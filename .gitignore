@@ -1,0 +1,51 @@
+# Python .gitignore — Rug Munch Media fleet standard
+# See https://git.rugmunch.io/RugMunchMedia/standards for source of truth.
+
+# ── Secrets (zero tolerance) ───────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.session
+credentials.json
+service-account.json
+.secrets/
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# ── IDE ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Cache / temp ───────────────────────────────────────────────
+.cache/
+tmp/
+*.tmpu00261
