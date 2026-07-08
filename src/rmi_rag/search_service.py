@@ -26,9 +26,9 @@ from rmi_rag.crypto_embeddings import (
     KNOWN_SCAM_PATTERNS,
     CryptoEmbedder,
     EmbeddingResult,
-    extract_contract_features,
     get_embedder,
 )
+from rmi_rag.rrf_fusion import _rrf_fuse
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,11 @@ async def _get_redis():
             decode_responses=True,
         )
     return _redis_pool
+
+
+from rmi_rag.scam_detection import detect_scam_patterns  # noqa: E402, F401
+from rmi_rag.seed_scams import seed_known_scams  # noqa: E402, F401
+from rmi_rag.sparse_search import _sparse_text_search  # noqa: E402
 
 
 async def _preembed_scam_patterns():
@@ -136,6 +141,7 @@ async def _preembed_scam_patterns():
             logger.warning("Failed to pre-embed pattern %s: %s", pattern_name, e)
 
     _pattern_cache_loaded = True
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -926,48 +932,6 @@ def _classify_query(query: str) -> str:
     return "balanced"
 
 
-def _rrf_fuse(
-    ranked_lists: list[list[dict[str, Any]]],
-    k: int = 60,
-    entity_boost: float = 1.5,
-    entity_doc_ids: set | None = None,
-    pillar_weights: list[float] | None = None,
-) -> list[dict[str, Any]]:
-    """
-    Reciprocal Rank Fusion of multiple result lists.
-    Supports pillar-specific weights for query-adaptive fusion.
-    """
-    entity_doc_ids = entity_doc_ids or set()
-    if pillar_weights is None:
-        pillar_weights = [1.0] * len(ranked_lists)
-
-    scores: dict[str, float] = {}
-    doc_data: dict[str, dict[str, Any]] = {}
-
-    for list_idx, rlist in enumerate(ranked_lists):
-        weight = pillar_weights[list_idx] if list_idx < len(pillar_weights) else 1.0
-        for rank, item in enumerate(rlist, start=1):
-            doc_id = item.get("doc_id") or item.get("id")
-            if not doc_id:
-                continue
-            rrf = weight / (k + rank)
-            if doc_id in entity_doc_ids:
-                rrf *= entity_boost
-            scores[doc_id] = scores.get(doc_id, 0.0) + rrf
-            if doc_id not in doc_data:
-                doc_data[doc_id] = item
-
-    sorted_ids = sorted(scores, key=lambda d: scores[d], reverse=True)
-    results = []
-    for doc_id in sorted_ids:
-        entry = dict(doc_data[doc_id])
-        entry["rrf_score"] = round(scores[doc_id], 6)
-        entry["entity_match"] = doc_id in entity_doc_ids
-        results.append(entry)
-
-    return results
-
-
 # ═══════════════════════════════════════════════════════════════════
 # QUERY TRANSFORMATION SEARCH
 # ═══════════════════════════════════════════════════════════════════
@@ -1044,297 +1008,6 @@ async def search_with_transform(
         "strategy": transformed.strategy,
         "transformed_queries": transformed.transformed_queries,
         "metadata": transformed.metadata,
-    }
-
-
-async def _sparse_text_search(
-    query: str,
-    collections: list[str],
-    limit: int = 20,
-) -> list[dict[str, Any]]:
-    """
-    Simple keyword-based text search over Redis-stored documents.
-    Tokenizes the query and matches against content fields.
-    This is a lightweight BM25-style fallback when pgvector FTS is not available.
-    """
-    r = await _get_redis()
-
-    # Tokenize query
-    query_tokens = set(query.lower().split())
-    if not query_tokens:
-        return []
-
-    results = []
-    for coll in collections:
-        try:
-            doc_ids = list(await r.smembers(f"rag:idx:{coll}"))
-            if not doc_ids:
-                continue
-
-            # Batch fetch (limit to avoid massive reads)
-            sample_ids = doc_ids[:200]
-            keys = [f"rag:{coll}:{did}" for did in sample_ids]
-            pipe = r.pipeline()
-            for k in keys:
-                pipe.get(k)
-            raw_docs = await pipe.execute()
-
-            for data in raw_docs:
-                if not data:
-                    continue
-                try:
-                    doc = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-
-                content = doc.get("content", "").lower()
-                if not content:
-                    continue
-
-                # BM25-style scoring: count matching tokens
-                content_tokens = set(content.split())
-                matching = query_tokens & content_tokens
-                if not matching:
-                    continue
-
-                # Simple BM25-ish score: match ratio * idf-like factor
-                score = len(matching) / (len(query_tokens) + 0.5)
-                # Boost exact phrase matches
-                if query.lower() in content:
-                    score *= 2.0
-
-                results.append(
-                    {
-                        "id": doc.get("id", ""),
-                        "doc_id": doc.get("id", ""),
-                        "text_score": round(score, 4),
-                        "content": doc.get("content", "")[:500],
-                        "metadata": doc.get("metadata", {}),
-                        "collection": coll,
-                    }
-                )
-        except Exception as e:
-            logger.debug("Sparse search for %s failed: %s", coll, e)
-
-    results.sort(key=lambda x: x["text_score"], reverse=True)
-    return results[:limit]
-
-
-# ═══════════════════════════════════════════════════════════════════
-# SCAM PATTERN DETECTION
-# ═══════════════════════════════════════════════════════════════════
-
-
-async def detect_scam_patterns(
-    token_data: dict,
-    threshold: float = 0.65,
-) -> dict[str, Any]:
-    """
-    Compare a token against all known scam patterns.
-    Returns matched patterns with similarity scores.
-    """
-    global _pattern_cache_loaded
-    embedder = await get_embedder()
-
-    # Pre-embed patterns on first call if not already done
-    if not _pattern_cache_loaded:
-        await _preembed_scam_patterns()
-
-    # Build a token embedding
-    code = token_data.get("contract_code", "")
-    desc = token_data.get("description", "")
-    name = token_data.get("name", "Unknown")
-    symbol = token_data.get("symbol", "???")
-
-    # Quick pre-filter: check code for exact keyword matches (fast, no API)
-    code_lower = code.lower() if code else ""
-    quick_matches = []
-    for pattern in KNOWN_SCAM_PATTERNS:
-        if not pattern["code_snippets"]:
-            continue
-        hits = sum(1 for s in pattern["code_snippets"] if s.lower() in code_lower)
-        if hits > 0:
-            quick_matches.append(
-                {
-                    "pattern": pattern["name"],
-                    "severity": pattern["severity"],
-                    "quick_match_score": hits / len(pattern["code_snippets"]),
-                    "matched_snippets": hits,
-                }
-            )
-
-    # Deep semantic comparison
-    token_result = await embedder.embed_token_scam(
-        name=name,
-        symbol=symbol,
-        description=desc,
-        contract_code=code,
-        chain=token_data.get("chain", "solana"),
-        metadata=token_data,
-    )
-
-    # Vector layout:
-    #   token  = [semantic(sem_dim) | code(128) | behavioral(64) | wallet(64)]
-    #   pattern = [semantic(sem_dim) | code(128)]
-    # Both have a common [semantic | code] prefix if they use the same model.
-    # For the semantic comparison, use only the common prefix.
-    # For the code comparison, compare the 128-dim code sections.
-
-    token_total = len(token_result.vector)
-    # If token vector has multi-head layout, extract heads by known offsets
-    if token_total > 128 + 64 + 64:
-        # Full multi-head: [semantic | code(128) | behavioral(64) | wallet(64)]
-        token_sem_end = token_total - 128 - 64 - 64
-        token_sem = token_result.vector[:token_sem_end]
-        token_code = token_result.vector[token_sem_end : token_sem_end + 128]
-    elif token_total > 128:
-        # Partial: [semantic | code(128)] - no behavioral/wallet
-        token_sem_end = token_total - 128
-        token_sem = token_result.vector[:token_sem_end]
-        token_code = token_result.vector[token_sem_end : token_sem_end + 128]
-    else:
-        # Only semantic - use as-is
-        token_sem = token_result.vector
-        token_code = [0.0] * 128
-
-    deep_matches = []
-    for pattern in KNOWN_SCAM_PATTERNS:
-        # Use pre-embedded cache if available, otherwise embed on-demand and cache
-        pattern_name = pattern["name"]
-        if pattern_name in _pattern_cache:
-            pattern_result = _pattern_cache[pattern_name]
-        else:
-            pattern_result = await embedder.embed_scam_pattern(
-                pattern_name=pattern["name"],
-                description=pattern["description"],
-                code_snippets=pattern.get("code_snippets", []),
-                indicators=pattern.get("indicators", []),
-                severity=pattern.get("severity", "high"),
-            )
-            # Cache for future use
-            _pattern_cache[pattern_name] = pattern_result
-            # Also persist to Redis
-            try:
-                r = await _get_redis()
-                redis_key = f"rag:pattern_cache:{pattern_name}"
-                await r.setex(
-                    redis_key,
-                    86400 * 30,
-                    json.dumps(
-                        {
-                            "vector": pattern_result.vector,
-                            "dims": pattern_result.dims,
-                            "model": pattern_result.model,
-                            "head": pattern_result.head,
-                        }
-                    ),
-                )
-            except Exception:
-                logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
-
-        # Extract pattern semantic + code portions
-        pat_total = len(pattern_result.vector)
-        if pat_total > 128:
-            pat_sem_end = pat_total - 128
-            pattern_sem = pattern_result.vector[:pat_sem_end]
-            pattern_result.vector[pat_sem_end : pat_sem_end + 128]
-        else:
-            pattern_sem = pattern_result.vector
-
-        # Compare same-length semantic portions (may differ if different models)
-        min_sem = min(len(token_sem), len(pattern_sem))
-        if min_sem == 0:
-            continue
-        sem_sim = embedder.cosine_similarity(token_sem[:min_sem], pattern_sem[:min_sem])
-
-        # Code similarity
-        pat_code_features = (
-            extract_contract_features("\n".join(pattern.get("code_snippets", []))).tolist()
-            if pattern.get("code_snippets")
-            else [0.0] * 128
-        )
-        code_sim = (
-            embedder.cosine_similarity(token_code, pat_code_features)
-            if any(pat_code_features)
-            else 0.0
-        )
-
-        combined = 0.7 * sem_sim + 0.3 * code_sim
-
-        if combined >= threshold:
-            deep_matches.append(
-                {
-                    "pattern": pattern["name"],
-                    "severity": pattern["severity"],
-                    "description": pattern["description"],
-                    "similarity": round(combined, 4),
-                    "semantic_sim": round(sem_sim, 4),
-                    "code_sim": round(code_sim, 4),
-                }
-            )
-
-    deep_matches.sort(key=lambda x: x["similarity"], reverse=True)
-
-    return {
-        "quick_matches": quick_matches,
-        "deep_matches": deep_matches,
-        "highest_threat": deep_matches[0]["pattern"] if deep_matches else "none",
-        "threat_severity": deep_matches[0]["severity"] if deep_matches else "low",
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════
-# SEEDING
-# ═══════════════════════════════════════════════════════════════════
-
-
-async def seed_known_scams() -> dict[str, Any]:
-    """Seed the RAG database with known scam patterns."""
-    global _seeded
-
-    r = await _get_redis()
-    existing = await r.scard("rag:idx:known_scams")
-    if existing > 0 and _seeded:
-        return {"status": "already_seeded", "count": existing}
-
-    embedder = await get_embedder()
-    count = 0
-
-    for pattern in KNOWN_SCAM_PATTERNS:
-        try:
-            pid = hashlib.sha256(f"scam:{pattern['name']}".encode()).hexdigest()[:16]
-            result = await embedder.embed_scam_pattern(
-                pattern_name=pattern["name"],
-                description=pattern["description"],
-                code_snippets=pattern.get("code_snippets", []),
-                indicators=pattern.get("indicators", []),
-                severity=pattern.get("severity", "high"),
-            )
-
-            doc = {
-                "id": pid,
-                "collection": "known_scams",
-                "vector": result.vector,
-                "dims": result.dims,
-                "model": result.model,
-                "metadata": pattern,
-                "content": pattern["description"],
-                "stored_at": datetime.now(UTC).isoformat(),
-            }
-            key = f"rag:known_scams:{pid}"
-            await r.set(key, json.dumps(doc))  # permanent - seed data should never expire
-            await r.sadd("rag:idx:known_scams", pid)
-            count += 1
-            logger.info("Seeded scam pattern: %s", pattern['name'])
-
-        except Exception as e:
-            logger.error("Failed to seed %s: %s", pattern['name'], e)
-
-    _seeded = True
-    return {
-        "status": "seeded",
-        "count": count,
-        "patterns": [p["name"] for p in KNOWN_SCAM_PATTERNS],
     }
 
 
