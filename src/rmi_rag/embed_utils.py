@@ -164,8 +164,7 @@ def extract_transaction_features(tx_data: dict) -> np.ndarray:
     vec[20] = min(len(counterparties) / 10.0, 1.0)
     tokens_seen: set[str] = set()
     for field in ["from_address", "to_address", "contract_address"]:
-        if isinstance(tx_data, dict):
-            if field in tx_data:
+        if isinstance(tx_data, dict) and field in tx_data:
                 tokens_seen.add(str(tx_data[field]))
     vec[23] = min(len(tokens_seen) / 100.0, 1.0)
 
