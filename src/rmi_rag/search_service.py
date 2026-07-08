@@ -98,10 +98,10 @@ async def _preembed_scam_patterns():
                     model=cached["model"],
                     head=cached.get("head", "scam_pattern"),
                 )
-                logger.debug(f"Pattern cache hit (Redis): {pattern_name}")
+                logger.debug("Pattern cache hit (Redis): %s", pattern_name)
                 continue
         except Exception as e:
-            logger.debug(f"Redis pattern cache read failed for {pattern_name}: {e}")
+            logger.debug("Redis pattern cache read failed for %s: %s", pattern_name, e)
 
         # 3. Embed and cache
         try:
@@ -129,11 +129,11 @@ async def _preembed_scam_patterns():
                     ),
                 )
             except Exception as e:
-                logger.debug(f"Redis pattern cache write failed for {pattern_name}: {e}")
+                logger.debug("Redis pattern cache write failed for %s: %s", pattern_name, e)
 
-            logger.info(f"Pre-embedded scam pattern: {pattern_name}")
+            logger.info("Pre-embedded scam pattern: %s", pattern_name)
         except Exception as e:
-            logger.warning(f"Failed to pre-embed pattern {pattern_name}: {e}")
+            logger.warning("Failed to pre-embed pattern %s: %s", pattern_name, e)
 
     _pattern_cache_loaded = True
 
@@ -206,7 +206,7 @@ async def ingest_document(
         ann = get_ann_index()
         await ann.bump_version(collection)
     except Exception as e:
-        logger.debug(f"ANN version bump skipped: {e}")
+        logger.debug("ANN version bump skipped: %s", e)
 
     # ── Update secondary indexes ──
     # BM25 index: invalidate cache so it gets rebuilt
@@ -218,7 +218,7 @@ async def ingest_document(
             _bm25_built_at = 0  # force rebuild on next call
             logger.debug("BM25 index cache invalidated for incremental rebuild")
     except Exception as e:
-        logger.debug(f"BM25 cache invalidation skipped: {e}")
+        logger.debug("BM25 cache invalidation skipped: %s", e)
 
     # Entity extraction + indexing
     try:
@@ -234,9 +234,9 @@ async def ingest_document(
                     doc_id,
                     metadata={**metadata, "collection": collection},
                 )
-            logger.debug(f"Entity indexing: {len(entities.all_entities())} entities")
+            logger.debug("Entity indexing: %s entities", len(entities.all_entities()))
     except Exception as e:
-        logger.debug(f"Entity indexing skipped: {e}")
+        logger.debug("Entity indexing skipped: %s", e)
 
     # Knowledge Graph edge creation
     try:
@@ -246,7 +246,7 @@ async def ingest_document(
         await kg.ingest_rag_document(collection, doc_id, content, metadata)
         logger.debug("KG edge creation complete")
     except Exception as e:
-        logger.debug(f"KG edge creation skipped: {e}")
+        logger.debug("KG edge creation skipped: %s", e)
 
     # pgvector disabled - FAISS + Redis are the primary vector stores.
     # Supabase pgvector was a migration artifact consuming 500MB of free-tier quota.
@@ -260,9 +260,9 @@ async def ingest_document(
         pr = await get_parent_retriever()
         await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)
     except Exception as e:
-        logger.debug(f"ParentRetriever.store_parent skipped: {e}")
+        logger.debug("ParentRetriever.store_parent skipped: %s", e)
 
-    logger.info(f"Ingested {collection}/{doc_id}: {content[:60]}...")
+    logger.info("Ingested %s/%s: %s...", collection, doc_id, content[:60])
     return {"id": doc_id, "dims": result.dims, "collection": collection}
 
 
@@ -347,7 +347,7 @@ async def search_similar(
         cached = await cache.check(query_vec)
         if cached is not None:
             cache_hit = True
-            logger.info(f"Semantic cache hit for query: {query[:60]}")
+            logger.info("Semantic cache hit for query: %s", query[:60])
             # Trace observability
             try:
                 from rmi_rag.observability import trace_retrieval  # external dependency
@@ -357,7 +357,7 @@ async def search_similar(
                 logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
             return cached
     except Exception as e:
-        logger.debug(f"Semantic cache check skipped: {e}")
+        logger.debug("Semantic cache check skipped: %s", e)
 
     # 2. Try FAISS ANN index search
     results = []
@@ -381,7 +381,7 @@ async def search_similar(
                 results = [r for r in ann_results if "content" in r] + enriched
         else:
             # FAISS not built - fall back to embedder brute-force search
-            logger.info(f"FAISS not built for {collection}, using brute-force fallback")
+            logger.info("FAISS not built for %s, using brute-force fallback", collection)
             results = await embedder.search(
                 query=query,
                 collection=collection,
@@ -389,7 +389,7 @@ async def search_similar(
                 min_similarity=min_similarity,
             )
     except Exception as e:
-        logger.warning(f"ANN/pgvector search failed, falling back to brute-force: {e}")
+        logger.warning("ANN/pgvector search failed, falling back to brute-force: %s", e)
         # 3. Fallback to embedder brute-force search
         results = await embedder.search(
             query=query,
@@ -406,7 +406,7 @@ async def search_similar(
             cache = get_semantic_cache()
             await cache.store(query_vec, results)
         except Exception as e:
-            logger.debug(f"Semantic cache store skipped: {e}")
+            logger.debug("Semantic cache store skipped: %s", e)
 
     # Trace observability
     try:
@@ -480,7 +480,7 @@ async def search_multi_collection(
                     r["collection"] = coll
             return results
         except Exception as e:
-            logger.warning(f"Search failed for {coll}: {e}")
+            logger.warning("Search failed for %s: %s", coll, e)
             return []
 
     # Search all collections in parallel
@@ -562,7 +562,7 @@ async def three_pillar_search(
                         r["pillar"] = "dense"
                     pillar1_results.extend(enriched)
                 except Exception as e:
-                    logger.debug(f"ANN search for {coll} failed: {e}")
+                    logger.debug("ANN search for %s failed: %s", coll, e)
                     # Fallback to embedder search for this collection
                     try:
                         hits = await embedder.search(
@@ -578,7 +578,7 @@ async def three_pillar_search(
             if pillar1_results:
                 await cache.store(query_vec, pillar1_results)
     except Exception as e:
-        logger.warning(f"Pillar 1 (dense) failed: {e}")
+        logger.warning("Pillar 1 (dense) failed: %s", e)
         # Fallback: use search_multi_collection
         try:
             pillar1_results = await search_multi_collection(
@@ -604,16 +604,16 @@ async def three_pillar_search(
             for r in pillar2_results:
                 r["pillar"] = "sparse"
         except Exception as e:
-            logger.warning(f"Pillar 2 (sparse) failed: {e}")
+            logger.warning("Pillar 2 (sparse) failed: %s", e)
     except Exception as e:
-        logger.warning(f"Pillar 2 (SPLADE) failed: {e}")
+        logger.warning("Pillar 2 (SPLADE) failed: %s", e)
         # Fallback to old sparse search
         try:
             pillar2_results = await _sparse_text_search(query, collections, limit=limit * 2)
             for r in pillar2_results:
                 r["pillar"] = "sparse"
         except Exception as e2:
-            logger.warning(f"Pillar 2 fallback also failed: {e2}")
+            logger.warning("Pillar 2 fallback also failed: %s", e2)
 
     # ── Pillar 3: Entity exact-match + Knowledge Graph expansion ──
     pillar3_results: list[dict[str, Any]] = []
@@ -631,7 +631,7 @@ async def three_pillar_search(
                         m["pillar"] = "entity"
                     pillar3_results.extend(matches)
                 except Exception as e:
-                    logger.debug(f"Entity lookup for {entity['value']} failed: {e}")
+                    logger.debug("Entity lookup for %s failed: %s", entity['value'], e)
 
             # Knowledge Graph expansion: find related entities via graph traversal
             if use_kg:
@@ -646,14 +646,14 @@ async def three_pillar_search(
                         for r in kg_results:
                             r["pillar"] = "entity+kg"
                         pillar3_results.extend(kg_results)
-                        logger.info(f"KG expansion: {len(kg_results)} related entities")
+                        logger.info("KG expansion: %s related entities", len(kg_results))
                 except ImportError:
                     logger.debug("Knowledge Graph module not available, skipping KG expansion")
                 except Exception as e:
-                    logger.debug(f"KG expansion failed (non-critical): {e}")
+                    logger.debug("KG expansion failed (non-critical): %s", e)
 
     except Exception as e:
-        logger.warning(f"Pillar 3 (entity) failed: {e}")
+        logger.warning("Pillar 3 (entity) failed: %s", e)
 
     # ── RRF fusion with query-adaptive weights ──
     # Classify query type to weight pillars appropriately
@@ -730,11 +730,11 @@ async def three_pillar_search(
                 top_k=limit * 3,  # Keep more for parent-child expansion
             )
             mmr_applied = True
-            logger.info(f"MMR dedup: {pre_mmr_count} → {len(fused)} results (lambda={mmr_lambda})")
+            logger.info("MMR dedup: %s → %s results (lambda=%s)", pre_mmr_count, len(fused), mmr_lambda)
         except ImportError:
             logger.debug("MMR dedup module not available, skipping")
         except Exception as e:
-            logger.debug(f"MMR dedup failed (non-critical): {e}")
+            logger.debug("MMR dedup failed (non-critical): %s", e)
 
     # ── Cross-encoder reranking (optional stage after MMR) ──
     # Two-stage fallback: 1) Ollama bge-m3 cosine reranker (lightweight),
@@ -824,7 +824,7 @@ async def three_pillar_search(
         except ImportError:
             logger.debug("Contextual chunking module not available")
         except Exception as e:
-            logger.debug(f"Parent-child expansion failed (non-critical): {e}")
+            logger.debug("Parent-child expansion failed (non-critical): %s", e)
 
     # ── Parent document context expansion (ParentRetriever) ──
     try:
@@ -852,7 +852,7 @@ async def three_pillar_search(
     except ImportError:
         logger.debug("Confidence module not available")
     except Exception as e:
-        logger.debug(f"Confidence scoring failed (non-critical): {e}")
+        logger.debug("Confidence scoring failed (non-critical): %s", e)
 
     return {
         "results": final_results,
@@ -998,7 +998,7 @@ async def search_with_transform(
             if results:
                 all_result_lists.append(results)
         except Exception as e:
-            logger.debug(f"Transformed query search failed for '{tq[:60]}': {e}")
+            logger.debug("Transformed query search failed for '%s': %s", tq[:60], e)
 
     # If only one list (or none), just return as-is
     if len(all_result_lists) <= 1:
@@ -1114,7 +1114,7 @@ async def _sparse_text_search(
                     }
                 )
         except Exception as e:
-            logger.debug(f"Sparse search for {coll} failed: {e}")
+            logger.debug("Sparse search for %s failed: %s", coll, e)
 
     results.sort(key=lambda x: x["text_score"], reverse=True)
     return results[:limit]
@@ -1325,10 +1325,10 @@ async def seed_known_scams() -> dict[str, Any]:
             await r.set(key, json.dumps(doc))  # permanent - seed data should never expire
             await r.sadd("rag:idx:known_scams", pid)
             count += 1
-            logger.info(f"Seeded scam pattern: {pattern['name']}")
+            logger.info("Seeded scam pattern: %s", pattern['name'])
 
         except Exception as e:
-            logger.error(f"Failed to seed {pattern['name']}: {e}")
+            logger.error("Failed to seed %s: %s", pattern['name'], e)
 
     _seeded = True
     return {
@@ -1451,6 +1451,7 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
             },
         )
     except Exception as e:
-        logger.warning(f"Failed to ingest GoPlus result for {token_address}: {e}")
+        logger.warning("Failed to ingest GoPlus result for %s: %s", token_address, e)
 
     return result
+

@@ -139,9 +139,9 @@ async def scrape_rekt_db() -> list[dict]:
                         }
                     )
     except Exception as e:
-        logger.warning(f"Rekt DB scrape failed: {e}")
+        logger.warning("Rekt DB scrape failed: %s", e)
 
-    logger.info(f"Rekt DB: {len(docs)} hacks scraped")
+    logger.info("Rekt DB: %s hacks scraped", len(docs))
     return docs
 
 
@@ -183,9 +183,9 @@ async def scrape_chainabuse() -> list[dict]:
                         }
                     )
     except Exception as e:
-        logger.warning(f"Chainabuse scrape failed: {e}")
+        logger.warning("Chainabuse scrape failed: %s", e)
 
-    logger.info(f"Chainabuse: {len(docs)} reports scraped")
+    logger.info("Chainabuse: %s reports scraped", len(docs))
     return docs
 
 
@@ -219,9 +219,9 @@ async def scrape_slowmist() -> list[dict]:
                         }
                     )
     except Exception as e:
-        logger.warning(f"SlowMist scrape failed: {e}")
+        logger.warning("SlowMist scrape failed: %s", e)
 
-    logger.info(f"SlowMist: {len(docs)} analyses scraped")
+    logger.info("SlowMist: %s analyses scraped", len(docs))
     return docs
 
 
@@ -257,9 +257,9 @@ async def scrape_rekt_news() -> list[dict]:
                         }
                     )
     except Exception as e:
-        logger.warning(f"Rekt News scrape failed: {e}")
+        logger.warning("Rekt News scrape failed: %s", e)
 
-    logger.info(f"Rekt News: {len(docs)} articles scraped")
+    logger.info("Rekt News: %s articles scraped", len(docs))
     return docs
 
 
@@ -303,9 +303,9 @@ async def ingest_trm_report() -> list[dict]:
                             }
                         )
     except Exception as e:
-        logger.warning(f"TRM report ingest failed: {e}")
+        logger.warning("TRM report ingest failed: %s", e)
 
-    logger.info(f"TRM Report: {len(docs)} sections ingested")
+    logger.info("TRM Report: %s sections ingested", len(docs))
     return docs
 
 
@@ -318,7 +318,7 @@ async def ingest_historical_source(source_id: str) -> dict:
     if not source:
         return {"error": f"Unknown source: {source_id}"}
 
-    logger.info(f"Ingesting {source['name']} → {source['collection']}")
+    logger.info("Ingesting %s → %s", source['name'], source['collection'])
 
     # Scrape
     scrapers = {
@@ -366,9 +366,9 @@ async def ingest_historical_source(source_id: str) -> dict:
                     result = resp.json()
                     ingested += result.get("ingested", len(batch))
                 else:
-                    logger.warning(f"Ingest batch failed for {source_id}: HTTP {resp.status_code}")
+                    logger.warning("Ingest batch failed for %s: HTTP %s", source_id, resp.status_code)
     except Exception as e:
-        logger.error(f"Ingest HTTP failed for {source_id}: {e}")
+        logger.error("Ingest HTTP failed for %s: %s", source_id, e)
 
     return {
         "source": source_id,
@@ -387,14 +387,14 @@ async def ingest_all_historical() -> dict:
     total_ingested = 0
 
     for source_id in SOURCES:
-        logger.info(f"Starting historical ingest: {source_id}")
+        logger.info("Starting historical ingest: %s", source_id)
         try:
             result = await ingest_historical_source(source_id)
             results[source_id] = result
             total_ingested += result.get("ingested", 0)
         except Exception as e:
             results[source_id] = {"error": str(e), "source": source_id}
-            logger.error(f"Historical ingest failed for {source_id}: {e}")
+            logger.error("Historical ingest failed for %s: %s", source_id, e)
 
     return {
         "status": "complete",
@@ -415,3 +415,4 @@ if __name__ == "__main__":
     else:
         result = asyncio.run(ingest_all_historical())
         print(json.dumps(result, indent=2))
+

@@ -353,7 +353,7 @@ class BM25Index:
                 },
                 f,
             )
-        logger.info(f"BM25 index persisted to {path} ({os.path.getsize(path) / 1024 / 1024:.1f}MB)")
+        logger.info("BM25 index persisted to %s (%sMB)", path, os.path.getsize(path) / 1024 / 1024)
 
     @classmethod
     def load(cls, path: str) -> Optional["BM25Index"]:
@@ -377,10 +377,10 @@ class BM25Index:
                 idx._metadata = data["_metadata"]
             if data.get("_raw_content"):
                 idx._raw_content = data["_raw_content"]
-            logger.info(f"BM25 index loaded from disk: {idx.doc_count} docs, {len(idx.df)} terms")
+            logger.info("BM25 index loaded from disk: %s docs, %s terms", idx.doc_count, len(idx.df))
             return idx
         except Exception as e:
-            logger.warning(f"Failed to load BM25 from disk: {e}")
+            logger.warning("Failed to load BM25 from disk: %s", e)
             return None
 
     def idf(self, token: str) -> float:
@@ -580,7 +580,7 @@ async def build_bm25_from_redis(
 
             # Limit per collection for memory
             sample = list(doc_ids)[:max_per_collection]
-            logger.info(f"BM25 indexing {coll}: {len(sample)} docs")
+            logger.info("BM25 indexing %s: %s docs", coll, len(sample))
 
             # Batch fetch
             batch_size = 500
@@ -608,7 +608,7 @@ async def build_bm25_from_redis(
                         continue
 
         except Exception as e:
-            logger.warning(f"BM25 indexing for {coll} failed: {e}")
+            logger.warning("BM25 indexing for %s failed: %s", coll, e)
 
     index.build()
     await r.aclose()
@@ -678,7 +678,7 @@ async def _save_bm25_async(path: str):
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _bm25_index.save, path)
     except Exception as e:
-        logger.debug(f"BM25 disk save failed (non-critical): {e}")
+        logger.debug("BM25 disk save failed (non-critical): %s", e)
 
 
 async def bm25_search(
@@ -708,3 +708,4 @@ async def splade_search(
     index = await get_bm25_index()
     results = index.search_with_expansion(query, limit=limit)
     return results
+

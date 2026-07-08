@@ -51,7 +51,7 @@ async def nightly_rag_index(**kw) -> dict:
 
         indexed["collections"]["news_articles"] = await _embed_batch(news_docs, "news_articles")
         indexed["total_docs"] += indexed["collections"]["news_articles"]
-        logger.info(f"RAG indexed {indexed['collections']['news_articles']} news articles")
+        logger.info("RAG indexed %s news articles", indexed['collections']['news_articles'])
 
     except Exception as e:
         indexed["errors"].append(f"news: {str(e)[:100]}")
@@ -80,7 +80,7 @@ async def nightly_rag_index(**kw) -> dict:
 
         indexed["collections"]["ct_rundown"] = await _embed_batch(ct_docs, "ct_rundown")
         indexed["total_docs"] += indexed["collections"]["ct_rundown"]
-        logger.info(f"RAG indexed {indexed['collections']['ct_rundown']} CT stories")
+        logger.info("RAG indexed %s CT stories", indexed['collections']['ct_rundown'])
 
     except Exception as e:
         indexed["errors"].append(f"ct: {str(e)[:100]}")
@@ -198,7 +198,7 @@ async def _embed_batch(docs: list[dict], collection: str) -> int:
         return embedded
 
     except Exception as e:
-        logger.warning(f"Embed batch failed for {collection}: {e}")
+        logger.warning("Embed batch failed for %s: %s", collection, e)
         return 0
 
 
@@ -251,3 +251,4 @@ async def rag_health_check(**kw) -> dict:
 
     except Exception as e:
         return {"status": "error", "error": str(e)[:200], "source": "rag_health"}
+

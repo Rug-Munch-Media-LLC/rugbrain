@@ -54,7 +54,7 @@ def parse_solidity_ast(source: str) -> dict | None:
             timeout=30,
         )
         if result.returncode != 0:
-            logger.debug(f"solc AST parse failed: {result.stderr.decode()[:200]}")
+            logger.debug("solc AST parse failed: %s", result.stderr.decode()[:200])
             return None
 
         output = json.loads(result.stdout.decode())
@@ -71,7 +71,7 @@ def parse_solidity_ast(source: str) -> dict | None:
         logger.debug("solc AST output not valid JSON")
         return None
     except Exception as e:
-        logger.debug(f"solc AST parse error: {e}")
+        logger.debug("solc AST parse error: %s", e)
         return None
 
 
@@ -175,7 +175,7 @@ def chunk_solidity_ast(
         boundaries = extract_boundaries(ast, source)
         if boundaries:
             chunks = _build_chunks_from_boundaries(source, boundaries, target_size, max_size)
-            logger.info(f"AST chunking: {len(boundaries)} boundaries → {len(chunks)} chunks")
+            logger.info("AST chunking: %s boundaries → %s chunks", len(boundaries), len(chunks))
             return chunks
 
     # Fallback: regex-based heuristic chunking for unparseable sources
@@ -312,3 +312,4 @@ def _chunk_solidity_regex(
         chunks.append(current.strip())
 
     return [c for c in chunks if c]
+

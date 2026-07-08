@@ -54,10 +54,10 @@ async def _r2_put(key: str, data: bytes, content_type: str = "application/json")
             )
             if resp.status_code == 200:
                 return True
-            logger.error(f"R2 PUT {key}: {resp.status_code} {resp.text[:200]}")
+            logger.error("R2 PUT %s: %s %s", key, resp.status_code, resp.text[:200])
             return False
         except Exception as e:
-            logger.error(f"R2 PUT {key}: {e}")
+            logger.error("R2 PUT %s: %s", key, e)
             return False
 
 
@@ -73,7 +73,7 @@ async def _r2_get(key: str) -> bytes | None:
                 return resp.content
             return None
         except Exception as e:
-            logger.error(f"R2 GET {key}: {e}")
+            logger.error("R2 GET %s: %s", key, e)
             return None
 
 
@@ -92,7 +92,7 @@ async def _r2_list(prefix: str = "") -> list:
                 return data.get("result", [])
             return []
         except Exception as e:
-            logger.error(f"R2 LIST: {e}")
+            logger.error("R2 LIST: %s", e)
             return []
 
 
@@ -106,7 +106,7 @@ async def _r2_delete(key: str) -> bool:
             resp = await client.delete(url, headers=_headers())
             return resp.status_code in (200, 204, 404)
         except Exception as e:
-            logger.error(f"R2 DELETE {key}: {e}")
+            logger.error("R2 DELETE %s: %s", key, e)
             return False
 
 
@@ -399,3 +399,4 @@ async def r2_stats():
         "collections": coll_info,
         "model_version": EMBEDDING_VERSION,
     }
+

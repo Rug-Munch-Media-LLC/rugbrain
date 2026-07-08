@@ -419,7 +419,7 @@ class LocalBGEEmbedder:
             from sentence_transformers import SentenceTransformer
 
             cls._model = SentenceTransformer(cls.MODEL_NAME)
-            logger.info(f"LocalBGEEmbedder loaded: {cls.MODEL_NAME} (384d)")
+            logger.info("LocalBGEEmbedder loaded: %s (384d)", cls.MODEL_NAME)
         return cls._model
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -514,7 +514,7 @@ class OpenRouterEmbedder:
             return await _try_embed(model_id)
         except Exception as e:
             if "RATE_LIMITED" in str(e) and model_id != self.FALLBACK:
-                logger.warning(f"NVIDIA embed rate-limited, falling back to {self.FALLBACK}")
+                logger.warning("NVIDIA embed rate-limited, falling back to %s", self.FALLBACK)
                 return await _try_embed(self.FALLBACK)
             raise
 
@@ -564,7 +564,7 @@ class HuggingFaceEmbedder:
                         # Flat [float] - wrap it
                         results.append(data)
                 else:
-                    logger.warning(f"HF returned unexpected shape: {type(data)}")
+                    logger.warning("HF returned unexpected shape: %s", type(data))
                     results.append([0.0] * 1024)
             return results
 
@@ -605,7 +605,7 @@ class ContractCodeEmbedder:
                 if len(semantic) < 192:
                     semantic = np.pad(semantic, (0, 192 - len(semantic)))
             except Exception as e:
-                logger.warning(f"Semantic contract embedding failed: {e}")
+                logger.warning("Semantic contract embedding failed: %s", e)
                 semantic = np.zeros(192, dtype=np.float32)
         else:
             semantic = np.zeros(192, dtype=np.float32)
@@ -718,28 +718,28 @@ class CryptoEmbedder:
             try:
                 return await self._ollama.embed(texts)
             except Exception as e:
-                logger.warning(f"Ollama qwen3 embedding failed: {e}")
+                logger.warning("Ollama qwen3 embedding failed: %s", e)
 
         # Fallback: OpenRouter NVIDIA (2048d, free)
         if self._openrouter:
             try:
                 return await self._openrouter.embed(texts)
             except Exception as e:
-                logger.warning(f"OpenRouter/NVIDIA embedding failed: {e}")
+                logger.warning("OpenRouter/NVIDIA embedding failed: %s", e)
 
         # Fallback: Local BGE (384d, always available, zero cost)
         if self._local:
             try:
                 return await self._local.embed(texts)
             except Exception as e:
-                logger.warning(f"Local BGE embedding failed: {e}")
+                logger.warning("Local BGE embedding failed: %s", e)
 
         # Fallback: HuggingFace
         if self._huggingface:
             try:
                 return await self._huggingface.embed(texts)
             except Exception as e:
-                logger.warning(f"HuggingFace embedding failed: {e}")
+                logger.warning("HuggingFace embedding failed: %s", e)
 
         # Last resort: hash-based
         logger.warning("Using hash-based fallback embeddings (low quality)")
@@ -1052,7 +1052,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
 
             return True
         except Exception as e:
-            logger.error(f"Failed to store embedding: {e}")
+            logger.error("Failed to store embedding: %s", e)
             return False
 
     async def search(
@@ -1120,7 +1120,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
             return scored[:limit]
 
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error("Search failed: %s", e)
             return []
 
     @property
@@ -1307,3 +1307,4 @@ async def get_embedder() -> CryptoEmbedder:
         _embedder = CryptoEmbedder()
         await _embedder.initialize()
     return _embedder
+

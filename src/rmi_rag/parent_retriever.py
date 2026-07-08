@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 
 class ParentRetriever:
     """Stores and retrieves parent documents in Redis for context expansion."""
+    def __init__(self, redis=None):
+        """Args: redis: optional async Redis client for DI/testing."""
+        self._redis = redis
+
 
     async def store_parent(self, doc_id: str, content: str, metadata: dict) -> None:
         """Store the full parent document in Redis.

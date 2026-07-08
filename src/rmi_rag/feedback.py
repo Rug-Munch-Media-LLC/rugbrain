@@ -135,7 +135,7 @@ async def record_scanner_result(
 
             except Exception as e:
                 adjustments["errors"] += 1
-                logger.debug(f"Weight adjustment error for {doc_id}: {e}")
+                logger.debug("Weight adjustment error for %s: %s", doc_id, e)
 
         # Record scanner hit count for analytics
         if doc_ids:
@@ -165,7 +165,7 @@ async def record_scanner_result(
         }
 
     except Exception as e:
-        logger.error(f"RAG feedback error: {e}")
+        logger.error("RAG feedback error: %s", e)
         with contextlib.suppress(Exception):
             await r.aclose()
         return {"status": "error", "detail": str(e)}
@@ -240,3 +240,4 @@ async def get_feedback_stats() -> dict[str, Any]:
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+

@@ -286,14 +286,14 @@ async def describe_image(
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
             else:
-                logger.warning(f"Image description failed: HTTP {resp.status_code}")
+                logger.warning("Image description failed: HTTP %s", resp.status_code)
                 return f"Image analysis error: HTTP {resp.status_code}"
 
     except ImportError:
         logger.debug("LLM module not available for vision")
         return "Vision analysis unavailable"
     except Exception as e:
-        logger.warning(f"Image description error: {e}")
+        logger.warning("Image description error: %s", e)
         return f"Image analysis failed: {e}"
 
 
@@ -354,3 +354,4 @@ def get_logo_db() -> TokenLogoDB:
     if _logo_db is None:
         _logo_db = TokenLogoDB()
     return _logo_db
+

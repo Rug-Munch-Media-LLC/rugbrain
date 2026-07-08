@@ -42,7 +42,7 @@ async def detect_communities(
         logger.debug("Knowledge Graph not available")
         return []
     except Exception as e:
-        logger.warning(f"KG access failed: {e}")
+        logger.warning("KG access failed: %s", e)
         return []
 
     r = kg._redis_client if hasattr(kg, "_redis_client") else None
@@ -57,7 +57,7 @@ async def detect_communities(
             logger.debug("KG has no nodes")
             return []
     except Exception as e:
-        logger.warning(f"Failed to get KG nodes: {e}")
+        logger.warning("Failed to get KG nodes: %s", e)
         return []
 
     # 2. Get edges (adjacency)
@@ -247,3 +247,4 @@ async def graph_rag_search(
             f"Detected {len(communities)} communities across {sum(c['size'] for c in communities)} addresses."
         ),
     }
+

@@ -150,7 +150,7 @@ async def query_rag_citations(
                     citations.append(citation)
 
     except (TimeoutError, Exception) as e:
-        logger.warning(f"RAG citation query failed for '{topic}': {e}")
+        logger.warning("RAG citation query failed for '%s': %s", topic, e)
         return []
 
     # Sort by similarity, deduplicate
@@ -198,7 +198,7 @@ async def query_address_rag(
                 formatted.append(c)
         return formatted
     except Exception as e:
-        logger.debug(f"Address RAG query failed for {address[:10]}...: {e}")
+        logger.debug("Address RAG query failed for %s...: %s", address[:10], e)
         return []
 
 
@@ -282,3 +282,4 @@ def build_citation_string(citations: list[dict[str, Any]], finding: str) -> str:
             parts.append(";")
 
     return "".join(parts)
+

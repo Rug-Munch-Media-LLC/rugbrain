@@ -164,7 +164,7 @@ Return a JSON list sorted by score descending. Only return the JSON, nothing els
                     return results[:top_k]
 
         except Exception as e:
-            logger.warning(f"LLM reranking failed: {e}")
+            logger.warning("LLM reranking failed: %s", e)
 
         # Fallback: return top-K by vector similarity
         return sorted(documents, key=lambda x: x.get("similarity", 0), reverse=True)[:top_k]
@@ -343,7 +343,7 @@ Return as JSON. Be precise and evidence-based."""
                     plan["steps"] = plan.get("steps", [])[:max_hops]
                     return plan
         except Exception as e:
-            logger.warning(f"Planning failed: {e}")
+            logger.warning("Planning failed: %s", e)
 
         return {
             "steps": [
@@ -395,7 +395,7 @@ Return as JSON. Be precise and evidence-based."""
                 ],
             }
         except Exception as e:
-            logger.warning(f"Hop {action} failed: {e}")
+            logger.warning("Hop %s failed: %s", action, e)
             return {"action": action, "error": str(e), "documents": [], "evidence": []}
 
     async def _synthesize(
@@ -451,7 +451,7 @@ Return as JSON. Be precise and evidence-based."""
                 if json_match:
                     return json.loads(json_match.group(0))
         except Exception as e:
-            logger.warning(f"Synthesis LLM failed: {e}")
+            logger.warning("Synthesis LLM failed: %s", e)
 
         return {
             "overall_risk": "UNKNOWN",
@@ -640,3 +640,4 @@ def get_monitor() -> RealTimeTokenMonitor:
     if _monitor is None:
         _monitor = RealTimeTokenMonitor()
     return _monitor
+

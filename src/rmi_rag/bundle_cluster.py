@@ -615,7 +615,7 @@ Top3 holder %: {bundle.get("top3_holder_percent", 0):.1f}%"""
         severity="high" if bundle.get("confidence", 0) > 0.7 else "medium",
     )
 
-    logger.info(f"Indexed bundle {bundle_id} for token {token}")
+    logger.info("Indexed bundle %s for token %s", bundle_id, token)
     return bundle_id
 
 
@@ -662,7 +662,7 @@ All labels: {json.dumps(labels["all_labels"])}"""
         severity=labels["all_labels"][0]["severity"] if labels["all_labels"] else "medium",
     )
 
-    logger.info(f"Indexed cluster {cluster_id} as '{labels['top_label']}' ({labels['top_confidence']:.2f})")
+    logger.info("Indexed cluster %s as '%s' (%s)", cluster_id, labels['top_label'], labels['top_confidence'])
 
     return {
         "cluster_id": cluster_id,
@@ -704,5 +704,6 @@ async def backfill_label_templates():
         )
         count += 1
 
-    logger.info(f"Backfilled {count} cluster label templates")
+    logger.info("Backfilled %s cluster label templates", count)
     return count
+

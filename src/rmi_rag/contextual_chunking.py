@@ -228,7 +228,7 @@ async def _generate_context_llm(
             context = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             return context.strip()
     except Exception as e:
-        logger.warning(f"Context generation failed: {e}")
+        logger.warning("Context generation failed: %s", e)
         return ""
 
 
@@ -407,3 +407,4 @@ def parent_child_chunk(
         parent.metadata["child_count"] = len(children)
 
     return all_chunks
+

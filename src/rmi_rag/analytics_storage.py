@@ -79,7 +79,7 @@ class RedisStorage:
         self.port = port
         self.db = db
         self.client = redis.Redis(host=host, port=port, db=db, decode_responses=True)
-        logger.info(f"Connected to Redis at {host}:{port}/{db}")
+        logger.info("Connected to Redis at %s:%s/%s", host, port, db)
 
     def key_prefix(self, category: str, identifier: str) -> str:
         """Generate a Redis key."""
@@ -104,7 +104,7 @@ class RedisStorage:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to save transaction: {e}")
+            logger.error("Failed to save transaction: %s", e)
             return False
 
     def get_transaction(self, tx_hash: str) -> dict[str, Any] | None:
@@ -114,7 +114,7 @@ class RedisStorage:
             data = self.client.get(key)
             return json.loads(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get transaction: {e}")
+            logger.error("Failed to get transaction: %s", e)
             return None
 
     def get_wallet_history(self, wallet_address: str, chain: str = "ethereum") -> WalletHistory | None:
@@ -145,7 +145,7 @@ class RedisStorage:
                 total_tx_count=len(transactions),
             )
         except Exception as e:
-            logger.error(f"Failed to get wallet history: {e}")
+            logger.error("Failed to get wallet history: %s", e)
             return None
 
     def save_alert(self, alert: EntityAlertRecord) -> bool:
@@ -164,7 +164,7 @@ class RedisStorage:
 
             return True
         except Exception as e:
-            logger.error(f"Failed to save alert: {e}")
+            logger.error("Failed to save alert: %s", e)
             return False
 
     def get_entity_alerts(self, entity_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -185,7 +185,7 @@ class RedisStorage:
 
             return alerts
         except Exception as e:
-            logger.error(f"Failed to get entity alerts: {e}")
+            logger.error("Failed to get entity alerts: %s", e)
             return []
 
     def get_alert(self, alert_id: str) -> dict[str, Any] | None:
@@ -195,7 +195,7 @@ class RedisStorage:
             data = self.client.get(key)
             return json.loads(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get alert: {e}")
+            logger.error("Failed to get alert: %s", e)
             return None
 
     def save_entity_relation(self, from_entity: str, to_entity: str, relation: str):
@@ -204,7 +204,7 @@ class RedisStorage:
             key = self.key_prefix("entity_relation", from_entity)
             self.client.sadd(key, json.dumps({"to": to_entity, "relation": relation}))
         except Exception as e:
-            logger.error(f"Failed to save entity relation: {e}")
+            logger.error("Failed to save entity relation: %s", e)
 
     def get_entity_relations(self, entity_id: str) -> list[dict[str, str]]:
         """Get relations for an entity."""
@@ -213,7 +213,7 @@ class RedisStorage:
             relations = self.client.smembers(key)
             return [json.loads(r) for r in relations]
         except Exception as e:
-            logger.error(f"Failed to get entity relations: {e}")
+            logger.error("Failed to get entity relations: %s", e)
             return []
 
     def save_wallet_cluster(self, cluster_id: str, members: list[str], labels: list[str]):
@@ -228,7 +228,7 @@ class RedisStorage:
             }
             self.client.setex(key, 86400 * 365, json.dumps(data))  # 1 year TTL
         except Exception as e:
-            logger.error(f"Failed to save cluster: {e}")
+            logger.error("Failed to save cluster: %s", e)
 
     def get_wallet_cluster(self, cluster_id: str) -> dict[str, Any] | None:
         """Get a wallet cluster."""
@@ -237,7 +237,7 @@ class RedisStorage:
             data = self.client.get(key)
             return json.loads(data) if data else None
         except Exception as e:
-            logger.error(f"Failed to get cluster: {e}")
+            logger.error("Failed to get cluster: %s", e)
             return None
 
     def get_or_create_wallet_history(self, wallet_address: str, chain: str = "ethereum") -> WalletHistory:
@@ -447,3 +447,4 @@ if __name__ == "__main__":
     # Get activity summary
     summary = db.get_wallet_activity_summary(tx.from_address, "ethereum")
     print(f"Activity summary: {summary}")
+

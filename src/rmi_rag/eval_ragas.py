@@ -451,7 +451,7 @@ async def faithfulness(answer: str, context_chunks: list[str]) -> float:
         result = await guard.check_answer(answer, combined_context)
         return result.confidence if result.is_faithful else 1.0 - result.confidence
     except Exception as e:
-        logger.debug(f"NLI faithfulness failed, using keyword overlap: {e}")
+        logger.debug("NLI faithfulness failed, using keyword overlap: %s", e)
         return _keyword_faithfulness(answer, context_chunks)
 
 
@@ -599,7 +599,7 @@ async def answer_relevancy(answer: str, query: str) -> float:
         # Normalize to [0, 1] (cosine sim is [-1, 1])
         return max(0.0, (sim + 1.0) / 2.0)
     except Exception as e:
-        logger.debug(f"Answer relevancy embedding failed: {e}")
+        logger.debug("Answer relevancy embedding failed: %s", e)
         return _keyword_relevancy(answer, query)
 
 
@@ -769,3 +769,4 @@ async def run_evaluation(
         report.p95_latency_ms = round(latencies[min(p95_idx, len(latencies) - 1)], 2)
 
     return report
+

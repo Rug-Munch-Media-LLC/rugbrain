@@ -448,7 +448,7 @@ class FeedSources:
                 )
             return docs
         except Exception as e:
-            logger.warning(f"News RSS pull failed: {e}")
+            logger.warning("News RSS pull failed: %s", e)
             return []
 
     async def pull_ct_rundown(self) -> list[dict]:
@@ -481,7 +481,7 @@ class FeedSources:
                 )
             return docs
         except Exception as e:
-            logger.warning(f"CT rundown pull failed: {e}")
+            logger.warning("CT rundown pull failed: %s", e)
             return []
 
     async def pull_social_sentiment(self) -> list[dict]:
@@ -526,7 +526,7 @@ class FeedSources:
                         }
                     )
         except Exception as e:
-            logger.warning(f"Social pull failed: {e}")
+            logger.warning("Social pull failed: %s", e)
 
         return docs
 
@@ -578,7 +578,7 @@ class FeedSources:
                     }
                 )
         except Exception as e:
-            logger.warning(f"Etherscan pull failed: {e}")
+            logger.warning("Etherscan pull failed: %s", e)
 
         return docs
 
@@ -612,7 +612,7 @@ class FeedSources:
                             }
                         )
         except Exception as e:
-            logger.warning(f"Solana pull failed: {e}")
+            logger.warning("Solana pull failed: %s", e)
 
         return docs
 
@@ -636,7 +636,7 @@ class FeedSources:
                         }
                     )
         except Exception as e:
-            logger.warning(f"Prediction market pull failed: {e}")
+            logger.warning("Prediction market pull failed: %s", e)
 
         return docs
 
@@ -680,7 +680,7 @@ class FeedSources:
                         }
                     )
         except Exception as e:
-            logger.warning(f"Pattern extraction failed: {e}")
+            logger.warning("Pattern extraction failed: %s", e)
 
         return docs
 
@@ -783,7 +783,7 @@ class FirehoseEngine:
         self.stats.total_sources = len(self._sources)
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
-        logger.info(f"Firehose started with {len(self._sources)} sources")
+        logger.info("Firehose started with %s sources", len(self._sources))
 
     async def stop(self):
         """Stop the firehose engine."""
@@ -815,7 +815,7 @@ class FirehoseEngine:
                 self.stats.last_activity = now
 
                 try:
-                    logger.debug(f"Firehose: pulling {source.name}")
+                    logger.debug("Firehose: pulling %s", source.name)
                     docs = await source.fetch_fn()
 
                     if docs:
@@ -829,13 +829,16 @@ class FirehoseEngine:
                         self.stats.total_errors += stats["errors"]
 
                         logger.info(
-                            f"Firehose {source.name}: +{stats['ingested']} new, "
-                            f"{stats['duplicate']} dup, {stats['skipped']} skip, "
-                            f"{stats['errors']} err "
-                            f"(total: {source.docs_ingested})"
+                            "Firehose %s: +%s new, %s dup, %s skip, %s err (total: %s)",
+                            source.name,
+                            stats['ingested'],
+                            stats['duplicate'],
+                            stats['skipped'],
+                            stats['errors'],
+                            source.docs_ingested,
                         )
                 except Exception as e:
-                    logger.error(f"Firehose {source.name} failed: {e}")
+                    logger.error("Firehose %s failed: %s", source.name, e)
                     source.errors += 1
                     self.stats.total_errors += 1
 
@@ -898,3 +901,4 @@ def get_firehose() -> FirehoseEngine:
     if _firehose is None:
         _firehose = FirehoseEngine()
     return _firehose
+

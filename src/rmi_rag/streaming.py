@@ -58,7 +58,7 @@ async def create_watch(
     _watches[watch_id] = watch
     _updates[watch_id] = []
 
-    logger.info(f"Created watch {watch_id} for {token_address[:12]}... on {chain}")
+    logger.info("Created watch %s for %s... on %s", watch_id, token_address[:12], chain)
 
     # Kick off async scanning
     task = asyncio.create_task(_run_watch_scans(watch_id))
@@ -117,7 +117,7 @@ async def _run_watch_scans(watch_id: str):
         except ImportError:
             logger.debug("Unified scanner not available")
         except Exception as e:
-            logger.debug(f"Scanner failed: {e}")
+            logger.debug("Scanner failed: %s", e)
 
         # 2. RAG search for known scam patterns
         try:
@@ -144,7 +144,7 @@ async def _run_watch_scans(watch_id: str):
         except ImportError:
             logger.debug("RAG search not available for streaming")
         except Exception as e:
-            logger.debug(f"RAG search failed in watch: {e}")
+            logger.debug("RAG search failed in watch: %s", e)
 
         # 3. Deployer reputation
         try:
@@ -168,7 +168,7 @@ async def _run_watch_scans(watch_id: str):
         except ImportError:
             logger.debug("Deployer reputation not available")
         except Exception as e:
-            logger.debug(f"Reputation failed: {e}")
+            logger.debug("Reputation failed: %s", e)
 
     finally:
         watch["status"] = "completed"
@@ -243,3 +243,4 @@ async def list_active_watches() -> list[dict[str, Any]]:
         _updates.pop(wid, None)
 
     return active
+

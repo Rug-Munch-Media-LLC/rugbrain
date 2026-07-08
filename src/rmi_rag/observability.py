@@ -139,7 +139,7 @@ def trace_ingest(docs: int, collection: str):
 def trace_error(error_type: str, detail: str = ""):
     """Record an error."""
     _metrics.errors += 1
-    logger.warning(f"RAG error [{error_type}]: {detail[:200]}")
+    logger.warning("RAG error [%s]: %s", error_type, detail[:200])
 
 
 @asynccontextmanager
@@ -183,3 +183,4 @@ def get_metrics() -> dict:
         "errors": _metrics.errors,
         "langfuse": LANGFUSE_AVAILABLE,
     }
+
