@@ -4,6 +4,7 @@ Pulls from GoPlus, PhishTank, Chainabuse, and community submissions.
 Embeds with BGE-M3 and stores in Qdrant threat_intel collection.
 """
 import asyncio
+
 import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct

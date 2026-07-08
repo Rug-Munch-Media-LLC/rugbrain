@@ -120,7 +120,7 @@ async def snapshot_all():
 
     # Get collections from rag_service (Redis-backed)
     try:
-        from app.domains.intelligence.rag_service import COLLECTIONS, _get_redis
+        from rmi_rag.search_service import COLLECTIONS, _get_redis
 
         redis = await _get_redis()
         has_redis = True
@@ -242,7 +242,7 @@ async def restore_all():
     """Restore all RAG collections from latest R2 snapshots."""
     # Get collections and Redis connection
     try:
-        from app.domains.intelligence.rag_service import COLLECTIONS, _get_redis
+        from rmi_rag.search_service import COLLECTIONS, _get_redis
 
         redis = await _get_redis()
     except Exception:
@@ -341,7 +341,7 @@ async def r2_stats():
     """Get R2 usage + local cache stats."""
     # Get collections and Redis connection
     try:
-        from app.domains.intelligence.rag_service import COLLECTIONS, _get_redis
+        from rmi_rag.search_service import COLLECTIONS, _get_redis
 
         redis = await _get_redis()
         has_redis = True

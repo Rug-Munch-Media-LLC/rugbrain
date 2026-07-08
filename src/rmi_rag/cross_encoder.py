@@ -88,7 +88,7 @@ class OllamaReranker:
 
     async def _embed_via_pipeline(self, text: str) -> list[float]:
         """Embed via the existing CryptoEmbedder pipeline (fallback)."""
-        from app.domains.intelligence.crypto_embeddings import get_embedder
+        from rmi_rag.crypto_embeddings import get_embedder
 
         embedder = await get_embedder()
         vec = await embedder.embed_query(text)
@@ -216,3 +216,9 @@ class OllamaReranker:
 async def get_reranker() -> OllamaReranker:
     """Async convenience function to obtain the singleton OllamaReranker."""
     return await OllamaReranker.get_reranker()
+
+
+async def rerank(query: str, documents: list[dict], top_k: int = 5) -> list[dict]:
+    """Convenience wrapper — rerank documents against query."""
+    reranker = OllamaReranker()
+    return await reranker.rerank(query, documents, top_k)

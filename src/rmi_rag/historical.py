@@ -342,7 +342,7 @@ async def ingest_historical_source(source_id: str) -> dict:
         return {"source": source_id, "docs_scraped": 0, "status": "empty"}
 
     # Chunk and dedup
-    from app.rag_chunking import chunk_batch  # external dependency
+    from rmi_rag.app_chunking import chunk_batch  # external dependency
 
     chunks = chunk_batch(docs, source["content_type"])
 

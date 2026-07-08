@@ -248,7 +248,7 @@ Return as JSON. Be precise and evidence-based."""
         Multi-hop investigation pipeline.
         Returns structured findings with evidence trail.
         """
-        from app.domains.intelligence.crypto_embeddings import get_embedder
+        from rmi_rag.crypto_embeddings import get_embedder
 
         embedder = await get_embedder()
         context = context or {}
@@ -360,7 +360,7 @@ Return as JSON. Be precise and evidence-based."""
         embedder,
     ) -> dict:
         """Execute a single investigation hop."""
-        from app.domains.intelligence.rag_service import search_multi_collection, search_similar
+        from rmi_rag.search_service import search_multi_collection, search_similar
 
         action = step["action"]
         query = step["query"]
@@ -474,7 +474,7 @@ async def stream_rag_search(
     Streaming RAG search - yields results as they're discovered.
     Pattern: "thinking..." → "found N matches..." → "reranking..." → results
     """
-    from app.domains.intelligence.rag_service import search_multi_collection, search_similar
+    from rmi_rag.search_service import search_multi_collection, search_similar
 
     # Phase 1: Quick keyword pre-filter (instant)
     yield json.dumps({"phase": "quick_scan", "status": "searching"}) + "\n"
@@ -553,7 +553,7 @@ class RealTimeTokenMonitor:
 
     async def scan_new_token(self, token_data: dict) -> dict[str, Any]:
         """Quick-look scan of a newly deployed token."""
-        from app.domains.intelligence.rag_service import detect_scam_patterns
+        from rmi_rag.search_service import detect_scam_patterns
 
         address = token_data.get("address", "")
         if address in self.processed:

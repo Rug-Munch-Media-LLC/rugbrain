@@ -233,7 +233,7 @@ def content_hash(text: str) -> str:
 async def is_duplicate(collection: str, text: str, redis_client=None) -> bool:
     """Check if content already exists in the collection via hash dedup."""
     if redis_client is None:
-        from app.domains.intelligence.rag_service import _get_redis
+        from rmi_rag.search_service import _get_redis
 
         redis_client = await _get_redis()
 
@@ -251,7 +251,7 @@ async def mark_ingested(
 ) -> None:
     """Mark content as ingested in dedup registry."""
     if redis_client is None:
-        from app.domains.intelligence.rag_service import _get_redis
+        from rmi_rag.search_service import _get_redis
 
         redis_client = await _get_redis()
 

@@ -350,7 +350,7 @@ async def search_similar(
             logger.info(f"Semantic cache hit for query: {query[:60]}")
             # Trace observability
             try:
-                from app.rag_observability import trace_retrieval  # external dependency
+                from rmi_rag.observability import trace_retrieval  # external dependency
 
                 trace_retrieval((time.time() - t0) * 1000, collection, len(cached), cache_hit=True)
             except Exception:
@@ -410,7 +410,7 @@ async def search_similar(
 
     # Trace observability
     try:
-        from app.rag_observability import trace_retrieval  # external dependency
+        from rmi_rag.observability import trace_retrieval  # external dependency
 
         trace_retrieval((time.time() - t0) * 1000, collection, len(results), cache_hit=cache_hit)
     except Exception:
@@ -748,7 +748,7 @@ async def three_pillar_search(
 
         # Stage 1: Ollama bge-m3 cosine approximation
         try:
-            from app.rag.cross_encoder import (
+            from rmi_rag.cross_encoder import (
                 get_reranker as _get_ollama_reranker,  # external dependency
             )
 

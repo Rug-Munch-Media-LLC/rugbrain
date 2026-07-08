@@ -489,7 +489,7 @@ async def find_similar_clusters(
     Find clusters similar to a target cluster using behavioral vector similarity.
     "This cluster looks like the Wintermute cluster from March"
     """
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     # Embed the target cluster
     target_vec = embed_cluster_profile(target_cluster)
@@ -513,7 +513,7 @@ async def find_similar_bundles(
     limit: int = 10,
 ) -> list[dict[str, Any]]:
     """Find bundles similar to a target bundle."""
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     target_vec = embed_bundle_profile(target_bundle)
     store = await get_qdrant_store()
@@ -540,9 +540,8 @@ async def search_clusters_by_description(
     "Show me all wash trading clusters from Solana in the last month"
     → embeds the query, searches against cluster behavioral vectors
     """
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
-
     from rmi_rag.crypto_embeddings import get_embedder
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     embedder = await get_embedder()
 
@@ -584,7 +583,7 @@ async def index_bundle_detection(bundle: dict[str, Any]) -> str:
     After bundle detection runs, index the result in RAG.
     Store bundle behavioral vector + metadata for future similarity search.
     """
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     vec = embed_bundle_profile(bundle)
     token = bundle.get("token_address", "unknown")
@@ -624,7 +623,7 @@ async def index_cluster_detection(cluster: dict[str, Any]) -> dict[str, Any]:
     """
     After cluster detection runs, index + auto-label + store.
     """
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     vec = embed_cluster_profile(cluster)
 
@@ -678,9 +677,8 @@ All labels: {json.dumps(labels["all_labels"])}"""
 
 async def backfill_label_templates():
     """Index all cluster label templates into pgvector for auto-labeling."""
-    from app.rag.qdrant_store import get_qdrant_store  # external dependency
-
     from rmi_rag.crypto_embeddings import get_embedder
+    from rmi_rag.qdrant_store import get_qdrant_store  # external dependency
 
     embedder = await get_embedder()
     store = await get_qdrant_store()

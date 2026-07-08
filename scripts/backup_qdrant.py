@@ -2,8 +2,9 @@
 
 Run daily via cron to back up all 20 RAG collections.
 """
-import boto3
 from datetime import datetime
+
+import boto3
 from qdrant_client import QdrantClient
 
 S3_ENDPOINT = "https://s3.hf.co/cryptorugmunch"
