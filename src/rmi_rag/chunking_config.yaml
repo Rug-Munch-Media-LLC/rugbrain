@@ -1,0 +1,33 @@
+rag_chunking:
+  news:
+    strategy: recursive
+    chunk_size: 512
+    overlap: 0.15
+  scam_report:
+    strategy: semantic
+    chunk_size: 400
+    overlap: 0.10
+  contract_code:
+    strategy: code
+    chunk_size: 256
+    overlap: 0.20
+  wallet_profile:
+    strategy: fixed
+    chunk_size: 128
+    overlap: 0.0
+  annual_report:
+    strategy: recursive
+    chunk_size: 800
+    overlap: 0.15
+  social_post:
+    strategy: fixed
+    chunk_size: 256
+    overlap: 0.05
+  market_data:
+    strategy: semantic
+    chunk_size: 300
+    overlap: 0.10
+  default:
+    strategy: recursive
+    chunk_size: 512
+    overlap: 0.15
