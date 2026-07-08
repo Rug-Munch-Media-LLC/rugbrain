@@ -98,6 +98,30 @@ SOURCES = {
         "description": "Annual crypto scam typologies and case studies",
         "cadence": "yearly",
     },
+    "honeypotdb": {
+        "name": "HoneypotDB",
+        "url": "https://honeypot.is/api/top-honeypots",
+        "collection": "known_scams",
+        "content_type": "scam_report",
+        "description": "Community-curated honeypot token list",
+        "cadence": "weekly",
+    },
+    "scamsniffer": {
+        "name": "ScamSniffer",
+        "url": "https://scamsniffer.io/reports",
+        "collection": "known_scams",
+        "content_type": "scam_report",
+        "description": "Real-time phishing and scam reports",
+        "cadence": "weekly",
+    },
+    "tokensniffer": {
+        "name": "TokenSniffer",
+        "url": "https://tokensniffer.com/api/tokens",
+        "collection": "known_scams",
+        "content_type": "scam_report",
+        "description": "Automated token scam detection",
+        "cadence": "weekly",
+    },
 }
 
 
@@ -309,6 +333,123 @@ async def ingest_trm_report() -> list[dict]:
     return docs
 
 
+async def ingest_honeypotdb() -> list[dict]:
+    """Ingest HoneypotDB top honeypots list."""
+    docs = []
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.get("https://honeypot.is/api/top-honeypots")
+            if resp.status_code == 200:
+                data = resp.json()
+                for item in data[:200]:
+                    token_addr = item.get("token_address", item.get("address", ""))
+                    token_name = item.get("token_name", item.get("name", "Unknown"))
+                    chain = item.get("chain", item.get("network", "ethereum"))
+                    score = item.get("honeypot_score", item.get("score", "N/A"))
+                    docs.append(
+                        {
+                            "text": f"HoneypotDB Token: {token_name} ({token_addr}) on {chain}. "
+                            f"Honeypot score: {score}. "
+                            f"Risk indicators: {item.get('indicators', '')}",
+                            "source": "honeypotdb",
+                            "url": f"https://honeypot.is/{chain}/{token_addr}",
+                            "category": "honeypot_token",
+                            "date": datetime.now(UTC).isoformat(),
+                            "chain": chain,
+                            "tags": [
+                                "honeypot",
+                                chain,
+                                "honeypotdb",
+                                "known_scams",
+                            ],
+                        }
+                    )
+    except Exception as e:
+        logger.warning("HoneypotDB ingest failed: %s", e)
+        return []
+
+    logger.info("HoneypotDB: %s tokens ingested", len(docs))
+    return docs
+
+
+async def ingest_scamsniffer() -> list[dict]:
+    """Ingest ScamSniffer real-time phishing and scam reports."""
+    docs = []
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.get("https://scamsniffer.io/reports")
+            if resp.status_code == 200:
+                text = resp.text
+                sections = re.split(r"<article[^>]*>", text)
+                for section in sections[1:]:
+                    clean = re.sub(r"<[^>]+>", " ", section)
+                    clean = re.sub(r"\s+", " ", clean).strip()
+                    if len(clean) > 50:
+                        docs.append(
+                            {
+                                "text": f"ScamSniffer Report: {clean[:2000]}",
+                                "source": "scamsniffer",
+                                "url": "https://scamsniffer.io/reports",
+                                "category": "phishing_report",
+                                "date": datetime.now(UTC).isoformat(),
+                                "tags": [
+                                    "phishing",
+                                    "scam_report",
+                                    "scamsniffer",
+                                    "known_scams",
+                                ],
+                            }
+                        )
+    except Exception as e:
+        logger.warning("ScamSniffer ingest failed: %s", e)
+        return []
+
+    logger.info("ScamSniffer: %s reports ingested", len(docs))
+    return docs
+
+
+async def ingest_tokensniffer() -> list[dict]:
+    """Ingest TokenSniffer automated token scam detection."""
+    docs = []
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.get("https://tokensniffer.com/api/tokens")
+            if resp.status_code == 200:
+                data = resp.json()
+                tokens = data if isinstance(data, list) else data.get("tokens", [])
+                for item in tokens[:200]:
+                    token_addr = item.get("address", "")
+                    token_name = item.get("name", "Unknown")
+                    chain = item.get("chain", item.get("network", "ethereum"))
+                    risks = item.get("risks", [])
+                    risk_str = ", ".join(risks) if risks else "None"
+                    docs.append(
+                        {
+                            "text": f"TokenSniffer Scan: {token_name} ({token_addr}) on {chain}. "
+                            f"Detected risks: {risk_str}. "
+                            f"Scam probability: {item.get('scam_probability', 'N/A')}. "
+                            f"Flags: {item.get('flags', '')}",
+                            "source": "tokensniffer",
+                            "url": f"https://tokensniffer.com/token/{chain}/{token_addr}",
+                            "category": "scam_token",
+                            "date": datetime.now(UTC).isoformat(),
+                            "chain": chain,
+                            "tags": [
+                                "scam_detection",
+                                chain,
+                                "tokensniffer",
+                                "known_scams",
+                            ],
+                        }
+                    )
+    except Exception as e:
+        logger.warning("TokenSniffer ingest failed: %s", e)
+        return []
+
+    logger.info("TokenSniffer: %s tokens ingested", len(docs))
+    return docs
+
+
 # ── Master Ingestion Orchestrator ──
 
 
@@ -327,6 +468,9 @@ async def ingest_historical_source(source_id: str) -> dict:
         "slowmist_hacked": scrape_slowmist,
         "rekt_news": scrape_rekt_news,
         "trm_crime_report": ingest_trm_report,
+        "honeypotdb": ingest_honeypotdb,
+        "scamsniffer": ingest_scamsniffer,
+        "tokensniffer": ingest_tokensniffer,
     }
 
     scraper = scrapers.get(source_id)

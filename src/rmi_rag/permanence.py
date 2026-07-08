@@ -1,15 +1,19 @@
 """
 RAG Permanence v2 - Cloudflare R2 cold storage via REST API.
-Hot (Redis) → Warm (local 7-day cache) → Cold (R2 permanent).
+Hot (Redis) → Warm (local 7-day cache) → Cold (R2 permanent + HF mirror).
 
 R2 free tier: 10GB storage, 10M Class A ops/month, zero egress.
 Uses CF REST API with Bearer token - no S3 credentials needed.
+HF mirror: opt-in dual-write to HuggingFace Storage Buckets via hf CLI.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
+import subprocess
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -24,6 +28,10 @@ R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "8f9bd9165c1250b426c66dc1967deefd")
 R2_BUCKET = os.getenv("R2_BUCKET", "rag-backup")
 R2_API_TOKEN = os.getenv("R2_API_TOKEN", "")
 R2_BASE = f"https://api.cloudflare.com/client/v4/accounts/{R2_ACCOUNT_ID}/r2/buckets/{R2_BUCKET}"
+
+RAG_HF_MIRROR = os.getenv("RAG_HF_MIRROR", "false").lower() in ("true", "1", "yes")
+HF_REPO = "cryptorugmunch/fleet-state"
+HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 LOCAL_CACHE = Path(os.getenv("RAG_LOCAL_CACHE", "/data/rag-storage"))
 LOCAL_RETENTION_DAYS = 7
@@ -111,6 +119,61 @@ async def _r2_delete(key: str) -> bool:
 
 
 # ═══════════════════════════════════════════════════════════════
+# HUGGINGFACE STORAGE BUCKETS MIRROR
+# ═══════════════════════════════════════════════════════════════
+def _hf_put(key: str, data: bytes) -> bool:
+    """Upload an object to HuggingFace Storage Buckets via hf CLI.
+
+    Writes data to a temp file and calls `hf storage buckets upload`.
+    Uses HF_TOKEN env var or gopass for authentication.
+    """
+    if not HF_TOKEN:
+        token_sources = []
+        token_sources.append(os.getenv("HF_TOKEN", ""))
+        try:
+            result = subprocess.run(
+                ["gopass", "show", "rmi/hf/token"],  # noqa: S607
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                token_sources.append(result.stdout.strip())
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        hf_token = next((t for t in token_sources if t), "")
+    else:
+        hf_token = HF_TOKEN
+
+    if not hf_token:
+        logger.error("HF_TOKEN not set and no gopass entry found")
+        return False
+
+    hf_key = f"rag/{key}"
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        try:
+            tmp.write(data)
+            tmp.flush()
+            result = subprocess.run(  # noqa: S603
+                ["hf", "storage", "buckets", "upload",  # noqa: S607
+                 "--repo", HF_REPO,
+                 "--key", hf_key,
+                 "--token", hf_token,
+                 tmp.name],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode == 0:
+                return True
+            logger.error("HF PUT %s: %s %s", key, result.returncode, result.stderr[:200])
+            return False
+        except Exception as e:
+            logger.error("HF PUT %s: %s", key, e)
+            return False
+        finally:
+            with contextlib.suppress(OSError):
+                Path(tmp.name).unlink()
+
+
+# ═══════════════════════════════════════════════════════════════
 # RAG PERSISTENCE OPERATIONS
 # ═══════════════════════════════════════════════════════════════
 async def snapshot_all():
@@ -189,6 +252,16 @@ async def snapshot_all():
                 ok = await _r2_put(key, payload)
                 total_uploaded += len(chunk_items)
 
+                if RAG_HF_MIRROR:
+                    try:
+                        hf_ok = await asyncio.get_running_loop().run_in_executor(
+                            None, _hf_put, key, payload,
+                        )
+                        if not hf_ok:
+                            logger.warning("HF mirror failed for chunk: %s", key)
+                    except Exception as e:
+                        logger.warning("HF mirror exception for %s: %s", key, e)
+
                 if not ok and chunk_idx == 0:
                     # First chunk failed - report failure
                     results[name] = {
@@ -216,6 +289,23 @@ async def snapshot_all():
                         }
                     ).encode(),
                 )
+
+                if RAG_HF_MIRROR:
+                    try:
+                        latest_payload = json.dumps(
+                            {
+                                "key": f"rag_snapshots/{name}/{ts}",
+                                "timestamp": ts,
+                                "count": count,
+                                "version": EMBEDDING_VERSION,
+                                "chunks": chunk_idx,
+                            }
+                        ).encode()
+                        await asyncio.get_running_loop().run_in_executor(
+                            None, _hf_put, f"rag_snapshots/{name}/latest.json", latest_payload,
+                        )
+                    except Exception as e:
+                        logger.warning("HF mirror failed for latest.json of %s: %s", name, e)
 
                 results[name] = {
                     "collection": name,

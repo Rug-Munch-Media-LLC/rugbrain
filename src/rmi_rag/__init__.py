@@ -2,6 +2,7 @@
 
 Public API surface.
 """
+from rmi_rag import endpoints
 from rmi_rag.cross_encoder import rerank
 from rmi_rag.embeddings import (
     EMBED_MODEL_NAME,
@@ -25,12 +26,15 @@ __all__ = [
     "EMBED_VERSION_STAMP",
     "DeltaTracker",
     "current_backend",
+    "endpoints",
+    "extract_pattern_from_url",
     "get_embedding",
     "get_embeddings",
     "get_parent_retriever",
     "get_qdrant_store",
     "rerank",
     "rewrite_query",
+    "scam_check_router",
     "search_multi_collection",
     "search_similar",
     "three_pillar_search",
