@@ -4,8 +4,41 @@ Confidence scoring, Solidity chunking, deployer reputation, cross-chain,
 multi-modal, investigation narratives, graph RAG, streaming, email.
 """
 
+import logging
+from datetime import UTC, datetime, timedelta
+
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
+
+logger = logging.getLogger(__name__)
+
+RATE_LIMITS = {
+    "free": 5,
+    "pro": 100,
+}
+
+
+async def _check_rate_limit(
+    identifier: str, tier: str, hour_key: str
+) -> tuple[bool, int]:
+    from rmi_rag.search_service import _get_redis
+
+    rd = await _get_redis()
+    limit = RATE_LIMITS.get(tier, RATE_LIMITS["free"])
+    key = f"rag:ratelimit:{identifier}:{hour_key}"
+    current = await rd.incr(key)
+    if current == 1:
+        now = datetime.now(UTC)
+        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        ttl = int((next_hour - now).total_seconds())
+        await rd.expire(key, ttl)
+    else:
+        ttl = await rd.ttl(key)
+        if ttl < 0:
+            ttl = 3600
+    if current > limit:
+        return False, ttl
+    return True, ttl
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
 
@@ -129,7 +162,32 @@ scam_check_router = APIRouter(prefix="/api/v1/rag/v2", tags=["scam-check"])
 
 
 @scam_check_router.get("/scam-check")
-async def scam_check(address: str, chain: str = "ethereum") -> dict:
+async def scam_check(
+    request: Request,
+    address: str,
+    chain: str = "ethereum",
+    limit: int = Query(default=10, ge=1, le=100),
+    tier: str = Query(default="free", pattern="^(free|pro)$"),
+) -> dict:
+    now = datetime.now(UTC)
+    hour_key = now.strftime("%Y%m%d%H")
+    device_id = request.headers.get("X-Device-Id", "")
+    client_ip = request.client.host if request.client else "unknown"
+    identifier = device_id if device_id else client_ip
+
+    allowed, ttl = await _check_rate_limit(identifier, tier, hour_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "tier": tier,
+                "limit": RATE_LIMITS.get(tier, RATE_LIMITS["free"]),
+                "reset_in_seconds": ttl,
+            },
+            headers={"X-RateLimit-Reset": str(ttl)},
+        )
+
     from rmi_rag.search_service import three_pillar_search
 
     query = f"scam check address {address} on {chain}"
@@ -137,7 +195,7 @@ async def scam_check(address: str, chain: str = "ethereum") -> dict:
     results_data = await three_pillar_search(
         query=query,
         collections=["known_scams", "scam_patterns"],
-        limit=10,
+        limit=limit,
         min_similarity=0.4,
         entity_boost=2.0,
         use_mmr=False,
