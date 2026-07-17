@@ -1,0 +1,29 @@
+# rmi-rag docker-compose
+# Deploy: cd /srv/work/repos/rmi-rag && docker compose up -d
+networks:
+  rmi_network:
+    external: true
+
+services:
+  rag-ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rmi-rag-ingest
+    restart: "no"
+    networks:
+      - rmi_network
+    environment:
+      - QDRANT_HOST=rmi-qdrant
+      - QDRANT_PORT=6333
+      - REDIS_HOST=rmi-redis
+      - REDIS_PORT=6379
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=http://rmi-langfuse:3000
+      - OTEL_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      - /root/.cache/huggingface:/root/.cache/huggingface:ro
+    command: python scripts/ingest_threats.py
