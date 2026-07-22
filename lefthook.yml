@@ -1,0 +1,50 @@
+pre-commit:
+  parallel: true
+  commands:
+    envsitter:
+      run: envsitter scan --filePath .env.example
+    env-check:
+      run: ./scripts/pre-commit-env-check.sh
+      skip: true  # TODO: set to false after Win #22 migration — soft warning for now
+    gitleaks:
+      run: gitleaks detect --verbose --redact --no-git
+    ruff:
+      run: ruff check --fix && ruff format
+      tags: [python]
+    biome:
+      run: biome check --write
+      tags: [typescript, javascript]
+    hadolint:
+      run: hadolint {files}
+      glob: "*.Dockerfile"
+    shellcheck:
+      run: shellcheck {files}
+      glob: "*.sh"
+    pre-commit-checks:
+      run: ./scripts/pre-commit-checks.sh
+    semgrep-quick:
+      run: semgrep --config=auto --error --quiet {files}
+      tags: [python, javascript, typescript]
+
+pre-push:
+  parallel: true
+  commands:
+    mypy:
+      run: mypy --strict .
+      tags: [python]
+    bandit:
+      run: bandit -r .
+      tags: [python]
+    deptry:
+      run: deptry .
+      tags: [python]
+    gitleaks-full:
+      run: gitleaks detect --verbose --redact
+    semgrep-full:
+      run: semgrep --config=auto --error
+      tags: [python, javascript, typescript]
+
+commit-msg:
+  commands:
+    commitlint:
+      run: commitlint --edit "$1"

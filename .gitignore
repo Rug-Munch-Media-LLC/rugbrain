@@ -1,51 +1,79 @@
-# Python .gitignore — Rug Munch Media fleet standard
-# See https://git.rugmunch.io/RugMunchMedia/standards for source of truth.
+# === RUGMUNCH STANDARD GITIGNORE — 2026-07-22 ===
 
-# ── Secrets (zero tolerance) ───────────────────────────────────
-.env
-.env.*
-!.env.example
-!.env.template
-*.pem
+# Secrets & Credentials — NEVER commit
+*.env
 *.key
+*.pem
 *.p12
 *.pfx
-id_rsa
-id_ed25519
-*.session
-credentials.json
-service-account.json
-.secrets/
+credentials*
+secrets*
+.env.*
+!.env.example
+!.env.sample
 
-# ── Python ─────────────────────────────────────────────────────
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*.egg-info/
 .venv/
 venv/
-*.egg-info/
-dist/
-build/
+*.egg
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-htmlcov/
-.coverage
-.coverage.*
 
-# ── IDE ────────────────────────────────────────────────────────
-.vscode/
+# Node
+node_modules/
+.npm/
+.yarn/
+
+# Build
+dist/
+build/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .idea/
+.vscode/
 *.swp
 *.swo
-*~
-.DS_Store
 
-# ── Logs ───────────────────────────────────────────────────────
+# Logs
 *.log
-logs/
 
-# ── Cache / temp ───────────────────────────────────────────────
+# Security reports — stored in R2, not git
+security-reports/
+*.gitleaks.json
+trivy*.json
+
+# Internal docs — company confidential
+*INTERNAL*
+PRIVATE*
+ADMIN-ACCESS*
+EDGE*
+secret-rotation*
+
+# === REPO-SPECIFIC ENTRIES (preserved) ===
+
+!.env.template
+*.pyo
+*.session
+*.tmp
+*~
 .cache/
+.coverage
+.coverage.*
+.env
+.secrets/
+credentials.json
+htmlcov/
+id_ed25519
+id_rsa
+logs/
+service-account.json
 tmp/
-*.tmpu00261
