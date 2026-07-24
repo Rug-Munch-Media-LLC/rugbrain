@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+
+# Node / JS
+node_modules/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/
+*.test.*
+
+# CI / cache
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

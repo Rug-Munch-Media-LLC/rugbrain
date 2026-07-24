@@ -11,10 +11,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run lefthook
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check
+        run: ruff check . --exit-non-zero-on-fix
+      - name: Ruff format check
+        run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Python
         run: |
-          which lefthook || curl -1sLf 'https://github.com/evilmartians/lefthook/releases/download/v1.7.18/lefthook_1.7.18_linux_amd64.tar.gz' | tar xz -C /usr/local/bin
-          lefthook run pre-commit
+          pip install -e ".[dev]"
+      - name: Run pytest
+        run: pytest tests/ -x -q --tb=short
 
   security:
     runs-on: ubuntu-latest
@@ -24,5 +36,5 @@ jobs:
           fetch-depth: 0
       - name: Gitleaks scan
         run: |
-          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz -C /usr/local/bin
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_linux_x64.tar.gz | tar xz -C /usr/local/bin
           gitleaks detect --source . --verbose
