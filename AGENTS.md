@@ -18,8 +18,8 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 
 ## Built With
 - Standards: [github.com/RugMunchMedia/standards](https://github.com/RugMunchMedia/standards)
-- Toolchain: [TOOLCHAIN.md](https://github.com/RugMunchMedia/standards/raw/main/TOOLCHAIN.md)
-- Conventions: [CONVENTIONS.md](https://github.com/RugMunchMedia/standards/raw/main/CONVENTIONS.md)
+- Toolchain: See README.md for development toolchain
+- Conventions: See CONTRIBUTING.md for coding conventions
 
 ## Components
 - `collections/` — Qdrant collection definitions and configs (20 collections)
@@ -61,7 +61,7 @@ See [PRODUCT.md](PRODUCT.md) and [ROADMAP.md](ROADMAP.md).
 ## Related Repos
 - `rmi-backend/` — query endpoint host
 - `pryscraper/` — ingestion source
-- [standards/PRODUCTS.md](https://github.com/RugMunchMedia/standards/raw/main/PRODUCTS.md)
+- See product documentation for available products
 
 ## Open-Core Protection
 

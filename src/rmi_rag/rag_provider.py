@@ -11,7 +11,7 @@ async def _rag_search_provider(**kwargs) -> dict | None:
     """DataBus provider for hybrid RAG search across all collections."""
     from dotenv import load_dotenv
 
-    load_dotenv("/root/backend/.env", override=True)
+    load_dotenv("/path/to/backend/.env", override=True)
     query = kwargs.get("query", kwargs.get("q", ""))
     collections = kwargs.get("collections", [])
     top_k = int(kwargs.get("limit", 10))
