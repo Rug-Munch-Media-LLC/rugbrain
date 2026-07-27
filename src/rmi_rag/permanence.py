@@ -30,7 +30,7 @@ R2_API_TOKEN = os.getenv("R2_API_TOKEN", "")
 R2_BASE = f"https://api.cloudflare.com/client/v4/accounts/{R2_ACCOUNT_ID}/r2/buckets/{R2_BUCKET}"
 
 RAG_HF_MIRROR = os.getenv("RAG_HF_MIRROR", "false").lower() in ("true", "1", "yes")
-HF_REPO = "cryptorugmunch/fleet-state"
+HF_REPO = os.getenv("RAG_HF_REPO", "your-username/your-repo")
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 LOCAL_CACHE = Path(os.getenv("RAG_LOCAL_CACHE", "/data/rag-storage"))
@@ -125,12 +125,12 @@ def _hf_put(key: str, data: bytes) -> bool:
     """Upload an object to HuggingFace Storage Buckets via hf CLI.
 
     Writes data to a temp file and calls `hf storage buckets upload`.
-    Uses HF_TOKEN env var or gopass for authentication.
+    Uses HF_TOKEN env var for authentication.
     """
     hf_token = HF_TOKEN if HF_TOKEN else os.getenv("HF_TOKEN", "")
 
     if not hf_token:
-        logger.error("HF_TOKEN not set and no gopass entry found")
+        logger.error("HF_TOKEN not set")
         return False
 
     hf_key = f"rag/{key}"
@@ -140,11 +140,11 @@ def _hf_put(key: str, data: bytes) -> bool:
             tmp.write(data)
             tmp.flush()
             result = subprocess.run(  # noqa: S603
-                [
+                [  # noqa: S607
                     "hf",
                     "storage",
                     "buckets",
-                    "upload",  # noqa: S607
+                    "upload",
                     "--repo",
                     HF_REPO,
                     "--key",

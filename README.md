@@ -8,13 +8,13 @@ RAG layer for Rug Munch Intelligence. Stores vector embeddings of threats, scams
 - Ingestion scripts from Ponder, Pry, and APIs
 - RAG query helpers
 
-## Fleet dependencies
-- Qdrant at 127.0.0.1:6333 (currently down due to stale IP bind)
-- bge-m3 embeddings at 127.0.0.1:8001
-- RMI backend for query endpoints
+## Dependencies
+- Vector database (configurable via environment variables)
+- Embedding service (configurable via environment variables)
+- Backend service for query endpoints
 
 ## Collections
-See collections/ for per-collection configs. 20 collections including threat_intel, known_scams, wallet_profiles, token_analysis, news_articles.
+Collections are configured via the `RAG_COLLECTIONS` environment variable. See `.env.example` for available options.
 
 ## Development
 pip install -r requirements.txt

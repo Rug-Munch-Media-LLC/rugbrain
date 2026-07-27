@@ -21,53 +21,27 @@ Citations add credibility:
 """
 
 import asyncio
+import json
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger("rag_citations")
 
 
 # ── Citation relevance map: scanner topic → RAG collections to query ──
-
-SCANNER_COLLECTIONS = {
-    "flash_loan": {
-        "primary": ["forensic_reports", "known_scams"],
-        "secondary": ["transaction_patterns", "scam_patterns"],
-    },
-    "pump_dump": {
-        "primary": ["forensic_reports", "known_scams", "market_intel"],
-        "secondary": ["scam_patterns", "wallet_profiles"],
-    },
-    "oracle_manipulation": {
-        "primary": ["forensic_reports", "scam_patterns"],
-        "secondary": ["contract_audits", "known_scams"],
-    },
-    "governance_attack": {
-        "primary": ["forensic_reports", "known_scams"],
-        "secondary": ["contract_audits", "scam_patterns"],
-    },
-    "proxy_detect": {
-        "primary": ["forensic_reports", "contract_audits"],
-        "secondary": ["known_scams", "scam_patterns"],
-    },
-    "static_analysis": {
-        "primary": ["contract_audits", "forensic_reports"],
-        "secondary": ["scam_patterns", "known_scams"],
-    },
-    "decompiler": {
-        "primary": ["contract_audits", "scam_patterns"],
-        "secondary": ["forensic_reports", "known_scams"],
-    },
-    "address_labeling": {
-        "primary": ["known_scams", "wallet_profiles"],
-        "secondary": ["forensic_reports"],
-    },
-    # Generic fallback
-    "general": {
-        "primary": ["known_scams", "forensic_reports"],
-        "secondary": ["scam_patterns", "wallet_profiles"],
-    },
-}
+# Configure via RAG_SCANNER_COLLECTIONS env var (JSON).
+# Example: '{"flash_loan": {"primary": ["col_a", "col_b"], "secondary": ["col_c"]}}'
+_SCANNER_COLLECTIONS_JSON = os.getenv("RAG_SCANNER_COLLECTIONS", "")
+if _SCANNER_COLLECTIONS_JSON:
+    SCANNER_COLLECTIONS = json.loads(_SCANNER_COLLECTIONS_JSON)
+else:
+    SCANNER_COLLECTIONS = {
+        "general": {
+            "primary": ["collection_a", "collection_b"],
+            "secondary": ["collection_c"],
+        },
+    }
 
 
 async def query_rag_citations(
@@ -282,4 +256,3 @@ def build_citation_string(citations: list[dict[str, Any]], finding: str) -> str:
             parts.append(";")
 
     return "".join(parts)
-

@@ -16,6 +16,7 @@ Design (per DESIGN.md M3):
 - FAIL LOUD: if both backends fail, raise RAGUnavailableError
 - Monitor via Prometheus counter rag_empty_returns_total
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,8 +41,8 @@ EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI bu
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/embeddings"
-OPENROUTER_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
+OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
+OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 
 
 class RAGUnavailableError(Exception):
@@ -70,7 +71,11 @@ def _ollama_reachable() -> bool:
 def _resize(vec: list[float], dim: int) -> list[float]:
     """Pad or truncate a vector to target dim, then L2 normalize."""
     arr = np.asarray(vec, dtype=np.float32)
-    arr = arr[:dim] if arr.shape[0] >= dim else np.concatenate([arr, np.zeros(dim - arr.shape[0], dtype=np.float32)])
+    arr = (
+        arr[:dim]
+        if arr.shape[0] >= dim
+        else np.concatenate([arr, np.zeros(dim - arr.shape[0], dtype=np.float32)])
+    )
     n = float(np.linalg.norm(arr))
     if n > 0:
         arr = arr / n

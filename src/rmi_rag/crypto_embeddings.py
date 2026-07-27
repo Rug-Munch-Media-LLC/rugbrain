@@ -1,29 +1,20 @@
 #!/usr/bin/env python3
 """
-ULTIMATE CRYPTO EMBEDDER - Rug Munch Intelligence
-===================================================
-Multi-head embedding system purpose-built for crypto scam/rug detection.
+Crypto Embedder - Multi-head embedding system for RAG.
 
 Architecture:
-  PRIMARY:   OpenRouter NVIDIA Nemotron (2048d, multimodal, FREE)
-  FALLBACK:  Local BGE-small-en-v1.5 (384-dim) - runs on CPU, zero API, zero cost
-  FALLBACK:  HuggingFace BGE-M3 (1024d) if token has inference permissions
+  PRIMARY:   Configurable primary model (set via RAG_PRIMARY_EMBED_MODEL)
+  FALLBACK:  Configurable fallback model (set via RAG_FALLBACK_EMBED_MODEL)
   SPECIALTY: Crypto-aware hashing - contract bytecode sim, tx pattern fingerprints
 
 Embedding Heads:
-  SEMANTIC    - token descriptions, scam narratives, news (OpenRouter/HF)
+  SEMANTIC    - token descriptions, scam narratives, news
   CODE        - smart contract similarity (AST-aware + bytecode hash)
-  BEHAVIORAL  - transaction patterns, wallet behavior vectors (numeric → float[])
+  BEHAVIORAL  - transaction patterns, wallet behavior vectors
   ENTITY      - wallet labels, cluster IDs, known scammer fingerprints
 
 Collections:
-  wallet_profiles   - wallet behavior + labels
-  token_analysis    - token metadata + risk signals
-  scam_patterns     - known rug/honeypot signatures
-  forensic_reports  - investigation findings
-  market_intel      - news, trends, alerts
-  contract_audits   - smart contract code + audit results
-  known_scams       - verified scam DB entries
+  Configured via RAG_COLLECTIONS env var (comma-separated).
 """
 
 import hashlib
@@ -46,56 +37,82 @@ REDIS_HOST = os.getenv("REDIS_HOST", "rmi-redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PW = os.getenv("REDIS_PASSWORD", "")
 
-# Embedding dimensions by model
-DIMS = {
-    "local/bge-small-en-v1.5": 384,
-    "openai/text-embedding-3-large": 3072,
-    "openai/text-embedding-3-small": 1536,
-    "BAAI/bge-m3": 1024,
-    "BAAI/bge-large-en-v1.5": 1024,
-    "BAAI/bge-small-en-v1.5": 384,
-    "nvidia/llama-nemotron-embed-vl-1b-v2:free": 2048,
-    "rmi/qwen3-embedding:4b": 2048,  # deprecated - using bge-m3 1024d instead
-    "crypto_behavioral": 64,
-    "crypto_code_hash": 128,
-}
+# Embedding dimensions by model.
+# Configure via RAG_EMBED_DIMS env var: "model1:dim1,model2:dim2"
+# Example: "your-model:1024,fallback:384"
+_DIMS_ENV = os.getenv("RAG_EMBED_DIMS", "")
+DIMS: dict[str, int] = {}
+if _DIMS_ENV:
+    for entry in _DIMS_ENV.split(","):
+        if ":" in entry:
+            model, dim = entry.split(":", 1)
+            DIMS[model.strip()] = int(dim.strip())
+if not DIMS:
+    # Sensible defaults showing the pattern
+    DIMS = {
+        "your-embedding-model": 1024,
+        "fallback-model": 384,
+        "behavioral": 64,
+        "code_hash": 128,
+    }
 
-# Default model per head - ONE embedder: bge-m3 1024d
-HEAD_DEFAULTS = {
-    "semantic": "rmi/bge-m3",  # OUR OWN - 1024d via Ollama, zero cost
-    "code": "rmi/bge-m3",  # OUR OWN - 1024d via Ollama
-    "behavioral": "crypto_behavioral",  # LOCAL - numeric vectors, zero cost
-    "entity": "crypto_behavioral",  # LOCAL - numeric vectors, zero cost
-}
+# Default model per head.
+# Configure via RAG_HEAD_DEFAULTS env var: "head:model,head:model"
+# Example: "semantic:your-model,code:your-model"
+_HEAD_ENV = os.getenv("RAG_HEAD_DEFAULTS", "")
+HEAD_DEFAULTS: dict[str, str] = {}
+if _HEAD_ENV:
+    for entry in _HEAD_ENV.split(","):
+        if ":" in entry:
+            head, model = entry.split(":", 1)
+            HEAD_DEFAULTS[head.strip()] = model.strip()
+if not HEAD_DEFAULTS:
+    HEAD_DEFAULTS = {
+        "semantic": "your-embedding-model",
+        "code": "your-embedding-model",
+        "behavioral": "behavioral-embedder",
+        "entity": "behavioral-embedder",
+    }
 
-# Primary embedding model: OUR OWN bge-m3 via Ollama (1024d)
-OR_PRIMARY_EMBED = "rmi/bge-m3"
-# OpenRouter fallback: NVIDIA Nemotron (2048d, free) - only if key works
-OR_PAID_FALLBACK = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
-# Always-available local fallback: BGE-small (384d, CPU, zero cost)
-OR_FALLBACK_EMBED = "local/bge-small-en-v1.5"
-# NVIDIA NIM embed endpoint
-NVIDIA_EMBED_URL = "https://integrate.api.nvidia.com/v1/embeddings"
+# Primary embedding model (set your model name here or via env var)
+OR_PRIMARY_EMBED = os.getenv("RAG_PRIMARY_EMBED_MODEL", "openrouter/your-model-here")
+# OpenRouter fallback model
+OR_PAID_FALLBACK = os.getenv("RAG_FALLBACK_EMBED_MODEL", "openrouter/your-fallback-here")
+# Always-available local fallback
+OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
+# Embed API endpoint (set your preferred provider URL)
+NVIDIA_EMBED_URL = os.getenv(
+    "RAG_EMBED_URL", "https://your-embed-provider.example.com/v1/embeddings"
+)
 
-COLLECTIONS = [
-    "wallet_profiles",
-    "token_analysis",
-    "scam_patterns",
-    "forensic_reports",
-    "market_intel",
-    "contract_audits",
-    "known_scams",
-    "news_articles",
-    "transaction_patterns",
-    "defi_hacks",
-    "rug_timeline",
-    "vuln_patterns",
-    "crime_reports",
-]
+# Collection names for vector storage.
+# Configure via RAG_COLLECTIONS env var (comma-separated).
+# Example: RAG_COLLECTIONS="profiles,analysis,patterns"
+_COLLECTIONS_ENV = os.getenv("RAG_COLLECTIONS", "")
+if _COLLECTIONS_ENV:
+    COLLECTIONS = [c.strip() for c in _COLLECTIONS_ENV.split(",")]
+else:
+    COLLECTIONS = [
+        "collection_1",
+        "collection_2",
+        "collection_3",
+        "collection_4",
+        "collection_5",
+        "collection_6",
+    ]
 
-from rmi_rag.bge_embedders import ContractCodeEmbedder, HuggingFaceEmbedder, LocalBGEEmbedder, OllamaBGEEmbedder, OpenRouterEmbedder  # noqa: E402, I001
-from rmi_rag.feature_extractors import extract_contract_features, extract_transaction_features, extract_wallet_features  # noqa: E402
-
+from rmi_rag.bge_embedders import (  # noqa: E402
+    ContractCodeEmbedder,
+    HuggingFaceEmbedder,
+    LocalBGEEmbedder,
+    OllamaBGEEmbedder,
+    OpenRouterEmbedder,
+)
+from rmi_rag.feature_extractors import (  # noqa: E402
+    extract_contract_features,
+    extract_transaction_features,
+    extract_wallet_features,
+)
 
 # ══════════════════════════════════════════════════════════════════════
 # MAIN CRYPTO EMBEDDER
@@ -151,24 +168,24 @@ class CryptoEmbedder:
         self._cache_misses = 0
 
     async def initialize(self):
-        """Initialize embedding providers. Ollama qwen3-embedding is PRIMARY."""
+        """Initialize embedding providers."""
         or_key = os.environ.get("OPENROUTER_API_KEY", "") or OPENROUTER_KEY
         hf_token = os.environ.get("HUGGINGFACE_TOKEN", "") or HF_TOKEN
 
-        # PRIMARY: Our own qwen3-embedding:4b via Ollama (2048d, #2 MTEB)
+        # PRIMARY embedding provider
         self._ollama = OllamaBGEEmbedder()
-        logger.info("CryptoEmbedder: Ollama qwen3-embedding:4b ready (PRIMARY, 2048d)")
+        logger.info("CryptoEmbedder: primary ollama embedder ready")
 
         self._local = LocalBGEEmbedder()
-        logger.info("CryptoEmbedder: Local BGE-small ready (fallback, 384d)")
+        logger.info("CryptoEmbedder: local fallback embedder ready")
 
         if or_key:
             self._openrouter = OpenRouterEmbedder(api_key=or_key)
-            logger.info("CryptoEmbedder: OpenRouter ready (fallback, 2048d NVIDIA Nemotron)")
+            logger.info("CryptoEmbedder: OpenRouter embedder ready")
 
         if hf_token:
             self._huggingface = HuggingFaceEmbedder(token=hf_token)
-            logger.info("CryptoEmbedder: HuggingFace ready (fallback, 1024d)")
+            logger.info("CryptoEmbedder: HuggingFace embedder ready")
 
         self._initialized = True
         logger.info("CryptoEmbedder initialized")
@@ -188,35 +205,36 @@ class CryptoEmbedder:
 
     async def _semantic_embed(self, texts: list[str], head: str = "semantic") -> list[list[float]]:
         """
-        Semantic embedding pipeline.
-        PRIMARY:   Our own qwen3-embedding:4b via Ollama (2048d, #2 MTEB)
-        FALLBACK:  OpenRouter NVIDIA Nemotron (2048d, free)
-        FALLBACK:  Local BGE-small (384d, zero cost)
-        LAST:      Hash-based (2048d, deterministic)
+        Semantic embedding pipeline with tiered fallback:
+        PRIMARY:   Primary embedder (e.g., Ollama)
+        FALLBACK:  OpenRouter or API-based embedder
+        FALLBACK:  Local embedder (always available)
+        FALLBACK:  HuggingFace embedder
+        LAST:      Hash-based (low quality, deterministic)
         """
         if not texts:
             return []
 
-        # PRIMARY: Our own qwen3-embedding:4b (2048d, best quality, zero cost)
+        # PRIMARY embedder
         if self._ollama:
             try:
                 return await self._ollama.embed(texts)
             except Exception as e:
-                logger.warning("Ollama qwen3 embedding failed: %s", e)
+                logger.warning("Primary ollama embedding failed: %s", e)
 
-        # Fallback: OpenRouter NVIDIA (2048d, free)
+        # Fallback: OpenRouter
         if self._openrouter:
             try:
                 return await self._openrouter.embed(texts)
             except Exception as e:
-                logger.warning("OpenRouter/NVIDIA embedding failed: %s", e)
+                logger.warning("OpenRouter embedding failed: %s", e)
 
-        # Fallback: Local BGE (384d, always available, zero cost)
+        # Fallback: Local embedder
         if self._local:
             try:
                 return await self._local.embed(texts)
             except Exception as e:
-                logger.warning("Local BGE embedding failed: %s", e)
+                logger.warning("Local embedding failed: %s", e)
 
         # Fallback: HuggingFace
         if self._huggingface:
@@ -244,7 +262,7 @@ class CryptoEmbedder:
         return vector
 
     def _hash_embed(self, text: str, dims: int = 1024) -> list[float]:
-        """Deterministic hash-based embedding (emergency fallback). 1024d matches bge-m3."""
+        """Deterministic hash-based embedding (emergency fallback)."""
         vec = np.zeros(dims, dtype=np.float32)
         words = re.findall(r"\w+", text.lower())
         for word in words:
@@ -304,7 +322,9 @@ Metadata: {json.dumps(metadata or {})[:1000]}"""
         semantic_dim = len(semantic_vec)
 
         # Get code features
-        code_vec = extract_contract_features(contract_code).tolist() if contract_code else [0.0] * 128
+        code_vec = (
+            extract_contract_features(contract_code).tolist() if contract_code else [0.0] * 128
+        )
 
         # Get behavioral features (from metadata)
         behavioral = extract_transaction_features(metadata or {})
@@ -490,12 +510,16 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
 
         sem_sim = CryptoEmbedder.cosine_similarity(vec_a[:semantic_dim], vec_b[:semantic_dim])
         code_sim = (
-            CryptoEmbedder.cosine_similarity(vec_a[code_start:behav_start], vec_b[code_start:behav_start])
+            CryptoEmbedder.cosine_similarity(
+                vec_a[code_start:behav_start], vec_b[code_start:behav_start]
+            )
             if len(vec_a) > code_start
             else 0.0
         )
         behav_sim = (
-            CryptoEmbedder.cosine_similarity(vec_a[behav_start:wallet_start], vec_b[behav_start:wallet_start])
+            CryptoEmbedder.cosine_similarity(
+                vec_a[behav_start:wallet_start], vec_b[behav_start:wallet_start]
+            )
             if len(vec_a) > behav_start
             else 0.0
         )
@@ -505,7 +529,12 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
             else 0.0
         )
 
-        return weights[0] * sem_sim + weights[1] * code_sim + weights[2] * behav_sim + weights[3] * wallet_sim
+        return (
+            weights[0] * sem_sim
+            + weights[1] * code_sim
+            + weights[2] * behav_sim
+            + weights[3] * wallet_sim
+        )
 
     # ─── VECTOR STORE INTEGRATION ───────────────────────────────
 
@@ -612,18 +641,17 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         return {
             "initialized": self._initialized,
             "providers": {
-                "local_bge": self._local is not None,
-                "openrouter": self._openrouter is not None,
+                "primary": self._ollama is not None,
+                "fallback_api": self._openrouter is not None,
+                "local": self._local is not None,
                 "huggingface": self._huggingface is not None,
             },
-            "primary": "local/bge-small-en-v1.5 (384d, $0/mo)",
             "cache": {
                 "hits": self._cache_hits,
                 "misses": self._cache_misses,
                 "ratio": round(self._cache_hits / max(1, self._cache_hits + self._cache_misses), 3),
             },
-            "dimensions": DIMS,
-            "collections": COLLECTIONS,
+            "collections_count": len(COLLECTIONS),
         }
 
 
@@ -791,4 +819,3 @@ async def get_embedder() -> CryptoEmbedder:
         _embedder = CryptoEmbedder()
         await _embedder.initialize()
     return _embedder
-

@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
-OR_PRIMARY_EMBED = "rmi/bge-m3"
-OR_FALLBACK_EMBED = "local/bge-small-en-v1.5"
+OR_PRIMARY_EMBED = os.getenv("RAG_PRIMARY_EMBED_MODEL", "openrouter/your-model-here")
+OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
 
 
 class LocalBGEEmbedder:
@@ -42,7 +42,9 @@ class LocalBGEEmbedder:
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         model = self._get_model()
-        embeddings = await asyncio.to_thread(lambda: model.encode(texts, normalize_embeddings=True).tolist())
+        embeddings = await asyncio.to_thread(
+            lambda: model.encode(texts, normalize_embeddings=True).tolist()
+        )
         return embeddings
 
     async def embed_one(self, text: str) -> list[float]:
@@ -51,11 +53,11 @@ class LocalBGEEmbedder:
 
 
 class OllamaBGEEmbedder:
-    """Our own bge-m3 via Ollama. 1024d, always available, zero cost."""
+    """Ollama embedding provider."""
 
-    OLLAMA_URL = "http://172.19.0.1:11434"
-    MODEL = "bge-m3"
-    DIMS = 1024
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "your-embedding-model")
+    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "1024"))
 
     def __init__(self, ollama_url: str | None = None):
         self.url = ollama_url or os.getenv("OLLAMA_URL", self.OLLAMA_URL)
@@ -202,7 +204,9 @@ class ContractCodeEmbedder:
             # Take first 4000 chars - enough for the key logic
             code_snippet = code[:4000]
             try:
-                semantic_vec = await semantic_embedder.embed_one(f"Smart contract code: {code_snippet[:3000]}")
+                semantic_vec = await semantic_embedder.embed_one(
+                    f"Smart contract code: {code_snippet[:3000]}"
+                )
                 # Truncate or pad to 192
                 semantic = np.array(semantic_vec[:192], dtype=np.float32)
                 if len(semantic) < 192:
