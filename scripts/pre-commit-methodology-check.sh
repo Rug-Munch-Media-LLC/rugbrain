@@ -1,131 +1,107 @@
-#!/usr/bin/env bash
-# ============================================================================
+#!/bin/bash
 # RugMunch Methodology Leak Detection — Pre-Commit Hook
-# "Code, Not Methods" — scans staged changes for proprietary method leaks
-# ============================================================================
+# Blocks commits that contain internal hostnames, IPs, gopass paths, or methodology
+# Canonical source: standards/scripts/pre-commit-methodology-check.sh
+# Installed per-repo: scripts/pre-commit-methodology-check.sh
+#
+# DESIGN NOTE: This script defines the forbidden patterns as REGEXES for detection.
+# The patterns themselves appear in this file and .gitleaks.toml because those are
+# scanner definitions — NOT actual leaks. Both files are excluded from scanning.
+# See: .gitleaks.toml allowlist for the gitleaks-side exclusion.
+
 set -euo pipefail
 
-# ── Configuration ──────────────────────────────────────────────────────────
-# Patterns that indicate proprietary method leaks
-LEAK_PATTERNS=(
-    # Internal hostnames
-    'talos\.rugmunch\.io'
-    'hydra\.rugmunch\.io'
-    'cinnabox\.rugmunch\.io'
-    'netcup\.'
-    'contabo\.'
-
-    # Internal IP ranges
-    '100\.64\.'
-    '172\.(1[6-9]|2[0-9]|3[01])\.'
-
-    # Gopass paths (secrets manager paths)
-    'rmi/[a-z]'
-    'rmi/'
-
-    # Internal filesystem paths
-    '^/root/backend'
-    '^/root/rmi'
-    '^/srv/data'
-    '^/srv/rmi'
-
-    # Infrastructure-specific patterns
-    'systemd-oomd'
-    'cloudflared'
-    'proprietary.*method'
-    'admin\.rugmunch\.io'
+# Files that are explicitly allowed to contain these patterns because they are
+# security scanner definitions (the detector, not the detected)
+EXEMPT_FILES=(
+  "scripts/pre-commit-methodology-check.sh"
+  ".gitleaks.toml"
 )
 
-# File patterns to scan (staged changes only)
-INCLUDE_EXTENSIONS='\.(md|yml|yaml|py|ts|js|sh|json|toml|env|txt|cfg|conf)$'
+FORBIDDEN_PATTERNS=(
+  # Internal hostnames
+  'talos\.rugmunch\.io'
+  'hydra\.rugmunch\.io'
+  'cinnabox\.rugmunch\.io'
+  'ssh netcup'
+  'ssh contabo'
+  'ssh talos'
+  'ssh hydra'
+  'root@talos'
+  'root@netcup'
 
-# ── Colors ─────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+  # Internal IPs (Tailscale CGNAT range [INTERNAL]/10)
+  '100\.6[4-9]\.'
+  '100\.7[0-9]\.'
+  '100\.8[0-9]\.'
+  '100\.9[0-9]\.'
+  '100\.1[01][0-9]\.'
 
-# ── Functions ──────────────────────────────────────────────────────────────
-check_staged() {
-    local found=0
-    local violations=""
+  # Secret management paths
+  'gopass show rmi/'
+  'gopass.*rmi/'
 
-    # Get staged files
-    local staged_files
-    staged_files=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+  # Internal filesystem paths
+  '/root/backend/'
+  '/root/frontend/'
+  '/root/\.hermes/'
+  '/srv/work/repos.*\.git'
+  '/srv/pryscraper'
+  '/srv/walletpress'
+  '/srv/data/'
+  '/var/www/rmi'
 
-    if [ -z "$staged_files" ]; then
-        echo -e "${GREEN}✓ No staged files to check${NC}"
-        return 0
+  # Methodology keywords (high-signal — never in public code)
+  'proprietary.*algorithm'
+  'internal.*methodology'
+  'competitor.*analysis.*method'
+  'our.*scraping.*target'
+  'production.*deploy.*root@'
+)
+
+# Check if a file is in the exempt list
+is_exempt() {
+  local f="$1"
+  for exempt in "${EXEMPT_FILES[@]}"; do
+    if [ "$f" = "$exempt" ]; then
+      return 0
     fi
-
-    echo "🔍 Scanning $(echo "$staged_files" | wc -l) staged files for methodology leaks..."
-
-    while IFS= read -r file; do
-        # Skip binary files and files outside our extension range
-        if ! echo "$file" | grep -qE "$INCLUDE_EXTENSIONS"; then
-            continue
-        fi
-
-        # Skip files in safe paths
-        if echo "$file" | grep -qE '\.git/|node_modules/|venv/|\.venv/|__pycache__/'; then
-            continue
-        fi
-
-        # Read staged content
-        local content
-        content=$(git diff --cached "$file" 2>/dev/null || true)
-
-        # Check each leak pattern
-        for pattern in "${LEAK_PATTERNS[@]}"; do
-            if echo "$content" | grep -qE "$pattern"; then
-                # Extract the actual matching lines (added lines in diff)
-                local matches
-                matches=$(echo "$content" | grep -nE "^\+.*$pattern" | sed 's/^+//' || true)
-                if [ -n "$matches" ]; then
-                    echo -e "${RED}⚠  METHODOLOGY LEAK in $file:${NC}"
-                    echo "$matches" | while IFS= read -r line; do
-                        echo -e "  ${RED}→ $line${NC}"
-                    done
-                    found=$((found + 1))
-                    violations="$violations $file"
-                fi
-            fi
-        done
-    done <<<"$staged_files"
-
-    if [ "$found" -gt 0 ]; then
-        echo ""
-        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${RED}❌ METHODOLOGY LEAK DETECTED: $found violation(s)${NC}"
-        echo -e "${RED}   Files: $violations${NC}"
-        echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo ""
-        echo "Policy: METHODOLOGY-PROTECTION.md — 'Code, Not Methods'"
-        echo "These patterns reveal proprietary operations. Fix before commit."
-        echo "  - Remove internal hostnames/IPs"
-        echo "  - Replace gopass paths with env var references"
-        echo "  - Replace internal paths with generic /path/to/ placeholders"
-        echo ""
-        return 1
-    fi
-
-    echo -e "${GREEN}✓ Methodology check passed — no leaks detected${NC}"
-    return 0
+  done
+  return 1
 }
 
-# ── Main ────────────────────────────────────────────────────────────────────
-echo ""
-echo "========================================"
-echo " RugMunch Methodology Leak Detector"
-echo " 'Code, Not Methods'"
-echo "========================================"
+FOUND=0
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
 
-check_staged
-exit_code=$?
-
-if [ $exit_code -ne 0 ]; then
-    exit 1
+if [ -z "$STAGED_FILES" ]; then
+  echo "✅ Methodology check: clean (no staged files)"
+  exit 0
 fi
 
+for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+  # Check each staged file, excluding exempt scanner definition files
+  while IFS= read -r file; do
+    if is_exempt "$file"; then
+      continue
+    fi
+    if grep -lq "$pattern" "$file" 2>/dev/null; then
+      echo "❌ FORBIDDEN PATTERN: $pattern"
+      echo "   Found in: $file"
+      FOUND=1
+    fi
+  done <<< "$STAGED_FILES"
+done
+
+if [ "$FOUND" -eq 1 ]; then
+  echo ""
+  echo "🚫 COMMIT BLOCKED: Methodology leak detected."
+  echo "   These patterns reveal internal infrastructure or methods."
+  echo "   See: standards/METHODOLOGY-PROTECTION.md"
+  echo ""
+  echo "   If this is a false positive, use:"
+  echo "   git commit --no-verify  (with Lead approval)"
+  exit 1
+fi
+
+echo "✅ Methodology check: clean"
 exit 0
