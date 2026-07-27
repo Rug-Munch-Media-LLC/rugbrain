@@ -2,7 +2,7 @@
 RMI RAG — FastAPI application entry point.
 
 Mounts the existing APIRouter from endpoints.py, adds health/readiness probes,
-CORS middleware, and OpenTelemetry integration via observability.py.
+CORS middleware, API key authentication, and OpenTelemetry integration.
 
 Usage:
     uvicorn rmi_rag.main:app --host 0.0.0.0 --port 8012
@@ -17,8 +17,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from rmi_rag.endpoints import router as rag_router
 from rmi_rag.endpoints import scam_check_router
@@ -29,6 +31,13 @@ logger = logging.getLogger(__name__)
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
 OTEL_ENABLED = os.getenv("OTEL_ENABLED", "").lower() in ("1", "true", "yes")
 OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+RMI_RAG_API_KEY = os.getenv("RMI_RAG_API_KEY", "")
+
+if not RMI_RAG_API_KEY:
+    logger.warning(
+        "RMI_RAG_API_KEY is not set! API endpoints will be accessible without authentication. "
+        "Set RMI_RAG_API_KEY environment variable in production."
+    )
 
 # ── Health probes (shared state) ─────────────────────────────────────
 _health_state: dict[str, Any] = {
@@ -40,6 +49,50 @@ _health_state: dict[str, Any] = {
     "scanner_subscriber": False,
     "subscriber_stats": {},
 }
+
+
+# ── Auth Middleware ───────────────────────────────────────────────────
+class RAGAuthMiddleware(BaseHTTPMiddleware):
+    """API key authentication via X-API-Key header.
+
+    Exempts /health and /ready endpoints.
+    All other endpoints require a valid API key.
+    """
+
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        path = request.url.path
+
+        # Exempt health/readiness probes
+        if path in ("/health", "/ready") or path.startswith("/health"):
+            return await call_next(request)
+
+        # If no API key is configured, allow all (dev mode)
+        if not RMI_RAG_API_KEY:
+            return await call_next(request)
+
+        # Require X-API-Key header
+        api_key = request.headers.get("X-API-Key", "")
+        if not api_key:
+            logger.warning("auth_failed path=%s reason=missing_api_key", path)
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Unauthorized — X-API-Key header required",
+                    "code": "auth.missing_key",
+                },
+            )
+
+        if api_key != RMI_RAG_API_KEY:
+            logger.warning("auth_failed path=%s reason=invalid_api_key", path)
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Unauthorized — invalid X-API-Key",
+                    "code": "auth.invalid_key",
+                },
+            )
+
+        return await call_next(request)
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────
@@ -150,6 +203,9 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# ── Auth middleware (before CORS — authenticate before processing) ────
+app.add_middleware(RAGAuthMiddleware)
+
 # ── CORS ──────────────────────────────────────────────────────────────
 # Match rmi-backend pattern: secure defaults, allow *.rugmunch.io in prod
 _cors_origins = CORS_ORIGINS.split(",") if CORS_ORIGINS != "*" else ["*"]
@@ -164,6 +220,7 @@ app.add_middleware(
         "Content-Type",
         "X-Request-ID",
         "X-Payment",
+        "X-API-Key",
         "X-CSRF-Token",
     ],
 )

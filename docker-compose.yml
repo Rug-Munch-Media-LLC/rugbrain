@@ -18,6 +18,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8012:8012"
+    env_file:
+      - .env.rag
     networks:
       - rmi_network
     environment:
