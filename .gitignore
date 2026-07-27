@@ -1,5 +1,4 @@
 # === RUGMUNCH STANDARD GITIGNORE — 2026-07-22 ===
-
 # Secrets & Credentials — NEVER commit
 *.env
 *.key
@@ -11,7 +10,6 @@ secrets*
 .env.*
 !.env.example
 !.env.sample
-
 # Python
 __pycache__/
 *.py[cod]
@@ -22,44 +20,35 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-
 # Node
 node_modules/
 .npm/
 .yarn/
-
 # Build
 dist/
 build/
 *.pyc
-
 # OS
 .DS_Store
 Thumbs.db
-
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
 # Logs
 *.log
-
 # Security reports — stored in R2, not git
 security-reports/
 *.gitleaks.json
 trivy*.json
-
 # Internal docs — company confidential
 *INTERNAL*
 PRIVATE*
 ADMIN-ACCESS*
 EDGE*
 secret-rotation*
-
 # === REPO-SPECIFIC ENTRIES (preserved) ===
-
 !.env.template
 *.pyo
 *.session
@@ -78,3 +67,9 @@ logs/
 service-account.json
 tmp/
 RADICLE.md
+# Missing common patterns (added by fleet standardization)
+.turbo/
+.next/
+.nuxt/
+coverage/
+
