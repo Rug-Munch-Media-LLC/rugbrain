@@ -24,6 +24,13 @@ dev = [
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: cross-service integration tests (require external services running)",
+]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["rmi_rag*"]
