@@ -14,14 +14,12 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 `backend` · language=Python 3.12
 
 ## Where It Lives
-- Source: `https://git.rugmunch.io/RugMunchMedia/rmi-rag`
-- Deployed: Docker on Talos (compose in fleet-infra)
-- Port: 6333 (Qdrant, shared)
+- Source: `https://github.com/RugMunchMedia/rmi-rag`
 
 ## Built With
-- Standards: [git.rugmunch.io/RugMunchMedia/standards](https://git.rugmunch.io/RugMunchMedia/standards)
-- Toolchain: [TOOLCHAIN.md](https://git.rugmunch.io/RugMunchMedia/standards/raw/branch/main/TOOLCHAIN.md)
-- Conventions: [CONVENTIONS.md](https://git.rugmunch.io/RugMunchMedia/standards/raw/branch/main/CONVENTIONS.md)
+- Standards: [github.com/RugMunchMedia/standards](https://github.com/RugMunchMedia/standards)
+- Toolchain: [TOOLCHAIN.md](https://github.com/RugMunchMedia/standards/raw/main/TOOLCHAIN.md)
+- Conventions: [CONVENTIONS.md](https://github.com/RugMunchMedia/standards/raw/main/CONVENTIONS.md)
 
 ## Components
 - `collections/` — Qdrant collection definitions and configs (20 collections)
@@ -29,18 +27,17 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 - `requirements.txt` — Python deps
 
 ## Dependencies
-- Qdrant at `127.0.0.1:6333`
-- bge-m3 embeddings at `127.0.0.1:8001/embed`
-- RMI backend for query endpoints
-- Postgres (source data via Ponder)
+- Vector database (Qdrant or compatible)
+- Embedding service (configurable)
+- Backend service for query endpoints
 
 ## 🚨 CRITICAL RULES
 
 1. **No nested repos.** Don't commit other complete project trees inside this one.
-2. **No secrets.** Never commit `.secrets/`, `.env`, `*.pem`, `*.key`, `*.crt`. Use gopass.
+2. **No secrets.** Never commit `.secrets/`, `.env`, `*.pem`, `*.key`, `*.crt`.
 3. **No data blobs.** Don't commit `*.zip`, `*.parquet`, model weights, sqlite files, Qdrant snapshots.
 4. **No file > 500 lines.** Split or refactor.
-5. **No mainnet RPC keys in source.** Use gopass and environment.
+5. **No mainnet RPC keys in source.** Use environment variables.
 6. **Update STATUS.md before committing.** Builders must know where we are.
 7. **Read DECISIONS.md before architectural changes.** Don't repeat rejected designs.
 
@@ -64,12 +61,21 @@ See [PRODUCT.md](PRODUCT.md) and [ROADMAP.md](ROADMAP.md).
 ## Related Repos
 - `rmi-backend/` — query endpoint host
 - `pryscraper/` — ingestion source
-- See [standards/PRODUCTS.md](https://git.rugmunch.io/RugMunchMedia/standards/raw/branch/main/PRODUCTS.md).
+- [standards/PRODUCTS.md](https://github.com/RugMunchMedia/standards/raw/main/PRODUCTS.md)
+
+## Open-Core Protection
+
+This repo is open source (MIT). The code here demonstrates RAG patterns for
+crypto intelligence — it is NOT the complete RugMunch production RAG pipeline.
+The managed platform at rugmunch.io includes proprietary enhancements.
+
+See [METHODOLOGY-PROTECTION.md](https://github.com/RugMunchMedia/standards/blob/main/METHODOLOGY-PROTECTION.md)
+for details on what information belongs in public vs private repos.
+
 ## Git Policy
 
-See the master Git Policy at /root/AGENTS.md. This repo:
+This repo:
 - Classification: OPEN SOURCE
-- Remotes: forgejo + codeberg + gitlab + radicle
-- Push: git push forgejo main && git push codeberg main && git push gitlab main && rad sync
+- Remotes: codeberg + github + gitlab + radicle (primary)
 - Commits: type(scope): description
 - Never commit: .env, secrets, internal IPs, security reports
