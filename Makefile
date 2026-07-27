@@ -2,66 +2,67 @@
 # Rug Munch Media fleet standard (from fleet-template/Makefile.python.template)
 # Source of truth: https://git.rugmunch.io/RugMunchMedia/rmi-rag
 #
-# Small Python utility repo: 2 standalone scripts (no app/ package).
-# Ingests threats into Qdrant + backs up the Qdrant collection.
+# Modes:
+#   make api-dev   — start FastAPI dev server on :8012
+#   make ingest    — run one-shot threat ingest into Qdrant
+#   make backup    — snapshot Qdrant collection
 #
 # Layout:
-#   scripts/ingest_threats.py   - push threat intel into Qdrant
-#   scripts/backup_qdrant.py    - snapshot a Qdrant collection
-#   requirements.txt            - qdrant-client, sentence-transformers, torch
+#   src/rmi_rag/   — Python package (53 modules, ~15K LOC)
+#   scripts/       — operational scripts
+#   Dockerfile     — multi-mode container (API default, ingest override)
 
 SHELL := /bin/bash
 
-.PHONY: help install dev run ingest backup restore lint format check test \
+.PHONY: help install dev run api-dev ingest backup restore lint format check \
         typecheck security precommit commit ci clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install Python deps (qdrant + sentence-transformers + torch CPU)
-	pip install -r requirements.txt
+install: ## Install Python deps (pyproject.toml + requirements.txt)
+	pip install -e ".[dev]"
 
-dev: ## Alias for `make ingest` (interactive re-ingest for development)
-	@echo "use:  make ingest      # run ingest_threats.py"
-	@echo "      make backup      # snapshot Qdrant collection"
+dev: api-dev ## Alias for starting the API server
 
-run: ingest ## Alias for ingest (dev-loop entry point)
+api-dev: ## Start FastAPI dev server on :8012 with hot-reload
+	uvicorn rmi_rag.main:app --host 0.0.0.0 --port 8012 --reload --log-level debug
 
 ingest: ## Run threat ingest into Qdrant (requires QDRANT_URL env)
-	@test -n "$$QDRANT_URL" || (echo "QDRANT_URL not set - export it first" && exit 1)
-	python3 scripts/ingest_threats.py
+	@test -n "$$QDRANT_URL" || echo "QDRANT_URL not set - using default http://rmi-qdrant:6333"
+	python scripts/ingest_threats.py
 
 backup: ## Snapshot Qdrant collection to local snapshot dir (QDRANT_URL env)
 	@test -n "$$QDRANT_URL" || (echo "QDRANT_URL not set - export it first" && exit 1)
-	python3 scripts/backup_qdrant.py
+	python scripts/backup_qdrant.py
 
 restore: ## Restore a Qdrant snapshot (requires SNAPSHOT_FILE + QDRANT_URL)
 	@test -n "$$SNAPSHOT_FILE" || (echo "SNAPSHOT_FILE not set" && exit 1)
 	@test -n "$$QDRANT_URL" || (echo "QDRANT_URL not set" && exit 1)
-	python3 scripts/backup_qdrant.py --restore "$$SNAPSHOT_FILE"
+	python scripts/backup_qdrant.py --restore "$$SNAPSHOT_FILE"
 
-lint: ## Lint scripts/ with ruff
-	ruff check scripts/
+lint: ## Lint src/ and scripts/ with ruff
+	ruff check src/ scripts/
 
-format: ## Format scripts/ with ruff (writes)
-	ruff format scripts/
-	ruff check --fix scripts/
+format: ## Format src/ and scripts/ with ruff (writes)
+	ruff format src/ scripts/
+	ruff check --fix src/ scripts/
 
 check: ## Full check: lint + format + typecheck
-	ruff check scripts/
-	ruff format --check scripts/
-	mypy scripts/ --ignore-missing-imports
+	ruff check src/ scripts/
+	ruff format --check src/ scripts/
+	mypy src/ scripts/ --ignore-missing-imports
 
 typecheck: ## MyPy type check
-	mypy scripts/ --ignore-missing-imports
+	mypy src/ scripts/ --ignore-missing-imports
 
 test: ## Run tests (placeholder - no tests yet)
-	@echo "no tests yet - scripts are CLI tools; smoke test via make ingest/backup"
+	@echo "no tests yet - API endpoints covered via smoke test: make api-dev"
 	exit 0
 
 security: ## Security audit (bandit + ruff S-rules)
-	bandit -r scripts/ -q
-	ruff check --select S scripts/
+	bandit -r src/ scripts/ -q
+	ruff check --select S src/ scripts/
 
 precommit: ## Install pre-commit hooks
 	pre-commit install

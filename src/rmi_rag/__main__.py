@@ -1,0 +1,55 @@
+"""
+RMI RAG — CLI entry point.
+
+Usage:
+    python -m rmi_rag           # Start FastAPI dev server (default)
+    python -m rmi_rag --ingest  # Run threat ingest pipeline
+    python -m rmi_rag --help    # Show help
+"""
+
+import argparse
+
+
+def _main() -> None:
+    parser = argparse.ArgumentParser(
+        description="RMI RAG — hybrid search, embeddings, chunking, agentic retrieval"
+    )
+    parser.add_argument(
+        "--ingest",
+        action="store_true",
+        help="Run threat ingest pipeline instead of starting the API server",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",  # noqa: S104
+        help="Bind host for the API server (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8012,
+        help="Bind port for the API server (default: 8012)",
+    )
+    args = parser.parse_args()
+
+    if args.ingest:
+        # Run threat ingest — run as __main__ so __name__ block fires
+        import runpy
+
+        runpy.run_path("scripts/ingest_threats.py", run_name="__main__")
+        return
+
+    # Start API server
+    import uvicorn
+
+    uvicorn.run(
+        "rmi_rag.main:app",
+        host=args.host,
+        port=args.port,
+        reload=False,
+        log_level="info",
+    )
+
+
+if __name__ == "__main__":
+    _main()

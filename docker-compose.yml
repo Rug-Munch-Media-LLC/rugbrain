@@ -1,19 +1,57 @@
 # rmi-rag docker-compose
+# Two modes:
+#   rag-api     — FastAPI server (default, always-on)
+#   rag-ingest  — One-shot threat ingest (run via: docker compose run --rm rag-ingest)
+#
 # Deploy: cd /srv/work/repos/rmi-rag && docker compose up -d
 networks:
   rmi_network:
     external: true
 
 services:
+  # ── API server (always-on) ──────────────────────────────────────
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rmi-rag-api
+    restart: unless-stopped
+    ports:
+      - "8012:8012"
+    networks:
+      - rmi_network
+    environment:
+      - QDRANT_URL=http://rmi-qdrant:6333
+      - QDRANT_HOST=rmi-qdrant
+      - QDRANT_PORT=6333
+      - REDIS_HOST=rmi-redis
+      - REDIS_PORT=6379
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=http://rmi-langfuse:3000
+      - OTEL_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8012/ready'); exit(0 if r.status_code == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Threat ingest (one-shot) ────────────────────────────────────
   rag-ingest:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: rmi-rag-ingest
     restart: "no"
+    profiles:
+      - ingest
     networks:
       - rmi_network
     environment:
+      - QDRANT_URL=http://rmi-qdrant:6333
       - QDRANT_HOST=rmi-qdrant
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-redis

@@ -6,3 +6,6 @@ numpy>=1.26.0
 pandas>=2.2.0
 pydantic>=2.9.0
 asyncio>=3.11
+uvicorn[standard]>=0.30.0
+fastapi>=0.115.0
+redis>=5.2.0
