@@ -1,0 +1,55 @@
+# rmi-rag-ingest — RAG Threat Ingest (One-shot)
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-ingest.service
+# Deploy: /etc/systemd/system/rmi-rag-ingest.service
+#
+# Runs the rag-ingest container from docker compose (ingest profile).
+# Designed to be triggered by rmi-rag-ingest.timer (weekly) or manually:
+#   systemctl start rmi-rag-ingest.service
+#
+# This is a oneshot service — it runs the ingest pipeline and exits.
+# The ingest will:
+#   1. Pull latest threat intel from configured sources
+#   2. Chunk, embed, and index into Qdrant
+#   3. Cache results in Redis/DragonflyDB
+#
+# Deploy:
+#   cp systemd/rmi-rag-ingest.service /etc/systemd/system/
+#   cp systemd/rmi-rag-ingest.timer   /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-rag-ingest.timer
+#
+# Manual run:
+#   systemctl start rmi-rag-ingest.service
+#
+# View logs:
+#   journalctl -u rmi-rag-ingest.service -f
+#   docker logs rmi-rag-ingest
+
+[Unit]
+Description=RMI RAG Threat Ingest (One-shot Indexing Pipeline)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+After=docker.service network-online.target rmi-rag.service
+Wants=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rmi-rag
+ExecStartPre=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest pull rag-ingest
+ExecStart=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest run --rm rag-ingest
+ExecStartPost=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest rm -f rag-ingest 2>/dev/null || true
+TimeoutStartSec=600
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+# Environment (override via /etc/default/rmi-rag or systemctl edit)
+EnvironmentFile=-/etc/default/rmi-rag
+
+[Install]
+WantedBy=multi-user.target

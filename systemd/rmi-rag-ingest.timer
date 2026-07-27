@@ -1,0 +1,30 @@
+# rmi-rag-ingest.timer — Weekly RAG Threat Ingest Schedule
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-ingest.timer
+# Deploy: /etc/systemd/system/rmi-rag-ingest.timer
+#
+# Runs rmi-rag-ingest.service weekly on Monday at 03:00 UTC.
+# This refreshes the threat intelligence vectors in Qdrant.
+#
+# Deploy:
+#   cp systemd/rmi-rag-ingest.timer /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-rag-ingest.timer
+#
+# To see next run:
+#   systemctl list-timers rmi-rag-ingest.timer
+#
+# To trigger manually (without waiting for timer):
+#   systemctl start rmi-rag-ingest.service
+
+[Unit]
+Description=RMI RAG Threat Ingest — Weekly Timer
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Requires=rmi-rag-ingest.service
+
+[Timer]
+OnCalendar=Mon *-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

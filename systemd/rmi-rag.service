@@ -1,0 +1,56 @@
+# rmi-rag — RAG API Server
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag.service
+# Deploy: /etc/systemd/system/rmi-rag.service
+#
+# Manages the rmi-rag FastAPI server via docker compose.
+# Depends on: Docker, rmi_network (created by infra stack), Qdrant, Redis
+#
+# Health check: curl http://localhost:8012/ready  → 200 OK
+#
+# Deploy:
+#   cp systemd/rmi-rag.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-rag.service
+#
+# View logs:
+#   journalctl -u rmi-rag.service -f
+#   docker logs rmi-rag-api
+#
+# Manual rebuild:
+#   systemctl stop rmi-rag.service
+#   cd /srv/work/repos/rmi-rag && docker compose build rag-api
+#   systemctl start rmi-rag.service
+
+[Unit]
+Description=RMI RAG API Server (FastAPI + Qdrant)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rmi-rag
+ExecStartPre=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml pull rag-api
+ExecStart=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml up -d rag-api
+ExecStop=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml stop rag-api --timeout 30
+ExecReload=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml up -d --force-recreate --no-deps rag-api
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=45
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+# Environment (override via /etc/default/rmi-rag or systemctl edit)
+EnvironmentFile=-/etc/default/rmi-rag
+
+[Install]
+WantedBy=multi-user.target
