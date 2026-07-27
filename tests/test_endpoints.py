@@ -100,34 +100,35 @@ async def test_search_empty_query(client):
 
 @pytest.mark.asyncio
 async def test_confidence_score_basic(client):
-    """POST /api/v1/rag/confidence should work with minimal input."""
+    """POST /api/v1/rag/confidence — skip if external dep not installed."""
+    pytest.importorskip("app.confidence", reason="External dep app.confidence not installed")
     resp = await client.post(
         "/api/v1/rag/confidence",
         json={"results": [], "query": "test"},
     )
-    # May 500 if app.confidence not installed (external dep)
-    assert resp.status_code in (200, 404, 500)
+    assert resp.status_code in (200, 500)
 
 
 @pytest.mark.asyncio
 async def test_cross_chain_basic(client):
-    """POST /api/v1/rag/cross-chain with minimal input."""
+    """POST /api/v1/rag/cross-chain — skip if external dep not installed."""
+    pytest.importorskip("app.cross_chain", reason="External dep not installed")
     resp = await client.post(
         "/api/v1/rag/cross-chain",
         json={"address": "0xabc", "chain": "ethereum"},
     )
-    assert resp.status_code in (200, 404, 500)
+    assert resp.status_code in (200, 500)
 
 
 @pytest.mark.asyncio
 async def test_deployer_risk_exists(client):
-    """POST /api/v1/scanner/deployer-risk should exist and respond."""
+    """POST /api/v1/scanner/deployer-risk — skip if external dep not installed."""
+    pytest.importorskip("app.deployer_reputation", reason="External dep not installed")
     resp = await client.post(
         "/api/v1/scanner/deployer-risk",
         json={"address": "0xabc", "deployment_count": 0},
     )
-    # External dep may 500
-    assert resp.status_code in (200, 404, 500)
+    assert resp.status_code in (200, 500)
 
 
 @pytest.mark.asyncio
@@ -138,14 +139,21 @@ async def test_rag_watches_endpoint(client):
 
 
 @pytest.mark.asyncio
-async def test_scam_check_invalid_address(client):
-    """GET /api/v1/rag/v2/scam-check with empty address should handle."""
-    resp = await client.get(
-        "/api/v1/rag/v2/scam-check",
-        params={"address": "0xabc", "chain": "ethereum", "tier": "free"},
-    )
-    # Should either work or rate-limit (redis required)
-    assert resp.status_code in (200, 429, 500)
+async def test_scam_check_rate_limited(client):
+    """GET /api/v1/rag/v2/scam-check with mock rate limit to avoid redis."""
+    from unittest.mock import patch
+
+    # Mock _check_rate_limit to allow the request
+    async def mock_rate_limit(*args, **kwargs):
+        return True, 3600
+
+    with patch("rmi_rag.endpoints._check_rate_limit", side_effect=mock_rate_limit):
+        resp = await client.get(
+            "/api/v1/rag/v2/scam-check",
+            params={"address": "0xabc", "chain": "ethereum", "tier": "free"},
+        )
+    # Should respond — may 500 if search_service unavailable
+    assert resp.status_code in (200, 500)
 
 
 @pytest.mark.asyncio
