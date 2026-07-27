@@ -37,6 +37,8 @@ _health_state: dict[str, Any] = {
     "redis": False,
     "qdrant_url": "",
     "redis_host": "",
+    "scanner_subscriber": False,
+    "subscriber_stats": {},
 }
 
 
@@ -89,16 +91,43 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("redis_probe failed: %s", exc)
         _health_state["redis"] = False
 
+    # ── Start scanner subscriber (background RAG ingestion) ──
+    try:
+        from rmi_rag.scanner_subscriber import (
+            is_subscriber_running,
+            start_subscriber,
+            subscriber_stats,
+        )
+
+        await start_subscriber()
+        _health_state["scanner_subscriber"] = is_subscriber_running()
+        _health_state["subscriber_stats"] = subscriber_stats()
+        logger.info(
+            "scanner_subscriber status=%s",
+            "ok" if _health_state["scanner_subscriber"] else "fail",
+        )
+    except Exception as exc:
+        logger.warning("scanner_subscriber_start_failed: %s", exc)
+        _health_state["scanner_subscriber"] = False
+
     _health_state["status"] = "ok"
     logger.info(
-        "rmi_rag_started qdrant=%s redis=%s",
+        "rmi_rag_started qdrant=%s redis=%s subscriber=%s",
         _health_state["qdrant"],
         _health_state["redis"],
+        _health_state["scanner_subscriber"],
     )
 
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
+    try:
+        from rmi_rag.scanner_subscriber import stop_subscriber
+
+        await stop_subscriber()
+    except Exception:
+        logger.debug("subscriber_stop skipped")
+
     try:
         from rmi_rag.observability import _langfuse as langfuse_client
 
@@ -174,12 +203,27 @@ async def health() -> dict[str, Any]:
     except Exception:
         redis_ok = False
 
+    # Check subscriber status
+    try:
+        from rmi_rag.scanner_subscriber import (
+            is_subscriber_running,
+            subscriber_stats,
+        )
+
+        sub_running = is_subscriber_running()
+        sub_stats = subscriber_stats()
+    except Exception:
+        sub_running = False
+        sub_stats = {}
+
     return {
         "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
         "qdrant": qdrant_ok,
         "redis": redis_ok,
         "qdrant_url": _health_state["qdrant_url"],
         "redis_host": _health_state["redis_host"],
+        "scanner_subscriber": sub_running,
+        "subscriber_stats": sub_stats,
     }
 
 

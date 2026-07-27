@@ -18,9 +18,7 @@ RATE_LIMITS = {
 }
 
 
-async def _check_rate_limit(
-    identifier: str, tier: str, hour_key: str
-) -> tuple[bool, int]:
+async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[bool, int]:
     from rmi_rag.search_service import _get_redis
 
     rd = await _get_redis()
@@ -39,6 +37,7 @@ async def _check_rate_limit(
     if current > limit:
         return False, ttl
     return True, ttl
+
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
 
@@ -98,7 +97,9 @@ async def rag_image_analysis(request: Request, data: dict):
 
     return {
         "task": data.get("task", "describe"),
-        "description": await describe_image(image_url=data.get("image_url", ""), task=data.get("task", "describe")),
+        "description": await describe_image(
+            image_url=data.get("image_url", ""), task=data.get("task", "describe")
+        ),
     }
 
 
@@ -121,7 +122,9 @@ async def rag_investigate_endpoint(request: Request, data: dict):
         return {"error": "query is required"}
     from app.investigation_narratives import investigate  # external dependency
 
-    return await investigate(query=q, investigation_type=data.get("type", "auto"), max_hops=data.get("max_hops", 5))
+    return await investigate(
+        query=q, investigation_type=data.get("type", "auto"), max_hops=data.get("max_hops", 5)
+    )
 
 
 @router.get("/rag/graph-communities")
@@ -135,7 +138,9 @@ async def rag_graph_communities(request: Request):
 async def rag_create_watch(request: Request, data: dict):
     from rmi_rag.streaming import create_watch
 
-    return await create_watch(token_address=data.get("token_address", ""), chain=data.get("chain", "ethereum"))
+    return await create_watch(
+        token_address=data.get("token_address", ""), chain=data.get("chain", "ethereum")
+    )
 
 
 @router.get("/rag/watches")
@@ -155,6 +160,55 @@ async def email_accounts(request: Request):
             {"id": "biz", "email": "biz@rugmunch.io", "type": "local"},
         ],
         "webmail_url": "https://webmail.rugmunch.io/",
+    }
+
+
+@router.get("/search")
+async def search_threat_intel(
+    request: Request,
+    q: str = Query(
+        default="", description="Search query — token address, name, or scam description"
+    ),
+    limit: int = Query(default=10, ge=1, le=100),
+    collection: str = Query(default="threat_intel", description="Qdrant collection to search"),
+) -> dict:
+    """
+    Semantic search across scanner findings ingested into Qdrant.
+
+    Queries the ``threat_intel`` collection (populated in real-time by the
+    scanner subscriber) for tokens that match the query by semantic similarity.
+
+    Example::
+
+        curl "http://localhost:8012/api/v1/search?q=0xdead...&limit=5"
+    """
+    from rmi_rag.embeddings import get_embedding
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    if not q:
+        return {"results": [], "query": q, "collection": collection, "total": 0}
+
+    try:
+        embedding = await get_embedding(q)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "embedding_unavailable", "message": str(e)[:200]},
+        ) from e
+
+    store = QdrantVectorStore()
+    results = await store.search(
+        query_embedding=embedding,
+        collection=collection,
+        limit=limit,
+        min_similarity=0.4,
+    )
+
+    return {
+        "results": results,
+        "query": q,
+        "collection": collection,
+        "total": len(results),
     }
 
 
@@ -211,14 +265,16 @@ async def scam_check(
     for r in results_data.get("results", []):
         sim = r.get("similarity", 0)
         sev = r.get("severity", "")
-        matches.append({
-            "id": r.get("id", ""),
-            "content": (r.get("content", "") or "")[:300],
-            "similarity": round(sim, 4),
-            "severity": sev,
-            "collection": r.get("metadata", {}).get("collection", r.get("collection", "")),
-            "source": r.get("source", ""),
-        })
+        matches.append(
+            {
+                "id": r.get("id", ""),
+                "content": (r.get("content", "") or "")[:300],
+                "similarity": round(sim, 4),
+                "severity": sev,
+                "collection": r.get("metadata", {}).get("collection", r.get("collection", "")),
+                "source": r.get("source", ""),
+            }
+        )
         max_score = max(max_score, sim)
         if sev in ("high", "critical"):
             risk_signals += 1
