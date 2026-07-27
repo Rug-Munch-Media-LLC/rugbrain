@@ -17,7 +17,7 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 - Source: `https://github.com/RugMunchMedia/rmi-rag`
 
 ## Built With
-- Standards: [github.com/RugMunchMedia/standards](https://github.com/RugMunchMedia/standards)
+- Standards: See the project documentation for development standards
 - Toolchain: See README.md for development toolchain
 - Conventions: See CONTRIBUTING.md for coding conventions
 
@@ -69,7 +69,7 @@ This repo is open source (MIT). The code here demonstrates RAG patterns for
 crypto intelligence — it is NOT the complete RugMunch production RAG pipeline.
 The managed platform at rugmunch.io includes proprietary enhancements.
 
-See [METHODOLOGY-PROTECTION.md](https://github.com/RugMunchMedia/standards/blob/main/METHODOLOGY-PROTECTION.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for project methodology.
 for details on what information belongs in public vs private repos.
 
 ## Git Policy
