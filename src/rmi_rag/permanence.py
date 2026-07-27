@@ -127,21 +127,7 @@ def _hf_put(key: str, data: bytes) -> bool:
     Writes data to a temp file and calls `hf storage buckets upload`.
     Uses HF_TOKEN env var or gopass for authentication.
     """
-    if not HF_TOKEN:
-        token_sources = []
-        token_sources.append(os.getenv("HF_TOKEN", ""))
-        try:
-            result = subprocess.run(
-                ["gopass", "show", "rmi/hf/token"],  # noqa: S607
-                capture_output=True, text=True, timeout=10,
-            )
-            if result.returncode == 0:
-                token_sources.append(result.stdout.strip())
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-        hf_token = next((t for t in token_sources if t), "")
-    else:
-        hf_token = HF_TOKEN
+    hf_token = HF_TOKEN if HF_TOKEN else os.getenv("HF_TOKEN", "")
 
     if not hf_token:
         logger.error("HF_TOKEN not set and no gopass entry found")
@@ -154,12 +140,22 @@ def _hf_put(key: str, data: bytes) -> bool:
             tmp.write(data)
             tmp.flush()
             result = subprocess.run(  # noqa: S603
-                ["hf", "storage", "buckets", "upload",  # noqa: S607
-                 "--repo", HF_REPO,
-                 "--key", hf_key,
-                 "--token", hf_token,
-                 tmp.name],
-                capture_output=True, text=True, timeout=60,
+                [
+                    "hf",
+                    "storage",
+                    "buckets",
+                    "upload",  # noqa: S607
+                    "--repo",
+                    HF_REPO,
+                    "--key",
+                    hf_key,
+                    "--token",
+                    hf_token,
+                    tmp.name,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             if result.returncode == 0:
                 return True
@@ -255,7 +251,10 @@ async def snapshot_all():
                 if RAG_HF_MIRROR:
                     try:
                         hf_ok = await asyncio.get_running_loop().run_in_executor(
-                            None, _hf_put, key, payload,
+                            None,
+                            _hf_put,
+                            key,
+                            payload,
                         )
                         if not hf_ok:
                             logger.warning("HF mirror failed for chunk: %s", key)
@@ -302,7 +301,10 @@ async def snapshot_all():
                             }
                         ).encode()
                         await asyncio.get_running_loop().run_in_executor(
-                            None, _hf_put, f"rag_snapshots/{name}/latest.json", latest_payload,
+                            None,
+                            _hf_put,
+                            f"rag_snapshots/{name}/latest.json",
+                            latest_payload,
                         )
                     except Exception as e:
                         logger.warning("HF mirror failed for latest.json of %s: %s", name, e)
@@ -489,4 +491,3 @@ async def r2_stats():
         "collections": coll_info,
         "model_version": EMBEDDING_VERSION,
     }
-
