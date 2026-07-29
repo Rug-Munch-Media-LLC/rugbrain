@@ -16,6 +16,10 @@ services:
       dockerfile: Dockerfile
     container_name: rmi-rag-api
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     labels:
       - "dockflare.enable=true"
       - "dockflare.hostname=rag.rugmunch.io"
