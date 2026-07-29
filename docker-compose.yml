@@ -16,6 +16,11 @@ services:
       dockerfile: Dockerfile
     container_name: rmi-rag-api
     restart: unless-stopped
+    labels:
+      - "dockflare.enable=true"
+      - "dockflare.hostname=rag.rugmunch.io"
+      - "dockflare.service=http://rmi-rag-api:8012"
+      - "dockflare.zonename=rugmunch.io"
     ports:
       - "127.0.0.1:8012:8012"
     env_file:
