@@ -150,6 +150,65 @@ async def rag_list_watches(request: Request):
     return await list_active_watches()
 
 
+@router.get("/rag/journalism/research")
+async def journalism_research(
+    request: Request,
+    topic: str = Query(
+        default="", description="Research topic — e.g. 'cross-chain bridge hacks 2024'"
+    ),
+    limit: int = Query(default=15, ge=1, le=50, description="Max docs per collection"),
+) -> dict:
+    """
+    Deep-dive research for crypto journalism.
+
+    Queries all three RAG collections (``threat_intel``, ``rmi_agent_memory``,
+    ``rmi_community``) and returns a structured research brief with:
+
+    - **Timeline**: Chronological events extracted from threat intel
+    - **Key Entities**: Threat actors, protocols, vulnerability patterns
+    - **Related Scams**: Matching scam/hack records with severity classification
+    - **Community Insights**: Best practices and contextual knowledge
+    - **Cross-Collection Connections**: Entities linked across threat and memory data
+    - **Synthesis**: Markdown summary with quality metrics
+
+    Designed for:
+    - **Journalists**: Research briefs for articles and investigations
+    - **Bots**: Structured data for automated content generation
+    - **Scanners**: Context enrichment during threat analysis
+    - **Historical analysis**: Trend identification across events
+
+    Example::
+
+        curl "http://localhost:8012/api/v1/rag/journalism/research?topic=Solana+bridge+security"
+    """
+    from rmi_rag.journalism import research_topic
+
+    if not topic:
+        return {
+            "topic": "",
+            "error": "topic query parameter is required",
+            "status": "error",
+            "research_timestamp": datetime.now(UTC).isoformat(),
+        }
+
+    try:
+        brief = await research_topic(topic, max_docs=limit)
+        brief["status"] = (
+            "ok"
+            if brief.get("total_docs_retrieved", {}).get("threat_intel", 0) > 0
+            else "low_relevance"
+        )
+        return brief
+    except Exception as e:
+        logger.exception("journalism_research_failed topic=%s", topic[:60])
+        return {
+            "topic": topic,
+            "error": str(e)[:300],
+            "status": "error",
+            "research_timestamp": datetime.now(UTC).isoformat(),
+        }
+
+
 @router.get("/email/accounts")
 async def email_accounts(request: Request):
     return {

@@ -52,11 +52,15 @@ class RAGUnavailableError(Exception):
 
 
 def _ollama_reachable() -> bool:
-    """Quick probe: is Ollama listening? Cached per process via env."""
-    if os.getenv("_OLLAMA_PROBED"):
+    """Quick probe: is Ollama listening? Cached per process via env.
+
+    ``RAG_EMBED_NO_CACHE`` env var (any non-empty value) forces a fresh
+    probe every time, which is useful during development / container restarts.
+    """
+    if os.getenv("_OLLAMA_PROBED") and not os.getenv("RAG_EMBED_NO_CACHE"):
         return os.getenv("_OLLAMA_OK") == "1"
     try:
-        with httpx.Client(timeout=2.0) as c:
+        with httpx.Client(timeout=5.0) as c:
             r = c.get(f"{OLLAMA_URL}/api/tags")
             ok = r.status_code == 200
     except Exception:
@@ -85,7 +89,7 @@ def _resize(vec: list[float], dim: int) -> list[float]:
 def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
     """Try Ollama qwen3-embed:4b. Returns None on any failure."""
     try:
-        with httpx.Client(timeout=10.0) as c:
+        with httpx.Client(timeout=30.0) as c:
             r = c.post(
                 f"{OLLAMA_URL}/api/embeddings",
                 json={"model": OLLAMA_MODEL, "prompt": text[:8000]},
@@ -157,11 +161,12 @@ async def get_embedding(text: str) -> list[float]:
     v = _openrouter_embed(text)
     if v is not None:
         return v
-        raise RAGUnavailableError(
-            "no embedding backend available (ollama unreachable, openrouter failed). "
-            "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
-            f"Verify: OLLAMA_URL={OLLAMA_URL} qwen3-embed:4b pulled?"
-        )
+
+    raise RAGUnavailableError(
+        "no embedding backend available (ollama unreachable, openrouter failed). "
+        "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
+        f"Verify: OLLAMA_URL={OLLAMA_URL} qwen3-embed:4b pulled?"
+    )
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
