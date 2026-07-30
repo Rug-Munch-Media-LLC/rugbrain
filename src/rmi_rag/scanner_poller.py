@@ -1,20 +1,21 @@
 """
 Scanner Poller — polling-based fallback for scanner->RAG ingestion.
 
-DragonflyDB pub/sub is unreliable in certain versions (v1.39.x known issue).
-This module provides a polling-based alternative that reads from a Redis list
-(``rmi:rag:findings_queue``) using BLPop with a timeout.
+DragonflyDB pub/sub is unreliable in certain versions (v1.39.x known issue)
+and BLPop blocking commands also have compatibility issues with Dragonfly.
+This module uses LPOP in a polling loop (non-blocking) to read from
+a Redis list (``rmi:rag:findings_queue``).
 
 Architecture::
     Scanner (rmi-backend)
         → Redis LPUSH ``rmi:rag:findings_queue``
-        → Poller (rmi-rag, background task, BLPop loop)
+        → Poller (rmi-rag, background task, LPOP polling loop)
         → ``_process_finding()`` (shared with scanner_subscriber)
         → ``QdrantVectorStore.insert()`` → Qdrant ``threat_intel``
 
 Usage::
     from rmi_rag.scanner_subscriber import is_subscriber_running, start_polling
-    await start_polling()  # starts the BLPop-based polling fallback
+    await start_polling()  # starts the LPOP-based polling fallback
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ REDIS_HOST = os.getenv("REDIS_HOST", "rmi-redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 QUEUE_KEY = "rmi:rag:findings_queue"
-POLL_TIMEOUT = 30  # BLPop timeout in seconds (0 = infinite)
+POLL_TIMEOUT = 30  # Kept for backward compatibility; LPOP uses 1s sleep between polls
 
 # ── Poller state ───────────────────────────────────────────────────────────
 _poller_running = False
@@ -94,10 +95,12 @@ async def stop_poller() -> None:
 
 
 async def _poll_forever() -> None:
-    """BLPop from the findings queue and process each item.
+    """LPoll from the findings queue and process each item.
 
-    Uses BLPop with a timeout so we can respond to cancellation quickly
-    while still blocking efficiently when the queue is empty.
+    Uses LPOP in a polling loop (non-blocking) because DragonflyDB has
+    known issues with BLPop blocking commands (v1.39.x+). This approach
+    is slightly less efficient but reliable across all Redis-compatible
+    backends.
     """
     import redis.asyncio as aioredis
 
@@ -109,6 +112,9 @@ async def _poll_forever() -> None:
                 port=REDIS_PORT,
                 password=REDIS_PASSWORD or None,
                 decode_responses=True,
+                socket_connect_timeout=5,
+                socket_keepalive=True,
+                retry_on_timeout=True,
             )
             await r.ping()
             logger.info(
@@ -120,13 +126,13 @@ async def _poll_forever() -> None:
 
             while _poller_running:
                 try:
-                    # BLPop with timeout — blocks up to POLL_TIMEOUT seconds
-                    result = await r.blpop(QUEUE_KEY, timeout=POLL_TIMEOUT)
-                    if result is None:
-                        # Timeout, no item — loop back and check _poller_running
+                    # LPOP is non-blocking — safe with DragonflyDB
+                    # Sleep 1s between empty polls (check _poller_running)
+                    value = await r.lpop(QUEUE_KEY)
+                    if value is None:
+                        await asyncio.sleep(1)
                         continue
 
-                    _key, value = result  # (queue_name, item_json)
                     try:
                         data = json.loads(value)
                     except json.JSONDecodeError:
