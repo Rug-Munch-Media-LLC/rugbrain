@@ -31,15 +31,25 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 - Embedding service (configurable)
 - Backend service for query endpoints
 
-## 🚨 CRITICAL RULES
+## 🚨 GIT POLICY — NON-NEGOTIABLE
+
+1. **NEVER commit .env files, credentials, API keys, or tokens**
+2. **NEVER use HTTPS remotes with embedded passwords — SSH only**
+3. **NEVER commit before gitleaks passes** (`gitleaks detect --no-git`)
+4. **NEVER push to main without lefthook pre-commit passing**
+5. **All secrets come from gopass — NEVER hardcoded**
+6. **All repos must have: .gitignore, .gitleaks.toml, .lefthook.yml**
+7. **Internal IPs/hostnames use [INTERNAL] placeholder in public repos**
+8. **Any agent caught leaking secrets will have their work rejected**
+
+## 🚨 REPO-SPECIFIC RULES
 
 1. **No nested repos.** Don't commit other complete project trees inside this one.
-2. **No secrets.** Never commit `.secrets/`, `.env`, `*.pem`, `*.key`, `*.crt`.
-3. **No data blobs.** Don't commit `*.zip`, `*.parquet`, model weights, sqlite files, Qdrant snapshots.
-4. **No file > 500 lines.** Split or refactor.
-5. **No mainnet RPC keys in source.** Use environment variables.
-6. **Update STATUS.md before committing.** Builders must know where we are.
-7. **Read DECISIONS.md before architectural changes.** Don't repeat rejected designs.
+2. **No data blobs.** Don't commit `*.zip`, `*.parquet`, model weights, sqlite files, Qdrant snapshots.
+3. **No file > 500 lines.** Split or refactor.
+4. **No mainnet RPC keys in source.** Use environment variables.
+5. **Update STATUS.md before committing.** Builders must know where we are.
+6. **Read DECISIONS.md before architectural changes.** Don't repeat rejected designs.
 
 ## Commands
 ```bash

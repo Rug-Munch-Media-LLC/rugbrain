@@ -4,10 +4,12 @@ Fetches an article URL, sends it to an LLM for structured extraction,
 and ingests the resulting scam pattern into the Qdrant scam_patterns
 collection for future retrieval.
 """
+
 from __future__ import annotations
 
 import json
 import logging
+import os
 
 import httpx
 
@@ -34,7 +36,7 @@ Return ONLY valid JSON (no markdown, no explanation) with these fields:
 Incident report:
 {article_text}"""
 
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
 
 
 async def extract_pattern_from_url(url: str) -> dict:
