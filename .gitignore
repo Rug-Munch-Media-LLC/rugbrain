@@ -7,6 +7,7 @@
 *.pfx
 credentials*
 secrets*
+*.token
 .env.*
 !.env.example
 !.env.sample
