@@ -3,7 +3,7 @@
 #   rag-api     — FastAPI server (default, always-on)
 #   rag-ingest  — One-shot threat ingest (run via: docker compose run --rm rag-ingest)
 #
-# Deploy: cd /srv/work/repos/rmi-rag && docker compose up -d
+# Deploy: cd [REPO_DIR] && docker compose up -d
 networks:
   rmi_network:
     external: true

@@ -27,7 +27,7 @@ tags = ["internal", "infrastructure"]
 [[rules]]
 id = "internal-hostname-explicit"
 description = "Internal hostnames should not be committed"
-regex = '''(talos|cinnabox|hydra)\.rugmunch\.io'''
+regex = '''(internal-[a-z]+|dev-[a-z]+)\.example\.com'''
 tags = ["internal", "infrastructure"]
 
 [[rules]]

@@ -6,11 +6,11 @@ off-site durability, and cleans up local temp files.
 
 Credentials (in priority order):
   1. Environment variables: R2_ACCESS_KEY, R2_SECRET_KEY, R2_ENDPOINT, R2_BUCKET
-  2. /root/.config/rclone/rclone.conf [r2] section
+  2. ~/.config/rclone/rclone.conf [r2] section
   3. Hard-coded defaults (for this deployment)
 
 Schedule: 30 3 * * * (daily 3:30am UTC, after DB backups at 2am)
-Cron: cd /srv/work/repos/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
+Cron: cd /opt/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
 """
 
 import argparse
@@ -33,7 +33,7 @@ from qdrant_client import QdrantClient
 R2_ENDPOINT_DEFAULT = "https://8f9bd9165c1250b426c66dc1967deefd.r2.cloudflarestorage.com"
 R2_BUCKET_DEFAULT = "rag-backup"
 R2_KEY_PREFIX = "qdrant-snapshots"
-RCLONE_CONF_PATH = "/root/.config/rclone/rclone.conf"
+RCLONE_CONF_PATH = os.getenv("RCLONE_CONF", "~/.config/rclone/rclone.conf")
 QDRANT_HOST_DEFAULT = "rmi-qdrant"
 QDRANT_PORT_DEFAULT = 6333
 

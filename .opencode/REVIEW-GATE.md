@@ -1,5 +1,5 @@
 # REVIEW-GATE.md — Enterprise Quality Gate
-# Source: /srv/work/repos/standards/REVIEW-GATE.md
+# Source: [STANDARDS]/REVIEW-GATE.md
 
 ## Before Every Commit
 
