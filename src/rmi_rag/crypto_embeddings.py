@@ -93,12 +93,9 @@ if _COLLECTIONS_ENV:
     COLLECTIONS = [c.strip() for c in _COLLECTIONS_ENV.split(",")]
 else:
     COLLECTIONS = [
-        "collection_1",
-        "collection_2",
-        "collection_3",
-        "collection_4",
-        "collection_5",
-        "collection_6",
+        "threat_intel",
+        "rmi_agent_memory",
+        "rmi_community",
     ]
 
 from rmi_rag.bge_embedders import (  # noqa: E402

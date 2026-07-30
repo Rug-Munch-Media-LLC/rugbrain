@@ -34,6 +34,7 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 
 # ── Subscriber state ───────────────────────────────────────────────────────
 _subscriber_running = False
+_subscriber_connected = False  # set when Redis subscription actually succeeds
 _subscriber_task: asyncio.Task | None = None
 _ingested_count: int = 0
 _last_ingested_at: str = ""
@@ -50,6 +51,7 @@ def subscriber_stats() -> dict[str, Any]:
     global _ingested_count, _last_ingested_at
     return {
         "running": _subscriber_running,
+        "connected": _subscriber_connected,
         "ingested_count": _ingested_count,
         "last_ingested_at": _last_ingested_at,
         "channel": "rmi:rag:ingest",
@@ -108,6 +110,13 @@ async def _listen_forever() -> None:
             )
             pubsub = r.pubsub()
             await pubsub.subscribe("rmi:rag:ingest")
+
+            # Verify subscription actually worked
+            channels = await r.pubsub_channels()
+            if b"rmi:rag:ingest" in channels or "rmi:rag:ingest" in channels:
+                global _subscriber_connected
+                _subscriber_connected = True
+
             logger.info(
                 "subscriber_connected host=%s port=%s channel=rmi:rag:ingest",
                 REDIS_HOST,
@@ -140,11 +149,13 @@ async def _listen_forever() -> None:
                     )
 
         except asyncio.CancelledError:
+            _subscriber_connected = False
             logger.info("subscriber_cancelled")
             return
         except Exception as exc:
+            _subscriber_connected = False
             logger.warning(
-                "subscriber_connection_error error=%s — reconnecting in 5s",
+                "subscriber_connection_error error=%s",
                 str(exc)[:200],
             )
             await asyncio.sleep(5)

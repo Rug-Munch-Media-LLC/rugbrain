@@ -55,8 +55,8 @@ class LocalBGEEmbedder:
 class OllamaBGEEmbedder:
     """Ollama embedding provider."""
 
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "your-embedding-model")
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
+    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "1024"))
 
     def __init__(self, ollama_url: str | None = None):

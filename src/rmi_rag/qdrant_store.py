@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import uuid
 from typing import Any
 
 import httpx
@@ -223,6 +224,16 @@ class QdrantVectorStore:
             final.append(r)
         return final
 
+    @staticmethod
+    def _to_uuid(doc_id: str) -> str:
+        """Convert a string doc_id to a deterministic UUID v5.
+
+        Qdrant REST API requires point IDs to be unsigned integers or UUIDs.
+        We use UUID v5 (SHA-1 namespace + name) for deterministic conversion.
+        Namespace: 6ba7b810-9dad-11d1-80b4-00c04fd430c8 (DNS namespace)
+        """
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, doc_id))
+
     async def insert(
         self,
         doc_id: str,
@@ -237,10 +248,11 @@ class QdrantVectorStore:
         client = await self._get_client()
         await _ensure_collection(collection, len(embedding), client)
 
+        point_id = self._to_uuid(doc_id)
         payload = {
             "points": [
                 {
-                    "id": doc_id,
+                    "id": point_id,
                     "vector": embedding,
                     "payload": {
                         "content": content[:10000],
