@@ -48,6 +48,8 @@ _health_state: dict[str, Any] = {
     "redis_host": "",
     "scanner_subscriber": False,
     "subscriber_stats": {},
+    "scanner_poller": False,
+    "poller_stats": {},
 }
 
 
@@ -144,7 +146,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("redis_probe failed: %s", exc)
         _health_state["redis"] = False
 
-    # ── Start scanner subscriber (background RAG ingestion) ──
+    # ── Start scanner subscriber + poller (background RAG ingestion) ──
+    # Primary: Redis pub/sub. Fallback: BLPop polling (for DragonflyDB pub/sub issues).
+
+    # Start pub/sub subscriber
+    _sub_ok = False
     try:
         from rmi_rag.scanner_subscriber import (
             is_subscriber_running,
@@ -153,15 +159,36 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         )
 
         await start_subscriber()
-        _health_state["scanner_subscriber"] = is_subscriber_running()
+        _sub_ok = is_subscriber_running()
+        _health_state["scanner_subscriber"] = _sub_ok
         _health_state["subscriber_stats"] = subscriber_stats()
         logger.info(
             "scanner_subscriber status=%s",
-            "ok" if _health_state["scanner_subscriber"] else "fail",
+            "ok" if _sub_ok else "fail",
         )
     except Exception as exc:
         logger.warning("scanner_subscriber_start_failed: %s", exc)
         _health_state["scanner_subscriber"] = False
+
+    # Start polling fallback (always runs regardless of pub/sub state)
+    try:
+        from rmi_rag.scanner_poller import (
+            is_poller_running,
+            poller_stats,
+            start_poller,
+        )
+
+        await start_poller()
+        _poll_ok = is_poller_running()
+        _health_state["scanner_poller"] = _poll_ok
+        _health_state["poller_stats"] = poller_stats()
+        logger.info(
+            "scanner_poller status=%s",
+            "ok" if _poll_ok else "fail",
+        )
+    except Exception as exc:
+        logger.warning("scanner_poller_start_failed: %s", exc)
+        _health_state["scanner_poller"] = False
 
     _health_state["status"] = "ok"
     logger.info(
@@ -180,6 +207,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await stop_subscriber()
     except Exception:
         logger.debug("subscriber_stop skipped")
+
+    try:
+        from rmi_rag.scanner_poller import stop_poller
+
+        await stop_poller()
+    except Exception:
+        logger.debug("poller_stop skipped")
 
     try:
         from rmi_rag.observability import _langfuse as langfuse_client
@@ -273,6 +307,19 @@ async def health() -> dict[str, Any]:
         sub_running = False
         sub_stats = {}
 
+    # Check poller status
+    try:
+        from rmi_rag.scanner_poller import (
+            is_poller_running,
+            poller_stats,
+        )
+
+        poll_running = is_poller_running()
+        poll_stats = poller_stats()
+    except Exception:
+        poll_running = False
+        poll_stats = {}
+
     return {
         "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
         "qdrant": qdrant_ok,
@@ -281,6 +328,8 @@ async def health() -> dict[str, Any]:
         "redis_host": _health_state["redis_host"],
         "scanner_subscriber": sub_running,
         "subscriber_stats": sub_stats,
+        "scanner_poller": poll_running,
+        "poller_stats": poll_stats,
     }
 
 
