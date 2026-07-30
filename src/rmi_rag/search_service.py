@@ -143,7 +143,6 @@ async def _preembed_scam_patterns():
     _pattern_cache_loaded = True
 
 
-
 # ═══════════════════════════════════════════════════════════════════
 # CORE INGEST
 # ═══════════════════════════════════════════════════════════════════
@@ -637,7 +636,7 @@ async def three_pillar_search(
                         m["pillar"] = "entity"
                     pillar3_results.extend(matches)
                 except Exception as e:
-                    logger.debug("Entity lookup for %s failed: %s", entity['value'], e)
+                    logger.debug("Entity lookup for %s failed: %s", entity["value"], e)
 
             # Knowledge Graph expansion: find related entities via graph traversal
             if use_kg:
@@ -736,14 +735,16 @@ async def three_pillar_search(
                 top_k=limit * 3,  # Keep more for parent-child expansion
             )
             mmr_applied = True
-            logger.info("MMR dedup: %s → %s results (lambda=%s)", pre_mmr_count, len(fused), mmr_lambda)
+            logger.info(
+                "MMR dedup: %s → %s results (lambda=%s)", pre_mmr_count, len(fused), mmr_lambda
+            )
         except ImportError:
             logger.debug("MMR dedup module not available, skipping")
         except Exception as e:
             logger.debug("MMR dedup failed (non-critical): %s", e)
 
     # ── Cross-encoder reranking (optional stage after MMR) ──
-    # Two-stage fallback: 1) Ollama bge-m3 cosine reranker (lightweight),
+    # Two-stage fallback: 1) Ollama qwen3-embed:4b cosine reranker (lightweight),
     # 2) sentence-transformers CrossEncoder (full joint scoring).
     reranker_applied = False
     reranker_method: str | None = None
@@ -752,7 +753,7 @@ async def three_pillar_search(
             r["similarity"] = r.get("rrf_score", 0.0)
         pre_rerank = len(fused)
 
-        # Stage 1: Ollama bge-m3 cosine approximation
+        # Stage 1: Ollama qwen3-embed:4b cosine approximation
         try:
             from rmi_rag.cross_encoder import (
                 get_reranker as _get_ollama_reranker,  # external dependency
@@ -1127,4 +1128,3 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
         logger.warning("Failed to ingest GoPlus result for %s: %s", token_address, e)
 
     return result
-

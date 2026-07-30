@@ -50,7 +50,7 @@ if _DIMS_ENV:
 if not DIMS:
     # Sensible defaults showing the pattern
     DIMS = {
-        "your-embedding-model": 1024,
+        "qwen3-embed:4b": 2560,
         "fallback-model": 384,
         "behavioral": 64,
         "code_hash": 128,
@@ -258,7 +258,7 @@ class CryptoEmbedder:
         await self._cache_set(cache_key, vector, ttl=86400)
         return vector
 
-    def _hash_embed(self, text: str, dims: int = 1024) -> list[float]:
+    def _hash_embed(self, text: str, dims: int = 2560) -> list[float]:
         """Deterministic hash-based embedding (emergency fallback)."""
         vec = np.zeros(dims, dtype=np.float32)
         words = re.findall(r"\w+", text.lower())

@@ -25,7 +25,7 @@ class LocalBGEEmbedder:
     Local BAAI BGE-small-en-v1.5 embedder.
     Runs on CPU, ~80MB RAM, 384-dim vectors.
     Loaded lazily - first call initializes the model.
-    FALLBACK only. Primary is Ollama bge-m3.
+    FALLBACK only. Primary is Ollama qwen3-embed:4b.
     """
 
     MODEL_NAME = "BAAI/bge-small-en-v1.5"
@@ -56,8 +56,8 @@ class OllamaBGEEmbedder:
     """Ollama embedding provider."""
 
     OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
-    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "1024"))
+    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen3-embed:4b")
+    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "2560"))
 
     def __init__(self, ollama_url: str | None = None):
         self.url = ollama_url or os.getenv("OLLAMA_URL", self.OLLAMA_URL)
@@ -90,7 +90,7 @@ class OllamaBGEEmbedder:
 
 
 class OpenRouterEmbedder:
-    """OpenRouter embedding API - NVIDIA Nemotron primary, bge-m3 fallback."""
+    """OpenRouter embedding API - NVIDIA Nemotron primary, qwen3-embed:4b fallback."""
 
     BASE = "https://openrouter.ai/api/v1/embeddings"
     MODEL = OR_PRIMARY_EMBED
@@ -175,7 +175,7 @@ class HuggingFaceEmbedder:
                         results.append(data)
                 else:
                     logger.warning("HF returned unexpected shape: %s", type(data))
-                    results.append([0.0] * 1024)
+                    results.append([0.0] * 2560)
             return results
 
     async def embed_one(self, text: str, model: str | None = None) -> list[float]:

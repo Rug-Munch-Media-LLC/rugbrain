@@ -4,7 +4,7 @@ Rug Munch Intelligence - RAG Ingestion Pipeline
 Nightly indexing of ALL data sources into the RAG system.
 Feeds: news, CT rundown, market data, social metrics, on-chain data.
 
-Runs at 3AM UTC. Embeds via NVIDIA NIM (BGE-M3, 1024d, free).
+Runs at 3AM UTC. Embeds via Ollama qwen3-embed:4b (2560d).
 Redis-backed with permanence to R2.
 
 Incremental indexing: each successful ingest is tracked in a Redis delta
@@ -34,7 +34,9 @@ async def nightly_rag_index(**kw) -> dict:
         news = await aggregate_all_news(limit=100)
         news_docs = []
         for article in news.get("articles", [])[:50]:
-            h = hashlib.sha256((article.get("url", "") + article.get("title", "")).encode()).hexdigest()[:12]
+            h = hashlib.sha256(
+                (article.get("url", "") + article.get("title", "")).encode()
+            ).hexdigest()[:12]
             news_docs.append(
                 {
                     "id": f"news:{h}",
@@ -51,7 +53,7 @@ async def nightly_rag_index(**kw) -> dict:
 
         indexed["collections"]["news_articles"] = await _embed_batch(news_docs, "news_articles")
         indexed["total_docs"] += indexed["collections"]["news_articles"]
-        logger.info("RAG indexed %s news articles", indexed['collections']['news_articles'])
+        logger.info("RAG indexed %s news articles", indexed["collections"]["news_articles"])
 
     except Exception as e:
         indexed["errors"].append(f"news: {str(e)[:100]}")
@@ -63,7 +65,9 @@ async def nightly_rag_index(**kw) -> dict:
         ct = await fetch_ct_rundown(limit=30)
         ct_docs = []
         for story in ct.get("rundown", [])[:20]:
-            h = hashlib.sha256((story.get("url", "") + story.get("text", "")).encode()).hexdigest()[:12]
+            h = hashlib.sha256((story.get("url", "") + story.get("text", "")).encode()).hexdigest()[
+                :12
+            ]
             ct_docs.append(
                 {
                     "id": f"ct:{h}",
@@ -80,7 +84,7 @@ async def nightly_rag_index(**kw) -> dict:
 
         indexed["collections"]["ct_rundown"] = await _embed_batch(ct_docs, "ct_rundown")
         indexed["total_docs"] += indexed["collections"]["ct_rundown"]
-        logger.info("RAG indexed %s CT stories", indexed['collections']['ct_rundown'])
+        logger.info("RAG indexed %s CT stories", indexed["collections"]["ct_rundown"])
 
     except Exception as e:
         indexed["errors"].append(f"ct: {str(e)[:100]}")
@@ -192,7 +196,9 @@ async def _embed_batch(docs: list[dict], collection: str) -> int:
 
                 DeltaTracker.track_add(doc_id, collection)
             except Exception as e:
-                logger.debug("delta_track_failed doc_id=%s collection=%s err=%s", doc_id, collection, e)
+                logger.debug(
+                    "delta_track_failed doc_id=%s collection=%s err=%s", doc_id, collection, e
+                )
 
         r.close()
         return embedded
@@ -242,7 +248,7 @@ async def rag_health_check(**kw) -> dict:
             "status": "healthy",
             "total_documents": total,
             "collections": stats,
-            "embedder": "baai/bge-m3 (NVIDIA NIM, 1024d, free)",
+            "embedder": "qwen3-embed:4b (Ollama, 2560d)",
             "storage": "Redis + R2 permanence",
             "nightly_cron": "3AM UTC",
             "checked_at": datetime.now(UTC).isoformat(),
@@ -251,4 +257,3 @@ async def rag_health_check(**kw) -> dict:
 
     except Exception as e:
         return {"status": "error", "error": str(e)[:200], "source": "rag_health"}
-

@@ -1,12 +1,7 @@
-"""RAG Dual-Dim Embedder (M3 in v3 unfuck plan).
+"""RAG Dual-Dim Embedder (M4 migration complete).
 
-Wraps the FROZEN app/crypto_embeddings.py to support both bge-m3 (1024d, current)
-and qwen3-embedding:4b (2048d, target) during zero-downtime migration.
-
-Strategy: reindex one collection per night, smallest first, verify each morning.
-If eval harness reports <8% nDCG@10 improvement, defer the rest.
-
-See DESIGN.md §M3 for the full math and migration plan.
+Qwen3-embed:4b (2560d) is now the primary embedding model.
+BGE-M3 (1024d) is retired. All Qdrant collections are 2560d Cosine.
 """
 
 from __future__ import annotations
@@ -18,14 +13,14 @@ from typing import Any
 class EmbedderBackend(Enum):
     """Available embedding backends."""
 
-    BGE_M3 = "bge-m3"  # 1024d, legacy
-    QWEN3_4B = "qwen3-embedding:4b"  # 2048d, target
+    BGE_M3 = "bge-m3"  # 1024d, legacy (retired)
+    QWEN3_4B = "qwen3-embed:4b"  # 2560d, current primary
 
 
 # ── Per-backend configuration ──────────────────────────────────────────
 _BACKEND_DIMS: dict[EmbedderBackend, int] = {
     EmbedderBackend.BGE_M3: 1024,
-    EmbedderBackend.QWEN3_4B: 2048,
+    EmbedderBackend.QWEN3_4B: 2560,
 }
 
 

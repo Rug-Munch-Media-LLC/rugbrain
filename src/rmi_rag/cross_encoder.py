@@ -1,14 +1,14 @@
 """
-Cross-Encoder Reranker — Ollama bge-m3 Cosine Approximation
-===========================================================
+Cross-Encoder Reranker — Ollama qwen3-embed:4b Cosine Approximation
+====================================================================
 
-Embeds query and each document separately via Ollama's bge-m3, then
+Embeds query and each document separately via Ollama's qwen3-embed:4b, then
 ranks by cosine similarity.  This is NOT a true cross-encoder (no
 joint query+document scoring), but provides a pragmatic relevance
 signal that often outperforms pure vector search alone.
 
 Primary flow:
-  1. Embed query via Ollama /api/embeddings (bge-m3, 1024d)
+  1. Embed query via Ollama /api/embeddings (qwen3-embed:4b, 2560d)
   2. Embed each document text via Ollama
   3. Compute cosine similarity between query and each doc vector
   4. Return top_k sorted by similarity
@@ -31,8 +31,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://172.19.0.1:11434")
-OLLAMA_MODEL = os.getenv("RERANK_MODEL", "bge-m3")
-OLLAMA_DIMS = 1024
+OLLAMA_MODEL = os.getenv("RERANK_MODEL", "qwen3-embed:4b")
+OLLAMA_DIMS = 2560
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -45,7 +45,7 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 class OllamaReranker:
-    """Cross-encoder reranker using Ollama bge-m3 embeddings + cosine similarity.
+    """Cross-encoder reranker using Ollama qwen3-embed:4b embeddings + cosine similarity.
 
     Singleton via ``OllamaReranker.get_reranker()``.
     """
@@ -102,7 +102,7 @@ class OllamaReranker:
         documents: list[dict[str, Any]],
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
-        """Re-rank *documents* against *query* using Ollama bge-m3 cosine similarity.
+        """Re-rank *documents* against *query* using Ollama qwen3-embed:4b cosine similarity.
 
         Parameters
         ----------
@@ -132,8 +132,7 @@ class OllamaReranker:
             query_vec = await self._embed(query)
         except Exception:
             logger.warning(
-                "Ollama reranker: bge-m3 query embedding failed, "
-                "trying CryptoEmbedder fallback"
+                "Ollama reranker: bge-m3 query embedding failed, trying CryptoEmbedder fallback"
             )
             try:
                 query_vec = await self._embed_via_pipeline(query)
@@ -163,9 +162,7 @@ class OllamaReranker:
                     sim = _cosine_similarity(query_vec, doc_vec)
                     scored.append((doc, sim))
                 except Exception:
-                    logger.debug(
-                        "Ollama reranker: doc embedding failed, using similarity=0"
-                    )
+                    logger.debug("Ollama reranker: doc embedding failed, using similarity=0")
                     scored.append((doc, 0.0))
 
         scored.sort(key=lambda x: x[1], reverse=True)

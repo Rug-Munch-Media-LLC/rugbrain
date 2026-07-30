@@ -1,7 +1,7 @@
 """M3 RAG Chunking - recursive text chunking with MD5 dedup.
 
 Why chunking matters:
-- Embedding models have context limits (bge-m3 = 8192 tokens, but we
+- Embedding models have context limits (qwen3-embed:4b = 8192 tokens, but we
   chunk to 512 for granularity and to keep individual FAISS hits useful)
 - Smaller chunks = better retrieval precision (less noise per result)
 - Dedup via content MD5 prevents the same fact being ingested N times
@@ -12,6 +12,7 @@ Strategy (per 2026 RAG standards):
 - Quality score: (length / max_chunk) x (1 - special_char_ratio)  # noqa: RUF002
 - Skip chunks < min_chars (likely noise)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +33,7 @@ def _get_redis():
     global _redis
     if _redis is None:
         from app.core.redis import get_redis
+
         _redis = get_redis()
     return _redis
 

@@ -1,16 +1,16 @@
-"""M3 RAG Embeddings - strict two-tier (no hash fallback).
+"""M4 RAG Embeddings - strict two-tier (no hash fallback).
 
 Per T04: the hash-based "fallback" embedding was returning
 confidently-wrong results (non-semantic vectors). When all neural
 backends fail, the RAG system now fails LOUDLY instead of returning
 gibberish.
 
-Tier 1: Ollama bge-m3 (1024d, our own, zero cost) - best quality when reachable
+Tier 1: Ollama qwen3-embed:4b (2560d, our own, zero cost) - SOTA quality
 Tier 2: OpenRouter NVIDIA Nemotron (2048d, free tier) - if API key set
 
-Design (per DESIGN.md M3):
+Design (per DESIGN.md M4):
 - Single async API: `await get_embedding(text) -> list[float]`
-- BGE-M3 preferred when available
+- Qwen3-embed preferred when available
 - Embedding dim is reported via EMBEDDING_DIM; collections use same dim
 - All embeddings are float lists (JSON-serializable) for Redis storage
 - FAIL LOUD: if both backends fail, raise RAGUnavailableError
@@ -28,19 +28,19 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-EMBEDDING_DIM: Final = 1024
+EMBEDDING_DIM: Final = 2560
 
 # Embedding versioning (ADR-0007 compliance)
 # Stamped on every embedding so downstream consumers can migrate
 # when the model changes. Format: {model}:{version}:{dim}
-EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "bge-m3")
-EMBED_MODEL_VERSION = os.getenv("RAG_EMBED_VERSION", "1.0")
+EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embed:4b")
+EMBED_MODEL_VERSION = os.getenv("RAG_EMBED_VERSION", "1.1")
 EMBED_VERSION_STAMP = f"{EMBED_MODEL_NAME}:{EMBED_MODEL_VERSION}:{EMBEDDING_DIM}"
 EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI build number
 # Backends
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
+OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen3-embed:4b")
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 
@@ -83,7 +83,7 @@ def _resize(vec: list[float], dim: int) -> list[float]:
 
 
 def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try Ollama bge-m3. Returns None on any failure."""
+    """Try Ollama qwen3-embed:4b. Returns None on any failure."""
     try:
         with httpx.Client(timeout=10.0) as c:
             r = c.post(
@@ -128,7 +128,7 @@ def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None
 
 
 async def get_embedding(text: str) -> list[float]:
-    """Async embedding API. Returns 1024d float list.
+    """Async embedding API. Returns 2560d float list.
 
     Per T04: NO hash fallback. If both neural backends fail,
     raises RAGUnavailableError. The RAG endpoint translates this to
@@ -157,10 +157,11 @@ async def get_embedding(text: str) -> list[float]:
     v = _openrouter_embed(text)
     if v is not None:
         return v
-    raise RAGUnavailableError(
-        "no embedding backend available (ollama unreachable, openrouter failed). "
-        "Per T04, hash fallback removed to prevent false-confidence in RAG results."
-    )
+        raise RAGUnavailableError(
+            "no embedding backend available (ollama unreachable, openrouter failed). "
+            "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
+            f"Verify: OLLAMA_URL={OLLAMA_URL} qwen3-embed:4b pulled?"
+        )
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
