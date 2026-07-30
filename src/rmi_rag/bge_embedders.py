@@ -66,7 +66,7 @@ class OllamaBGEEmbedder:
         import httpx
 
         results = []
-        async with httpx.AsyncClient(timeout=3) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             for text in texts:
                 try:
                     resp = await client.post(
@@ -112,7 +112,7 @@ class OpenRouterEmbedder:
                 "Content-Type": "application/json",
             }
             payload = {"model": m, "input": texts}
-            async with httpx.AsyncClient(timeout=3) as client:
+            async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(self.BASE, headers=headers, json=payload)
                 if resp.status_code == 429:
                     raise RuntimeError("RATE_LIMITED")

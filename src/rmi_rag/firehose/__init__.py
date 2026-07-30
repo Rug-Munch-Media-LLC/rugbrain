@@ -40,21 +40,8 @@ Architecture:
   │              └────────────────────────────┘               │
   └─────────────────────────────────────────────────────────┘
 
-Feed Cadences:
-  - 15min: CT rundown, social sentiment, scam alerts (high-urgency)
-  - 1hr:   News RSS (200+ feeds), market brief, fear & greed
-  - 6hr:   X/Twitter profiles, KOL tracking, prediction markets
-  - 24hr:  Etherscan labels, Solana registry, chainabuse, rekt DB
-  - 72hr:  FAISS index rebuild, BM25 rebuild, RAGAS evaluation
-  - 168hr: Full pattern extraction from confirmed scams, quality audit
-
-Smart Ingestion:
-  - Content hash dedup (Redis) - never ingest the same doc twice
-  - Quality scoring - skip low-signal content (<30 score)
-  - Entity extraction - pull addresses, chains, tokens, protocols
-  - Auto-classification - route to correct collection
-  - Batch embedding with rate limiting - never overload embedder
-  - Per-collection size caps - auto-evict oldest on overflow
+This module serves as both the package initializer and the facade,
+replacing the original monolithic firehose.py.
 """
 
 import asyncio
@@ -70,6 +57,11 @@ from typing import Any
 import aiofiles
 import httpx
 
+from .twitter import pull_ct_rundown as _pull_ct_rundown
+from .twitter import pull_social_sentiment as _pull_social_sentiment
+from .news import pull_news_rss as _pull_news_rss
+from .news import pull_prediction_markets as _pull_prediction_markets
+
 logger = logging.getLogger("rag.firehose")
 
 # ──────────────────────────────────────────────────────────────
@@ -80,17 +72,17 @@ RAG_API = "http://localhost:8000/api/v1/rag"
 
 # Per-collection size caps (auto-evict oldest on overflow)
 COLLECTION_CAPS = {
-    "known_scams": 50000,  # scam addresses - keep forever, large
-    "scam_patterns": 5000,  # curated patterns - small, high quality
-    "forensic_reports": 10000,  # hack reports - medium
-    "contract_audits": 5000,  # code audits - medium
-    "wallet_profiles": 100000,  # labeled wallets - large
-    "news_articles": 20000,  # news - rolling window
-    "market_intel": 5000,  # market data - medium
-    "token_analysis": 50000,  # token data - large
-    "transaction_patterns": 10000,  # on-chain patterns - medium
-    "social_sentiment": 10000,  # social data - rolling
-    "general": 10000,  # misc - catch-all
+    "known_scams": 50000,
+    "scam_patterns": 5000,
+    "forensic_reports": 10000,
+    "contract_audits": 5000,
+    "wallet_profiles": 100000,
+    "news_articles": 20000,
+    "market_intel": 5000,
+    "token_analysis": 50000,
+    "transaction_patterns": 10000,
+    "social_sentiment": 10000,
+    "general": 10000,
 }
 
 # Quality thresholds (skip docs below this score)
@@ -158,7 +150,7 @@ class IngestionPipeline:
 
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
-        self._rate_trackers: dict[str, list[float]] = {}  # collection → recent ingest timestamps
+        self._rate_trackers: dict[str, list[float]] = {}
         self._background_tasks: set[asyncio.Task] = set()
 
     def _check_rate(self, collection: str) -> bool:
@@ -166,7 +158,6 @@ class IngestionPipeline:
         limit = RATE_LIMITS.get(collection, RATE_LIMITS["default"])
         now = time.monotonic()
         times = self._rate_trackers.setdefault(collection, [])
-        # Remove timestamps older than 60s
         times[:] = [t for t in times if now - t < 60]
         return len(times) < limit
 
@@ -189,14 +180,13 @@ class IngestionPipeline:
             if resp.status_code == 200:
                 return resp.json().get("exists", False)
         except Exception:
-            logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
+            logger.warning("swallowed exception", exc_info=True)
         return False
 
     def score_quality(self, content: str, metadata: dict) -> int:
         """Score document quality 0-100. Skip low-signal content."""
-        score = 50  # Start neutral
+        score = 50
 
-        # Length bonus (substantial content is better)
         if len(content) > 500:
             score += 15
         elif len(content) > 200:
@@ -204,7 +194,6 @@ class IngestionPipeline:
         elif len(content) < 50:
             score -= 20
 
-        # Entity richness (more entities = more useful)
         entity_count = 0
         if metadata.get("address"):
             entity_count += 1
@@ -216,18 +205,15 @@ class IngestionPipeline:
             entity_count += 1
         score += entity_count * 5
 
-        # Source authority
         high_authority = {"etherscan", "chainabuse", "rekt", "certik", "slowmist", "peckshield"}
         if metadata.get("source", "").lower() in high_authority:
             score += 20
 
-        # Severity boost (critical scams are more valuable)
         if metadata.get("severity") == "critical":
             score += 15
         elif metadata.get("severity") == "high":
             score += 10
 
-        # Penalize duplicates of very similar content
         if metadata.get("is_variant"):
             score -= 10
 
@@ -239,15 +225,12 @@ class IngestionPipeline:
 
         entities = {"addresses": [], "chains": [], "tokens": [], "protocols": []}
 
-        # EVM addresses (0x...)
         evm_addrs = re.findall(r"0x[a-fA-F0-9]{40}", content)
         entities["addresses"].extend(evm_addrs[:10])
 
-        # Solana addresses (base58, 32-44 chars)
         sol_addrs = re.findall(r"[1-9A-HJ-NP-Za-km-z]{32,44}", content)
         entities["addresses"].extend([a for a in sol_addrs[:10] if a not in entities["addresses"]])
 
-        # Known chains
         known_chains = [
             "ethereum",
             "bsc",
@@ -274,11 +257,9 @@ class IngestionPipeline:
             if chain.lower() in content.lower():
                 entities["chains"].append(chain)
 
-        # Token symbols ($TOKEN)
         tokens = re.findall(r"\$([A-Z]{2,10})", content)
         entities["tokens"].extend(tokens[:10])
 
-        # Known protocols
         known_protocols = [
             "uniswap",
             "aave",
@@ -308,17 +289,14 @@ class IngestionPipeline:
     ) -> dict[str, Any]:
         """Run the full pipeline: dedup → quality → extract → classify → store."""
 
-        # 1. Hash and dedup
         content_hash = self.make_content_hash(content)
         if await self.is_duplicate(content_hash, collection):
             return {"status": "duplicate", "hash": content_hash}
 
-        # 2. Quality filter
         quality = self.score_quality(content, metadata)
         if quality < MIN_QUALITY_SCORE:
             return {"status": "skipped", "reason": "low_quality", "score": quality}
 
-        # 3. Entity extraction
         entities = self.extract_entities(content)
         metadata.update(
             {
@@ -329,11 +307,9 @@ class IngestionPipeline:
             }
         )
 
-        # 4. Rate limit check
         if not self._check_rate(collection):
             return {"status": "rate_limited", "collection": collection}
 
-        # 5. Ingest into RAG
         try:
             payload = {
                 "collection": collection,
@@ -348,7 +324,6 @@ class IngestionPipeline:
 
             if resp.status_code == 200:
                 result = resp.json()
-                # Track in dedup set
                 task = asyncio.create_task(self._mark_ingested(content_hash, collection))
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
@@ -373,7 +348,7 @@ class IngestionPipeline:
                 timeout=5,
             )
         except Exception:
-            logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
+            logger.warning("swallowed exception", exc_info=True)
 
     async def ingest_batch(self, docs: list[dict]) -> dict[str, int]:
         """Ingest multiple documents with rate limiting."""
@@ -396,153 +371,60 @@ class IngestionPipeline:
             else:
                 stats["errors"] += 1
 
-            # Small delay between docs to avoid overwhelming embedder
             await asyncio.sleep(0.05)
 
         return stats
 
 
 # ──────────────────────────────────────────────────────────────
-# Feed Sources - Pull Functions
+# Feed Sources - Orchestrator
 # ──────────────────────────────────────────────────────────────
 
 
 class FeedSources:
-    """All data sources the firehose can pull from."""
+    """All data sources the firehose can pull from.
+
+    Delegates to source-specific modules for twitter, news, etc.
+    Chain-data sources (etherscan, solana, pattern extraction) remain
+    inline here as they don't fit a dedicated source module.
+    """
 
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
 
-    # ── Hourly: News ──
+    # ── Hourly: News (delegated) ──
 
     async def pull_news_rss(self) -> list[dict]:
-        """Pull latest news from DataBus news provider (200+ RSS feeds)."""
-        try:
-            resp = await self.client.get(
-                "http://localhost:8000/api/v1/databus/fetch/news", params={"limit": 30}, timeout=30
-            )
-            if resp.status_code != 200:
-                return []
-            data = resp.json()
-            articles = data.get("articles", data.get("data", []))
-
-            docs = []
-            for article in (articles if isinstance(articles, list) else [])[:20]:
-                title = article.get("title", "")
-                desc = article.get("description", article.get("summary", ""))
-                if not title:
-                    continue
-                content = f"News: {title}. {desc}"
-                docs.append(
-                    {
-                        "collection": "news_articles",
-                        "content": content[:2000],
-                        "metadata": {
-                            "source": article.get("source", "news_rss"),
-                            "url": article.get("url", ""),
-                            "published": article.get("published_at", article.get("date", "")),
-                            "category": article.get("category", "crypto"),
-                            "title": title,
-                        },
-                    }
-                )
-            return docs
-        except Exception as e:
-            logger.warning("News RSS pull failed: %s", e)
-            return []
+        return await _pull_news_rss(self.client)
 
     async def pull_ct_rundown(self) -> list[dict]:
-        """Pull CT Rundown stories."""
-        try:
-            resp = await self.client.get(
-                "http://localhost:8000/api/v1/databus/fetch/ct_rundown",
-                params={"limit": 10},
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                return []
-            data = resp.json()
-            stories = data.get("stories", data.get("data", []))
-
-            docs = []
-            for story in (stories if isinstance(stories, list) else [])[:5]:
-                content = f"CT: {story.get('title', '')} - {story.get('summary', '')}"
-                docs.append(
-                    {
-                        "collection": "news_articles",
-                        "content": content[:1500],
-                        "metadata": {
-                            "source": "ct_rundown",
-                            "category": "crypto_twitter",
-                            "handle": story.get("handle", ""),
-                            "engagement": story.get("engagement", 0),
-                        },
-                    }
-                )
-            return docs
-        except Exception as e:
-            logger.warning("CT rundown pull failed: %s", e)
-            return []
+        return await _pull_ct_rundown(self.client)
 
     async def pull_social_sentiment(self) -> list[dict]:
-        """Pull social sentiment and scam alerts."""
-        docs = []
-        try:
-            # Scam monitor
-            resp = await self.client.get(
-                "http://localhost:8000/api/v1/databus/fetch/scam_monitor", timeout=20
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                alerts = data.get("alerts", data.get("data", []))
-                for alert in (alerts if isinstance(alerts, list) else [])[:10]:
-                    docs.append(
-                        {
-                            "collection": "social_sentiment",
-                            "content": f"Scam alert: {alert.get('title', '')} - {alert.get('description', '')}",
-                            "metadata": {
-                                "source": "scam_monitor",
-                                "severity": alert.get("severity", "medium"),
-                                "token": alert.get("token_address", ""),
-                                "chain": alert.get("chain", ""),
-                            },
-                        }
-                    )
+        return await _pull_social_sentiment(self.client)
 
-            # Social metrics
-            resp2 = await self.client.get(
-                "http://localhost:8000/api/v1/databus/fetch/social_metrics", timeout=20
-            )
-            if resp2.status_code == 200:
-                data2 = resp2.json()
-                metrics = data2.get("metrics", data2.get("data", {}))
-                if metrics:
-                    docs.append(
-                        {
-                            "collection": "social_sentiment",
-                            "content": f"Social metrics: Sentiment {metrics.get('sentiment', '?')}, "
-                            f"Trending: {metrics.get('trending_topics', [])}",
-                            "metadata": {"source": "social_metrics", "type": "daily_summary"},
-                        }
-                    )
-        except Exception as e:
-            logger.warning("Social pull failed: %s", e)
+    async def pull_prediction_markets(self) -> list[dict]:
+        return await _pull_prediction_markets(self.client)
 
-        return docs
-
-    # ── Daily: Scam Databases ──
+    # ── Daily: Scam Databases (inline) ──
 
     async def pull_etherscan_labels(self) -> list[dict]:
         """Pull etherscan labeled addresses (via existing CSV)."""
         docs = []
-        csv_path = await asyncio.get_running_loop().run_in_executor(
-            None,
-            os.path.join,
-            await asyncio.get_running_loop().run_in_executor(None, os.path.dirname, __file__),
-            "..",
-            "data",
-            "etherscan_phish_hack.csv",
+        # __file__ is rmi_rag/firehose/__init__.py -> go up 2 levels to rmi_rag/../data/
+        csv_rel = os.path.join(
+            os.path.dirname(__file__), "..", "..", "data", "etherscan_phish_hack.csv"
         )
+        csv_path = await asyncio.get_running_loop().run_in_executor(None, os.path.abspath, csv_rel)
+        # Fall back to rmi_rag/../data/ (original firehose.py location)
+        if not await asyncio.get_running_loop().run_in_executor(None, os.path.exists, csv_path):
+            csv_fallback = os.path.join(
+                os.path.dirname(__file__), "..", "data", "etherscan_phish_hack.csv"
+            )
+            csv_path = await asyncio.get_running_loop().run_in_executor(
+                None, os.path.abspath, csv_fallback
+            )
+
         if not await asyncio.get_running_loop().run_in_executor(None, os.path.exists, csv_path):
             return docs
 
@@ -598,7 +480,8 @@ class FeedSources:
                         docs.append(
                             {
                                 "collection": "known_scams",
-                                "content": f"Solana scam token: {token.get('name', '')} ({token.get('symbol', '')}) "
+                                "content": f"Solana scam token: {token.get('name', '')} "
+                                f"({token.get('symbol', '')}) "
                                 f"at {token.get('address', '')}. Tags: {tags}.",
                                 "metadata": {
                                     "address": token.get("address", ""),
@@ -616,37 +499,12 @@ class FeedSources:
 
         return docs
 
-    async def pull_prediction_markets(self) -> list[dict]:
-        """Pull Polymarket prediction data for market intel."""
-        docs = []
-        try:
-            resp = await self.client.get(
-                "http://localhost:8000/api/v1/databus/fetch/prediction_markets", timeout=20
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                markets = data.get("markets", data.get("data", []))
-                for m in (markets if isinstance(markets, list) else [])[:10]:
-                    docs.append(
-                        {
-                            "collection": "market_intel",
-                            "content": f"Prediction market: {m.get('question', '')} - "
-                            f"YES: {m.get('yes_price', '?')} NO: {m.get('no_price', '?')}",
-                            "metadata": {"source": "polymarket", "type": "prediction"},
-                        }
-                    )
-        except Exception as e:
-            logger.warning("Prediction market pull failed: %s", e)
-
-        return docs
-
     # ── Weekly: Pattern Extraction ──
 
     async def extract_scam_patterns(self) -> list[dict]:
         """Extract common patterns from confirmed scam documents."""
         docs = []
         try:
-            # Search for confirmed scams
             resp = await self.client.get(
                 f"{RAG_API}/search",
                 params={
@@ -660,7 +518,6 @@ class FeedSources:
                 data = resp.json()
                 results = data.get("results", [])
                 if len(results) >= 10:
-                    # Create a meta-pattern document
                     content_parts = []
                     for r in results[:20]:
                         c = r.get("content", "")[:200]
@@ -715,9 +572,7 @@ class FirehoseEngine:
         self._feeds = FeedSources(self._client)
         self._start_time = time.monotonic()
 
-        # Define all feed sources with cadences
         self._sources = [
-            # ── 15-minute cadence: High urgency ──
             FeedSource(
                 "ct_rundown",
                 "news_articles",
@@ -734,7 +589,6 @@ class FirehoseEngine:
                 True,
                 "Social sentiment and scam alerts",
             ),
-            # ── 1-hour cadence: News ──
             FeedSource(
                 "news_rss",
                 "news_articles",
@@ -743,7 +597,6 @@ class FirehoseEngine:
                 True,
                 "200+ RSS crypto news feeds",
             ),
-            # ── 6-hour cadence: Market data ──
             FeedSource(
                 "prediction_markets",
                 "market_intel",
@@ -752,7 +605,6 @@ class FirehoseEngine:
                 True,
                 "Polymarket predictions",
             ),
-            # ── 24-hour cadence: Scam databases ──
             FeedSource(
                 "etherscan_labels",
                 "known_scams",
@@ -769,7 +621,6 @@ class FirehoseEngine:
                 True,
                 "Solana token registry flagged tokens",
             ),
-            # ── 72-hour cadence: Pattern extraction ──
             FeedSource(
                 "scam_patterns",
                 "scam_patterns",
@@ -809,7 +660,6 @@ class FirehoseEngine:
                 if now - source.last_run < source.cadence_seconds:
                     continue
 
-                # Run this source
                 source.last_run = now
                 source.runs += 1
                 self.stats.last_activity = now
@@ -831,10 +681,10 @@ class FirehoseEngine:
                         logger.info(
                             "Firehose %s: +%s new, %s dup, %s skip, %s err (total: %s)",
                             source.name,
-                            stats['ingested'],
-                            stats['duplicate'],
-                            stats['skipped'],
-                            stats['errors'],
+                            stats["ingested"],
+                            stats["duplicate"],
+                            stats["skipped"],
+                            stats["errors"],
                             source.docs_ingested,
                         )
                 except Exception as e:
@@ -842,7 +692,6 @@ class FirehoseEngine:
                     source.errors += 1
                     self.stats.total_errors += 1
 
-            # Update source stats
             async with self._lock:
                 self.stats.sources = {
                     s.name: {
@@ -857,7 +706,6 @@ class FirehoseEngine:
                     for s in self._sources
                 }
 
-            # Check every 30 seconds
             await asyncio.sleep(30)
 
     async def feed_now(self, source_name: str) -> dict:
@@ -902,3 +750,17 @@ def get_firehose() -> FirehoseEngine:
         _firehose = FirehoseEngine()
     return _firehose
 
+
+__all__ = [
+    "COLLECTION_CAPS",
+    "FeedSource",
+    "FeedSources",
+    "FirehoseEngine",
+    "FirehoseStats",
+    "HASH_TTL",
+    "IngestionPipeline",
+    "MIN_QUALITY_SCORE",
+    "RAG_API",
+    "RATE_LIMITS",
+    "get_firehose",
+]
