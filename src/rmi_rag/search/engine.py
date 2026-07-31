@@ -15,12 +15,12 @@ All cross-module deps resolved via search._state / inline imports.
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 from rmi_rag.crypto_embeddings import COLLECTIONS, get_embedder
 from rmi_rag.rrf_fusion import _rrf_fuse
 from rmi_rag.sparse_search import _sparse_text_search
+
 from ._state import _get_redis
 from .ranking import _classify_query
 
@@ -349,13 +349,13 @@ async def three_pillar_search(
 
     # ── RRF fusion with query-adaptive weights ──
     query_type = _classify_query(query)
-    WEIGHTS = {
+    weights = {
         "entity_heavy": (0.3, 0.2, 0.5),
         "keyword_heavy": (0.3, 0.6, 0.1),
         "semantic_heavy": (0.7, 0.2, 0.1),
         "balanced": (0.4, 0.4, 0.2),
     }
-    w_dense, w_sparse, w_entity = WEIGHTS.get(query_type, WEIGHTS["balanced"])
+    w_dense, w_sparse, w_entity = weights.get(query_type, weights["balanced"])
 
     p1_ranked = sorted(pillar1_results, key=lambda x: x.get("similarity", 0), reverse=True)
     p2_ranked = sorted(
@@ -479,8 +479,6 @@ async def three_pillar_search(
     parent_child_applied = False
     if use_parent_child and fused:
         try:
-            from rmi_rag.contextual_chunking import parent_child_chunk  # noqa: F401
-
             expanded_results = []
             for r in fused[: limit * 2]:
                 content = r.get("content", "") or ""
