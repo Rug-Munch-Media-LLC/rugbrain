@@ -87,9 +87,14 @@ def _resize(vec: list[float], dim: int) -> list[float]:
 
 
 def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try Ollama bge-m3. Returns None on any failure."""
+    """Try Ollama bge-m3. Returns None on any failure.
+
+    Uses a generous timeout: bge-m3 (1.2GB) on a CPU-only Ollama with a
+    handful of threads can take 30-120s for the first (cold-load) call,
+    so a short timeout would spuriously mark the backend unavailable.
+    """
     try:
-        with httpx.Client(timeout=30.0) as c:
+        with httpx.Client(timeout=120.0) as c:
             r = c.post(
                 f"{OLLAMA_URL}/api/embeddings",
                 json={"model": OLLAMA_MODEL, "prompt": text[:8000]},
@@ -140,6 +145,21 @@ async def get_embedding(text: str) -> list[float]:
     """
     if not text or not text.strip():
         raise RAGUnavailableError("empty text input")
+
+    import time
+
+    from rmi_rag.metrics import embed_latency, embed_requests
+
+    embed_requests.inc()
+    t0 = time.perf_counter()
+    try:
+        return await _get_embedding_impl(text)
+    finally:
+        embed_latency.observe(time.perf_counter() - t0)
+
+
+async def _get_embedding_impl(text: str) -> list[float]:
+    """Core embedding resolution (separated for latency instrumentation)."""
 
     # Explicit backend override
     if _BACKEND == "ollama":
