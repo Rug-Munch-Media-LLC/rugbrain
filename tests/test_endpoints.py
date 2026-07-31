@@ -58,8 +58,12 @@ async def test_chunk_solidity_simple_contract(client):
 
 
 @pytest.mark.asyncio
-async def test_email_accounts_returns_list(client):
-    """GET /api/v1/email/accounts should return expected accounts."""
+async def test_email_accounts_returns_list(client, monkeypatch):
+    """GET /api/v1/email/accounts reads accounts from RMI_EMAIL_ACCOUNTS env."""
+    monkeypatch.setenv(
+        "RMI_EMAIL_ACCOUNTS",
+        "gmail|ops@example.com|gmail,rmi|admin@example.com|gmail",
+    )
     resp = await client.get("/api/v1/email/accounts")
     assert resp.status_code == 200
     data = resp.json()
@@ -68,6 +72,16 @@ async def test_email_accounts_returns_list(client):
     account_ids = {a["id"] for a in data["accounts"]}
     assert "gmail" in account_ids
     assert "rmi" in account_ids
+
+
+@pytest.mark.asyncio
+async def test_email_accounts_unconfigured_empty(client, monkeypatch):
+    """Unset RMI_EMAIL_ACCOUNTS returns an empty list (no hardcoded emails)."""
+    monkeypatch.delenv("RMI_EMAIL_ACCOUNTS", raising=False)
+    resp = await client.get("/api/v1/email/accounts")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["accounts"] == []
 
 
 @pytest.mark.asyncio
