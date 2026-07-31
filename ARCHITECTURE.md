@@ -1,273 +1,569 @@
 # RMI RAG — Architecture
 
 **Status:** canonical
-**Last updated:** 2026-07-27
-**Lines of code:** ~15K Python (53 modules)
+**Last updated:** 2026-07-31
+**Owner:** crmuncher
+**Repo:** [RugMunchMedia/rmi-rag](https://git.rugmunch.io/RugMunchMedia/rmi-rag)
+
+> This document describes the RAG system **as it exists today** — what is live,
+> what is wired but idle, and what is explicitly work-in-progress. It does not
+> describe aspirational features. Where something is broken or incomplete, this
+> document says so.
 
 ---
 
-## Overview
+## 1. System Overview
 
-RMI RAG is a hybrid retrieval-augmented generation system purpose-built for
-crypto intelligence. It provides semantic + sparse + entity-graph search over
-token analysis, wallet profiles, scam patterns, forensic reports, market
-intel, and contract audits.
+RMI RAG is the retrieval-augmented generation layer for RugMunch Intelligence.
+It makes crypto threat knowledge **semantically searchable**: instead of
+exact-match lookups, queries are embedded into vectors and matched against a
+curated corpus of scam patterns, news, and entity intelligence. Retrieved
+context is served to the scanner, the Telegram bot, and the frontend AI chat
+so their answers are grounded in stored evidence rather than model priors.
 
-The system runs as a FastAPI service (default) with a separate one-shot ingest
-pipeline. Both modes share the same Qdrant vector store and Redis cache.
+The system serves three intelligence domains:
 
----
+### 1.1 Scam Intelligence
+Semantic search over known scam patterns, hacked protocols, and exploit
+techniques. Powers the scanner's *Known Scam Patterns* check and the bot's
+`/research` command. Goal: immediately identify repeat deployer patterns, known
+exploit signatures, and rug-pull techniques by matching against our curated
+database of Web3 security incidents.
 
-## Component Diagram
+**Where it lives today:** `threat_intel` collection (Qdrant) + the curated
+pattern corpus in `KNOWN_SCAM_PATTERNS` (10 patterns), `seed_all.py` (10
+patterns + 8 historical hacks + 6 entity profiles), and `seed_threat_intel.py`
+(13 static vulnerability patterns + 6 historical hacks + Redis seed docs).
+
+### 1.2 Market Awareness
+Real-time news and social sentiment, embedded and searchable. When a user asks
+"what's happening with ETH today?", the RAG layer retrieves recent articles
+(CoinTelegraph, Decrypt, The Block, crypto Twitter/X via the DataBus news
+aggregator) and returns grounded, sourced answers. Powers the frontend's AI
+chat and market intelligence features.
+
+**Where it lives today:** the nightly ingest pipeline (`rag_ingestion.py`,
+3 AM UTC) pulls news, CT rundown, market briefs, and social metrics into Redis
+collections (`news_articles`, `ct_rundown`, `market_intel`, `social_intel`).
+The firehose module (`firehose/news.py`) pulls DataBus RSS + prediction
+markets. **Gap:** these collections are not yet materialized in Qdrant — see
+§7.
+
+### 1.3 Entity Intelligence
+Wallet labels, deployer histories, and cross-chain entity resolution, embedded
+for investigator queries. Powers the bot's `/investigate` and the frontend's
+wallet forensics. Goal: "show me everything about wallet 0x..." returns labeled
+entities, related addresses, known associations, and scam involvement.
+
+**Where it lives today:** `rmi_agent_memory` collection (entity profiles +
+known addresses) and the wallet-label paths in `crypto_embeddings.py`
+(`embed_wallet`) and `search/filters.py` (`_embed_by_collection` →
+`wallet_profiles`). Cross-chain resolution and investigation narratives exist
+in `src/app/` (currently being restored — see §7).
+
+### 1.4 High-level flow
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                    rmi-rag FastAPI Service                      │
-│  ┌──────────┐  ┌──────────────┐  ┌────────────┐  ┌─────────┐  │
-│  │ /health  │  │  /ready      │  │ /api/v1/*  │  │ /docs   │  │
-│  │ liveness │  │  readiness   │  │ RAG routes │  │ OpenAPI │  │
-│  └──────────┘  └──────────────┘  └──────┬─────┘  └─────────┘  │
-│                                         │                      │
-│  ┌──────────────────────────────────────┴──────────────────────┐│
-│  │                    Search Service Layer                      ││
-│  │  three_pillar_search()  search_multi_collection()           ││
-│  │  search_similar()       search_with_transform()             ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-         │                        │                  │
-    ┌────▼────┐           ┌───────▼───────┐    ┌─────▼─────┐
-    │  Qdrant │           │    Redis      │    │  Langfuse │
-    │  Vector │◄──────────│ cache+metrics │    │  Tracing  │
-    │  Store  │           └───────────────┘    └───────────┘
-    └────▲────┘
-         │
-    ┌────▼────┐
-    │ Ingest  │
-    │ Pipeline│
-    │(one-shot)│
-    └─────────┘
+        ┌──────────────────────────────────────────────────────┐
+        │                        QUERIES                        │
+        │  "known scam patterns for 0xdead…"                   │
+        │  "what's happening with ETH today?"                  │
+        │  "show me everything about wallet 0x…"               │
+        └─────────────────────────┬────────────────────────────┘
+                                  │
+                                  ▼
+        ┌──────────────────────────────────────────────────────┐
+        │                  RETRIEVAL LAYER                      │
+        │  rmi-backend  /api/v1/rag/v2/*  (search/ingest/stats)│
+        │  rmi-rag      /api/v1/rag/v2/scam-check  /api/v1/search│
+        │  three-pillar: dense + sparse + entity → RRF fusion  │
+        └──────────────┬───────────────────────┬───────────────┘
+                       │                       │
+                       ▼                       ▼
+        ┌──────────────────────┐   ┌──────────────────────────┐
+        │  Qdrant (vector)     │   │  Redis (doc store +      │
+        │  1024-dim BGE-M3     │   │  warm numpy-cosine scan)  │
+        │  Cosine distance     │   │  + semantic cache + TTLs  │
+        └──────────────┬───────┘   └──────────────────────────┘
+                       │
+                       ▼
+        ┌──────────────────────────────────────────────────────┐
+        │                 EMBEDDING LAYER                       │
+        │  BGE-M3 (primary, Ollama, 1024-dim)                   │
+        │  nomic-embed-text (fallback, 768-dim, backend chain)  │
+        │  legacy chain: OpenRouter → LocalBGE → HF (CryptoEmbedder)│
+        └──────────────┬───────────────────────────────────────┘
+                       │
+                       ▼
+        ┌──────────────────────────────────────────────────────┐
+        │                INGESTION PIPELINE                     │
+        │  Scanner → Redis queue → subscriber/poller → embed → Qdrant│
+        │  News/social → nightly rag_ingestion → Redis          │
+        │  Scam DBs → seed scripts (seed_all, seed_threat_intel)│
+        │  Code patterns → rmi-codebase-mcp (ChromaDB, external)│
+        └──────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Data Flow
+## 2. Architecture
 
 ```
-                        INGEST PIPELINE (one-shot)
-  ┌──────────────┐    ┌──────────────┐    ┌───────────────┐
-  │ GoPlus API   │───►│ embedder     │───►│ Qdrant        │
-  │ PhishTank    │    │ (BGE-M3)     │    │ threat_intel  │
-  │ Community    │    │              │    │ collection    │
-  └──────────────┘    └──────────────┘    └───────────────┘
-
-                       QUERY FLOW (API)
-  ┌──────┐    ┌──────────────────┐    ┌──────────────────┐
-  │Client│───►│ three_pillar_    │───►│ RRF Fusion       │
-  │      │    │ search()         │    │ (Reciprocal Rank)│
-  └──────┘    │                  │    └────────┬─────────┘
-              │ Pillar 1: Dense  │             │
-              │   (Qdrant ANN)   │    ┌────────▼─────────┐
-              │ Pillar 2: Sparse │    │ MMR Dedup        │
-              │   (BM25+SPLADE)  │    │ (Diversity)      │
-              │ Pillar 3: Entity │    └────────┬─────────┘
-              │   (KG + lookup)  │             │
-              └──────────────────┘    ┌────────▼─────────┐
-                                      │ Cross-encoder    │
-                                      │ Rerank (opt)     │
-                                      └────────┬─────────┘
-                                               │
-                                      ┌────────▼─────────┐
-                                      │ Parent-child     │
-                                      │ Context Expand   │
-                                      └────────┬─────────┘
-                                               │
-                                      ┌────────▼─────────┐
-                                      │ Response         │
-                                      │ (results + pill- │
-                                      │  ar attribution) │
-                                      └──────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        CONSUMERS                             │
+│  rmi-frontend (Chat)  │  rugmunchbot (/research)  │ Scanner │
+└───────────┬──────────────┬─────────────────┬────────────────┘
+            │              │                 │
+     ┌──────┴──────────────┴─────────────────┴──────────────┐
+     │                 RETRIEVAL LAYER                       │
+     │  rmi-backend: POST /api/v1/rag/v2/search (LIVE)       │
+     │              POST /api/v1/rag/v2/ingest (LIVE)        │
+     │              GET  /api/v1/rag/v2/stats (LIVE)         │
+     │  rmi-rag:     GET  /api/v1/rag/v2/scam-check (LIVE)   │
+     │              GET  /api/v1/search (LIVE)               │
+     │              POST /api/v1/rag/investigate (WIP 500)   │
+     │              POST /api/v1/rag/confidence (WIP 500)    │
+     │  three-pillar: dense + sparse + entity + RRF + MMR    │
+     └──────────────┬─────────────────────┬──────────────────┘
+                    │                     │
+        ┌───────────┴────────┐   ┌────────┴─────────────┐
+        │  Qdrant             │   │  Redis               │
+        │  (vector store)     │   │  (warm store)        │
+        │  1024-dim BGE-M3    │   │  docs rag:{c}:{id}   │
+        │  Cosine distance    │   │  idx rag:idx:{c}     │
+        │  3 collections exist│   │  numpy cosine scan   │
+        └───────────┬────────┘   └────────┬─────────────┘
+                    │                     │
+        ┌───────────┴─────────────────────┴──────────────┐
+        │              EMBEDDING LAYER                    │
+        │  PRIMARY:  bge-m3 via Ollama, 1024-dim          │
+        │  FALLBACK: nomic-embed-text via Ollama, 768-dim │
+        │  (legacy: OpenRouter → LocalBGE → HF)           │
+        └───────────┬─────────────────────────────────────┘
+                    │
+        ┌───────────┴─────────────────────────────────────┐
+        │              INGESTION PIPELINE                  │
+        │  Scanner → Redis pub/sub rmi:rag:ingest          │
+        │         → Redis list rmi:rag:findings_queue      │
+        │         → subscriber + poller → embed → Qdrant   │
+        │  News/social → nightly rag_ingestion (3 AM UTC)  │
+        │  Scam DBs → scripts/seed_threat_intel.py         │
+        │          → scripts/seed_all.py                   │
+        │  Wallet labels → embed_wallet → Redis/Qdrant     │
+        │  Code patterns → rmi-codebase-mcp ChromaDB (ext) │
+        └──────────────────────────────────────────────────┘
 ```
+
+### 2.1 Runtime topology
+
+| Component | Hostname (Docker) | Port | Purpose |
+|-----------|-------------------|------|---------|
+| rmi-rag API | `rmi-rag-api` | 8012 | FastAPI service: search, scam-check, health |
+| Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
+| Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
+| Ollama | `rmi-ollama` | 11434 | Embedding inference (bge-m3, nomic-embed-text) |
+| rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
+| rmi-codebase-mcp | external | — | Code-pattern embeddings (ChromaDB) |
+
+**Qdrant connection fallback:** `QDRANT_URL` env (default `http://rmi-qdrant:6333`)
+→ `http://127.0.0.1:6333` → `http://localhost:6333`. First responsive URL is
+cached for the process lifetime (`qdrant_store._resolve_qdrant_url`).
 
 ---
 
-## Module Map (53 modules)
+## 3. Component Details
 
-### API Layer
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `main.py` | ~130 | FastAPI app, lifespan, CORS, health/ready endpoints |
-| `endpoints.py` | ~250 | APIRouter: confidence, chunking, deployer risk, cross-chain, image, investigation, watches, scam-check, email |
-| `metrics_api.py` | — | Prometheus/metrics endpoint |
+### 3.1 Qdrant (vector store)
 
-### Search & Retrieval
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `search_service.py` | ~1130 | Core service: ingest, search_similar, three_pillar_search, stats, GoPlus analysis |
-| `parent_retriever.py` | — | Parent document retrieval (chunk expansion) |
-| `rrf_fusion.py` | — | Reciprocal Rank Fusion across pillar results |
-| `search_similar.py` | — | Similarity search helpers |
-| `sparse_search.py` | — | BM25 sparse text search |
-| `splade_bm25.py` | — | SPLADE + BM25 hybrid sparse search |
+**Distance:** Cosine. **Dimension:** 1024 (BGE-M3) — collections are created
+on-demand by `QdrantVectorStore._ensure_collection` with the embedding's
+dimension.
 
-### Vector Store
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `qdrant_store.py` | ~270 | Qdrant REST wrapper: search, hybrid_search, insert, collection management with connection fallback |
-| `bundle_cluster.py` | — | Document bundling/clustering for Qdrant |
+**Collection inventory (verified 2026-07-31):**
 
-### Embeddings
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `embeddings.py` | — | Public interface: get_embedding, get_embeddings |
-| `embedder.py` | — | Base embedder abstraction |
-| `crypto_embeddings.py` | — | Crypto-specific embedding heads: tokens, wallets, scams, contracts |
-| `bge_embedders.py` | — | BGE-M3 embedder config |
-| `embed_utils.py` | — | Embedding utility functions |
-| `embed_tiers.py` | — | Tiered embedding (fast/accurate) |
-| `embedding_router.py` | — | Route queries to optimal embedding model |
-| `embedding_finetune.py` | — | Fine-tuning for embedding models |
-| `citations.py` | — | Citation-aware embeddings |
+| Collection | Exists in Qdrant? | Points | Purpose |
+|------------|-------------------|--------|---------|
+| `threat_intel` | ✅ | 0 (seeding in progress) | Scam patterns, historical hacks, scanner findings |
+| `rmi_agent_memory` | ✅ | 0 | Entity profiles, wallet labels, known addresses |
+| `rmi_community` | ✅ | 0 | Community-reported scams, security best-practices topics |
+| `scanner`, `wallet`, `news`, `research`, `scams` | ❌ configured, not created | — | Target collections per TODO (2026-07-31) |
+| `scam_intel`, `deployer_history`, `wallet_labels`, `contract_audit`, `phishing_db` | ❌ | — | rmi-backend canonical set (`app/rag/models.py`) |
 
-### Chunking
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `chunking.py` | — | Core text chunking |
-| `app_chunking.py` | — | Document chunking for ingest |
-| `contextual_chunking.py` | — | Parent-child chunking |
-| `solidity_chunker.py` | — | Solidity source code AST chunking |
-| `chunking_config.yaml` | — | Chunk size/overlap config |
+**Payload schema** (written by `QdrantVectorStore.insert`, shared by all
+collection paths):
 
-### Knowledge Graph & Entity
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `graph_rag.py` | — | Knowledge Graph RAG expansion |
-| `cross_chain.py` | — | Cross-chain entity resolution |
-| `feature_extractors.py` | — | Feature extraction from entities |
-
-### Query Processing
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `query_classifier.py` | — | Classify query type (entity/keyword/semantic) |
-| `query_rewriter.py` | — | Rewrite queries for better retrieval |
-| `cross_encoder.py` | — | Cross-encoder reranker (bge-m3) |
-
-### Scam Detection
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `scam_detection.py` | — | Scam pattern detection logic |
-| `seed_scams.py` | — | Seed known scam patterns into Qdrant |
-| `pattern_extractor.py` | — | Extract scam patterns from text |
-
-### Streaming & Real-time
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `streaming.py` | — | Watch-based streaming alerts |
-| `realtime_alerts.py` | — | Real-time alert dispatch |
-| `firehose.py` | — | Event firehose for market data |
-| `feedback.py` | — | User feedback collection |
-
-### Evaluation
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `evaluation.py` | — | RAG evaluation harness |
-| `eval_ragas.py` | — | RAGAS metric computation |
-
-### Multimodal
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `multimodal.py` | — | Image analysis, logo theft detection |
-
-### Observability
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `observability.py` | ~200 | Langfuse tracing + local Redis metrics fallback |
-| `analytics_storage.py` | — | Analytics data storage |
-
-### Data Sources & Indexing
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `rag_ingestion.py` | ~250 | Nightly indexing pipeline (3 AM UTC) |
-| `incremental_indexer.py` | — | Delta-based incremental indexer |
-| `github_feeder.py` | — | GitHub issues/PRs → RAG |
-| `historical.py` | — | Historical data backfill |
-| `legacy_supabase.py` | — | Supabase migration support |
-
-### Agentic / Tool
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `agentic.py` | — | Agentic retrieval orchestration |
-| `tool.py` | — | CLI tool entry point |
-| `rag_provider.py` | — | DataBus provider integration |
-| `permanence.py` | — | R2 permanence for long-term storage |
-
-### Python Package
-| Module | Purpose |
-|--------|---------|
-| `__init__.py` | Public API surface re-exports |
-| `__main__.py` | CLI entry point (`python -m rmi_rag`) |
-
----
-
-## Fleet Dependencies
-
-| Service | Host (Docker) | Port | Purpose |
-|---------|--------------|------|---------|
-| Qdrant | `rmi-qdrant` | 6333 | Vector database (Cosine distance, 1024d) |
-| Redis | `rmi-redis` | 6379 | Cache, metrics, rate limiting |
-| Langfuse | `rmi-langfuse` | 3000 | LLM observability (optional) |
-| OTel Collector | `rmi-otel-collector` | 4317 | OpenTelemetry export (optional) |
-
-### Connection Fallback
-
-The Qdrant client probes URLs in order:
-1. `QDRANT_URL` env var (default: `http://rmi-qdrant:6333`)
-2. `http://127.0.0.1:{QDRANT_PORT}` (local dev)
-3. `http://localhost:{QDRANT_PORT}` (local dev)
-
-The first responsive URL is cached for the process lifetime. If none respond,
-the primary URL is used and callers handle connection errors gracefully.
-
----
-
-## API Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Liveness probe (probes Qdrant + Redis) |
-| GET | `/ready` | Readiness probe (app started) |
-| GET | `/docs` | Swagger UI |
-| GET | `/redoc` | ReDoc UI |
-| GET | `/openapi.json` | OpenAPI 3.1 spec |
-| POST | `/api/v1/rag/confidence` | Confidence scoring |
-| POST | `/api/v1/rag/chunk-solidity` | Solidity AST chunking |
-| POST | `/api/v1/scanner/deployer-risk` | Deployer risk scoring |
-| POST | `/api/v1/rag/cross-chain` | Cross-chain identity resolution |
-| POST | `/api/v1/rag/image-analysis` | Image analysis (multimodal) |
-| POST | `/api/v1/rag/logo-check` | Logo theft detection |
-| POST | `/api/v1/rag/investigate` | Investigation narrative generation |
-| GET | `/api/v1/rag/graph-communities` | Knowledge graph communities |
-| POST | `/api/v1/rag/watch` | Create streaming watch |
-| GET | `/api/v1/rag/watches` | List active watches |
-| GET | `/api/v1/email/accounts` | Email account list |
-| GET | `/api/v1/rag/v2/scam-check` | Scam check (rate-limited, free/pro tiers) |
-
----
-
-## Deployment
-
-### Docker Compose (production)
-```bash
-docker compose up -d rag-api          # Start API server
-docker compose run --rm rag-ingest    # Run one-shot ingest
+```json
+{
+  "id": "uuid-v5(doc_id)",          // deterministic — enables idempotent upserts
+  "vector": [1024 floats],
+  "payload": {
+    "content": "≤10,000 chars of normalized text",
+    "metadata": { "token_address": "...", "chain": "ethereum", "...": "..." },
+    "source": "scanner | curated_patterns | historic_db | seed | ...",
+    "severity": "low | medium | high | critical | informational",
+    "chain": "ethereum | solana | multi | ...",
+    "collection": "threat_intel"
+  }
+}
 ```
 
-### Local dev
-```bash
-pip install -e ".[dev]"
-python -m rmi_rag                     # Start dev server on :8012
-python -m rmi_rag --ingest            # Run ingest
-make api-dev                          # Same, via Makefile
+Point IDs are UUID v5 (`uuid5(NAMESPACE_DNS, doc_id)`) so re-ingesting the same
+document overwrites the same point instead of duplicating it. Scanner findings
+use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
+`pattern-<name>` / `hack-<name>` / `actor-<name>`.
+
+### 3.2 Ollama / BGE-M3 (embedding)
+
+| Setting | Value |
+|---------|-------|
+| Primary model | `bge-m3` (1.2 GB, 1024-dim) |
+| Fallback model | `nomic-embed-text` (274 MB, 768-dim) — used by rmi-backend chain |
+| Container | `rmi-ollama`, CPU-only, 4 threads, 4 GB memory cap |
+| Concurrency | `OLLAMA_NUM_PARALLEL=2`, `OLLAMA_MAX_LOADED_MODELS=2` |
+| Context | `OLLAMA_CONTEXT_LENGTH=4096`, KV cache `q8_0`, flash attention |
+| Keep-alive | `OLLAMA_KEEP_ALIVE=30m` |
+
+**Embedding chain (`embeddings.py`)** — strict two-tier, **no hash fallback**
+(per T04: hash embeddings returned confidently-wrong results and were removed;
+when both backends fail the API raises `RAGUnavailableError` → HTTP 503):
+
+1. **Ollama bge-m3** — `POST /api/embeddings` with `prompt` truncated to
+   8,000 chars, resized/L2-normalized to 1024 dims.
+2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 1024-dim resize.
+
+`RAG_EMBED_BACKEND` env can force `ollama` or `openrouter`; default `auto`
+(probe Ollama once per process, cache result).
+
+**Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — still used
+by search/ingest code paths: Ollama → OpenRouter → LocalBGE
+(`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`BAAI/bge-m3`) → hash
+(last resort, deprecated). Specialized heads: `embed_token_scam`,
+`embed_wallet`, `embed_scam_pattern`, `embed_news`, `embed_contract`
+(`ContractCodeEmbedder` — 128-dim structural + 192-dim semantic = 320-dim).
+
+**Batch strategy:** `get_embeddings()` is sequential (Ollama/OpenRouter handle
+large batches poorly; memory is kept bounded). Seed scripts use `/api/embed`
+with batched `input` arrays; `OllamaBGEEmbedder.embed` sends one request per
+text (120 s timeout). Embeddings are cached in Redis 24 h
+(`emb:{head}:{sha256(text)[:32]}`).
+
+### 3.3 Retrieval — three-pillar search
+
+`three_pillar_search()` (`search/engine.py`) is the core retrieval path used
+by scam-check and search:
+
+| Pillar | Mechanism | Notes |
+|--------|-----------|-------|
+| **1. Dense** | FAISS ANN index (`app.ann_index`) with Redis brute-force numpy-cosine fallback (`CryptoEmbedder.search`) | Semantic cache checked first (`app.semantic_cache`, Redis) |
+| **2. Sparse** | SPLADE + BM25 (`splade_bm25.splade_search`) with BM25 fallback (`sparse_search._sparse_text_search`) | Okapi BM25, k1=1.2, b=0.75, crypto-domain stopwords |
+| **3. Entity** | Exact-match entity lookup (`app.entity_extraction`) + knowledge-graph expansion (`app.knowledge_graph`) | Optional; KG expansion is best-effort |
+
+**Fusion:** Reciprocal Rank Fusion (`rrf_fusion._rrr_fuse`, k=60) with
+query-adaptive pillar weights from `_classify_query`:
+
+| Query type | dense | sparse | entity |
+|------------|------:|-------:|-------:|
+| entity_heavy | 0.3 | 0.2 | 0.5 |
+| keyword_heavy | 0.3 | 0.6 | 0.1 |
+| semantic_heavy | 0.7 | 0.2 | 0.1 |
+| balanced (default) | 0.4 | 0.4 | 0.2 |
+
+Entity-matched docs get `entity_boost` multiplier (default 1.5, scam-check uses
+2.0). Post-fusion: optional MMR dedup (`mmr_dedup`, λ=0.6), optional
+cross-encoder rerank (`use_reranker=False` by default — off in live paths),
+and parent-child context expansion (`contextual_chunking`).
+
+**Confidence:** `app.confidence.score_confidence()` scores result sets
+(hits, entity matches, score distribution). WIP — see §7.
+
+### 3.4 Ingestion
+
+Two live mechanisms + seed pipelines:
+
+**Scanner → RAG (live, currently idle):**
+- `scanner_subscriber.py` — Redis pub/sub on `rmi:rag:ingest`; reconnects with
+  5 s backoff; on message: build text → `get_embedding()` (bge-m3) →
+  `QdrantVectorStore.insert()` → `threat_intel`.
+- `scanner_poller.py` — LPOP polling loop on `rmi:rag:findings_queue` (1 s
+  sleep; non-blocking LPOP is used because DragonflyDB has known issues with
+  `BLPOP`). Mirrors subscriber processing.
+- Both start in the FastAPI lifespan. **As of 2026-07-31 both report
+  `running: true` but `ingested_count: 0`** — nothing in rmi-backend is
+  publishing to the queues yet (see §7).
+
+**Seed pipelines (for initially-empty collections):**
+- `scripts/seed_threat_intel.py` — canonical seeder: 13 static vulnerability
+  patterns + 6 historical hacks + Redis seed docs, embedded with **bge-m3
+  (1024-dim)**, idempotent (skips existing UUIDs). Invoked via
+  `scripts/ingest_threats.py` or `docker compose run --rm rag-ingest`
+  (weekly systemd timer).
+- `scripts/seed_all.py` — broader seeder (threat_intel + rmi_agent_memory +
+  rmi_community + optional backend findings). **Note:** still defaults to
+  `qwen3-embed:4b` / 2560-dim — stale vs. the bge-m3 migration; being
+  superseded by `seed_threat_intel.py`.
+
+**Nightly news/social (3 AM UTC, `rag_ingestion.py`):** pulls DataBus
+news (50 articles), CT rundown (20), market brief, social metrics → Redis
+`rag:doc:{collection}:{id}` with 30-day TTL + parent-document store +
+delta tracking. Depends on `app.domains.databus.*` (rmi-backend).
+
+**Wallet labels / entities:** `embed_wallet` → `wallet_profiles` →
+Redis `rag:idx:wallet_profiles` + per-collection TTLs (see §3.5).
+
+**Dedup strategy:** deterministic UUID v5 point IDs make all upserts
+idempotent; Redis `EXISTS` checks skip already-indexed docs; `DeltaTracker`
+tracks incremental changes.
+
+**Chunking** (`chunking.py`, `chunking_config.yaml`): per-content-type
+strategies — news 512 chars/15% overlap (recursive), scam_report 400/10%
+(semantic), contract_code 256/20% (code/AST via `solidity_chunker.py`),
+wallet_profile 128/0% (fixed), social_post 256/5% (fixed), market_data 300/10%
+(semantic), default 512/15% (recursive).
+
+### 3.5 Caching — L1 / L2 / L3
+
+| Layer | Store | What | Retention |
+|-------|-------|------|-----------|
+| **L1 — process/Redis hot** | in-process + Redis | embedding cache `emb:{head}:{hash}`, scam-pattern cache `rag:pattern_cache:*`, semantic query cache | 24 h / 30 d / per-entry |
+| **L2 — Redis doc store** | Redis | `rag:{collection}:{doc_id}` (JSON) + index sets `rag:idx:{collection}` | per-collection TTL: permanent for `scam_patterns`, `contract_audits`, `transaction_patterns`, `forensic_reports`; 365 d for `wallet_profiles`, `known_scams`, `market_intel`; 90 d `token_analysis`; 30 d `news_articles`, `general` |
+| **L3 — R2 permanence** | Cloudflare R2 bucket `rag-backup` | nightly snapshots `rag_snapshots/{collection}/{ts}_chunkN.json` (5 MB chunks) + `latest.json` pointer; Qdrant API snapshots → `qdrant-snapshots/` | nightly; local 7-day cache (`/data/rag-storage`); opt-in HF mirror |
+
+> **Note:** L3 targets **Cloudflare R2** (not B2). The fleet's broader
+> backup tiering (R2/B2/HF) is handled by fleet-infra; the RAG-specific
+> permanence layer is R2.
+
+---
+
+## 4. API Reference
+
+Authentication: `X-API-Key` header enforced by `RAGAuthMiddleware` when
+`RMI_RAG_API_KEY` is set (`/health` and `/ready` exempt). If the key is unset
+the API runs open (dev mode — a startup warning is logged).
+
+### 4.1 Retrieval layer — rmi-backend (`/api/v1/rag/v2/*`, LIVE)
+
+| Method | Path | Purpose | Request → Response |
+|--------|------|---------|--------------------|
+| POST | `/api/v1/rag/v2/search` | Semantic/hybrid search | `SearchRequest {query, collection="scam_intel", top_k=5, min_similarity=0, filters}` → `SearchResponse` with hits + scores |
+| POST | `/api/v1/rag/v2/ingest` | Document ingestion | `IngestRequest` → `IngestResult {doc_id, collection, status}` |
+| POST | `/api/v1/rag/v2/feedback` | Scanner→RAG feedback | Records feedback, ingests known scam into `known_scams` |
+| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `ollama:bge-m3`) |
+| POST | `/api/v1/rag/v2/bulk-ingest` | Batch ingest | max 500 items/call into one collection |
+
+### 4.2 rmi-rag service (port 8012)
+
+| Method | Path | Status | Purpose |
+|--------|------|--------|---------|
+| GET | `/health` | LIVE | Liveness: Qdrant, Redis, subscriber/poller state |
+| GET | `/ready` | LIVE | Readiness |
+| GET | `/api/v1/search` | LIVE | Semantic search over `threat_intel` (bge-m3 1024-dim, `min_similarity=0.4`) |
+| GET | `/api/v1/rag/v2/scam-check` | LIVE | Address scam check. Params: `address`, `chain` (default ethereum), `limit`, `tier=free\|pro`. Three-pillar search over `threat_intel` + `rmi_community`; maps max score + critical/high signal count → `scam_risk: high\|medium\|low\|unknown` + `confidence`. Rate-limited: free 5 req/hr, pro 100/hr via `X-Device-Id` or IP (`429` + `X-RateLimit-Reset`) |
+| POST | `/api/v1/rag/investigate` | ⚠️ WIP — currently 500 | Deep investigation narratives (`src/app/investigation_narratives.py`, restore in progress) |
+| POST | `/api/v1/rag/confidence` | ⚠️ WIP — currently 500 | Confidence scoring (`src/app/confidence.py`, restore in progress) |
+| POST | `/api/v1/rag/chunk-solidity` | LIVE | Solidity AST chunking |
+| POST | `/api/v1/scanner/deployer-risk` | ⚠️ WIP | Deployer risk scoring (`src/app/deployer_reputation.py`) |
+| POST | `/api/v1/rag/cross-chain` | ⚠️ WIP | Cross-chain identity resolution (`src/app/cross_chain.py`) |
+| POST | `/api/v1/rag/image-analysis` | LIVE | Multimodal image description |
+| POST | `/api/v1/rag/logo-check` | LIVE | Logo theft detection (perceptual hash) |
+| GET | `/api/v1/rag/journalism/research` | LIVE | Deep-dive research brief across `threat_intel`, `rmi_agent_memory`, `rmi_community` |
+| GET | `/api/v1/rag/graph-communities` | LIVE | Knowledge-graph communities |
+| POST | `/api/v1/rag/watch` / GET `/api/v1/rag/watches` | LIVE | Streaming watch creation/list |
+| GET | `/api/v1/rag/metrics` | ⚠️ defined, not mounted | Prometheus-style RAG metrics (`metrics_api.py`; not yet wired into `main.py`) |
+| GET | `/docs`, `/redoc`, `/openapi.json` | LIVE | OpenAPI 3.1 docs |
+
+---
+
+## 5. Data Flow
+
+### 5.1 Scan result → searchable
+
+```
+rmi-backend UnifiedTokenScanner (high/critical risk)
+  → Redis PUBLISH rmi:rag:ingest          (subscriber path)
+  → Redis LPUSH  rmi:rag:findings_queue   (poller path, Dragonfly-safe)
+  → scanner_subscriber / scanner_poller
+  → get_embedding()  (bge-m3, 1024-dim)
+  → QdrantVectorStore.insert() → Qdrant threat_intel   (id: scanner_{chain}_{addr})
+  → searchable via GET /api/v1/search and /api/v1/rag/v2/scam-check
 ```
 
-### Port
-The API binds to **8012** (allocated per PORTS.md §8001-8009 range for rmi-* sub-products).
+**Current state:** both consumers are subscribed and healthy, but
+**`ingested_count: 0`** — rmi-backend is not yet publishing findings. Scanner
+findings remain in Postgres (existing behavior; no data loss). See §7 P0.
+
+### 5.2 News article → searchable
+
+```
+DataBus news aggregator (200+ RSS feeds: CoinTelegraph, Decrypt, The Block, X)
+  → app/rag/rag_ingestion nightly_rag_index (3 AM UTC)
+  → Redis rag:doc:news_articles:{hash12}  +  parent store  +  delta tracker
+  → searchable via rmi-backend /api/v1/rag/v2/search
+```
+
+Firehose (`firehose/news.py`) provides an on-demand pull path (DataBus
+`/api/v1/databus/fetch/news` → `news_articles`, prediction markets →
+`market_intel`). **Gap:** news collections are Redis-only today; the Qdrant
+`news` collection has not been created (see §7).
+
+### 5.3 Wallet label → searchable
+
+```
+Wallet label / profile
+  → CryptoEmbedder.embed_wallet()   (semantic 1024 + wallet features + behavioral)
+  → Redis rag:idx:wallet_profiles + rag:wallet_profiles:{id}  (365 d TTL)
+  → searchable via three-pillar search (entity pillar + dense)
+```
+
+Cross-chain identity (`src/app/cross_chain.py`) and investigation narratives
+(`src/app/investigation_narratives.py`) consume wallet/entity data; both are
+part of the `src/app/` restore (WIP).
+
+### 5.4 Backup & permanence (nightly → R2)
+
+```
+Qdrant collections                        Redis-backed collections
+  │ backup_qdrant.py (3:30 AM UTC cron)     │ permanence.snapshot_all()
+  ▼                                         ▼
+Qdrant API snapshot  → R2 rag-backup      JSON chunks (≤5 MB) → R2
+  qdrant-snapshots/{coll}_{date}.snapshot    rag_snapshots/{coll}/{ts}_chunkN.json
+                                            + latest.json pointer
+                                            + local 7-day cache + opt-in HF mirror
+
+Recovery:
+  Qdrant: restore snapshot via Qdrant API (manual)
+  Redis:  permanence.restore_all() — reads latest.json, rehydrates Redis
+```
+
+**Current state:** the permanence path (Redis→R2) is implemented; the Qdrant
+snapshot backup is **failing nightly** (`Credential access key has length 0`
+— missing S3/R2 credentials; see §7 P0).
+
+---
+
+## 6. Operations
+
+### 6.1 Monitoring
+
+| Signal | Source | Status |
+|--------|--------|--------|
+| Qdrant/Redis health | `GET /health` | LIVE (per-request probes + startup probes) |
+| Subscriber/poller state | `GET /health` → `subscriber_stats`, `poller_stats` (`running`, `connected`, `ingested_count`) | LIVE |
+| Collection sizes + embedder backend | `GET /api/v1/rag/v2/stats` | LIVE |
+| Collection sizes, ingest rate, pattern mix | Grafana dashboard `grafana/rag-dashboard.json` (Prometheus `rmi_rag_*` metrics) | PARTIAL — metrics not yet fully exported |
+| Queue depth (`rmi:rag:ingest`, `rmi:rag:findings_queue`) | redis-cli / Redis dashboard | manual |
+| Embedding/retrieval latency | `metrics_api.py` → `/api/v1/rag/metrics` | ⚠️ defined, not mounted |
+
+**Operational gaps (from TODO 2026-07-31):** no query-latency/hit-rate
+metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
+`ingested_count: 0` (either fix or remove).
+
+### 6.2 Backup
+- Redis-backed collections → R2 `rag_snapshots/` nightly (`permanence.nightly_cycle`).
+- Qdrant API snapshots → R2 `qdrant-snapshots/` nightly via cron
+  (`backup_qdrant.py`; local retention 3/collection). **Currently failing** —
+  credentials not configured.
+- 4-tier fleet backup (local → R2 → B2 → HF) is handled outside this repo by
+  fleet-infra cron jobs.
+
+### 6.3 Recovery
+1. Restore Redis collections: run `permanence.restore_all()` (needs
+   `R2_API_TOKEN`); rehydrates `rag:{collection}:{id}` + index sets from
+   `latest.json` pointers.
+2. Restore Qdrant: download `qdrant-snapshots/{coll}_{date}.snapshot` from R2,
+   upload via Qdrant API (`/collections/{coll}/snapshots/upload`).
+3. Re-seed empty collections: `docker compose run --rm rag-ingest`
+   (`seed_threat_intel.py`, idempotent).
+
+### 6.4 Scaling
+- **Ollama:** concurrency bounded by `OLLAMA_NUM_PARALLEL=2`, 4 threads,
+  4 GB memory cap (bge-m3 uses ~1.24 GB → 3× headroom; cap raised when chat
+  models ship). CPU-only today.
+- **Qdrant:** single node, collections created with default (unsharded)
+  config; sharding/replication not configured — revisit when collections
+  exceed a single node.
+- **Redis:** singleton async pool with ping-revalidate (`search_service._get_redis`).
+
+---
+
+## 7. Known Issues & Roadmap
+
+### 7.1 Current gaps (honest status, 2026-07-31)
+
+1. **All vector stores empty** — `threat_intel`, `rmi_agent_memory`,
+   `rmi_community` exist with 0 points; seeding is in progress
+   (`scripts/seed_threat_intel.py` — untracked WIP being run now).
+2. **Configured collections missing** — `scanner`, `wallet`, `news`,
+   `research`, `scams` don't exist in Qdrant; must be created at 1024-dim.
+3. **Scanner ingestion idle** — subscriber/poller running but nothing
+   publishes to Redis queues (`ingested_count: 0`).
+4. **rmi-rag-api 500s** — `/api/v1/rag/investigate` and
+   `/api/v1/rag/confidence` fail with `ModuleNotFoundError: No module named
+   'app'`; the `src/app/` package (confidence, cross_chain,
+   deployer_reputation, investigation_narratives) is being restored into the
+   repo — packaging/PYTHONPATH must be fixed.
+5. **Qdrant nightly backup failing** — missing R2 S3 credentials.
+6. **Embedder fallback latency** — bge-m3 (1024-dim) is primary; nomic-embed-text
+   (768-dim) is the backend fallback. Cross-model dimension mismatch is a real
+   risk if a single collection mixes dims — collections are created per
+   first-write dimension.
+7. **Stale references** — `seed_all.py` still defaults to qwen3-embed:4b
+   (2560-dim); `README-RAG-API.md` still documents nomic-embed-text as primary.
+8. **Code patterns not in Qdrant** — contract-code embeddings live in
+   rmi-codebase-mcp ChromaDB (nomic 768-dim, not yet aligned to bge-m3).
+9. **Test/quality debt** — 1 failing test (`test_qdrant_store.py`), coverage
+   ~10% (60% threshold unenforced), 42 ruff errors, `make lint`/`make test`
+   not green.
+
+### 7.2 Roadmap
+
+**P0 — Make it real (in progress)**
+- [ ] Finish seeding `threat_intel` (+ agent memory, community) with bge-m3 at
+      1024-dim; verify via `/api/v1/rag/v2/stats`
+- [ ] Recreate configured collections (`scanner`, `wallet`, `news`, `research`,
+      `scams`) at 1024-dim
+- [ ] Wire rmi-backend scanner → Redis publish so subscriber/poller
+      `ingested_count` moves
+- [ ] Fix Qdrant nightly backup (R2 credentials); verify snapshot restore
+- [ ] Restore `src/app/` packaging → unblock `/investigate` + `/confidence`
+- [ ] Consolidate stores: one canonical collection set across
+      rmi-backend and rmi-rag; retire stale seed paths
+
+**P1 — Retrieval quality**
+- [ ] BM25 sparse: verify SPLADE+BM25 wiring end-to-end in live search paths
+      (`splade_bm25.py` exists; needs validation + tests)
+- [ ] Cross-encoder rerank: enable `use_reranker` on high-traffic endpoints
+      (`cross_encoder.py` exists; default off)
+- [ ] Evaluation pipeline: RAGAS harness exists (`eval_ragas.py`,
+      `evaluation.py`) — needs a labeled eval set and CI gate
+
+**P2 — Entity & multimodal expansion**
+- [ ] Neo4j/knowledge-graph entity expansion (`app.knowledge_graph` external;
+      formalize graph store)
+- [ ] Image pipeline: multimodal + logo-theft DB (`multimodal.py` exists)
+- [ ] Contract-code embeddings in Qdrant (`ContractCodeEmbedder` 320-dim
+      combined structural+semantic); align rmi-codebase-mcp to bge-m3
+- [ ] Metrics: query latency, hit rate, collection-size gauges in Prometheus
+      + Grafana
+
+---
+
+## Appendix — Key Env Vars
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `QDRANT_URL` | `http://rmi-qdrant:6333` | Qdrant REST endpoint |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `rmi-redis` / `6379` | Redis (DragonflyDB) connection |
+| `OLLAMA_URL` | `http://rmi-ollama:11434` | Ollama endpoint |
+| `OLLAMA_EMBED_MODEL` | `bge-m3` | Primary embedder |
+| `RAG_EMBED_BACKEND` | `auto` | `auto` \| `ollama` \| `openrouter` |
+| `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `bge-m3` / `1.1` | Embedding version stamp (ADR-0007) |
+| `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
+| `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |
+| `RMI_RAG_API_KEY` | (unset → open) | X-API-Key auth for the rmi-rag API |
+| `R2_API_TOKEN` / `R2_BUCKET` | — / `rag-backup` | R2 permanence credentials |
+| `RAG_HF_MIRROR` / `RAG_HF_REPO` | `false` | Opt-in HuggingFace mirror |
+
+---
+
+*Update this document whenever components change. The TODO audit
+(`TODO.md`, 2026-07-31) is the source of truth for current gaps.*
