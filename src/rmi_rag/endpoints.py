@@ -5,6 +5,7 @@ multi-modal, investigation narratives, graph RAG, streaming, email.
 """
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -19,24 +20,34 @@ RATE_LIMITS = {
 
 
 async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[bool, int]:
+    """Check the per-identifier hourly rate limit.
+
+    Fails OPEN when Redis is unavailable: rate limiting is a best-effort
+    guard, not a hard dependency — the route should still serve results
+    when the limiter backend is down.
+    """
     from rmi_rag.search_service import _get_redis
 
-    rd = await _get_redis()
-    limit = RATE_LIMITS.get(tier, RATE_LIMITS["free"])
-    key = f"rag:ratelimit:{identifier}:{hour_key}"
-    current = await rd.incr(key)
-    if current == 1:
-        now = datetime.now(UTC)
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        ttl = int((next_hour - now).total_seconds())
-        await rd.expire(key, ttl)
-    else:
-        ttl = await rd.ttl(key)
-        if ttl < 0:
-            ttl = 3600
-    if current > limit:
-        return False, ttl
-    return True, ttl
+    try:
+        rd = await _get_redis()
+        limit = RATE_LIMITS.get(tier, RATE_LIMITS["free"])
+        key = f"rag:ratelimit:{identifier}:{hour_key}"
+        current = await rd.incr(key)
+        if current == 1:
+            now = datetime.now(UTC)
+            next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            ttl = int((next_hour - now).total_seconds())
+            await rd.expire(key, ttl)
+        else:
+            ttl = await rd.ttl(key)
+            if ttl < 0:
+                ttl = 3600
+        if current > limit:
+            return False, ttl
+        return True, ttl
+    except Exception as exc:
+        logger.warning("rate_limit_unavailable: failing open — %s", exc)
+        return True, 3600
 
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
@@ -117,7 +128,8 @@ async def rag_logo_check(request: Request, data: dict):
 
 @router.post("/rag/investigate")
 async def rag_investigate_endpoint(request: Request, data: dict):
-    q = data.get("query", "")
+    # Accept either ``query`` (natural language) or ``address`` (token/wallet).
+    q = data.get("query", "") or data.get("address", "")
     if not q:
         return {"error": "query is required"}
     from app.investigation_narratives import investigate  # external dependency
@@ -211,14 +223,32 @@ async def journalism_research(
 
 @router.get("/email/accounts")
 async def email_accounts(request: Request):
+    """List configured mail accounts.
+
+    The account list comes from the ``RMI_EMAIL_ACCOUNTS`` env var — a
+    comma-separated list of ``id|email|type`` entries — so no personal
+    addresses are hardcoded in the repo. Returns an empty list when
+    unconfigured.
+    """
+    accounts: list[dict[str, str]] = []
+    for entry in os.getenv("RMI_EMAIL_ACCOUNTS", "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = [p.strip() for p in entry.split("|")]
+        if len(parts) == 2:
+            account_id, email = parts
+            account_type = "gmail"
+        elif len(parts) == 3:
+            account_id, email, account_type = parts
+        else:
+            logger.warning("email_accounts: skipping malformed entry %r", entry[:40])
+            continue
+        accounts.append({"id": account_id, "email": email, "type": account_type})
+
     return {
-        "accounts": [
-            {"id": "gmail", "email": "cryptorugmuncher@gmail.com", "type": "gmail"},
-            {"id": "rmi", "email": "admin@rugmunch.io", "type": "gmail"},
-            {"id": "rmi-local", "email": "admin@rugmunch.io", "type": "local"},
-            {"id": "biz", "email": "biz@rugmunch.io", "type": "local"},
-        ],
-        "webmail_url": "https://webmail.rugmunch.io/",
+        "accounts": accounts,
+        "webmail_url": os.getenv("RMI_WEBMAIL_URL", "https://webmail.rugmunch.io/"),
     }
 
 
