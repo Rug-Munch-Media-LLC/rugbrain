@@ -22,8 +22,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from rmi_rag.endpoints import router as rag_router
-from rmi_rag.endpoints import scam_check_router
+# Install optional ``app.*`` integration stubs FIRST — the standalone
+# rmi-rag container never ships the rmi-backend ``app`` package, so
+# ``from app.x import y`` must degrade to a stub instead of raising.
+from rmi_rag.import_guard import install_import_guard
+
+install_import_guard()
+
+# Deliberately after install_import_guard() so app.* stubs exist first.
+from rmi_rag.endpoints import router as rag_router  # noqa: E402
+from rmi_rag.endpoints import scam_check_router  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
