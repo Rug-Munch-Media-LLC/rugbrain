@@ -1,7 +1,7 @@
-"""RAG Dual-Dim Embedder (M4 migration complete).
+"""RAG Embedder — bge-m3 primary (M5 migration complete).
 
-Qwen3-embed:4b (2560d) is now the primary embedding model.
-BGE-M3 (1024d) is retired. All Qdrant collections are 2560d Cosine.
+bge-m3 (1024d) is the primary embedding model.
+qwen3-embed:4b (2560d) is retired. All Qdrant collections are 1024d Cosine.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import Any
 class EmbedderBackend(Enum):
     """Available embedding backends."""
 
-    BGE_M3 = "bge-m3"  # 1024d, legacy (retired)
-    QWEN3_4B = "qwen3-embed:4b"  # 2560d, current primary
+    BGE_M3 = "bge-m3"  # 1024d, current primary (lightweight, CPU-friendly)
+    QWEN3_4B = "qwen3-embed:4b"  # 2560d, legacy (retired)
 
 
 # ── Per-backend configuration ──────────────────────────────────────────

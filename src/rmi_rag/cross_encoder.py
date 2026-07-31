@@ -31,8 +31,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://172.19.0.1:11434")
-OLLAMA_MODEL = os.getenv("RERANK_MODEL", "qwen3-embed:4b")
-OLLAMA_DIMS = 2560
+OLLAMA_MODEL = os.getenv("RERANK_MODEL", "bge-m3")
+OLLAMA_DIMS = 1024
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:

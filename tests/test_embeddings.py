@@ -2,16 +2,16 @@ from rmi_rag.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING_
 
 
 def test_embedding_dim():
-    assert EMBEDDING_DIM == 2560
+    assert EMBEDDING_DIM == 1024
 
 
 def test_model_name():
-    assert EMBED_MODEL_NAME == "qwen3-embed:4b"
+    assert EMBED_MODEL_NAME == "bge-m3"
 
 
 def test_version_stamp():
-    assert "qwen3-embed:4b" in EMBED_VERSION_STAMP
-    assert "2560" in EMBED_VERSION_STAMP
+    assert "bge-m3" in EMBED_VERSION_STAMP
+    assert "1024" in EMBED_VERSION_STAMP
     assert ":" in EMBED_VERSION_STAMP
 
 

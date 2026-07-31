@@ -56,8 +56,8 @@ class OllamaBGEEmbedder:
     """Ollama embedding provider."""
 
     OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
-    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen3-embed:4b")
-    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "2560"))
+    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
+    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "1024"))
 
     def __init__(self, ollama_url: str | None = None):
         self.url = ollama_url or os.getenv("OLLAMA_URL", self.OLLAMA_URL)
@@ -175,7 +175,7 @@ class HuggingFaceEmbedder:
                         results.append(data)
                 else:
                     logger.warning("HF returned unexpected shape: %s", type(data))
-                    results.append([0.0] * 2560)
+                    results.append([0.0] * self.DIMS)
             return results
 
     async def embed_one(self, text: str, model: str | None = None) -> list[float]:
