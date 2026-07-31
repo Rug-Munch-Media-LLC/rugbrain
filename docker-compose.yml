@@ -16,15 +16,18 @@ services:
     restart: unless-stopped
     networks:
       - rmi_network
+    ports:
+      - "127.0.0.1:11434:11434"
     volumes:
       - /usr/share/ollama/.ollama/models:/root/.ollama/models
     environment:
-      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_NUM_PARALLEL=2
       - OLLAMA_NUM_THREADS=4
       - OLLAMA_CONTEXT_LENGTH=4096
-      - OLLAMA_KEEP_ALIVE=30m
+      - OLLAMA_KEEP_ALIVE=5m
       - OLLAMA_FLASH_ATTENTION=1
       - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_MAX_LOADED_MODELS=2
     cap_drop:
       - ALL
     security_opt:
@@ -32,8 +35,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "8"
-          memory: "48g"
+          cpus: "4"
+          memory: "8g"
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
