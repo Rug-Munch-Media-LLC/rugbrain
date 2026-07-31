@@ -83,6 +83,15 @@ class DualDimEmbedder:
         return result[0] if result else [0.0] * self.dim
 
 
+# ── Factory ────────────────────────────────────────────────────────────
+def get_embedder() -> DualDimEmbedder:
+    """Return the canonical embedder (bge-m3, 1024d).
+
+    Async interface: ``await embedder.embed([texts])`` or ``await embedder.embed_one(text)``.
+    """
+    return DualDimEmbedder(EmbedderBackend.BGE_M3)
+
+
 # ── Migration helpers ──────────────────────────────────────────────────
 async def reindex_collection(
     name: str,

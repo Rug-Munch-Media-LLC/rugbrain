@@ -165,14 +165,29 @@ async def _embed_batch(docs: list[dict], collection: str) -> int:
             if r.exists(f"rag:doc:{collection}:{doc_id}"):
                 continue
 
-            # Store document metadata
+            # Compute the embedding vector for this document.
+            # Embedder outages degrade gracefully: the doc is still stored
+            # with text+metadata, just without a vector.
+            embedding: list[float] | None = None
+            try:
+                from rmi_rag.embedder import get_embedder
+
+                embedder = get_embedder()
+                embedding = await embedder.embed_one(doc["text"])
+            except Exception as e:
+                logger.warning("embed_failed doc_id=%s collection=%s err=%s", doc_id, collection, e)
+
+            # Store document metadata (+ vector when available)
+            mapping = {
+                "text": doc["text"][:2000],
+                "metadata": json.dumps(doc.get("metadata", {}), default=str),
+                "indexed_at": datetime.now(UTC).isoformat(),
+            }
+            if embedding:
+                mapping["embedding"] = json.dumps(embedding)
             r.hset(
                 f"rag:doc:{collection}:{doc_id}",
-                mapping={
-                    "text": doc["text"][:2000],
-                    "metadata": json.dumps(doc.get("metadata", {}), default=str),
-                    "indexed_at": datetime.now(UTC).isoformat(),
-                },
+                mapping=mapping,
             )
             # Set TTL: 30 days
             r.expire(f"rag:doc:{collection}:{doc_id}", 2592000)
