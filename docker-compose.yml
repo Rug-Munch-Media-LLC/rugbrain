@@ -53,6 +53,10 @@ services:
       start_period: 30s
 
   # ── API server (always-on) ──────────────────────────────────────
+    labels:
+      - app.rugmunch.io/name=rmi-ollama
+      - app.rugmunch.io/role=inference
+      - app.rugmunch.io/description=Ollama local LLM inference
   rag-api:
     build:
       context: .
@@ -68,6 +72,9 @@ services:
       - "dockflare.hostname=rag.rugmunch.io"
       - "dockflare.service=http://rmi-rag-api:8012"
       - "dockflare.zonename=rugmunch.io"
+      - app.rugmunch.io/name=rmi-rag-api
+      - app.rugmunch.io/role=api
+      - app.rugmunch.io/description=RAG retrieval API
     ports:
       - "127.0.0.1:8012:8012"
     env_file:
@@ -144,3 +151,7 @@ services:
     volumes:
       - /srv/rmi-infra/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py
+    labels:
+      - app.rugmunch.io/name=rmi-rag-ingest
+      - app.rugmunch.io/role=worker
+      - app.rugmunch.io/description=RAG ingestion worker
