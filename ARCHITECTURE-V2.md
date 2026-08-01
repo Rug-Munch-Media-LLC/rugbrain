@@ -1,16 +1,42 @@
 # RMI RAG — Consolidation Blueprint (ARCHITECTURE-V2)
 
-**Status:** implementation spec (v2) · supersedes the "two RAGs" status quo
+**Status:** consolidation blueprint (v2) · supersedes the "two RAGs" status quo
 **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rmi-rag`
-**Scope:** pure design/planning. This file is the contract the 6 implementing agents follow. No code was changed to produce it.
+**Scope:** design/planning contract + verified as-built record. This file is the contract the implementing agents follow AND the record of what actually shipped. No code was changed to produce the verification notes — they were confirmed against the live system on 2026-08-01.
 
 > **How to use this document**
 > - Sections 1–8 are the normative design. Agents MUST NOT deviate without a written note in the PR.
 > - Section 10 (sequencing) is the order of operations. Do not skip a phase; the proxy-first order protects prod.
 > - Sections 3.3 / 3.4 are the authoritative file-disposition tables. Every `.py` file in the RAG surface is classified.
 > - Facts marked `[verified]` were confirmed against the repos on 2026-08-01. Facts marked `[decision]` are architect decisions that fill gaps in the original brief — agents should treat them as binding unless the reviewer objects.
+> - **Verification sweep 2026-08-01 (final):** status of each phase and every claim in this doc was re-checked against the live system. See §0.1 "As-Built Reality" below. Items marked `[DONE]`, `[PARTIAL]`, `[NOT DONE]`, `[STALE]` reflect what was actually found.
 
 ---
+
+## 0.1 As-Built Reality (verified 2026-08-01 — final sweep)
+
+**What is live and correct:**
+- **BGE-M3 is the primary embedder** (1024d via Ollama, `embedder.py` + `embeddings.py`). The dead `:8001` container path is gone; `ollama:bge-m3` (1.16GB) is loaded. `qwen3-embed:4b` (2560d) is retired but the enum entry + dims table still exists (`embedder.py` lines 16–23) — cleanup item, not a live path. `[DONE]`
+- **Qdrant is the single store** (`rmi-qdrant:6333`, 20 collections, live). **BM25 sparse hybrid shipped**: `scripts/migrate_to_sparse.py` creates `{name}_v2` collections carrying named `dense` + `bm25` sparse vectors; 9 `_v2` collections live with points (scam_intel_v2 600, news_v2 623, scanner_v2 191, research_v2 60, threat_intel_v2 26; hacks_v2 0 — empty, see §10 gaps). `[DONE]`
+- **Parquet permanence shipped**: `scripts/b2_permanence.py` writes parquet snapshots (zstd) of all collections to B2 bucket `rmi-rag-permanence`; `scripts/migrate_to_parquet.py` converts legacy NDJSON; `scripts/b2_restore.py` restores. Verified dry-run: 20 collections, `format=parquet`, `encrypt=False`. `[DONE]`
+- **Client-side B2 encryption REMOVED**: `B2_ENCRYPTION_KEY` is deprecated; all objects are encrypted at rest by **B2 SSE-B2 (AES256)** — no client-side AES-GCM on new uploads. `[DONE]`
+- **DuckDB query endpoint added**: `POST /api/v1/rag/query` (in `endpoints.py` + `parquet_analytics.py`) runs read-only SQL (SELECT/WITH/DESCRIBE/SHOW only) over the B2 parquet snapshots (httpfs direct or download fallback). **Committed but NOT deployed** — running container predates it (see §10 gap). `[PARTIAL]`
+- **RAGAS evaluation added**: `src/rmi_rag/evaluation.py` + `eval_ragas.py`, route `GET /api/v1/eval/run`, golden-set metrics. **Committed; deployed only on the stale eval-test container (:8013), not on the main API (:8012).** `[PARTIAL]`
+- **BGE reranker added**: `reranker.py` (bge-reranker-v2-m3 cross-encoder), opt-in via `rerank=true` on search. Committed + merged; live in code, not exercised in the running container build. `[PARTIAL]`
+- **Metrics router**: `metrics.py` + `/metrics` Prometheus mount. Committed; the running :8012 container returns 404/401 (stale build). `[PARTIAL]`
+- **Rate limiting**: IP-based per-hour limiter on `/search` shipped (commit 57a5f81). `[DONE in code]`
+
+**What is NOT done / stale:**
+- **Backend consolidation never executed**: `app/rag_client.py` (RagApiClient) was **never created**; `app/api/v1/rag/search.py` still imports `app.rag` in-process (not an HTTP proxy); `app/rag/` (17 files, the second implementation) still present; `app/rag_service/` shim still present with **17 live callers**. §3.2 delete table, §5.1, and Phases 1–3 are **NOT DONE**. `[NOT DONE]`
+- **`rmi-rag-eval-test` container (:8013)** still running, built from a dirty local tree (its `/eval/run` is POST while HEAD is GET; search hangs). Should be stopped; it is not part of compose. `[STALE]`
+- **Main API container (:8012) is a stale build**: image predates the parquet/DuckDB/eval/metrics commits (ee42095, 1f73843). `/api/v1/rag/query`, `/api/v1/eval/run`, `/metrics` → 404. Requires rebuild from HEAD. `[STALE]`
+- **Module deletions in §3.1 are PARTIAL**: 11 files deleted (search_similar, embed_tiers, embed_utils, embedding_router, query_classifier, metrics_api, agentic, tool, chunking, legacy_supabase, rag_provider, src/app/), but the `search/` package, `search_service.py`, `cross_encoder.py`, `crypto_embeddings.py`, `bge_embedders.py`, `embeddings.py`, `splade_bm25.py`, `sparse_search.py`, `permanence.py`, `rag_ingestion.py`, `query_rewriter.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `graph_rag.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/` still exist. `[PARTIAL]`
+- **`endpoints.py` was NOT split** into `api/*` — it remains one file with all routes incl. the new `/rag/query` and `/eval/run`. `[NOT DONE]`
+- **`hacks` collection now seeded** (50 points) — the previously-blocking empty-collection issue is resolved; `hacks_v2` sparse variant still 0 points. `[DONE, v2 gap]`
+- **Live search is slow when the embedder is cold**: first call after model expiry reloads bge-m3 (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
+
+**Related systems:**
+- **Lite indexer parquet backup pipeline** (`RugMunchMedia/chain-indexer`): `src/parquet.ts` converts NDJSON → Parquet via DuckDB hourly and syncs to B2 (`b2:rmi-data/parquet/`) with rclone. This is the indexer-side analogue of rmi-rag's parquet permanence — separate repo, same format family, no code coupling. `[verified]`
 
 ## 0. Target State (one picture)
 
@@ -18,8 +44,9 @@
                     ┌─────────────────────────────────────────────┐
                     │              rmi-backend                     │
                     │  auth · rate-limit · API routing · scanners  │
-                    │                                              │
-  bot ─────────────►│  /api/v1/rag/v2/*   (HTTP proxy)             │
+                    │  ⚠️ STILL IMPORTS app.rag IN-PROCESS —       │
+                    │     proxy (RagApiClient) NOT YET BUILT       │
+  bot ─────────────►│  /api/v1/rag/v2/*   (planned HTTP proxy)     │
   frontend chat ───►│  /api/v1/rag/v2/search                       │
   scanner ─────────►│  domains/scanner/rag_scam_check.py           │
                     │        │                                     │
@@ -30,24 +57,37 @@
                     ┌─────────────────────────────────────────────┐
                     │              rmi-rag-api  (:8012)            │
                     │  THE single RAG service                      │
-                    │  embedder.py → store.py (Qdrant)            │
-                    │  retrieval.py ← api/* · ingestion/*         │
-                    │  evaluation/eval.py (RAGAS)                 │
+                    │  embedder.py (BGE-M3 1024d, Ollama)          │
+                    │  qdrant_store.py → Qdrant (dense+BM25)      │
+                    │  endpoints.py (all routes, NOT split)       │
+                    │  evaluation.py / eval_ragas.py (RAGAS)      │
+                    │  parquet_analytics.py (DuckDB /rag/query)   │
+                    │  ⚠️ running container is a STALE build       │
                     └─────────────────────────────────────────────┘
                              │
-                             ▼
-                    ┌─────────────────────────────────────────────┐
-                    │  Qdrant (rmi-qdrant:6333) · Ollama BGE-M3   │
-                    │  collections: scanner · news · wallet       │
-                    └─────────────────────────────────────────────┘
+              ┌──────────────┼──────────────────────┐
+              ▼              ▼                      ▼
+    ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐
+    │ Qdrant          │  │ Ollama BGE-M3   │  │ B2 rmi-rag-      │
+    │ rmi-qdrant:6333 │  │ 1024d (primary) │  │ permanence       │
+    │ 20 collections  │  │ bge-reranker    │  │ parquet snapshots│
+    │ dense + bm25    │  │ v2-m3 (opt-in)  │  │ SSE-B2 (AES256)  │
+    │ (9 _v2 hybrid)  │  │                 │  │ DuckDB queryable │
+    └─────────────────┘  └─────────────────┘  └──────────────────┘
 ```
 
-**Non-negotiables**
-1. ONE embedding stack: BGE-M3 (1024d) via Ollama, `embedder.py`. No hash fallback, no dual-dim, no "tiers".
-2. ONE store: Qdrant, `store.py` (wraps `qdrant_store.py`). No numpy ANN, no ChromaDB, no Redis vectors.
-3. ONE search path: dense + keyword filter + RRF, `retrieval.py`. No three-pillar facade.
-4. Backend never embeds, never queries vectors. It proxies HTTP.
-5. Fail-closed. Infra failure → 503, never empty results, never fake vectors.
+**Non-negotiables (as-built status in brackets)**
+1. ONE embedding stack: BGE-M3 (1024d) via Ollama, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — bge-m3 live; qwen3 enum entry still present as cleanup]**
+2. ONE store: Qdrant, `store.py` (wraps `qdrant_store.py`). No numpy ANN, no ChromaDB, no Redis vectors. **[DONE — Qdrant 20 collections; BM25 sparse `_v2` variants live]**
+3. ONE search path: dense + keyword filter + RRF, `retrieval.py`. No three-pillar facade. **[PARTIAL — search/ package + search_service.py still exist; retrieval is endpoint-driven hybrid]**
+4. Backend never embeds, never queries vectors. It proxies HTTP. **[NOT DONE — backend still imports `app.rag` in-process; RagApiClient never created]**
+5. Fail-closed. Infra failure → 503, never empty results, never fake vectors. **[DONE — IP rate limiting + fail-closed API-key auth live]**
+
+**Permanence (added in consolidation, not in original blueprint):**
+6. Every Qdrant collection is snapshotted to B2 as **parquet** (`scripts/b2_permanence.py`), queryable via DuckDB `POST /api/v1/rag/query`. **[COMMITTED; not deployed on :8012 yet]**
+7. No client-side encryption — **B2 SSE-B2 (AES256)** encrypts objects at rest; `B2_ENCRYPTION_KEY` is deprecated. **[DONE]**
+8. Search may optionally rerank with **bge-reranker-v2-m3** (`rerank=true`); reranker failure never breaks search. **[DONE in code]**
+9. Evaluation runs via **RAGAS-style golden set** (`GET /api/v1/eval/run`). **[COMMITTED; only on stale :8013 container]**
 
 ---
 
@@ -221,6 +261,9 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 | `pattern_extractor.py` | KEEP→ `ingestion/news.py` support (LLM pattern extraction feeds news ingestion) [decision] |
 | `permanence.py` | DELETE |
 | `qdrant_store.py` | KEEP (becomes `store.py` internals) |
+| `parquet_analytics.py` | **NEW (post-blueprint)** — KEEP. DuckDB read-only SQL over B2 parquet snapshots; backs `POST /api/v1/rag/query`. |
+| `reranker.py` | **NEW (post-blueprint)** — KEEP. bge-reranker-v2-m3 cross-encoder, opt-in via `rerank=true`; failure is non-fatal. |
+| `metrics.py` | **NEW (post-blueprint)** — KEEP. Prometheus counters (embed_latency, embed_requests); mounted at `/metrics`. |
 | `query_classifier.py` | DELETE |
 | `query_rewriter.py` | DELETE |
 | `rag_ingestion.py` | DELETE |
@@ -360,6 +403,11 @@ Rules:
 | POST | `/api/v1/confidence` | `api/confidence.py` | `{query, hits?}` | `{score, explanation}` |
 | GET | `/api/v1/stats` | `api/admin.py` | — | `{collections: {name: {points, dim, updated_at}}, embed_model, latency_p50}` |
 | GET | `/health` `/ready` | `main.py` | — | 200 when embedder+store initialized |
+| POST | `/api/v1/rag/query` | `endpoints.py` + `parquet_analytics.py` (NEW) | `{query: "<read-only SQL>"}` | `{columns, rows, truncated}` — DuckDB over B2 parquet snapshots |
+| GET | `/api/v1/eval/run` | `endpoints.py` + `evaluation.py` (NEW) | — | `{passed, failed, per_query: [...]}` — RAGAS golden-set eval |
+| GET | `/api/v1/search?rerank=true` | `endpoints.py` + `reranker.py` (NEW) | `{q, collection, limit, rerank}` | `{results, reranker_applied, reranker_method}` |
+
+**As-built notes:** routes above marked (NEW) are committed at HEAD but not live on the running :8012 container (stale build — see §0.1/§10). `GET /api/v1/search?q=...` is the live canonical form today (the bot depends on it); POST migration remains a Phase 4 decision.
 
 Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the bot's existing `research` handler, then migrate to POST and delete [decision].
 
@@ -399,32 +447,40 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 
 **Phase 1 — Proof of proxy (1 agent, backend):** create `app/rag_client.py` + rewrite `app/api/v1/rag/search.py` to proxy. Delete `app/rag_firehose/`, `app/rag_*.py` facades, `supabase_rag.py`, `app/databus/rag_*`. Add §6 CI greps. Tests: `test_rag_client.py`.
 > Cutover risk: after this phase the bot path already hits rmi-rag-api. Verify manually with a bot `/research` call.
+> **[NOT DONE — verified 2026-08-01: `app/rag_client.py` absent; `app/api/v1/rag/search.py` still imports `app.rag`; `app/rag_firehose/`, `app/rag_*.py`, `supabase_rag.py`, `app/databus/rag_*` still present. Next agent starts here.]**
 
 **Phase 2 — Redirect the 31 `rag_service` consumers (2 agents, backend):** swap every `app.rag_service.*` / `app.rag.*` import to `RagApiClient`. Fix `rag_scam_check.py` C1. Do NOT delete `app/rag/` or `app/rag_service/` yet (imports in tests/scripts may linger). Grep gate: 0 references to `rag_service`; `app.rag` references only inside `app/rag/` itself.
+> **[NOT DONE — 17 callers of `app.rag_service` remain (down from 31): app/content_platform.py, app/databus/services/client.py, app/domains/scanners/address_labeler.py, app/domains/scanners/rag_citations.py, app/entity_extraction/query.py, app/intel_feed_pipeline.py, app/intel_pipeline.py, app/investigation_narratives.py, app/rag_agentic.py, app/routers/protection.py, app/routers/x402_advanced_tools/rug_probability.py, app/routers/x402_enrichment/__init__.py, app/routers/x402_enrichment/labels.py, app/routers/x402_premium_tools.py, app/scam_sources.py, app/streaming_rag.py, app/supabase_vector.py]**
 
 **Phase 3 — Delete the backend implementations (1 agent):** delete `app/rag/`, `app/rag_service/`. Grep gate: `grep -rn "app\.rag\b\|app\.rag_service\|from app\.rag" app/ tests/` = 0. Backend is now pure proxy.
+> **[NOT DONE — `app/rag/` (17 files) and `app/rag_service/` (6 files) both still present.]**
 
 **Phase 4 — rmi-rag module map (2 agents, parallel lanes):**
 - Lane A (core): `store.py` + `retrieval.py` + `config.py`; delete `search/` package, `search_similar.py`, `search_service.py`, `splade_bm25.py`, `cross_encoder.py`, `rrf_fusion.py` (fold), `embeddings.py` (redirect), `crypto_embeddings.py` (cascade), `bge_embedders.py`, `rag_provider.py`, `rag_ingestion.py`, `embed_utils.py`, `embed_tiers.py`, `embedding_router.py`, `query_classifier.py`, `query_rewriter.py`, `legacy_supabase.py`, `metrics_api.py`, `agentic.py`, `tool.py`, `chunking.py`, `permanence.py`, `sparse_search.py`, `src/app/` (whole).
 - Lane B (API+ingestion): split `endpoints.py` into `api/*` per §8.2; move `scanner_subscriber/poller` → `ingestion/scanner.py`; `pattern_extractor` → `ingestion/news.py`; `scam_detection.py` → `api/scam_check.py` support; `eval_ragas.py` → `evaluation/eval.py`; fix `embedder.py`; slim `__init__.py`; fix `import_guard.py`.
 - Both lanes land on the same release train; repo must pass tests at merge.
+> **[PARTIAL — deleted so far: search_similar.py, embed_tiers.py, embed_utils.py, embedding_router.py, query_classifier.py, metrics_api.py, agentic.py, tool.py, chunking.py, legacy_supabase.py, rag_provider.py, src/app/. STILL PRESENT: search/ package, search_service.py, splade_bm25.py, cross_encoder.py, embeddings.py, crypto_embeddings.py, bge_embedders.py, rag_ingestion.py, query_rewriter.py, permanence.py, sparse_search.py + ~15 more §3.1 stragglers. `endpoints.py` NOT split; `store.py`/`retrieval.py`/`config.py` NOT created; reranker.py, metrics.py, parquet_analytics.py ADDED beyond blueprint.]**
 
 **Phase 5 — Guard removal + cleanup:** after `grep -rnE "from app\.|import app\." src/rmi_rag/` = 0 (excluding `import_guard.py` itself), delete `import_guard.py`, remove its install call from `main.py`, delete `journalism.py` if §8.2 verdict was DELETE, delete any remaining disposition-DELETE stragglers.
+> **[NOT DONE — `import_guard.py` still present and installed.]**
 
 **Phase 6 — Verification & ship:** full pytest, §6 grep gates, manual smoke: bot research, scanner scan with scam-check, frontend chat, `/stats` showing 3 collections (scanner/news/wallet), RAGAS eval run, then update `ARCHITECTURE.md` to point at V2.
+> **[PARTIAL — pytest 81 passed / 5 skipped (2026-08-01); live smoke: /search works (2 hits on threat_intel, 1 on phishing) but slow on cold embed; /health + /ready green; RAGAS eval endpoint not on :8012; /stats route absent from running build. Rebuild :8012 from HEAD before final smoke.]**
 
 ---
 
 ## 11. Definition of Done (acceptance gates)
 
-1. `grep -rn "rag_service\|rag_firehose\|crypto_embeddings\|splade_bm25\|three_pillar" /srv/work/repos/rmi-backend/app /srv/work/repos/rmi-rag/src` → 0 matches.
-2. `grep -rnE "from (app\.|rmi_rag\.)" /srv/work/repos/rmi-rag/src/rmi_rag/{embedder,store,retrieval}.py` → 0.
-3. `grep -rn "qdrant_client\|rmi_rag\|from app\.rag" /srv/work/repos/rmi-backend/app --include="*.py"` → 0 except `app/rag_client.py`.
-4. All rmi-rag tests + backend proxy tests green (`pytest`, `mypy --strict`, `ruff`).
-5. Live smoke: bot `/research` returns Qdrant-grounded citations; scanner scam-check returns verdict from `rmi-rag-api`; `/health` + `/ready` green.
-6. `RMI_RAG_API_URL=http://rmi-rag-api:8012` documented in backend `.env.example`; compose on shared `rmi_network`.
-7. This document's §3.3/§3.4 disposition tables fully executed; `git log` shows conventional commits per phase (`feat(rag):`, `refactor(rag):`, `chore(rag):`, `delete(rag):`).
+1. `grep -rn "rag_service\|rag_firehose\|crypto_embeddings\|splade_bm25\|three_pillar" /srv/work/repos/rmi-backend/app /srv/work/repos/rmi-rag/src` → 0 matches. **[current: 17 rag_service hits in backend]**
+2. `grep -rnE "from (app\.|rmi_rag\.)" /srv/work/repos/rmi-rag/src/rmi_rag/{embedder,store,retrieval}.py` → 0. **[N/A — store.py/retrieval.py not created yet]**
+3. `grep -rn "qdrant_client\|rmi_rag\|from app\.rag" /srv/work/repos/rmi-backend/app --include="*.py"` → 0 except `app/rag_client.py`. **[NOT MET — backend imports app.rag; no rag_client.py]**
+4. All rmi-rag tests + backend proxy tests green (`pytest`, `mypy --strict`, `ruff`). **[pytest 81/86 pass (5 skipped) 2026-08-01]**
+5. Live smoke: bot `/research` returns Qdrant-grounded citations; scanner scam-check returns verdict from `rmi-rag-api`; `/health` + `/ready` green. **[search + health verified; needs rebuild for full surface]**
+6. `RMI_RAG_API_URL=http://rmi-rag-api:8012` documented in backend `.env.example`; compose on shared `rmi_network`. **[backend commit e4685e84 re-points RAG clients to :8012 with API-key auth — partially met]**
+7. This document's §3.3/§3.4 disposition tables fully executed; `git log` shows conventional commits per phase (`feat(rag):`, `refactor(rag):`, `chore(rag):`, `delete(rag):`). **[PARTIAL — see §10 phase status]**
+8. **[ADDED] Rebuild `rmi-rag-api` from HEAD so `/api/v1/rag/query`, `/api/v1/eval/run`, `/metrics` are live; stop the stale `rmi-rag-eval-test` container (:8013); remove nested clone `rmi-backend/rmi-rag/` and merged-branch worktrees.**
+9. **[ADDED] Fix cold-embed latency: keep bge-m3 resident (Ollama `keep_alive`) and move the sync `httpx.Client(timeout=120)` embed call off the event loop (thread/async httpx) so concurrent searches can't wedge the API.**
 
 ---
 
-*End of blueprint. Conflicts with the repo's `ARCHITECTURE.md` (the "as-is" doc) are expected — V2 is the "to-be" contract; ARCHITECTURE.md should be updated in Phase 6 to reference this document.*
+*End of blueprint. Conflicts with the repo's `ARCHITECTURE.md` (the "as-is" doc) are expected — V2 is the "to-be" contract; ARCHITECTURE.md should be updated in Phase 6 to reference this document. §0.1 is the verified as-built record (2026-08-01 final sweep) and takes precedence over the target-state sections where they disagree.*
