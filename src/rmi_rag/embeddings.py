@@ -19,6 +19,7 @@ Design (per DESIGN.md M4):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Final
@@ -83,19 +84,23 @@ def _resize(vec: list[float], dim: int) -> list[float]:
     n = float(np.linalg.norm(arr))
     if n > 0:
         arr = arr / n
-    return arr.tolist()
+    return [float(x) for x in arr]
 
 
-def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+async def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
     """Try Ollama bge-m3. Returns None on any failure.
 
     Uses a generous timeout: bge-m3 (1.2GB) on a CPU-only Ollama with a
     handful of threads can take 30-120s for the first (cold-load) call,
     so a short timeout would spuriously mark the backend unavailable.
+
+    Async (httpx.AsyncClient) so a slow Ollama never blocks the event
+    loop — previously the sync client wedged the FastAPI search handler
+    for 38-90s, tripping the container healthcheck.
     """
     try:
-        with httpx.Client(timeout=120.0) as c:
-            r = c.post(
+        async with httpx.AsyncClient(timeout=120.0) as c:
+            r = await c.post(
                 f"{OLLAMA_URL}/api/embeddings",
                 json={"model": OLLAMA_MODEL, "prompt": text[:8000]},
             )
@@ -110,14 +115,17 @@ def _ollama_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
         return None
 
 
-def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try OpenRouter Nemotron. Returns None on any failure."""
+async def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+    """Try OpenRouter Nemotron. Returns None on any failure.
+
+    Async (httpx.AsyncClient) so a slow upstream never blocks the event loop.
+    """
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
         return None
     try:
-        with httpx.Client(timeout=15.0) as c:
-            r = c.post(
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            r = await c.post(
                 OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {key}"},
                 json={"model": OPENROUTER_MODEL, "input": text[:8000]},
@@ -163,22 +171,24 @@ async def _get_embedding_impl(text: str) -> list[float]:
 
     # Explicit backend override
     if _BACKEND == "ollama":
-        v = _ollama_embed(text)
+        v = await _ollama_embed(text)
         if v is not None:
             return v
         raise RAGUnavailableError("ollama backend failed and hash fallback removed per T04")
     if _BACKEND == "openrouter":
-        v = _openrouter_embed(text)
+        v = await _openrouter_embed(text)
         if v is not None:
             return v
         raise RAGUnavailableError("openrouter backend failed and hash fallback removed per T04")
 
     # auto: try ollama -> openrouter, fail loud if both fail
-    if _ollama_reachable():
-        v = _ollama_embed(text)
+    # Probe is sync (cached per process) — run off the event loop so a slow
+    # first probe can never wedge the request handler.
+    if await asyncio.to_thread(_ollama_reachable):
+        v = await _ollama_embed(text)
         if v is not None:
             return v
-    v = _openrouter_embed(text)
+    v = await _openrouter_embed(text)
     if v is not None:
         return v
 
