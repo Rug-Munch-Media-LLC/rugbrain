@@ -142,6 +142,31 @@ async def test_search_with_custom_collection():
 
 
 @pytest.mark.asyncio
+async def test_search_uses_named_dense_vector_on_hybrid_collection():
+    """search() against a hybrid (named-vector) collection must send the
+    named dense vector, not a bare vector — Qdrant rejects bare vectors
+    against named-vector collections with 400 "Not existing vector name"."""
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        _mock_hybrid_collection(respx_mock, "threat_intel")
+        route = respx_mock.post("/collections/threat_intel/points/search").respond(
+            200, json={"result": []}
+        )
+        await store.search(
+            query_embedding=[0.1] * 768,
+            collection="threat_intel",
+            limit=5,
+            min_similarity=0.4,
+        )
+    assert route.called
+    request_body = route.calls[0].request.content
+    assert b'"name":"dense"' in request_body
+    assert b'"vector":' in request_body
+
+
+@pytest.mark.asyncio
 async def test_insert_stores_document():
     """insert() should PUT document to Qdrant and return True."""
     from rmi_rag.qdrant_store import QdrantVectorStore

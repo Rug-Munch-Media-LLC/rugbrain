@@ -1,5 +1,5 @@
 # rmi-rag — Production TODO
-**Last audit:** 2026-08-01 (final sweep) · **Status:** Phase 1 consolidation complete, Phase 2 in flight · **Grade:** A (compliance 94%)
+**Last audit:** 2026-08-01 (final sweep + BM25 alias swap) · **Status:** Phase 1 consolidation complete, Phase 2 in flight · **Grade:** A (compliance 94%)
 
 ## ✅ PHASE 1 — COMPLETED (2026-08-01)
 
@@ -13,7 +13,7 @@
   - `scams` 300 (MetaMask eth-phishing-detect sample) · `wallet` 1000 (Redis `rmi:label:*`)
   - `threat_intel` 26 · `threat_intel_v2` 26 (static patterns + historical hacks)
   - `hacks` **50 — SEEDED (was 0 at Phase 1; `ec4fb7b` restored hack ingest scripts and they ran)**
-  - `hacks_v2` **0 — sparse variant NOT populated (gap, see below)**
+  - `hacks_v2` **50 — populated 2026-08-01 (sparse migration backfill) + aliased `hacks → hacks_v2`**
   - `rmi_agent_memory` 5 · `rmi_community` 21
   Seeding scripts: `scripts/seed_qdrant_collections.py` (primary), `scripts/news_to_rag.py` (news), `scripts/ingest_rekt_news.py` (hacks).
 - [x] R2→B2 migration — all backup/permanence scripts, env vars, docs migrated (2026-07-31). Verified: 0 live R2 references (2 remaining strings are migration comments only).
@@ -39,9 +39,10 @@
 ## 🟠 HIGH
 
 - [x] **Ollama optimization** — DONE 2026-08-01 (compose + warmup script, see `scripts/ollama-warmup.sh`): `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_MAX_LOADED_MODELS=3`, `OLLAMA_CONTEXT_LENGTH=4096`, cpus 8 / mem 8g; bge-m3 + nomic-embed-text preloaded at container start; `qwen3:0.6b` removed (qwen3:1.7b retained). Verified live on rmi-ollama.
+- [ ] **Event-loop wedge confirmed post-swap (2026-08-01)** — `/api/v1/search` batch during verification wedged `rmi-rag-api` (unhealthy, `/ready` 000, needed `docker restart`). Cold bge-m3 embed reload (~40–45s on first search) + sync `httpx.Client(timeout=120)` inside async blocks the event loop. Now that hybrid_search runs on every canonical collection, each new process pays the cold reload — fix keep_alive resident model + move embed off the event loop (async httpx / to_thread) + request-level timeout. Was already tracked as "Fix live search latency + event-loop wedge"; confirmed recurring 2026-08-01.
 - [x] Fix `rmi-news-ingest.sh` cron pileup — DONE 2026-08-01 (`c17dc59`). `flock -n 200` guard: overlapping runs skip and exit 0; covers cron + systemd timer paths. **Caveat:** step-2 Redis auth gap (`REDIS_URL` vs `REDIS_PASSWORD`) still open, tracked separately.
-- [ ] Seed `hacks_v2` sparse variant — `migrate_to_sparse.py` ran for most collections but `hacks_v2` has 0 points (hacks was seeded after the sparse migration). Re-run migration for hacks. **Verified 2026-08-01: still 0 points.**
-- [ ] **BM25 alias swap** — `migrate_to_sparse.py` + `hybrid_search` (endpoints/qdrant_store) are implemented but the canonical-name → `_v2` alias is **NOT created** (Qdrant aliases list is empty as of 2026-08-01). Hybrid search only works if callers pass `_v2` names directly. Remaining work: create aliases + flip search to canonical names.
+- [x] Seed `hacks_v2` sparse variant — DONE 2026-08-01. `migrate_to_sparse.py --collection hacks` backfilled `hacks_v2` to 50 points (bm25 sparse computed), then `--swap` aliased `hacks → hacks_v2`.
+- [x] **BM25 alias swap** — DONE 2026-08-01. **8/8 collections swapped** (threat_intel, scam_intel, hacks, news, wallet, scanner, research, scams): canonical names are Qdrant aliases → `{name}_v2` hybrid (dense `dense` + sparse `bm25`). `migrate_to_sparse.py` made idempotent (skip copy when `_v2` complete; reuse existing hybrid `_v2`). Verified live: all canonical names resolve `sparse=bm25` with full point counts; `/api/v1/search` returns 3/3 hits per collection via canonical names.
 - [ ] Delete remaining §3.1 modules in rmi-rag — `search/` package, `search_service.py`, `splade_bm25.py`, `cross_encoder.py`, `embeddings.py`, `crypto_embeddings.py`, `bge_embedders.py`, `rag_ingestion.py`, `query_rewriter.py`, `permanence.py`, `sparse_search.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `graph_rag.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/`. (11 files already deleted.)
 - [ ] Split `endpoints.py` into `api/*` per ARCHITECTURE-V2 §8.2 (currently one file with all routes incl. new `/rag/query` + `/eval/run`).
 - [ ] Remove qwen3 legacy enum entry + `_BACKEND_DIMS` dead path from `embedder.py` (BGE-M3 1024d only).
@@ -55,6 +56,8 @@
 
 - [ ] Fix Qdrant nightly backup — failing every night: "Credential access key has length 0, should be 32" (missing S3 creds).
 - [ ] Clean up stale ChromaDB instance — `data/chroma/` (188KB, 0 collections) vs active `chroma_db/` (5 embeddings, stale).
+- [ ] Clean up Qdrant test-artifact collections — `_test_sparse6`, `_test_sparse8` (empty, leftover from sparse-migration testing) and any `tmp_old` remnant. `tmp_old` deleted 2026-08-01; `_test_*` remain.
+- [ ] `hybrid_search` uses `_collection_supports_sparse` per-instance cache — cache is not invalidated if a collection is swapped/recreated under a running process; acceptable for now (canonical names are aliases and stable), but restart the API after any future migration swap to refresh the probe.
 - [ ] Fix rmi-rag-api health shows `ingested_count: 0` — either fix or remove from dashboard.
 - [ ] Fix `RAG_EMBED_BACKEND=auto` ambiguity — explicit config would prevent broken fallback chain.
 - [ ] Create reindex cron/scheduler — seed data in place; add a reindex schedule to keep collections fresh (news/research/scams are static snapshots until wired).

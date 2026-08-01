@@ -296,21 +296,66 @@ async def _migrate_collection(
     points_count = int(info.get("points_count") or 0)
     v2 = f"{name}_v2"
 
+    # If a hybrid _v2 collection already exists from an earlier migrate run,
+    # skip create+copy and go straight to the alias swap (idempotent). The
+    # original dense-only collection must still be swapped, so we do NOT
+    # short-circuit on "already-hybrid" here — only when _v2 is complete.
+    v2_info = await _get_collection_info(client, v2)
+    v2_count = int((v2_info or {}).get("points_count") or 0)
+    v2_params = (v2_info or {}).get("config", {}).get("params", {}) or {}
+    v2_hybrid = bool(v2_params.get("sparse_vectors"))
+
     if args.dry_run:
         logger.info(
-            "plan name=%s v2=%s dense_size=%d sparse=%s points=%d swap=%s",
+            "plan name=%s v2=%s dense_size=%d sparse=%s points=%d v2_points=%d swap=%s",
             name,
             v2,
             vector_size,
             SPARSE_NAME,
             points_count,
+            v2_count,
             args.swap,
         )
         return "planned"
 
-    if not await _create_v2(client, v2, vector_size):
-        logger.error("fail name=%s stage=create_v2", name)
+    if v2_info is not None and v2_hybrid and v2_count == points_count and args.limit is None:
+        logger.info(
+            "skip_copy name=%s v2=%s already migrated points=%d",
+            name,
+            v2,
+            v2_count,
+        )
+        if args.swap:
+            return await _swap_alias(client, name, v2)
+        logger.info(
+            "note name=%s alias swap not run — verify %s then rerun with --swap",
+            name,
+            v2,
+        )
+        return "migrated"
+
+    # _v2 may already exist (e.g. a partial run or a seeded-after-migration
+    # collection like hacks). Qdrant returns 409 on re-PUT of an existing
+    # collection, so only create when missing; otherwise copy into it
+    # (upserts are idempotent) to backfill the missing points.
+    if v2_info is None:
+        if not await _create_v2(client, v2, vector_size):
+            logger.error("fail name=%s stage=create_v2", name)
+            return "create-failed"
+    elif not v2_hybrid:
+        logger.error(
+            "fail name=%s stage=create_v2 v2 exists but is not hybrid sparse=%s",
+            name,
+            v2_params.get("sparse_vectors"),
+        )
         return "create-failed"
+    else:
+        logger.info(
+            "reuse name=%s v2=%s exists hybrid points=%d — backfilling",
+            name,
+            v2,
+            v2_count,
+        )
 
     migrated, skipped, missing_sparse = await _copy_points(client, name, v2, args)
 

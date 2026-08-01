@@ -26,8 +26,18 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
 # ── Security: non-root user ──────────────────────────────────────────
-RUN groupadd -r rmi && useradd -r -g rmi -s /bin/false rmi && chown -R rmi:rmi /app
+# -m: create /home/rmi so DuckDB has a writable home for extension installs
+#     (httpfs). Without it, LOAD httpfs fails at runtime: "Can't find the
+#     home directory at '/home/rmi'".
+RUN groupadd -r rmi && useradd -r -g rmi -s /bin/false -m rmi && chown -R rmi:rmi /app
 USER rmi
+
+# ── DuckDB httpfs extension (baked at build time) ────────────────────
+# Install + verify as the non-root rmi user so /home/rmi/.duckdb/extensions
+# is populated in the image. Runtime queries against B2 parquet snapshots
+# (POST /api/v1/rag/query) need this extension; building it in avoids a
+# runtime download and makes the image self-contained.
+RUN python -c "import duckdb; con = duckdb.connect(); con.execute('INSTALL httpfs'); con.execute('LOAD httpfs'); print('httpfs extension ready')"
 
 # ── Expose API port ──────────────────────────────────────────────────
 EXPOSE 8012

@@ -97,6 +97,9 @@ async def _probe_qdrant() -> bool:
 # ``{name}_v2`` collections (see scripts/migrate_to_sparse.py) and
 # pointing the original name at them via an alias.
 SPARSE_VECTOR_NAME = "bm25"
+# Name of the dense vector in hybrid collections (must match the config
+# used by scripts/migrate_to_sparse.py when creating ``{name}_v2``).
+DENSE_VECTOR_NAME = "dense"
 
 _bm25_embedder: Any = None
 _bm25_embedder_lock = threading.Lock()
@@ -231,8 +234,17 @@ class QdrantVectorStore:
         client = await self._get_client()
         await _ensure_collection(coll, len(query_embedding), client)
 
+        # Hybrid collections (created by scripts/migrate_to_sparse.py) carry
+        # named dense + BM25 sparse vectors. A bare vector is rejected by
+        # Qdrant against a named-vector collection ("Not existing vector
+        # name"), so send the named dense vector when the collection is
+        # hybrid. Dense-only collections keep using the bare vector.
+        vector_field: Any = query_embedding
+        if await self._collection_supports_sparse(coll, client):
+            vector_field = {"name": DENSE_VECTOR_NAME, "vector": query_embedding}
+
         payload: dict[str, Any] = {
-            "vector": query_embedding,
+            "vector": vector_field,
             "limit": limit,
             "score_threshold": min_similarity,
             "with_payload": True,
@@ -273,6 +285,7 @@ class QdrantVectorStore:
         collection: str | None = None,
         limit: int = 10,
         vector_weight: float = 0.7,
+        min_similarity: float = 0.6,
     ) -> list[dict[str, Any]]:
         """Dense + BM25 sparse hybrid search with Reciprocal Rank Fusion.
 
@@ -294,7 +307,12 @@ class QdrantVectorStore:
                     return fused
 
         # ── Fallback: dense search + keyword re-rank (pre-sparse behaviour) ──
-        results = await self.search(query_embedding, collection=coll, limit=limit * 2)
+        results = await self.search(
+            query_embedding,
+            collection=coll,
+            limit=limit * 2,
+            min_similarity=min_similarity,
+        )
 
         if query_text and results:
             terms = set(query_text.lower().split())
@@ -336,7 +354,7 @@ class QdrantVectorStore:
         so the caller can fall back to dense-only search.
         """
         payload: dict[str, Any] = {
-            "vector": {"name": "dense", "vector": dense_vector},
+            "vector": {"name": DENSE_VECTOR_NAME, "vector": dense_vector},
             "sparse_vector": {
                 "name": SPARSE_VECTOR_NAME,
                 "vector": {"indices": sparse[0], "values": sparse[1]},
@@ -408,7 +426,7 @@ class QdrantVectorStore:
         point_id = self._to_uuid(doc_id)
         vector_field: Any = embedding
         if await self._collection_supports_sparse(collection, client):
-            vector_field = {"dense": embedding}
+            vector_field = {DENSE_VECTOR_NAME: embedding}
             sparse = await _embed_sparse(content)
             if sparse is not None:
                 vector_field[SPARSE_VECTOR_NAME] = {

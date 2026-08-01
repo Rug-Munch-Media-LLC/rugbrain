@@ -397,7 +397,13 @@ async def search_threat_intel(
 
     store = QdrantVectorStore()
     candidate_limit = min(max(limit * 4, 20), 100) if rerank else limit
-    results = await store.search(
+    # Hybrid search: dense + BM25 sparse with native Qdrant RRF when the
+    # target collection carries a bm25 sparse vector (post sparse-migration
+    # canonical collections), falling back to dense + keyword re-rank for
+    # dense-only collections. Keeps /api/v1/search serving hybrid results
+    # through canonical collection names after the alias swap.
+    results = await store.hybrid_search(
+        query_text=q,
         query_embedding=embedding,
         collection=collection,
         limit=candidate_limit,
