@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 RATE_LIMITS = {
     "free": 5,
     "pro": 100,
+    # /api/v1/search is called by the backend scanner per token over a shared
+    # egress IP, so the per-IP limit must be generous but still bound abuse
+    # (each search costs an embedding + Qdrant query + optional rerank).
+    "search": int(os.getenv("RAG_SEARCH_RATE_LIMIT", "3600")),
 }
 
 
@@ -286,6 +290,24 @@ async def search_threat_intel(
     if not q:
         return {"results": [], "query": q, "collection": collection, "total": 0}
 
+    # Rate limit /search by client IP (not spoofable via headers). Each
+    # search performs an embedding + Qdrant query (+ optional rerank), so an
+    # unthrottled caller could burn significant compute.
+    hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, ttl = await _check_rate_limit(client_ip, "search", hour_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "tier": "search",
+                "limit": RATE_LIMITS["search"],
+                "reset_in_seconds": ttl,
+            },
+            headers={"X-RateLimit-Reset": str(ttl)},
+        )
+
     try:
         embedding = await get_embedding(q)
     except Exception as e:
@@ -341,9 +363,10 @@ async def scam_check(
 ) -> dict:
     now = datetime.now(UTC)
     hour_key = now.strftime("%Y%m%d%H")
-    device_id = request.headers.get("X-Device-Id", "")
+    # IP-based identifier only: X-Device-Id is client-controlled and spoofable,
+    # so trusting it would let an attacker rotate headers to bypass the limit.
     client_ip = request.client.host if request.client else "unknown"
-    identifier = device_id if device_id else client_ip
+    identifier = client_ip
 
     allowed, ttl = await _check_rate_limit(identifier, tier, hour_key)
     if not allowed:
