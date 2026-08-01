@@ -18,19 +18,19 @@
   Seeding scripts: `scripts/seed_qdrant_collections.py` (primary), `scripts/news_to_rag.py` (news), `scripts/ingest_rekt_news.py` (hacks).
 - [x] R2→B2 migration — all backup/permanence scripts, env vars, docs migrated (2026-07-31). Verified: 0 live R2 references (2 remaining strings are migration comments only).
 - [x] B2 permanence pipeline — `scripts/b2_permanence.py` parquet snapshots verified (dry-run: **20 collections**, bucket `rmi-rag-permanence`, `format=parquet`, `encrypt=False`). Cron: `backup_qdrant.py` nightly + systemd timer.
-- [x] **Parquet + DuckDB permanence** — `scripts/b2_permanence.py` writes parquet (zstd); `scripts/migrate_to_parquet.py` converts legacy NDJSON; `POST /api/v1/rag/query` (read-only SQL) added in HEAD (`parquet_analytics.py`). `tests/test_parquet_permanence.py` — **18 passed**. ⚠️ NOT YET DEPLOYED on :8012 (stale container build).
+- [x] **Parquet + DuckDB permanence** — `scripts/b2_permanence.py` writes parquet (zstd); `scripts/migrate_to_parquet.py` converts legacy NDJSON; `POST /api/v1/rag/query` (read-only SQL) added in HEAD (`parquet_analytics.py`). `tests/test_parquet_permanence.py` — **18 passed**. **DEPLOYED 2026-08-01**: container rebuilt from HEAD, `/api/v1/rag/query` verified 200 (b2-direct source, DuckDB httpfs baked into image). ⚠️ Known: `_b2_native_auth` fallback uses `httpx.post` w/o body — B2 authorize returns 400 on POST; GET works. Primary httpfs path unaffected.
 - [x] **Client-side B2 encryption REMOVED** — `55ca320 refactor(b2)`: no client-side AES-GCM; **B2 SSE-B2 (AES256)** encrypts at rest. `B2_ENCRYPTION_KEY` deprecated, absent from `.env.rag`. `migrate_to_parquet.py` remains the only reader of legacy `.enc` objects.
 - [x] **BM25 sparse vectors (Phase 2 item, shipped early)** — `32d88f6`: `scripts/migrate_to_sparse.py` creates `{name}_v2` collections (named dense + bm25 sparse); 9 `_v2` collections live with points.
 - [x] **BGE reranker merged** — `8fbab3e` + `5ee229e` + `1f73843`: `reranker.py` (bge-reranker-v2-m3), opt-in `rerank=true`; torch-init fixed. Search never breaks on reranker failure.
-- [x] RAGAS evaluation framework — `src/rmi_rag/eval_ragas.py` + `evaluation.py` + golden dataset + metrics; route `GET /api/v1/eval/run` merged into main (`1f73843`). **NOT deployed on :8012** (only on stale :8013 eval-test container, which runs a dirty pre-merge build).
-- [x] RAG metrics — `metrics.py` Prometheus counters (`embed_latency`, `embed_requests`) + `/metrics` mount. **NOT deployed on :8012** (stale build).
+- [x] RAGAS evaluation framework — `src/rmi_rag/eval_ragas.py` + `evaluation.py` + golden dataset + metrics; route `GET /api/v1/eval/run` merged into main (`1f73843`). **DEPLOYED 2026-08-01** on :8012 (eval-test container removed).
+- [x] RAG metrics — `metrics.py` Prometheus counters (`embed_latency`, `embed_requests`) + `/metrics` mount. **DEPLOYED 2026-08-01** — `/metrics` returns 200 with API key.
 - [x] ARCHITECTURE-V2.md updated with as-built reality (§0.1 final sweep) + DATA-STRATEGY.md written (DATA-STRATEGY.md is NOT in this repo — it lives in rmi-backend).
 - [x] Historical crypto data ingestion scripts — `scripts/ingest_defihacklabs.py`, `scripts/ingest_rekt_news.py` restored to main (`ec4fb7b`) and **run against live Qdrant** (hacks = 50 points).
 
 ## 🔴 BLOCKING (from final sweep 2026-08-01)
 
-- [ ] **CRITICAL: Rebuild `rmi-rag-api` container from HEAD** — the running :8012 image predates `ee42095` (parquet/DuckDB) and `1f73843` (eval/metrics): `/api/v1/rag/query`, `/api/v1/eval/run`, `/metrics` all 404. Rebuild + restart, then re-verify the three endpoints.
-- [ ] **CRITICAL: Stop stale `rmi-rag-eval-test` container (:8013)** — built from a dirty local tree (its `/eval/run` is POST while HEAD is GET; search hangs). Not part of compose. `docker rm -f rmi-rag-eval-test` after verifying nothing depends on it.
+- [x] **CRITICAL: Rebuild `rmi-rag-api` container from HEAD** — DONE 2026-08-01 (container recreated 12:31 UTC). Verified live: `/ready` 200, `/api/v1/rag/query` POST 200 (b2-direct via DuckDB httpfs), `/metrics` 200 (with API key), `/api/v1/search` 200. Dockerfile now bakes `duckdb httpfs` extension at build time.
+- [x] **CRITICAL: Stop stale `rmi-rag-eval-test` container (:8013)** — DONE 2026-08-01. Container removed; no `eval-test` container remains. (Image `rmi-rag-eval-test:latest` still on disk — prune when convenient.)
 - [ ] **CRITICAL: Backend consolidation Phases 1–3 never executed** — `app/rag_client.py` (RagApiClient) NOT created; `app/api/v1/rag/search.py` still imports `app.rag` in-process; **17 callers** of `app.rag_service` remain (down from 31); `app/rag/` (17 files) + `app/rag_service/` (6 files) still present. See ARCHITECTURE-V2.md §10 for the full plan.
 - [ ] **CRITICAL: Fix news cron Redis auth on host** — `rmi-news-ingest.sh` step 1 fails: "HELLO must be called with the client already authenticated". Script sources `REDIS_PASSWORD` but backend `app/core/redis.py` reads `REDIS_URL` (default no-auth localhost). Fix: export `REDIS_URL=redis://:${REDIS_PASSWORD}@127.0.0.1:6379/0` in cron env. **Still open — verified in script, no fix present.**
 - [ ] **CRITICAL: Wire scanner ingestion pipeline** — `scanner_subscriber` and `scanner_poller` both `running: true` but `ingested_count: 0`; Redis queues `rmi:rag:ingest` / `rmi:rag:findings_queue` empty. Scanner/news collections are seeded from staged dumps; live ingestion not wired.
@@ -38,8 +38,10 @@
 
 ## 🟠 HIGH
 
-- [ ] Fix `rmi-news-ingest.sh` cron pileup — every 15-min tick spawns `app.domains.news.ingest` that never terminates when Ollama is busy; dozens of stuck processes accumulate and saturate the embedder. Ingest step has no lock (unlike news_to_rag).
-- [ ] Seed `hacks_v2` sparse variant — `migrate_to_sparse.py` ran for most collections but `hacks_v2` has 0 points (hacks was seeded after the sparse migration). Re-run migration for hacks.
+- [x] **Ollama optimization** — DONE 2026-08-01 (compose + warmup script, see `scripts/ollama-warmup.sh`): `OLLAMA_KEEP_ALIVE=-1`, `OLLAMA_MAX_LOADED_MODELS=3`, `OLLAMA_CONTEXT_LENGTH=4096`, cpus 8 / mem 8g; bge-m3 + nomic-embed-text preloaded at container start; `qwen3:0.6b` removed (qwen3:1.7b retained). Verified live on rmi-ollama.
+- [x] Fix `rmi-news-ingest.sh` cron pileup — DONE 2026-08-01 (`c17dc59`). `flock -n 200` guard: overlapping runs skip and exit 0; covers cron + systemd timer paths. **Caveat:** step-2 Redis auth gap (`REDIS_URL` vs `REDIS_PASSWORD`) still open, tracked separately.
+- [ ] Seed `hacks_v2` sparse variant — `migrate_to_sparse.py` ran for most collections but `hacks_v2` has 0 points (hacks was seeded after the sparse migration). Re-run migration for hacks. **Verified 2026-08-01: still 0 points.**
+- [ ] **BM25 alias swap** — `migrate_to_sparse.py` + `hybrid_search` (endpoints/qdrant_store) are implemented but the canonical-name → `_v2` alias is **NOT created** (Qdrant aliases list is empty as of 2026-08-01). Hybrid search only works if callers pass `_v2` names directly. Remaining work: create aliases + flip search to canonical names.
 - [ ] Delete remaining §3.1 modules in rmi-rag — `search/` package, `search_service.py`, `splade_bm25.py`, `cross_encoder.py`, `embeddings.py`, `crypto_embeddings.py`, `bge_embedders.py`, `rag_ingestion.py`, `query_rewriter.py`, `permanence.py`, `sparse_search.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `graph_rag.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/`. (11 files already deleted.)
 - [ ] Split `endpoints.py` into `api/*` per ARCHITECTURE-V2 §8.2 (currently one file with all routes incl. new `/rag/query` + `/eval/run`).
 - [ ] Remove qwen3 legacy enum entry + `_BACKEND_DIMS` dead path from `embedder.py` (BGE-M3 1024d only).
@@ -56,7 +58,7 @@
 - [ ] Fix rmi-rag-api health shows `ingested_count: 0` — either fix or remove from dashboard.
 - [ ] Fix `RAG_EMBED_BACKEND=auto` ambiguity — explicit config would prevent broken fallback chain.
 - [ ] Create reindex cron/scheduler — seed data in place; add a reindex schedule to keep collections fresh (news/research/scams are static snapshots until wired).
-- [ ] Remove stale repo copies — nested clone `/srv/work/repos/rmi-backend/rmi-rag/` (all commits ancestors of main, safe to delete); merged-branch worktrees `rmi-rag-wt-ragas` (wip/ragas-eval-endpoint), `/tmp/opencode/rmi-rag-main-verify`, `/tmp/opencode/rmi-rag-reranker` (feat/rag-bge-reranker).
+- [ ] Remove stale repo copies — DONE 2026-08-01 (partial): nested clone `/srv/work/repos/rmi-backend/rmi-rag/` removed + gitlink dropped (`rmi-backend c3682e02`); `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` removed. **Remaining:** worktree `rmi-rag-wt-ragas` (wip/ragas-eval-endpoint, branch merged) still registered — `git worktree remove` it.
 
 ## 🔵 PHASE 2 — QUEUED
 
