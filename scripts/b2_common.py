@@ -5,46 +5,32 @@ Implements the on-disk formats used by ``b2_permanence.py`` (upload),
 ``b2_restore.py`` (download) and ``migrate_to_parquet.py`` (convert):
 
     snapshots/{YYYY-MM-DD}/{collection}.parquet          (default, since 2026-08)
-    snapshots/{YYYY-MM-DD}/{collection}.jsonl.zst[.enc]  (legacy fallback)
+    snapshots/{YYYY-MM-DD}/{collection}.jsonl.zst        (legacy fallback)
 
 Per-collection file pipelines:
 
     Parquet (default — columnar, DuckDB-queryable from B2):
         Qdrant points -> Arrow table -> parquet (zstd level 19)
 
-    NDJSON (legacy fallback — encrypted at rest):
+    NDJSON (legacy fallback):
         Qdrant points -> NDJSON -> zstd level 19 -> .jsonl.zst
-                     -> AES-256-GCM (opt.) -> .jsonl.zst.enc
 
-Parquet snapshots are intentionally NOT file-encrypted: the whole point
-is that DuckDB can read them directly from B2 over the S3-compatible
-API without downloading the file. Access control is the private B2
-bucket + the scoped application key. To get encrypted-at-rest backups
-back, use ``--format ndjson``.
+Encryption at rest is handled by B2 server-side encryption (SSE-B2,
+AES256), which is free and automatic on all buckets. There is NO
+client-side encryption: files are compressed and uploaded directly.
 
-Encrypted file format (chunked AES-256-GCM, constant memory for any
-file size):
-
-    +--------------------- 16-byte header ----------------------+
-    | magic      : b"RMIB2AES1"        (8 bytes)                |
-    | version    : uint16 BE           (1)                      |
-    | chunk_size : uint32 BE           (plaintext bytes/chunk)  |
-    | reserved   : uint16 BE           (0)                      |
-    +-----------------------------------------------------------+
-    then, per chunk:
-        nonce          : 12 bytes (fresh os.urandom per chunk)
-        ciphertext+tag : chunk_size + 16 bytes
-            AESGCM(key, nonce, plaintext_chunk, aad=header)
-
-The 16-byte header is bound as AAD, so tampering with the layout is
-detected. GCM provides integrity, so no separate MAC is required.
+Legacy ``*.jsonl.zst.enc`` objects (written by pre-2026-08-01 versions
+that applied AES-256-GCM on top of SSE-B2) are still readable:
+``decrypt_file()`` is kept as a DEPRECATED helper so existing backups
+can be restored or migrated. New uploads never create them.
 
 Environment variables (never hardcoded in this repo):
     B2_APPLICATION_KEY_ID   required
     B2_APPLICATION_KEY      required
     B2_BUCKET_NAME          default: rmi-rag-permanence
-    B2_ENCRYPTION_KEY       64-char hex (32 bytes) for AES-256-GCM
-    B2_ENCRYPTION_ENABLED   auto|1|0 (default auto: encrypt iff key set)
+    B2_ENCRYPTION_KEY       DEPRECATED — SSE-B2 (AES256) encrypts all
+                            objects at rest; kept only for reading or
+                            migrating legacy .enc objects
     QDRANT_URL / QDRANT_PORT  Qdrant connection (see qdrant_store.py)
 """
 
@@ -59,10 +45,12 @@ from pathlib import Path
 from typing import Any
 
 from b2sdk.v2 import B2Api, Bucket, InMemoryAccountInfo
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 logger = None  # assigned by callers to avoid import-time logging config
 
+# Legacy AES-256-GCM constants — only used by the deprecated decrypt_file()
+# to read pre-2026-08-01 client-side-encrypted objects. New uploads rely on
+# B2 SSE-B2 (AES256) for encryption at rest and never use these.
 MAGIC = b"RMIB2AES"  # 8 bytes — must match the _HEADER ">8sHIH" magic field
 ENCRYPTED_SUFFIX = ".enc"
 COMPRESSED_SUFFIX = ".zst"
@@ -71,7 +59,7 @@ PARQUET_SUFFIX = ".parquet"
 DEFAULT_BUCKET = "rmi-rag-permanence"
 NONCE_LEN = 12
 TAG_LEN = 16
-CHUNK_SIZE = 4 * 1024 * 1024  # 4 MiB plaintext per GCM chunk
+CHUNK_SIZE = 4 * 1024 * 1024  # 4 MiB plaintext per GCM chunk (legacy format)
 _HEADER = struct.Struct(">8sHIH")
 
 
@@ -83,22 +71,13 @@ def env_or(key: str, default: str = "") -> str:
     return os.environ.get(key, default)
 
 
-def encryption_enabled() -> bool:
-    """Whether per-file encryption is on.
-
-    ``B2_ENCRYPTION_ENABLED`` = 1/true forces on, 0/false forces off;
-    ``auto`` (default) encrypts iff ``B2_ENCRYPTION_KEY`` is present.
-    """
-    mode = env_or("B2_ENCRYPTION_ENABLED", "auto").strip().lower()
-    if mode in ("1", "true", "yes", "on"):
-        return True
-    if mode in ("0", "false", "no", "off"):
-        return False
-    return bool(env_or("B2_ENCRYPTION_KEY"))
-
-
 def get_encryption_key() -> bytes:
-    """Return the 32-byte AES key from ``B2_ENCRYPTION_KEY`` (64-char hex)."""
+    """DEPRECATED: return the 32-byte AES key from ``B2_ENCRYPTION_KEY``.
+
+    B2 SSE-B2 (AES256) now encrypts objects at rest, so new uploads never
+    need a client-side key. This helper is kept only for reading or
+    migrating legacy ``*.enc`` objects that were written before 2026-08-01.
+    """
     raw = env_or("B2_ENCRYPTION_KEY")
     if not raw:
         raise RuntimeError("B2_ENCRYPTION_KEY not set (64-char hex for AES-256-GCM)")
@@ -333,37 +312,25 @@ def read_parquet_records(path: Path) -> list[dict[str, Any]]:
         con.close()
 
 
-# ── AES-256-GCM ───────────────────────────────────────────────────────
-
-
-def encrypt_file(src: Path, dst: Path, key_hex: str) -> Path:
-    """Encrypt *src* to *dst* using the chunked AES-256-GCM format.
-
-    ``key_hex`` is the 64-char hex encoding of the 32-byte key.
-    """
-    key = bytes.fromhex(key_hex)
-    if len(key) != 32:
-        raise ValueError(f"expected 32-byte key, got {len(key)} bytes")
-    aes = AESGCM(key)
-    header = _HEADER.pack(MAGIC, 1, CHUNK_SIZE, 0)
-    with open(src, "rb") as f_in, open(dst, "wb") as f_out:
-        f_out.write(header)
-        while True:
-            chunk = f_in.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            nonce = os.urandom(NONCE_LEN)
-            f_out.write(nonce)
-            f_out.write(aes.encrypt(nonce, chunk, header))
-    return dst
+# ── Legacy AES-256-GCM (DEPRECATED) ──────────────────────────────────
+#
+# New uploads never encrypt client-side: B2 SSE-B2 (AES256) encrypts
+# every object at rest for free. These helpers exist only to read the
+# ``*.jsonl.zst.enc`` objects written before 2026-08-01 so existing
+# backups can still be restored or migrated to parquet. Do not use them
+# for new data.
 
 
 def decrypt_file(src: Path, dst: Path, key_hex: str) -> Path:
-    """Decrypt a chunked AES-256-GCM *src* back to *dst*.
+    """DEPRECATED: decrypt a legacy chunked AES-256-GCM *src* back to *dst*.
 
-    Raises ``ValueError`` on any integrity violation (bad magic,
-    truncated layout, or GCM auth failure).
+    Only needed for ``*.enc`` objects written before 2026-08-01. New
+    snapshots are not client-side encrypted — B2 SSE-B2 (AES256) handles
+    encryption at rest. Raises ``ValueError`` on any integrity violation
+    (bad magic, truncated layout, or GCM auth failure).
     """
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     key = bytes.fromhex(key_hex)
     if len(key) != 32:
         raise ValueError(f"expected 32-byte key, got {len(key)} bytes")

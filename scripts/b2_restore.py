@@ -8,7 +8,13 @@ this script is the disaster-recovery path for the nightly
 
 Both snapshot formats are supported:
     *.parquet        (default since 2026-08)  read via DuckDB
-    *.jsonl.zst[.enc] (legacy)                decrypt + decompress to NDJSON
+    *.jsonl.zst      (legacy)                 decompress to NDJSON
+
+Objects are NOT client-side encrypted: B2 SSE-B2 (AES256) encrypts
+everything at rest, so restore is simply download + decompress. Legacy
+``*.jsonl.zst.enc`` objects (pre-2026-08-01) must be converted first
+with ``migrate_to_parquet.py`` — client-side decryption was removed from
+the restore path.
 
 Usage:
     python scripts/b2_restore.py --list
@@ -26,7 +32,7 @@ Behavior:
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME,
-    B2_ENCRYPTION_KEY, QDRANT_URL / QDRANT_PORT
+    QDRANT_URL / QDRANT_PORT
 """
 
 from __future__ import annotations
@@ -55,7 +61,6 @@ from b2_common import (
     ensure_bucket,
     env_or,
     get_b2_api,
-    get_encryption_key,
     list_object_keys,
     load_env_file,
     read_parquet_records,
@@ -126,15 +131,17 @@ def get_latest_date(b2_api: B2Api, bucket_name: str) -> str | None:
 # ── Decode ─────────────────────────────────────────────────────────────
 
 
-def decode_snapshot(
-    b2_api: B2Api, bucket_name: str, object_key: str, encrypted: bool, dest_dir: Path
-) -> Path:
-    """Download + decrypt + decompress a snapshot object; return readable path.
+def decode_snapshot(b2_api: B2Api, bucket_name: str, object_key: str, dest_dir: Path) -> Path:
+    """Download + decompress a snapshot object; return readable path.
 
     Returns the parquet file directly for ``*.parquet`` objects (no
-    decryption/decompression step — parquet carries its own zstd
-    compression). Legacy ``*.jsonl.zst[.enc]`` objects are decoded to
-    NDJSON as before.
+    decompression step — parquet carries its own zstd compression).
+    Legacy ``*.jsonl.zst`` objects are decompressed to NDJSON.
+
+    No decryption is performed: B2 SSE-B2 (AES256) encrypts objects at
+    rest, and client-side AES-256-GCM was removed from the pipeline. A
+    legacy ``*.jsonl.zst.enc`` object must be converted with
+    ``migrate_to_parquet.py`` before it can be restored.
     """
     local_raw = dest_dir / object_key.replace("/", "_")
     b2_common.download_file(b2_api, bucket_name, object_key, local_raw)
@@ -142,11 +149,15 @@ def decode_snapshot(
     if object_key.endswith(PARQUET_SUFFIX):
         return local_raw
 
+    if object_key.endswith(ENCRYPTED_SUFFIX):
+        raise ValueError(
+            f"{object_key} is a legacy client-side-encrypted (.enc) object. "
+            "Client-side AES-256-GCM was removed 2026-08-01 (B2 SSE-B2 encrypts at "
+            "rest). Convert it first with migrate_to_parquet.py, then restore the "
+            "resulting parquet snapshot."
+        )
+
     path = local_raw
-    if encrypted:
-        enc = dest_dir / (local_raw.name + ".dec.zst")
-        b2_common.decrypt_file(local_raw, enc, get_encryption_key().hex())
-        path = enc
     ndjson = dest_dir / (path.name + ".jsonl")
     b2_common.decompress_file(path, ndjson)
     return ndjson
@@ -463,11 +474,10 @@ def main() -> int:
             if not object_key:
                 suffix = PARQUET_SUFFIX if fmt == "parquet" else COMPRESSED_SUFFIX
                 object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{coll_name}{suffix}"
-            encrypted = bool(entry.get("encrypted", object_key.endswith(ENCRYPTED_SUFFIX)))
             logger.info("restoring collection=%s key=%s", coll_name, object_key)
 
             try:
-                decoded = decode_snapshot(b2_api, bucket_name, object_key, encrypted, dest_dir)
+                decoded = decode_snapshot(b2_api, bucket_name, object_key, dest_dir)
                 if object_key.endswith(PARQUET_SUFFIX) or fmt == "parquet":
                     points = parse_parquet(decoded)
                 else:

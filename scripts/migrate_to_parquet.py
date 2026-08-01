@@ -9,9 +9,14 @@ Downloads the ``*.jsonl.zst[.enc]`` snapshots written by older
     snapshots/{YYYY-MM-DD}/{collection}.parquet           (new)
 
 Legacy objects are NEVER deleted: parquet becomes the queryable
-standard while the old files stay as an encrypted-at-rest fallback.
-The date's ``manifest.json`` is re-uploaded with both entry types so
+standard while the old files stay as a fallback. The date's
+``manifest.json`` is re-uploaded with both entry types so
 ``b2_restore.py`` prefers the parquet copy (see ``_prefer_format``).
+
+This is the ONLY tool that still reads the pre-2026-08-01 client-side
+AES-256-GCM ``.enc`` objects (via the deprecated
+``b2_common.decrypt_file``). New uploads are never client-side
+encrypted — B2 SSE-B2 (AES256) encrypts them at rest.
 
 Usage:
     python scripts/migrate_to_parquet.py --date 2026-08-01
@@ -22,8 +27,9 @@ Usage:
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
     B2_BUCKET_NAME                              (default rmi-rag-permanence)
-    B2_ENCRYPTION_KEY                           64-char hex (needed only when
-                                                 converting encrypted objects)
+    B2_ENCRYPTION_KEY                           DEPRECATED — SSE-B2 encrypts
+                                                at rest; needed only when
+                                                converting legacy .enc objects
 """
 
 from __future__ import annotations
@@ -163,6 +169,12 @@ def convert_one(
 
     path: Path = local_raw
     if object_key.endswith(ENCRYPTED_SUFFIX):
+        logger.warning(
+            "legacy_enc_object key=%s: decrypting with deprecated client-side key "
+            "(B2 SSE-B2 now encrypts at rest; this path is for pre-2026-08-01 "
+            "snapshots only)",
+            object_key,
+        )
         dec = workdir / (local_raw.name + ".zst")
         b2_common.decrypt_file(local_raw, dec, get_encryption_key().hex())
         path = dec
@@ -244,8 +256,8 @@ def update_manifest(
     manifest["formats"] = sorted({str(e.get("format", "ndjson")) for e in manifest["collections"]})
     manifest.setdefault("encryption", {}).setdefault(
         "note",
-        "Parquet snapshots are not file-encrypted so DuckDB can query them directly "
-        "from B2; legacy NDJSON copies remain encrypted at rest.",
+        "B2 SSE-B2 (AES256) encrypts all objects at rest; legacy NDJSON .enc copies "
+        "also carry the deprecated pre-2026-08-01 client-side AES-256-GCM layer.",
     )
 
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:

@@ -6,8 +6,9 @@
 # 03:00 UTC via rmi-rag-permanence.timer. Exports every Qdrant
 # collection as a columnar parquet snapshot (zstd level 19, queryable by
 # DuckDB directly from B2) and uploads it to the rmi-rag-permanence B2
-# bucket under snapshots/YYYY-MM-DD/. Pass --format ndjson for the
-# legacy encrypted-at-rest (AES-256-GCM) NDJSON format.
+# bucket under snapshots/YYYY-MM-DD/. Encryption at rest is handled by
+# B2 SSE-B2 (AES256) — no client-side encryption. Pass --format ndjson
+# for the legacy compressed-only NDJSON format.
 #
 # Requires duckdb + pyarrow on the host python (verified present) and
 # /srv/secrets/b2-permanence.env for B2 credentials.
@@ -29,8 +30,10 @@
 #   /var/log/rmi-rag-permanence.log
 #
 # Secrets: /srv/secrets/b2-permanence.env (B2_APPLICATION_KEY_ID,
-# B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENCRYPTION_KEY — populated from
-# gopass rmi/infra/b2-*; never committed to git).
+# B2_APPLICATION_KEY, B2_BUCKET_NAME — populated from gopass
+# rmi/infra/b2-*; never committed to git). B2_ENCRYPTION_KEY is
+# DEPRECATED since 2026-08-01 (B2 SSE-B2 encrypts at rest); it is only
+# needed to read/migrate legacy .enc objects.
 
 [Unit]
 Description=RMI RAG B2 Permanence — Nightly Qdrant Snapshot to B2
