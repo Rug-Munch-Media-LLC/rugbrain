@@ -280,7 +280,11 @@ async def journalism_research(
 
 
 @router.get("/eval/run")
-async def eval_run(request: Request) -> dict:
+async def eval_run(
+    request: Request,
+    limit: int = 0,
+    skip_answers: bool = False,
+) -> dict:
     """Run the RAGAS-style golden-set evaluation against the live search endpoint.
 
     Executes ``run_evaluation()`` from ``rmi_rag.evaluation``: every query in
@@ -288,14 +292,22 @@ async def eval_run(request: Request) -> dict:
     context precision/recall. Returns the aggregate pass/fail report plus
     per-query results.
 
+    Queries run concurrently and each is bounded by a 10s timeout, so the
+    full run completes in seconds-to-a-minute instead of 30+ minutes.
+
     Example::
 
         curl "http://localhost:8012/api/v1/eval/run"
+        curl "http://localhost:8012/api/v1/eval/run?limit=3"         # smoke
+        curl "http://localhost:8012/api/v1/eval/run?skip_answers=1"  # retrieval-only
     """
     from rmi_rag.evaluation import run_evaluation
 
     try:
-        return await run_evaluation()
+        return await run_evaluation(
+            limit=limit or None,
+            skip_answers=skip_answers,
+        )
     except Exception as exc:
         logger.warning("eval_run_failed: %s", exc)
         raise HTTPException(
@@ -347,6 +359,48 @@ async def search_threat_intel(
         default=False,
         description="Rerank top-20 candidates with the bge-reranker-v2-m3 cross-encoder",
     ),
+    filter_severity: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: severity (critical|high|medium|low|info)",
+    ),
+    filter_chain: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: chain (ethereum, bsc, solana, multi, ...)",
+    ),
+    filter_attack_vector: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: attack_vector (reentrancy, flash-loan, ...)",
+    ),
+    filter_category: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: category (smart-contract, phishing, ...)",
+    ),
+    filter_protocol: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: affected protocol name",
+    ),
+    filter_source_type: str | None = Query(
+        default=None,
+        description="Exact-match payload filter: source_type (rekt_news, defihacklabs, ...)",
+    ),
+    filter_date_after: str | None = Query(
+        default=None,
+        description="Range filter: only points with date >= this ISO date (YYYY-MM-DD)",
+    ),
+    filter_date_before: str | None = Query(
+        default=None,
+        description="Range filter: only points with date <= this ISO date (YYYY-MM-DD)",
+    ),
+    filter_amount_min: float | None = Query(
+        default=None,
+        ge=0,
+        description="Range filter: only points with amount_lost_usd >= this value",
+    ),
+    filter_amount_max: float | None = Query(
+        default=None,
+        ge=0,
+        description="Range filter: only points with amount_lost_usd <= this value",
+    ),
 ) -> dict:
     """
     Semantic search across scanner findings ingested into Qdrant.
@@ -359,12 +413,21 @@ async def search_threat_intel(
     to ``limit``. If the reranker backend is unavailable, results fall back
     to the original vector ranking (search never breaks).
 
+    Crypto-specific payload filters combine with hybrid search — Qdrant
+    applies them *before* fusion, so filtered results are still dense+BM25
+    fused. Exact-match filters: ``filter_severity``, ``filter_chain``,
+    ``filter_attack_vector``, ``filter_category``, ``filter_protocol``,
+    ``filter_source_type``. Range filters: ``filter_date_after`` /
+    ``filter_date_before`` (ISO dates, compared on the ``date_ts`` timestamp
+    payload field) and ``filter_amount_min`` / ``filter_amount_max`` (USD,
+    compared on ``amount_lost_usd``).
+
     Example::
 
-        curl "http://localhost:8012/api/v1/search?q=0xdead...&limit=5&rerank=true"
+        curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5"
     """
     from rmi_rag.embeddings import get_embedding
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rmi_rag.qdrant_store import QdrantVectorStore, build_search_filters
 
     if not q:
         return {"results": [], "query": q, "collection": collection, "total": 0}
@@ -395,6 +458,20 @@ async def search_threat_intel(
             detail={"error": "embedding_unavailable", "message": str(e)[:200]},
         ) from e
 
+    filters = build_search_filters(
+        severity=filter_severity,
+        chain=filter_chain,
+        attack_vector=filter_attack_vector,
+        category=filter_category,
+        protocol=filter_protocol,
+        source_type=filter_source_type,
+        collection=None,
+        date_after=filter_date_after,
+        date_before=filter_date_before,
+        amount_min=filter_amount_min,
+        amount_max=filter_amount_max,
+    )
+
     store = QdrantVectorStore()
     candidate_limit = min(max(limit * 4, 20), 100) if rerank else limit
     # Hybrid search: dense + BM25 sparse with native Qdrant RRF when the
@@ -408,6 +485,7 @@ async def search_threat_intel(
         collection=collection,
         limit=candidate_limit,
         min_similarity=0.4,
+        filters=filters,
     )
 
     reranker_method = None
@@ -430,6 +508,7 @@ async def search_threat_intel(
         "query": q,
         "collection": collection,
         "total": len(results),
+        "filters_applied": filters is not None,
         "reranker_applied": reranker_applied,
         "reranker_method": reranker_method,
     }
