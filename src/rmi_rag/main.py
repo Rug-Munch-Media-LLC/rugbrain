@@ -32,6 +32,7 @@ install_import_guard()
 # Deliberately after install_import_guard() so app.* stubs exist first.
 from rmi_rag.endpoints import router as rag_router  # noqa: E402
 from rmi_rag.endpoints import scam_check_router  # noqa: E402
+from rmi_rag.metrics import metrics_router  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +294,7 @@ app.add_middleware(
 # ── Mount routers ─────────────────────────────────────────────────────
 app.include_router(rag_router)
 app.include_router(scam_check_router)
+app.include_router(metrics_router)  # /metrics — Prometheus scrape target
 
 
 # ── Health endpoints ──────────────────────────────────────────────────

@@ -13,12 +13,14 @@ Runs weekly. Alerts on regression > 10% from baseline.
 
 import asyncio
 import json
+import os
 from datetime import UTC, datetime
 
 import httpx
 
-BACKEND = "http://localhost:8000"
-RAG_SEARCH = f"{BACKEND}/api/v1/rag/search"
+BACKEND = "http://localhost:8012"
+RAG_SEARCH = f"{BACKEND}/api/v1/search"
+RAG_API_KEY = os.getenv("RMI_RAG_API_KEY", "")
 
 # ═══════════════════════════════════════════════════
 # GOLDEN TEST SET - 20 queries with expected answers
@@ -351,6 +353,7 @@ async def evaluate_single(test: dict) -> dict:
                     "collection": collection,
                     "limit": 10,
                 },
+                headers={"X-API-Key": RAG_API_KEY} if RAG_API_KEY else None,
             )
             if r.status_code != 200:
                 return {"query": query, "error": f"HTTP {r.status_code}", "score": 0}
@@ -360,7 +363,9 @@ async def evaluate_single(test: dict) -> dict:
             total = data.get("total", 0)
 
             # Score: context_precision - how many expected terms appear in results?
-            all_text = " ".join([res.get("content", res.get("text", "")) for res in results]).lower()
+            all_text = " ".join(
+                [res.get("content", res.get("text", "")) for res in results]
+            ).lower()
             terms_found = sum(1 for t in expected_terms if t in all_text)
             precision = terms_found / len(expected_terms) if expected_terms else 0
 

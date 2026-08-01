@@ -8,6 +8,8 @@ No external dependencies beyond ``prometheus_client``.
 
 from __future__ import annotations
 
+from fastapi import APIRouter
+from fastapi.responses import Response
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
 # ── Search ──────────────────────────────────────────────────────────
@@ -68,3 +70,12 @@ ollama_healthy = Gauge(
 def latest() -> bytes:
     """Return the Prometheus exposition format payload."""
     return generate_latest()
+
+
+metrics_router = APIRouter(tags=["metrics"])
+
+
+@metrics_router.get("/metrics")
+async def metrics_endpoint() -> Response:
+    """Prometheus scrape endpoint — plain-text exposition format."""
+    return Response(content=latest(), media_type="text/plain; version=0.0.4")

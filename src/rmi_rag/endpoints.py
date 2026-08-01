@@ -279,6 +279,31 @@ async def journalism_research(
         }
 
 
+@router.get("/eval/run")
+async def eval_run(request: Request) -> dict:
+    """Run the RAGAS-style golden-set evaluation against the live search endpoint.
+
+    Executes ``run_evaluation()`` from ``rmi_rag.evaluation``: every query in
+    the golden test set is sent through ``/api/v1/search`` and scored for
+    context precision/recall. Returns the aggregate pass/fail report plus
+    per-query results.
+
+    Example::
+
+        curl "http://localhost:8012/api/v1/eval/run"
+    """
+    from rmi_rag.evaluation import run_evaluation
+
+    try:
+        return await run_evaluation()
+    except Exception as exc:
+        logger.warning("eval_run_failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "evaluation_failed", "message": str(exc)[:200]},
+        ) from exc
+
+
 @router.get("/email/accounts")
 async def email_accounts(request: Request):
     """List configured mail accounts.

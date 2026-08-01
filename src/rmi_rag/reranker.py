@@ -138,6 +138,16 @@ class Reranker:
             return
         t0 = time.perf_counter()
         try:
+            # Force full torch initialization BEFORE sentence-transformers is
+            # imported. bge-reranker-v2-m3 pulls in torch as a dependency, and
+            # importing torch lazily inside sentence-transformers can hit
+            # "partially initialized module 'torch' has no attribute 'library'"
+            # (circular import). Touching torch.classes after the explicit
+            # import guarantees the extension registry is fully populated.
+            import torch
+
+            torch.classes  # noqa: B018 - trigger full torch init
+
             from sentence_transformers import CrossEncoder
 
             self._st_model = CrossEncoder(self._st_model_name, max_length=RERANK_MAX_LENGTH)
