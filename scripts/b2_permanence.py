@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """Nightly B2 permanence sync — Qdrant snapshots to Backblaze B2.
 
-Exports every Qdrant collection as compressed, optionally encrypted
-NDJSON and uploads it to B2 under ``snapshots/YYYY-MM-DD/``:
+Exports every Qdrant collection as a columnar parquet file (default)
+or compressed/encrypted NDJSON (legacy fallback) and uploads it to B2
+under ``snapshots/YYYY-MM-DD/``:
 
-    b2://{B2_BUCKET_NAME}/snapshots/{date}/{collection}.jsonl.zst[.enc]
+    b2://{B2_BUCKET_NAME}/snapshots/{date}/{collection}.parquet       (default)
+    b2://{B2_BUCKET_NAME}/snapshots/{date}/{collection}.jsonl.zst[.enc] (legacy)
 
-A ``manifest.json`` describing every collection (point count, file size,
-sha256, timestamps, vector metadata) is uploaded alongside the data and
-a ``snapshots/latest.json`` pointer records the most recent date.
+Parquet snapshots are written with zstd level 19 and are deliberately
+NOT file-encrypted: DuckDB can query them directly from B2 over the
+S3-compatible API (no full download). Bucket permissions + a scoped
+application key provide access control. Pass ``--format ndjson`` if you
+need encrypted-at-rest backups (AES-256-GCM).
+
+A ``manifest.json`` describing every collection (format, point count,
+file size, sha256, timestamps, vector metadata) is uploaded alongside
+the data and a ``snapshots/latest.json`` pointer records the most
+recent date.
 
 Data lifecycle this serves:
     Hot  (Qdrant): last 90 days, actively searched
@@ -20,8 +29,8 @@ Data lifecycle this serves:
 Usage:
     python scripts/b2_permanence.py --dry-run
     python scripts/b2_permanence.py --collection threat_intel --limit 10
-    python scripts/b2_permanence.py --no-encrypt --limit 50
-    python scripts/b2_permanence.py --env-file /path/to/b2-permanence.env
+    python scripts/b2_permanence.py --format ndjson --no-encrypt --limit 50
+    python scripts/b2_permanence.py --env-file /srv/secrets/b2-permanence.env
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
@@ -31,7 +40,7 @@ Environment:
     QDRANT_URL / QDRANT_PORT                    Qdrant connection
 
 See scripts/b2_common.py for the file/encryption format. Restore:
-scripts/b2_restore.py.
+scripts/b2_restore.py. Convert legacy snapshots: scripts/migrate_to_parquet.py.
 """
 
 from __future__ import annotations
@@ -42,6 +51,7 @@ import logging
 import os
 import sys
 import tempfile
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -57,6 +67,7 @@ from b2_common import (
     COMPRESSED_SUFFIX,
     ENCRYPTED_SUFFIX,
     NDJSON_SUFFIX,
+    PARQUET_SUFFIX,
     compress_file,
     encryption_enabled,
     ensure_bucket,
@@ -65,19 +76,21 @@ from b2_common import (
     get_encryption_key,
     load_env_file,
     sha256_file,
+    stream_parquet,
     upload_file,
 )
 
 logger = logging.getLogger("b2_permanence")
 
 # Qdrant fallback chain (mirrors src/rmi_rag/qdrant_store.py)
-DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://localhost:6333")
+DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333")
 DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")
 
 MANIFEST_NAME = "manifest.json"
 LATEST_NAME = "latest.json"
 SNAPSHOT_PREFIX = "snapshots"
 SCROLL_BATCH = 1000
+MANIFEST_SCHEMA_VERSION = 2
 
 
 # ── Qdrant helpers ────────────────────────────────────────────────────
@@ -137,6 +150,51 @@ def collection_info(client: qdrant_client.QdrantClient, name: str) -> dict[str, 
         return {"vector_size": None, "distance": None}
 
 
+def export_collection_parquet(
+    client: qdrant_client.QdrantClient,
+    name: str,
+    dest: Path,
+    limit: int | None = None,
+    with_vectors: bool = True,
+) -> int:
+    """Scroll all points in *name* into a columnar parquet file at *dest*.
+
+    Points are converted to Arrow tables per scroll batch and streamed
+    through a ParquetWriter (bounded memory), then compressed with zstd
+    level 19 inside the parquet file itself. Returns the point count.
+    """
+    count_cell: list[int] = [0]
+
+    def batches() -> Iterable[list[dict[str, object]]]:
+        offset: Any = None
+        remaining = limit
+        while True:
+            batch = min(remaining if remaining is not None else SCROLL_BATCH, SCROLL_BATCH)
+            points, next_offset = client.scroll(
+                collection_name=name,
+                limit=batch,
+                offset=offset,
+                with_payload=True,
+                with_vectors=with_vectors,
+            )
+            if points:
+                rows = [b2_common.point_to_row(p, with_vectors=with_vectors) for p in points]
+                count_cell[0] += len(rows)
+                yield rows
+            if next_offset is None:
+                break
+            offset = next_offset
+            if len(points) == 0:
+                break
+            if remaining is not None:
+                remaining -= len(points)
+                if remaining <= 0:
+                    break
+
+    stream_parquet(dest, batches())
+    return count_cell[0]
+
+
 def export_collection_ndjson(
     client: qdrant_client.QdrantClient,
     name: str,
@@ -150,7 +208,7 @@ def export_collection_ndjson(
     Returns the number of points written.
     """
     count = 0
-    offset: object = None
+    offset: Any = None
     remaining = limit
 
     with open(dest, "w", encoding="utf-8") as f:
@@ -196,30 +254,50 @@ def snapshot_collection(
     limit: int | None,
     with_vectors: bool,
     encrypt: bool,
+    fmt: str = "parquet",
 ) -> dict[str, Any]:
-    """Export, compress, encrypt (optional) and upload one collection.
+    """Export, compress (parquet/NDJSON), optionally encrypt and upload one collection.
+
+    ``fmt`` is ``parquet`` (default — columnar, DuckDB-queryable from B2)
+    or ``ndjson`` (legacy — zstd + optional AES-256-GCM). Parquet files
+    are never file-encrypted so DuckDB can read them directly from B2.
 
     Returns the manifest entry for this collection.
     """
     base = workdir / name
     base.mkdir(parents=True, exist_ok=True)
-    ndjson_path = base / f"{name}{NDJSON_SUFFIX}"
-    zst_path = base / f"{name}{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
 
     started = datetime.now(UTC)
-    point_count = export_collection_ndjson(
-        client, name, ndjson_path, limit=limit, with_vectors=with_vectors
-    )
 
-    compress_file(ndjson_path, zst_path, level=19)
-    upload_path = zst_path
-    suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
-
-    if encrypt:
-        enc_path = base / f"{name}{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}{ENCRYPTED_SUFFIX}"
-        b2_common.encrypt_file(zst_path, enc_path, get_encryption_key().hex())
-        upload_path = enc_path
-        suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}{ENCRYPTED_SUFFIX}"
+    if fmt == "parquet":
+        parquet_path = base / f"{name}{PARQUET_SUFFIX}"
+        point_count = export_collection_parquet(
+            client, name, parquet_path, limit=limit, with_vectors=with_vectors
+        )
+        if encrypt:
+            logger.warning(
+                "parquet_skip_encryption collection=%s: parquet snapshots are NOT "
+                "file-encrypted (so DuckDB can query them from B2). Access control is "
+                "the private bucket + scoped application key. Use --format ndjson for "
+                "encrypted-at-rest backups.",
+                name,
+            )
+        upload_path = parquet_path
+        suffix = PARQUET_SUFFIX
+    else:
+        ndjson_path = base / f"{name}{NDJSON_SUFFIX}"
+        zst_path = base / f"{name}{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
+        point_count = export_collection_ndjson(
+            client, name, ndjson_path, limit=limit, with_vectors=with_vectors
+        )
+        compress_file(ndjson_path, zst_path, level=19)
+        upload_path = zst_path
+        suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
+        if encrypt:
+            enc_path = base / f"{name}{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}{ENCRYPTED_SUFFIX}"
+            b2_common.encrypt_file(zst_path, enc_path, get_encryption_key().hex())
+            upload_path = enc_path
+            suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}{ENCRYPTED_SUFFIX}"
 
     object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{name}{suffix}"
     upload_file(b2_api, bucket_name, upload_path, object_key)
@@ -227,12 +305,13 @@ def snapshot_collection(
     finished = datetime.now(UTC)
     entry: dict[str, Any] = {
         "collection": name,
+        "format": fmt,
         "object_key": object_key,
         "point_count": point_count,
-        "bytes_raw": ndjson_path.stat().st_size,
+        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,
         "bytes_stored": upload_path.stat().st_size,
-        "compression": "zstd-19",
-        "encrypted": encrypt,
+        "compression": "zstd-19" if fmt == "ndjson" else "parquet-zstd-19",
+        "encrypted": encrypt if fmt == "ndjson" else False,
         "sha256": sha256_file(upload_path),
         "started_at": started.isoformat(),
         "finished_at": finished.isoformat(),
@@ -240,8 +319,9 @@ def snapshot_collection(
     if with_vectors:
         entry["vectors_included"] = True
     logger.info(
-        "snapshot_ok collection=%s points=%d stored=%s key=%s",
+        "snapshot_ok collection=%s format=%s points=%d stored=%s key=%s",
         name,
+        fmt,
         point_count,
         _fmt_size(upload_path.stat().st_size),
         object_key,
@@ -254,14 +334,17 @@ def upload_manifest(
 ) -> None:
     """Upload manifest.json for the day plus the latest.json pointer."""
     manifest = {
-        "schema_version": 1,
+        "schema_version": MANIFEST_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
         "date": date_str,
         "encryption": {
             "algorithm": "AES-256-GCM",
             "key_env": "B2_ENCRYPTION_KEY",
             "enabled": any(e.get("encrypted") for e in entries),
+            "note": "Parquet snapshots are not file-encrypted so DuckDB can query them "
+            "directly from B2; access control is bucket permissions + scoped key.",
         },
+        "formats": sorted({str(e.get("format", "ndjson")) for e in entries}),
         "collections": entries,
         "total_points": sum(int(e.get("point_count", 0)) for e in entries),
     }
@@ -285,9 +368,17 @@ def upload_manifest(
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Nightly Qdrant → B2 permanence sync (compressed + encrypted)",
+        description="Nightly Qdrant → B2 permanence sync (parquet by default, "
+        "compressed + encrypted NDJSON fallback)",
     )
     p.add_argument("--dry-run", action="store_true", help="Do everything except upload")
+    p.add_argument(
+        "--format",
+        choices=["parquet", "ndjson"],
+        default="parquet",
+        help="Snapshot format: parquet (default, DuckDB-queryable) or ndjson (legacy, "
+        "optionally encrypted at rest)",
+    )
     p.add_argument(
         "--collection",
         action="append",
@@ -343,23 +434,32 @@ def main() -> int:
 
     bucket_name = args.b2_bucket or env_or("B2_BUCKET_NAME", b2_common.DEFAULT_BUCKET)
     encrypt = encryption_enabled() and not args.no_encrypt
+    fmt = args.format
 
-    # Fail closed on encryption: backups must be encrypted unless the
-    # operator EXPLICITLY opts out with --no-encrypt. Never silently
-    # upload plaintext because B2_ENCRYPTION_KEY is missing.
-    if args.no_encrypt:
+    # Fail closed ONLY for --format ndjson: encrypted backups are the
+    # contract unless the operator EXPLICITLY opts out with --no-encrypt.
+    # Parquet never file-encrypts (DuckDB direct query needs plaintext),
+    # so the encryption key is not required for it.
+    if fmt == "ndjson":
+        if args.no_encrypt:
+            logger.warning(
+                "ENCRYPTION DISABLED via --no-encrypt — ndjson snapshots will be "
+                "uploaded to B2 in PLAINTEXT (compressed only). Do not use in production."
+            )
+        elif not encrypt:
+            logger.critical(
+                "Refusing to run --format ndjson: B2_ENCRYPTION_KEY is not set and "
+                "encryption is disabled. Backups would be uploaded unencrypted. Set "
+                "B2_ENCRYPTION_KEY (64-char hex) or explicitly pass --no-encrypt."
+            )
+            return 2
+    elif encrypt:
         logger.warning(
-            "ENCRYPTION DISABLED via --no-encrypt — snapshots will be uploaded "
-            "to B2 in PLAINTEXT (compressed only). Do not use in production."
+            "parquet format ignores file-level encryption: snapshots are uploaded "
+            "plaintext so DuckDB can query them directly from B2. Access control is "
+            "the private bucket + scoped application key. Use --format ndjson for "
+            "encrypted-at-rest backups."
         )
-    elif not encrypt:
-        logger.critical(
-            "Refusing to run: B2_ENCRYPTION_KEY is not set and encryption is "
-            "disabled. Backups would be uploaded unencrypted. Set "
-            "B2_ENCRYPTION_KEY (64-char hex) or explicitly pass --no-encrypt "
-            "to allow plaintext backups."
-        )
-        return 2
 
     with_vectors = not args.no_vectors
 
@@ -384,10 +484,11 @@ def main() -> int:
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")
     logger.info("=== B2 permanence sync started ===")
     logger.info(
-        "bucket=%s date=%s collections=%d encrypt=%s vectors=%s",
+        "bucket=%s date=%s collections=%d format=%s encrypt=%s vectors=%s",
         bucket_name,
         date_str,
         len(collections),
+        fmt,
         encrypt,
         with_vectors,
     )
@@ -396,8 +497,9 @@ def main() -> int:
         for c in collections:
             info = collection_info(client, c)
             logger.info(
-                "dry-run would snapshot collection=%s points=<all> vector_size=%s",
+                "dry-run would snapshot collection=%s format=%s points=<all> vector_size=%s",
                 c,
+                fmt,
                 info.get("vector_size"),
             )
         logger.info("=== dry-run complete (no uploads) ===")
@@ -429,6 +531,7 @@ def main() -> int:
                         args.limit,
                         with_vectors,
                         encrypt,
+                        fmt,
                     )
                 )
             except Exception as exc:

@@ -89,6 +89,13 @@ services:
       - HF_HOME=/opt/hf-cache
       - RERANK_MODEL=bge-reranker-v2-m3
       - RERANK_MODEL_NAME=BAAI/bge-reranker-v2-m3
+      # DuckDB query endpoint (/api/v1/rag/query) — B2 permanence snapshots.
+      # B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY are required for the
+      # endpoint; B2_S3_ENDPOINT defaults to s3.us-east-005.backblazeb2.com.
+      - B2_APPLICATION_KEY_ID=${B2_APPLICATION_KEY_ID:-}
+      - B2_APPLICATION_KEY=${B2_APPLICATION_KEY:-}
+      - B2_BUCKET_NAME=${B2_BUCKET_NAME:-rmi-rag-permanence}
+      - B2_S3_ENDPOINT=${B2_S3_ENDPOINT:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8012/ready'); exit(0 if r.status_code == 200 else 1)"]
       interval: 30s

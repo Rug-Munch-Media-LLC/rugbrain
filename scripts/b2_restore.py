@@ -6,6 +6,10 @@ Lists available snapshots and imports a chosen day back into Qdrant
 this script is the disaster-recovery path for the nightly
 ``b2_permanence.py`` sync.
 
+Both snapshot formats are supported:
+    *.parquet        (default since 2026-08)  read via DuckDB
+    *.jsonl.zst[.enc] (legacy)                decrypt + decompress to NDJSON
+
 Usage:
     python scripts/b2_restore.py --list
     python scripts/b2_restore.py --list --date 2026-08-01
@@ -47,12 +51,14 @@ import b2_common
 from b2_common import (
     COMPRESSED_SUFFIX,
     ENCRYPTED_SUFFIX,
+    PARQUET_SUFFIX,
     ensure_bucket,
     env_or,
     get_b2_api,
     get_encryption_key,
     list_object_keys,
     load_env_file,
+    read_parquet_records,
 )
 
 logger = logging.getLogger("b2_restore")
@@ -123,9 +129,18 @@ def get_latest_date(b2_api: B2Api, bucket_name: str) -> str | None:
 def decode_snapshot(
     b2_api: B2Api, bucket_name: str, object_key: str, encrypted: bool, dest_dir: Path
 ) -> Path:
-    """Download + decrypt + decompress a snapshot object; return NDJSON path."""
+    """Download + decrypt + decompress a snapshot object; return readable path.
+
+    Returns the parquet file directly for ``*.parquet`` objects (no
+    decryption/decompression step — parquet carries its own zstd
+    compression). Legacy ``*.jsonl.zst[.enc]`` objects are decoded to
+    NDJSON as before.
+    """
     local_raw = dest_dir / object_key.replace("/", "_")
     b2_common.download_file(b2_api, bucket_name, object_key, local_raw)
+
+    if object_key.endswith(PARQUET_SUFFIX):
+        return local_raw
 
     path = local_raw
     if encrypted:
@@ -153,8 +168,49 @@ def parse_point_id(raw: object) -> int | uuid.UUID:
     raise ValueError(f"unsupported point id type: {type(raw).__name__}")
 
 
+def record_to_point(rec: dict[str, Any]) -> PointStruct:
+    """Convert one snapshot record (NDJSON dict or parquet row) to a PointStruct.
+
+    Parquet rows carry ``payload`` (full JSON), ``embedding`` (flat dense
+    vector) and ``vectors`` (named/sparse vector JSON). ``vector`` is a
+    legacy NDJSON-only key.
+    """
+    payload_raw = rec.get("payload")
+    payload: dict[str, Any] = {}
+    if isinstance(payload_raw, str):
+        try:
+            parsed = json.loads(payload_raw)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except (TypeError, ValueError):
+            payload = {}
+    elif isinstance(payload_raw, dict):
+        payload = payload_raw
+
+    vector: Any = rec.get("vector")
+    if vector is None:
+        vectors_raw = rec.get("vectors")
+        if vectors_raw:
+            try:
+                parsed = json.loads(str(vectors_raw))
+                if isinstance(parsed, dict):
+                    vector = parsed
+            except (TypeError, ValueError):
+                vector = None
+        else:
+            embedding = rec.get("embedding")
+            if embedding is not None:
+                vector = list(embedding)
+
+    return PointStruct(
+        id=parse_point_id(rec.get("id")),
+        vector=vector,
+        payload=payload or {},
+    )
+
+
 def parse_ndjson(path: Path) -> list[PointStruct]:
-    """Load NDJSON snapshot lines into Qdrant PointStruct objects."""
+    """Load legacy NDJSON snapshot lines into Qdrant PointStruct objects."""
     points: list[PointStruct] = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -162,14 +218,19 @@ def parse_ndjson(path: Path) -> list[PointStruct]:
             if not line:
                 continue
             rec = json.loads(line)
-            points.append(
-                PointStruct(
-                    id=parse_point_id(rec.get("id")),
-                    vector=rec.get("vector"),
-                    payload=rec.get("payload") or {},
-                )
-            )
+            points.append(record_to_point(rec))
     return points
+
+
+def parse_parquet(path: Path) -> list[PointStruct]:
+    """Load a parquet snapshot into Qdrant PointStruct objects via DuckDB."""
+    records = read_parquet_records(path)
+    return [record_to_point(rec) for rec in records]
+
+
+def _prefer_format(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
+    """Prefer parquet manifest entries over legacy NDJSON when both exist."""
+    return str(candidate.get("format")) == "parquet" and str(current.get("format")) != "parquet"
 
 
 # ── Import ─────────────────────────────────────────────────────────────
@@ -376,29 +437,46 @@ def main() -> int:
         restored_total = 0
         failures = 0
 
-        targets = (
-            [e for e in entries]
-            if entries
-            else [{"collection": Path(k).stem.split(".")[0], "object_key": k} for k in keys]
-        )
+        # Build per-collection targets, preferring parquet when a migration
+        # left both formats for the same collection.
+        targets: list[dict[str, Any]] = []
+        if entries:
+            by_collection: dict[str, dict[str, Any]] = {}
+            for e in entries:
+                coll = str(e.get("collection", ""))
+                prev = by_collection.get(coll)
+                if prev is None or _prefer_format(e, prev):
+                    by_collection[coll] = e
+            targets = list(by_collection.values())
+        else:
+            for k in keys:
+                stem = Path(k).stem
+                coll = Path(k).stem if k.endswith(PARQUET_SUFFIX) else stem.split(".")[0]
+                targets.append({"collection": coll, "object_key": k})
+
         for entry in targets:
             coll_name = str(entry.get("collection", ""))
             if args.collection and coll_name not in args.collection:
                 continue
-            object_key = str(
-                entry.get("object_key")
-                or f"{SNAPSHOT_PREFIX}/{date_str}/{coll_name}{COMPRESSED_SUFFIX}"
-            )
+            fmt = str(entry.get("format") or "")
+            object_key = str(entry.get("object_key") or "")
+            if not object_key:
+                suffix = PARQUET_SUFFIX if fmt == "parquet" else COMPRESSED_SUFFIX
+                object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{coll_name}{suffix}"
             encrypted = bool(entry.get("encrypted", object_key.endswith(ENCRYPTED_SUFFIX)))
             logger.info("restoring collection=%s key=%s", coll_name, object_key)
 
             try:
-                ndjson_path = decode_snapshot(b2_api, bucket_name, object_key, encrypted, dest_dir)
-                points = parse_ndjson(ndjson_path)
+                decoded = decode_snapshot(b2_api, bucket_name, object_key, encrypted, dest_dir)
+                if object_key.endswith(PARQUET_SUFFIX) or fmt == "parquet":
+                    points = parse_parquet(decoded)
+                else:
+                    points = parse_ndjson(decoded)
                 if args.dry_run:
                     logger.info("dry-run decoded %d points for %s", len(points), coll_name)
                     restored_total += len(points)
                     continue
+                assert client is not None, "non-dry-run restore requires a Qdrant client"
                 n = import_points(
                     client,
                     coll_name,

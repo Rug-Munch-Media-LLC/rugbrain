@@ -4,8 +4,13 @@
 #
 # Runs the B2 permanence sync (scripts/b2_permanence.py) every night at
 # 03:00 UTC via rmi-rag-permanence.timer. Exports every Qdrant
-# collection as zstd-compressed, AES-256-GCM-encrypted NDJSON and uploads
-# it to the rmi-rag-permanence B2 bucket under snapshots/YYYY-MM-DD/.
+# collection as a columnar parquet snapshot (zstd level 19, queryable by
+# DuckDB directly from B2) and uploads it to the rmi-rag-permanence B2
+# bucket under snapshots/YYYY-MM-DD/. Pass --format ndjson for the
+# legacy encrypted-at-rest (AES-256-GCM) NDJSON format.
+#
+# Requires duckdb + pyarrow on the host python (verified present) and
+# /srv/secrets/b2-permanence.env for B2 credentials.
 #
 # Data lifecycle: Hot (Qdrant, 90 days) → Cold (B2, forever). Pruning of
 # documents older than 90 days runs AFTER a successful upload — see

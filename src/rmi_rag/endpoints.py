@@ -7,9 +7,11 @@ multi-modal, investigation narratives, graph RAG, streaming, email.
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,58 @@ async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[
 
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
+
+
+@router.post("/rag/query", response_model=None)
+async def rag_query_snapshots(
+    request: Request, data: dict[str, Any]
+) -> dict[str, Any] | JSONResponse:
+    """Run read-only SQL over RAG permanence parquet snapshots via DuckDB.
+
+    Body: ``{"query": "SELECT ...", "date": "2026-08-01"?, "limit": N?}``.
+    A read-only ``snapshots`` view exposes every parquet snapshot under
+    ``s3://{B2_BUCKET_NAME}/snapshots/`` (filtered by ``date`` when
+    given), so callers can ask questions like:
+
+        SELECT content, metadata FROM snapshots
+        WHERE json_extract_string(metadata, '$.severity') = 'critical';
+
+    Queries are validated to be single, read-only statements (no DDL,
+    DML, extension loading, or external file reads). Credentials come
+    from the process environment (B2_APPLICATION_KEY_ID/KEY,
+    B2_BUCKET_NAME, B2_S3_ENDPOINT) and are never exposed.
+    """
+    query = data.get("query", "")
+    if not query or not str(query).strip():
+        return {"error": "query is required", "code": "query.missing"}
+    date = data.get("date")
+    try:
+        limit = max(1, min(int(data.get("limit", 1000)), 5000))
+    except (TypeError, ValueError):
+        limit = 1000
+
+    from rmi_rag.parquet_analytics import run_snapshot_query, validate_read_only_sql
+
+    try:
+        validate_read_only_sql(str(query))
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(exc), "code": "query.invalid"},
+        )
+
+    try:
+        result = run_snapshot_query(str(query), date=date, limit=limit)
+    except Exception as exc:
+        logger.warning("rag_query_failed err=%s", exc)
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": f"snapshot query failed: {exc}",
+                "code": "query.execution_failed",
+            },
+        )
+    return result
 
 
 @router.post("/rag/confidence")

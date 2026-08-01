@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
 """Shared helpers for the RMI RAG B2 permanence pipeline.
 
-Implements the on-disk format used by ``b2_permanence.py`` (upload) and
-``b2_restore.py`` (download):
+Implements the on-disk formats used by ``b2_permanence.py`` (upload),
+``b2_restore.py`` (download) and ``migrate_to_parquet.py`` (convert):
 
-    snapshots/{YYYY-MM-DD}/{collection}.jsonl.zst[.enc]
+    snapshots/{YYYY-MM-DD}/{collection}.parquet          (default, since 2026-08)
+    snapshots/{YYYY-MM-DD}/{collection}.jsonl.zst[.enc]  (legacy fallback)
 
-Per-collection file pipeline:
-    Qdrant points  ->  NDJSON (one JSON object per line)
-                   ->  zstd level 19      ->  .jsonl.zst
-                   ->  AES-256-GCM (opt.) ->  .jsonl.zst.enc
+Per-collection file pipelines:
+
+    Parquet (default — columnar, DuckDB-queryable from B2):
+        Qdrant points -> Arrow table -> parquet (zstd level 19)
+
+    NDJSON (legacy fallback — encrypted at rest):
+        Qdrant points -> NDJSON -> zstd level 19 -> .jsonl.zst
+                     -> AES-256-GCM (opt.) -> .jsonl.zst.enc
+
+Parquet snapshots are intentionally NOT file-encrypted: the whole point
+is that DuckDB can read them directly from B2 over the S3-compatible
+API without downloading the file. Access control is the private B2
+bucket + the scoped application key. To get encrypted-at-rest backups
+back, use ``--format ndjson``.
 
 Encrypted file format (chunked AES-256-GCM, constant memory for any
 file size):
@@ -40,9 +51,12 @@ Environment variables (never hardcoded in this repo):
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import struct
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from b2sdk.v2 import B2Api, Bucket, InMemoryAccountInfo
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -53,6 +67,7 @@ MAGIC = b"RMIB2AES"  # 8 bytes — must match the _HEADER ">8sHIH" magic field
 ENCRYPTED_SUFFIX = ".enc"
 COMPRESSED_SUFFIX = ".zst"
 NDJSON_SUFFIX = ".jsonl"
+PARQUET_SUFFIX = ".parquet"
 DEFAULT_BUCKET = "rmi-rag-permanence"
 NONCE_LEN = 12
 TAG_LEN = 16
@@ -198,6 +213,124 @@ def decompress_file(src: Path, dst: Path) -> Path:
     with open(src, "rb") as f_in, open(dst, "wb") as f_out:
         dctx.copy_stream(f_in, f_out)
     return dst
+
+
+# ── Parquet ────────────────────────────────────────────────────────────
+#
+# Parquet snapshot schema (one file per collection per date):
+#
+#     id         VARCHAR   Qdrant point id (int or UUID, serialized)
+#     content    VARCHAR   payload["content"] (convenience column)
+#     metadata   VARCHAR   payload["metadata"] as JSON (SQL-queryable)
+#     payload    VARCHAR   full Qdrant payload as JSON (exact restore)
+#     embedding  DOUBLE[]  dense vector (null when named/sparse-only)
+#     vectors    VARCHAR   JSON of a named/sparse vector dict, else null
+#
+# Keeping ``payload`` lets restore reproduce the exact original point;
+# ``content``/``metadata`` make the common DuckDB queries cheap.
+
+
+def parquet_schema(with_vectors: bool = True) -> Any:
+    """Return the pyarrow schema used for permanence snapshots."""
+    import pyarrow as pa  # type: ignore[import-untyped]
+
+    fields: list[Any] = [
+        ("id", pa.string()),
+        ("content", pa.string()),
+        ("metadata", pa.string()),
+        ("payload", pa.string()),
+        ("embedding", pa.list_(pa.float64())),
+        ("vectors", pa.string()),
+    ]
+    return pa.schema(fields)
+
+
+def point_to_row(point: Any, with_vectors: bool = True) -> dict[str, object]:
+    """Convert one Qdrant scroll point into a parquet row dict.
+
+    Handles both flat dense vectors (``embedding``) and named/sparse
+    vector dicts (``vectors`` JSON). ``with_vectors=False`` writes null
+    embeddings (payload-only snapshots).
+    """
+    pid = getattr(point, "id", None)
+    payload = getattr(point, "payload", None)
+    if not isinstance(payload, dict):
+        payload = {}
+    vector = getattr(point, "vector", None) if with_vectors else None
+    row: dict[str, object] = {
+        "id": str(pid) if pid is not None else "",
+        "content": str(payload.get("content") or ""),
+        "metadata": json.dumps(payload.get("metadata") or {}, default=str),
+        "payload": json.dumps(payload, default=str),
+        "embedding": None,
+        "vectors": None,
+    }
+    if isinstance(vector, list):
+        row["embedding"] = [float(x) for x in vector]
+    elif isinstance(vector, dict):
+        dense = vector.get("dense")
+        if isinstance(dense, list):
+            row["embedding"] = [float(x) for x in dense]
+        row["vectors"] = json.dumps(vector, default=str)
+    return row
+
+
+def table_from_rows(rows: Iterable[dict[str, object]]) -> Any:
+    """Build a pyarrow Table from parquet row dicts."""
+    import pyarrow as pa
+
+    materialized = list(rows)
+    return pa.table(
+        {
+            "id": [str(r.get("id") or "") for r in materialized],
+            "content": [str(r.get("content") or "") for r in materialized],
+            "metadata": [str(r.get("metadata") or "") for r in materialized],
+            "payload": [str(r.get("payload") or "") for r in materialized],
+            "embedding": [r.get("embedding") for r in materialized],
+            "vectors": [r.get("vectors") for r in materialized],
+        },
+        schema=parquet_schema(),
+    )
+
+
+def write_parquet_file(dest: Path, rows: Iterable[dict[str, object]], level: int = 19) -> Path:
+    """Write *rows* to *dest* as a zstd-compressed parquet file."""
+    import pyarrow.parquet as pq  # type: ignore[import-untyped]
+
+    pq.write_table(table_from_rows(rows), dest, compression="zstd", compression_level=level)
+    return dest
+
+
+def stream_parquet(dest: Path, batches: Iterable[list[dict[str, object]]], level: int = 19) -> Path:
+    """Stream scroll batches into *dest* as one parquet file (bounded memory)."""
+    import pyarrow.parquet as pq
+
+    writer = pq.ParquetWriter(dest, parquet_schema(), compression="zstd", compression_level=level)
+    try:
+        for rows in batches:
+            if rows:
+                writer.write_table(table_from_rows(rows))
+    finally:
+        writer.close()
+    return dest
+
+
+def read_parquet_records(path: Path) -> list[dict[str, Any]]:
+    """Read a parquet snapshot back to record dicts via DuckDB.
+
+    Local-file reads (after a B2 download) keep restore simple and
+    credential-free; direct-from-B2 queries use the same schema through
+    DuckDB's httpfs extension (see src/rmi_rag/parquet_analytics.py).
+    """
+    import duckdb
+
+    con = duckdb.connect()
+    try:
+        rel = con.table_function("read_parquet", [str(path)])
+        cols = [d[0] for d in rel.description]
+        return [dict(zip(cols, row, strict=False)) for row in rel.fetchall()]
+    finally:
+        con.close()
 
 
 # ── AES-256-GCM ───────────────────────────────────────────────────────

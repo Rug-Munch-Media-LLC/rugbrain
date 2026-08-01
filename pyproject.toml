@@ -4,10 +4,12 @@ version = "0.1.0"
 description = "RMI RAG — hybrid search, embeddings, chunking, agentic retrieval for crypto intelligence"
 requires-python = ">=3.11"
 dependencies = [
+    "duckdb>=1.1.0",
     "fastapi>=0.115.0",
     "fastembed>=0.8.0",
     "httpx>=0.27.0",
     "numpy>=1.26.0,<2.0",
+    "pyarrow>=17.0.0",
     "pydantic>=2.9.0",
     "redis>=5.2.0",
     "qdrant-client>=1.13.0",
