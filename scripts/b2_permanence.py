@@ -343,6 +343,24 @@ def main() -> int:
 
     bucket_name = args.b2_bucket or env_or("B2_BUCKET_NAME", b2_common.DEFAULT_BUCKET)
     encrypt = encryption_enabled() and not args.no_encrypt
+
+    # Fail closed on encryption: backups must be encrypted unless the
+    # operator EXPLICITLY opts out with --no-encrypt. Never silently
+    # upload plaintext because B2_ENCRYPTION_KEY is missing.
+    if args.no_encrypt:
+        logger.warning(
+            "ENCRYPTION DISABLED via --no-encrypt — snapshots will be uploaded "
+            "to B2 in PLAINTEXT (compressed only). Do not use in production."
+        )
+    elif not encrypt:
+        logger.critical(
+            "Refusing to run: B2_ENCRYPTION_KEY is not set and encryption is "
+            "disabled. Backups would be uploaded unencrypted. Set "
+            "B2_ENCRYPTION_KEY (64-char hex) or explicitly pass --no-encrypt "
+            "to allow plaintext backups."
+        )
+        return 2
+
     with_vectors = not args.no_vectors
 
     try:
