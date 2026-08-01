@@ -4,6 +4,8 @@ Tests for qdrant_store.py — Qdrant vector store operations.
 Uses respx to mock HTTP calls to the Qdrant REST API.
 """
 
+import uuid
+
 import pytest
 import respx
 
@@ -163,7 +165,9 @@ async def test_insert_stores_document():
     assert ok is True
     assert route.called
     body = route.calls[0].request.content
-    assert b"doc_001" in body
+    # insert() converts doc_id to a deterministic UUID v5 point id
+    expected_point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, "doc_001")).encode()
+    assert expected_point_id in body
     assert b"scam pattern" in body
     assert b"critical" in body
     assert b"ethereum" in body
