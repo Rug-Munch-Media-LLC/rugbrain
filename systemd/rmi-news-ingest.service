@@ -1,5 +1,5 @@
 # rmi-news-ingest — News RSS Ingest + Embed → Qdrant (15-min)
-# Source: /srv/work/repos/rmi-rag/systemd/rmi-news-ingest.service
+# Source: /path/to/rmi-rag/systemd/rmi-news-ingest.service
 # Deploy: /etc/systemd/system/rmi-news-ingest.service
 #
 # Runs every 15 minutes via rmi-news-ingest.timer:
@@ -29,8 +29,8 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/srv/work/repos/rmi-rag
-ExecStart=/bin/bash /srv/work/repos/rmi-rag/scripts/rmi-news-ingest.sh
+WorkingDirectory=/path/to/rmi-rag
+ExecStart=/bin/bash /path/to/rmi-rag/scripts/rmi-news-ingest.sh
 TimeoutStartSec=1800
 
 # Security hardening
@@ -39,7 +39,7 @@ ProtectSystem=full
 ProtectHome=false
 PrivateTmp=true
 
-# Environment override (secrets loaded by the script from /srv/secrets/backend.env)
+# Environment override (secrets loaded by the script from /path/to/backend.env)
 EnvironmentFile=-/etc/default/rmi-news-ingest
 
 [Install]

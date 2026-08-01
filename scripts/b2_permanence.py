@@ -30,7 +30,7 @@ Usage:
     python scripts/b2_permanence.py --dry-run
     python scripts/b2_permanence.py --collection threat_intel --limit 10
     python scripts/b2_permanence.py --format ndjson --limit 50
-    python scripts/b2_permanence.py --env-file /srv/secrets/b2-permanence.env
+    python scripts/b2_permanence.py --env-file /path/to/b2-permanence.env
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)

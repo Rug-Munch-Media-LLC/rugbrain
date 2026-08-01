@@ -119,7 +119,7 @@ def get_b2_api() -> B2Api:
     if not key_id or not key:
         raise RuntimeError(
             "B2 credentials missing — set B2_APPLICATION_KEY_ID and "
-            "B2_APPLICATION_KEY (systemd: EnvironmentFile=/srv/secrets/b2-permanence.env)"
+            "B2_APPLICATION_KEY (systemd: EnvironmentFile=/path/to/b2-permanence.env)"
         )
     api = B2Api(InMemoryAccountInfo())
     api.authorize_account("production", key_id, key)

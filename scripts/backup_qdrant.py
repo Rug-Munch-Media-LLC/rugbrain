@@ -8,14 +8,14 @@ Migrated from Cloudflare R2 to Backblaze B2 on 2026-07-31.
 
 Credentials (in priority order):
   1. Environment variables: B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME
-  2. --env-file (defaults to /srv/secrets/b2-permanence.env if present)
+  2. --env-file (defaults to /path/to/b2-permanence.env if present)
   3. rclone.conf [rugmunch-b2] section (account/key)
 
 B2 uses the native B2 API (via b2sdk) — the S3-compatible API is not
 enabled for the master application key.
 
 Schedule: 30 3 * * * (daily 3:30am UTC, after DB backups at 2am)
-Cron: cd /srv/work/repos/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
+Cron: cd /path/to/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
 """
 
 import argparse
@@ -42,7 +42,7 @@ from b2_common import ensure_bucket, get_b2_api, list_object_keys, load_env_file
 # ---------------------------------------------------------------------------
 B2_BUCKET_DEFAULT = "rmi-rag-permanence"
 B2_KEY_PREFIX = "qdrant-snapshots"
-ENV_FILE_DEFAULT = "/srv/secrets/b2-permanence.env"
+ENV_FILE_DEFAULT = "/path/to/b2-permanence.env"
 RCLONE_CONF_PATH = os.getenv("RCLONE_CONF", "~/.config/rclone/rclone.conf")
 QDRANT_HOST_DEFAULT = "rmi-qdrant"
 QDRANT_PORT_DEFAULT = 6333

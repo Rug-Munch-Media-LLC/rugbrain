@@ -1,5 +1,5 @@
 # rmi-rag-permanence.timer — Nightly RAG permanence sync to B2
-# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-permanence.timer
+# Source: /path/to/rmi-rag/systemd/rmi-rag-permanence.timer
 # Deploy: /etc/systemd/system/rmi-rag-permanence.timer
 #
 # Triggers rmi-rag-permanence.service nightly at 03:00 UTC with up to

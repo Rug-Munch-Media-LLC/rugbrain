@@ -7,9 +7,9 @@
 # Scheduled via crontab (see below) or the rmi-news-ingest systemd timer
 # in systemd/ (deploy: cp systemd/rmi-news-ingest.* /etc/systemd/system/).
 #
-#   */15 * * * * /bin/bash /srv/work/repos/rmi-rag/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
+#   */15 * * * * /bin/bash /path/to/rmi-rag/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
 #
-# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /srv/secrets/backend.env.
+# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /path/to/backend.env.
 set -euo pipefail
 
 # ── Concurrency guard: never run two ingests at once ─────────────────
@@ -26,10 +26,10 @@ if ! flock -n 200; then
 fi
 trap 'flock -u 200 2>/dev/null || true' EXIT
 
-BACKEND_DIR="${RMI_BACKEND_DIR:-/srv/work/repos/rmi-backend}"
-RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
+BACKEND_DIR="${RMI_BACKEND_DIR:-/path/to/rmi-backend}"
+RAG_DIR="${RMI_RAG_DIR:-/path/to/rmi-rag}"
 PYTHON="${RMI_BACKEND_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
-SECRETS="${RMI_SECRETS_FILE:-/srv/secrets/backend.env}"
+SECRETS="${RMI_SECRETS_FILE:-/path/to/backend.env}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 

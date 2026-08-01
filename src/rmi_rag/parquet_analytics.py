@@ -132,6 +132,7 @@ def _b2_native_auth(key_id: str, key: str) -> dict[str, Any]:
     resp = httpx.post(
         f"https://{os.environ.get('B2_API_URL', DEFAULT_B2_API)}/b2api/v2/b2_authorize_account",
         headers={"Authorization": f"Basic {auth}"},
+        json={},
         timeout=30,
     )
     resp.raise_for_status()

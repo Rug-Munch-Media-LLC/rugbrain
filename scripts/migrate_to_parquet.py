@@ -22,7 +22,7 @@ Usage:
     python scripts/migrate_to_parquet.py --date 2026-08-01
     python scripts/migrate_to_parquet.py --date 2026-08-01 --collection threat_intel
     python scripts/migrate_to_parquet.py --date 2026-08-01 --dry-run
-    python scripts/migrate_to_parquet.py --env-file /srv/secrets/b2-permanence.env
+    python scripts/migrate_to_parquet.py --env-file /path/to/b2-permanence.env
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
