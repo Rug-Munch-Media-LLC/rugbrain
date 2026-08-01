@@ -129,10 +129,11 @@ def _b2_native_auth(key_id: str, key: str) -> dict[str, Any]:
     import httpx
 
     auth = base64.b64encode(f"{key_id}:{key}".encode()).decode()
-    resp = httpx.post(
+    # b2_authorize_account is a GET endpoint (no body) per the B2 Native
+    # API spec; POSTing a body returns 400 from some B2 API servers.
+    resp = httpx.get(
         f"https://{os.environ.get('B2_API_URL', DEFAULT_B2_API)}/b2api/v2/b2_authorize_account",
         headers={"Authorization": f"Basic {auth}"},
-        json={},
         timeout=30,
     )
     resp.raise_for_status()
