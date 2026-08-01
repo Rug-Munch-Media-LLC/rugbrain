@@ -1,0 +1,46 @@
+# rmi-news-ingest — News RSS Ingest + Embed → Qdrant (15-min)
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-news-ingest.service
+# Deploy: /etc/systemd/system/rmi-news-ingest.service
+#
+# Runs every 15 minutes via rmi-news-ingest.timer:
+#   1. rmi-backend RSS ingest → Postgres news_items
+#   2. news_to_rag.py → chunk + embed (bge-m3) + upsert Qdrant `news`
+#
+# Deploy:
+#   cp systemd/rmi-news-ingest.service /etc/systemd/system/
+#   cp systemd/rmi-news-ingest.timer   /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-news-ingest.timer
+#
+# Manual run:
+#   systemctl start rmi-news-ingest.service
+#
+# Logs:
+#   journalctl -u rmi-news-ingest.service -f
+#   /var/log/rmi-news-ingest.log
+
+[Unit]
+Description=RMI News RSS Ingest + Embed to Qdrant (Every 15 min)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rmi-rag
+ExecStart=/bin/bash /srv/work/repos/rmi-rag/scripts/rmi-news-ingest.sh
+TimeoutStartSec=1800
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+# Environment override (secrets loaded by the script from /srv/secrets/backend.env)
+EnvironmentFile=-/etc/default/rmi-news-ingest
+
+[Install]
+WantedBy=multi-user.target

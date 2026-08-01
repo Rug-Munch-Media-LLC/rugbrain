@@ -1,0 +1,30 @@
+# rmi-news-ingest.timer — News Ingest Every 15 Minutes
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-news-ingest.timer
+# Deploy: /etc/systemd/system/rmi-news-ingest.timer
+#
+# Runs rmi-news-ingest.service every 15 minutes for continuous
+# market awareness: RSS → Postgres news_items → embed → Qdrant `news`.
+#
+# Deploy:
+#   cp systemd/rmi-news-ingest.timer /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-news-ingest.timer
+#
+# See next run:
+#   systemctl list-timers rmi-news-ingest.timer
+#
+# Manual trigger:
+#   systemctl start rmi-news-ingest.service
+
+[Unit]
+Description=RMI News Ingest — Every 15 min
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Requires=rmi-news-ingest.service
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
