@@ -1,5 +1,5 @@
 # rmi-rag-ingest.timer — Weekly RAG Threat Ingest Schedule
-# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-ingest.timer
+# Source: /path/to/rmi-rag/systemd/rmi-rag-ingest.timer
 # Deploy: /etc/systemd/system/rmi-rag-ingest.timer
 #
 # Runs rmi-rag-ingest.service weekly on Monday at 03:00 UTC.

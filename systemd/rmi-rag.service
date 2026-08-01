@@ -1,5 +1,5 @@
 # rmi-rag — RAG API Server
-# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag.service
+# Source: /path/to/rmi-rag/systemd/rmi-rag.service
 # Deploy: /etc/systemd/system/rmi-rag.service
 #
 # Manages the rmi-rag FastAPI server via docker compose.
@@ -18,7 +18,7 @@
 #
 # Manual rebuild:
 #   systemctl stop rmi-rag.service
-#   cd /srv/work/repos/rmi-rag && docker compose build rag-api
+#   cd /path/to/rmi-rag && docker compose build rag-api
 #   systemctl start rmi-rag.service
 
 [Unit]
@@ -33,11 +33,11 @@ Type=oneshot
 RemainAfterExit=yes
 User=root
 Group=root
-WorkingDirectory=/srv/work/repos/rmi-rag
-ExecStartPre=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml pull rag-api
-ExecStart=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml up -d rag-api
-ExecStop=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml stop rag-api --timeout 30
-ExecReload=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml up -d --force-recreate --no-deps rag-api
+WorkingDirectory=/path/to/rmi-rag
+ExecStartPre=docker compose -f /path/to/rmi-rag/docker-compose.yml pull rag-api
+ExecStart=docker compose -f /path/to/rmi-rag/docker-compose.yml up -d rag-api
+ExecStop=docker compose -f /path/to/rmi-rag/docker-compose.yml stop rag-api --timeout 30
+ExecReload=docker compose -f /path/to/rmi-rag/docker-compose.yml up -d --force-recreate --no-deps rag-api
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120

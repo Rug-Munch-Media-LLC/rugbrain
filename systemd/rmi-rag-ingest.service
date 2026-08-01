@@ -1,5 +1,5 @@
 # rmi-rag-ingest — RAG Threat Ingest (One-shot)
-# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-ingest.service
+# Source: /path/to/rmi-rag/systemd/rmi-rag-ingest.service
 # Deploy: /etc/systemd/system/rmi-rag-ingest.service
 #
 # Runs the rag-ingest container from docker compose (ingest profile).
@@ -36,10 +36,10 @@ Requires=docker.service
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/srv/work/repos/rmi-rag
-ExecStartPre=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest pull rag-ingest
-ExecStart=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest run --rm rag-ingest
-ExecStartPost=docker compose -f /srv/work/repos/rmi-rag/docker-compose.yml --profile ingest rm -f rag-ingest 2>/dev/null || true
+WorkingDirectory=/path/to/rmi-rag
+ExecStartPre=docker compose -f /path/to/rmi-rag/docker-compose.yml --profile ingest pull rag-ingest
+ExecStart=docker compose -f /path/to/rmi-rag/docker-compose.yml --profile ingest run --rm rag-ingest
+ExecStartPost=docker compose -f /path/to/rmi-rag/docker-compose.yml --profile ingest rm -f rag-ingest 2>/dev/null || true
 TimeoutStartSec=600
 
 # Security hardening

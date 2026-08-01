@@ -83,11 +83,11 @@ services:
       - rmi_network
     volumes:
       # Shared HF cache: bge-reranker-v2-m3 weights persist across restarts.
-      # NOTE: served from /srv/rmi-infra/hf-cache (world-readable) and mounted
+      # NOTE: served from /path/to/hf-cache (world-readable) and mounted
       # at /opt/hf-cache (NOT /root/.cache) because the image's /root is 0700
       # root-owned — the non-root container user (rmi, uid 999) cannot traverse
       # into /root to reach the mount point. HF_HOME is set to /opt/hf-cache.
-      - /srv/rmi-infra/hf-cache:/opt/hf-cache:ro
+      - /path/to/hf-cache:/opt/hf-cache:ro
     environment:
       - QDRANT_URL=http://rmi-qdrant:6333
       - QDRANT_HOST=rmi-qdrant
@@ -149,7 +149,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
     volumes:
-      - /srv/rmi-infra/hf-cache:/opt/hf-cache:ro
+      - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py
     labels:
       - app.rugmunch.io/name=rmi-rag-ingest

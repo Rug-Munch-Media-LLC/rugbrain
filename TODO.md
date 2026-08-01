@@ -61,7 +61,7 @@
 - [ ] Fix rmi-rag-api health shows `ingested_count: 0` — either fix or remove from dashboard.
 - [ ] Fix `RAG_EMBED_BACKEND=auto` ambiguity — explicit config would prevent broken fallback chain.
 - [ ] Create reindex cron/scheduler — seed data in place; add a reindex schedule to keep collections fresh (news/research/scams are static snapshots until wired).
-- [ ] Remove stale repo copies — DONE 2026-08-01 (partial): nested clone `/srv/work/repos/rmi-backend/rmi-rag/` removed + gitlink dropped (`rmi-backend c3682e02`); `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` removed. **Remaining:** worktree `rmi-rag-wt-ragas` (wip/ragas-eval-endpoint, branch merged) still registered — `git worktree remove` it.
+- [ ] Remove stale repo copies — DONE 2026-08-01 (partial): nested clone `/path/to/rmi-backend/rmi-rag/` removed + gitlink dropped (`rmi-backend c3682e02`); `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` removed. **Remaining:** worktree `rmi-rag-wt-ragas` (wip/ragas-eval-endpoint, branch merged) still registered — `git worktree remove` it.
 
 ## 🔵 PHASE 2 — QUEUED
 

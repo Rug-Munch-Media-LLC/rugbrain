@@ -37,7 +37,7 @@
 
 **Session-close changes (2026-08-01):**
 - **Ollama optimized** — compose: `OLLAMA_KEEP_ALIVE=-1` (models stay resident, kills the 38-45s cold-start reload), `OLLAMA_MAX_LOADED_MODELS=3`, `OLLAMA_CONTEXT_LENGTH=4096`, cpus 8 / mem 8g. New `scripts/ollama-warmup.sh` entrypoint preloads bge-m3 + nomic-embed-text at container start. `qwen3:0.6b` removed (redundant vs 1.7b). Verified live. `[DONE]`
-- **Stale containers/clones cleaned** — `rmi-rag-eval-test` container removed; nested clone `/srv/work/repos/rmi-backend/rmi-rag/` removed + gitlink dropped; `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` worktrees removed. Remaining: `rmi-rag-wt-ragas` worktree (branch merged) — remove with `git worktree remove`. `[PARTIAL]`
+- **Stale containers/clones cleaned** — `rmi-rag-eval-test` container removed; nested clone `/path/to/rmi-backend/rmi-rag/` removed + gitlink dropped; `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` worktrees removed. Remaining: `rmi-rag-wt-ragas` worktree (branch merged) — remove with `git worktree remove`. `[PARTIAL]`
 - **News ingest flock guard** — `c17dc59` adds `flock -n` to `rmi-news-ingest.sh`; concurrent cron ticks skip instead of piling up. `[DONE]`
 - **BM25 alias swap NOT yet complete** — `hybrid_search` implemented in endpoints/qdrant_store (uncommitted WIP) but canonical-name → `_v2` aliases are NOT created (Qdrant aliases empty 2026-08-01). `[NOT DONE]`
 
@@ -370,7 +370,7 @@ All 31 files referencing `rag_service` [verified count] move to `RagApiClient` c
 
 **Enforcement (add to CI, Phase 1):**
 1. `grep -rnE "from (app\.|rmi_rag\.)" src/rmi_rag/embedder.py src/rmi_rag/store.py src/rmi_rag/retrieval.py` → 0 matches (import_guard excluded by path).
-2. `grep -rn "import rmi_rag\|from rmi_rag\|qdrant_client\|from app\.rag" /srv/work/repos/rmi-backend/app --include="*.py"` → 0 matches except `app/rag_client.py`.
+2. `grep -rn "import rmi_rag\|from rmi_rag\|qdrant_client\|from app\.rag" /path/to/rmi-backend/app --include="*.py"` → 0 matches except `app/rag_client.py`.
 3. Run both greps in CI (`.forgejo/workflows/`) as a hard gate. [decision]
 4. Ruff `TID252`/`PLC0415`-style rules are advisory; the greps are the contract.
 
@@ -477,9 +477,9 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 
 ## 11. Definition of Done (acceptance gates)
 
-1. `grep -rn "rag_service\|rag_firehose\|crypto_embeddings\|splade_bm25\|three_pillar" /srv/work/repos/rmi-backend/app /srv/work/repos/rmi-rag/src` → 0 matches. **[current: 17 rag_service hits in backend]**
-2. `grep -rnE "from (app\.|rmi_rag\.)" /srv/work/repos/rmi-rag/src/rmi_rag/{embedder,store,retrieval}.py` → 0. **[N/A — store.py/retrieval.py not created yet]**
-3. `grep -rn "qdrant_client\|rmi_rag\|from app\.rag" /srv/work/repos/rmi-backend/app --include="*.py"` → 0 except `app/rag_client.py`. **[NOT MET — backend imports app.rag; no rag_client.py]**
+1. `grep -rn "rag_service\|rag_firehose\|crypto_embeddings\|splade_bm25\|three_pillar" /path/to/rmi-backend/app /path/to/rmi-rag/src` → 0 matches. **[current: 17 rag_service hits in backend]**
+2. `grep -rnE "from (app\.|rmi_rag\.)" /path/to/rmi-rag/src/rmi_rag/{embedder,store,retrieval}.py` → 0. **[N/A — store.py/retrieval.py not created yet]**
+3. `grep -rn "qdrant_client\|rmi_rag\|from app\.rag" /path/to/rmi-backend/app --include="*.py"` → 0 except `app/rag_client.py`. **[NOT MET — backend imports app.rag; no rag_client.py]**
 4. All rmi-rag tests + backend proxy tests green (`pytest`, `mypy --strict`, `ruff`). **[pytest 81/86 pass (5 skipped) 2026-08-01]**
 5. Live smoke: bot `/research` returns Qdrant-grounded citations; scanner scam-check returns verdict from `rmi-rag-api`; `/health` + `/ready` green. **[search + health verified; needs rebuild for full surface]**
 6. `RMI_RAG_API_URL=http://rmi-rag-api:8012` documented in backend `.env.example`; compose on shared `rmi_network`. **[backend commit e4685e84 re-points RAG clients to :8012 with API-key auth — partially met]**
