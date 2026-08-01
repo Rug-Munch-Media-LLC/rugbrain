@@ -40,12 +40,20 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
 OTEL_ENABLED = os.getenv("OTEL_ENABLED", "").lower() in ("1", "true", "yes")
 OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 RMI_RAG_API_KEY = os.getenv("RMI_RAG_API_KEY", "")
+DEV_MODE = os.getenv("DEV_MODE", "").lower() in ("1", "true", "yes")
 
 if not RMI_RAG_API_KEY:
-    logger.warning(
-        "RMI_RAG_API_KEY is not set! API endpoints will be accessible without authentication. "
-        "Set RMI_RAG_API_KEY environment variable in production."
-    )
+    if DEV_MODE:
+        logger.warning(
+            "DEV_MODE=true and RMI_RAG_API_KEY is not set — API endpoints are "
+            "accessible WITHOUT authentication (development only)."
+        )
+    else:
+        logger.error(
+            "RMI_RAG_API_KEY is not set and DEV_MODE is false — the API will "
+            "REFUSE ALL REQUESTS (503). Set RMI_RAG_API_KEY in production or "
+            "DEV_MODE=true for local development."
+        )
 
 # ── Health probes (shared state) ─────────────────────────────────────
 _health_state: dict[str, Any] = {
@@ -67,6 +75,9 @@ class RAGAuthMiddleware(BaseHTTPMiddleware):
 
     Exempts /health and /ready endpoints.
     All other endpoints require a valid API key.
+
+    Fail-closed: if ``RMI_RAG_API_KEY`` is unset the middleware refuses
+    ALL requests (503) unless ``DEV_MODE=true`` is set for development.
     """
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
@@ -76,7 +87,19 @@ class RAGAuthMiddleware(BaseHTTPMiddleware):
         if path in ("/health", "/ready") or path.startswith("/health"):
             return await call_next(request)
 
-        # If no API key is configured, allow all (dev mode)
+        # Fail closed: refuse all requests when no API key is configured
+        # unless DEV_MODE=true explicitly opts in to open auth (development).
+        if not RMI_RAG_API_KEY and not DEV_MODE:
+            logger.error("auth_refused path=%s reason=key_not_configured", path)
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Service unavailable — RMI_RAG_API_KEY not configured",
+                    "code": "auth.not_configured",
+                },
+            )
+
+        # DEV_MODE: API key not configured, auth open (development only)
         if not RMI_RAG_API_KEY:
             return await call_next(request)
 

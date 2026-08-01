@@ -128,11 +128,12 @@ class TestRAGAuthMiddleware:
 
     @pytest.fixture
     def app_without_auth(self):
-        """Create app with auth disabled."""
+        """Create app with auth open (DEV_MODE=true, key not set)."""
 
-        # KEY NOT SET - auth should be disabled
+        # KEY NOT SET + DEV_MODE=true - auth open for development only
         if "RMI_RAG_API_KEY" in os.environ:
             del os.environ["RMI_RAG_API_KEY"]
+        os.environ["DEV_MODE"] = "true"
 
         import importlib
 
@@ -199,14 +200,44 @@ class TestRAGAuthMiddleware:
             assert resp.status_code in (200, 500)  # May 500 if deps missing
 
     @pytest.mark.asyncio
-    async def test_no_auth_when_key_not_set(self, app_without_auth):
-        """When RMI_RAG_API_KEY is not set, all requests should pass through."""
+    async def test_no_auth_when_key_not_set_and_dev_mode(self, app_without_auth):
+        """When RMI_RAG_API_KEY is not set and DEV_MODE=true, requests pass (dev only)."""
         transport = ASGITransport(app=app_without_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/v1/test-open")
             assert resp.status_code == 200
             data = resp.json()
             assert data["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_auth_fails_closed_when_key_not_set(self):
+        """Fail-closed: no key and no DEV_MODE => every request gets 503."""
+        import importlib
+
+        os.environ.pop("RMI_RAG_API_KEY", None)
+        os.environ.pop("DEV_MODE", None)
+
+        import rmi_rag.main
+
+        importlib.reload(rmi_rag.main)
+
+        from fastapi import FastAPI
+
+        from rmi_rag.main import RAGAuthMiddleware, lifespan
+
+        app = FastAPI(lifespan=lifespan)
+
+        @app.get("/api/v1/test-secure")
+        async def secure_endpoint():
+            return {"status": "ok"}
+
+        app.add_middleware(RAGAuthMiddleware)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/v1/test-secure")
+            assert resp.status_code == 503
+            data = resp.json()
+            assert data["code"] == "auth.not_configured"
 
     @pytest.mark.asyncio
     async def test_auth_missing_key_header(self, app_with_auth):
