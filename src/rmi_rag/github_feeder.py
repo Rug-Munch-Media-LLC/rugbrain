@@ -90,7 +90,7 @@ SOURCES = [
     },
 ]
 
-CLONE_DIR = "/tmp/rag_sources"  # noqa: S108
+CLONE_DIR = "/tmp/rag_sources"  # noqa: S108  # nosec B108 (agent-controlled clone dir)
 
 
 def ensure_cloned(repo: str) -> str | None:

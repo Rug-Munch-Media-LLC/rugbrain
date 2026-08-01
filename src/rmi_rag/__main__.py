@@ -21,7 +21,7 @@ def _main() -> None:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",  # noqa: S104
+        default="0.0.0.0",  # noqa: S104  # nosec B104 (intentional API bind)
         help="Bind host for the API server (default: 0.0.0.0)",
     )
     parser.add_argument(

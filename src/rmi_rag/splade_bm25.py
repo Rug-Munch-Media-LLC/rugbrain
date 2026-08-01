@@ -365,7 +365,7 @@ class BM25Index:
             return None
         try:
             with open(path, "rb") as f:
-                data = pickle.load(f)  # noqa: S301 (model caches trusted)
+                data = pickle.load(f)  # noqa: S301 (model caches trusted)  # nosec B301
             idx = cls(k1=data["k1"], b=data["b"], epsilon=data["epsilon"])
             idx.doc_count = data["doc_count"]
             idx.avg_dl = data["avg_dl"]
@@ -377,7 +377,9 @@ class BM25Index:
                 idx._metadata = data["_metadata"]
             if data.get("_raw_content"):
                 idx._raw_content = data["_raw_content"]
-            logger.info("BM25 index loaded from disk: %s docs, %s terms", idx.doc_count, len(idx.df))
+            logger.info(
+                "BM25 index loaded from disk: %s docs, %s terms", idx.doc_count, len(idx.df)
+            )
             return idx
         except Exception as e:
             logger.warning("Failed to load BM25 from disk: %s", e)
@@ -708,4 +710,3 @@ async def splade_search(
     index = await get_bm25_index()
     results = index.search_with_expansion(query, limit=limit)
     return results
-
