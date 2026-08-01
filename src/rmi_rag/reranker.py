@@ -43,7 +43,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://172.19.0.1:11434").rstrip("/")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_RERANK_MODEL = os.getenv("RERANK_MODEL", "bge-reranker-v2-m3")
 ST_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
 RERANK_MAX_LENGTH = int(os.getenv("RERANK_MAX_LENGTH", "512"))

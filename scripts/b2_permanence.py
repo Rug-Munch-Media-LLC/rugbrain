@@ -21,7 +21,7 @@ Usage:
     python scripts/b2_permanence.py --dry-run
     python scripts/b2_permanence.py --collection threat_intel --limit 10
     python scripts/b2_permanence.py --no-encrypt --limit 50
-    python scripts/b2_permanence.py --env-file /srv/secrets/b2-permanence.env
+    python scripts/b2_permanence.py --env-file /path/to/b2-permanence.env
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
@@ -71,7 +71,7 @@ from b2_common import (
 logger = logging.getLogger("b2_permanence")
 
 # Qdrant fallback chain (mirrors src/rmi_rag/qdrant_store.py)
-DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333")
+DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://localhost:6333")
 DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")
 
 MANIFEST_NAME = "manifest.json"
@@ -310,7 +310,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--env-file",
         default=None,
-        help="Load KEY=value env file (e.g. /srv/secrets/b2-permanence.env)",
+        help="Load KEY=value env file (e.g. /path/to/b2-permanence.env)",
     )
     p.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
     return p

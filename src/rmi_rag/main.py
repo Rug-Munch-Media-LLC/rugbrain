@@ -146,8 +146,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # ── Warm health state ─────────────────────────────────────────
     _health_state["status"] = "starting"
-    _health_state["qdrant_url"] = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
-    _health_state["redis_host"] = os.getenv("REDIS_HOST", "rmi-redis")
+    _health_state["qdrant_url"] = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    _health_state["redis_host"] = os.getenv("REDIS_HOST", "localhost")
 
     # Probe Qdrant once at startup
     try:

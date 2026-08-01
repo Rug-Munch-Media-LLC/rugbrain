@@ -25,8 +25,8 @@ Run (host or inside a container with Postgres/Qdrant/Ollama reachable):
 
 Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
-  QDRANT_URL   (default http://rmi-qdrant:6333, falls back to 127.0.0.1)
-  OLLAMA_URL   (default http://rmi-ollama:11434, falls back to 127.0.0.1)
+  QDRANT_URL   (default http://localhost:6333, falls back to 127.0.0.1)
+  OLLAMA_URL   (default http://localhost:11434, falls back to 127.0.0.1)
   OLLAMA_EMBED_MODEL (default bge-m3)
 """
 
@@ -165,7 +165,7 @@ async def _embed_batch(
 
 # ── Main pipeline ──────────────────────────────────────────────────────
 async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
-    pg_host = os.getenv("POSTGRES_HOST", "rmi-postgres")
+    pg_host = os.getenv("POSTGRES_HOST", "localhost")
     pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
     pg_user = os.getenv("POSTGRES_USER", "rmi")
     pg_pass = os.getenv("POSTGRES_PASSWORD", "")
@@ -173,12 +173,12 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
 
     qdrant_candidates = _resolve_base(
         "qdrant",
-        os.getenv("QDRANT_URL", "http://rmi-qdrant:6333"),
+        os.getenv("QDRANT_URL", "http://localhost:6333"),
         "http://127.0.0.1:6333",
     )
     ollama_candidates = _resolve_base(
         "ollama",
-        os.getenv("OLLAMA_URL", "http://rmi-ollama:11434"),
+        os.getenv("OLLAMA_URL", "http://localhost:11434"),
         "http://127.0.0.1:11434",
     )
 
