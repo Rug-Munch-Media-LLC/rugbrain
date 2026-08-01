@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 import sys
 import types
 from collections.abc import Generator, Iterator
@@ -122,6 +123,11 @@ class _StubModule(types.ModuleType):
     def __init__(self, name: str) -> None:
         super().__init__(name)
         self.__path__: list[str] = []
+        # Give the stub a real __file__ so stdlib ``inspect.getfile`` /
+        # torch's custom-op registration can resolve it. Without this,
+        # loading a sentence-transformers model inside the container raises
+        # ``TypeError: <module 'app.X' ...> is a built-in module``.
+        self.__file__ = os.path.abspath(__file__)
 
     def __getattr__(self, name: str) -> _StubCallable:
         return _StubCallable(f"{self.__name__}.{name}")
