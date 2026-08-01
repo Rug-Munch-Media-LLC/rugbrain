@@ -12,6 +12,20 @@
 # Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /srv/secrets/backend.env.
 set -euo pipefail
 
+# ── Concurrency guard: never run two ingests at once ─────────────────
+# Cron fires every 15 min but a run can exceed 15 min (Ollama cold
+# starts, slow RSS). Without a lock, runs pile up and saturate Ollama.
+# flock -n fails fast: if another run holds the lock we exit 0 (skip,
+# the next scheduled run will pick up). The lock is auto-released when
+# this process exits (fd 200 closed), plus an explicit EXIT trap.
+LOCK_FILE="${RMI_NEWS_INGEST_LOCK:-/tmp/rmi-news-ingest.lock}"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+  echo "[$(date -u +%FT%TZ)] another ingest already running (lock: $LOCK_FILE), skipping" >&2
+  exit 0
+fi
+trap 'flock -u 200 2>/dev/null || true' EXIT
+
 BACKEND_DIR="${RMI_BACKEND_DIR:-/srv/work/repos/rmi-backend}"
 RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
 PYTHON="${RMI_BACKEND_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
