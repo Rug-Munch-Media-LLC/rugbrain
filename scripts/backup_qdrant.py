@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Qdrant snapshot backup to Cloudflare R2 (S3-compatible).
+"""Qdrant snapshot backup to Backblaze B2.
 
-Creates API snapshots of all RAG collections, uploads them to R2 for
+Creates API snapshots of all RAG collections, uploads them to B2 for
 off-site durability, and cleans up local temp files.
 
+Migrated from Cloudflare R2 to Backblaze B2 on 2026-07-31.
+
 Credentials (in priority order):
-  1. Environment variables: R2_ACCESS_KEY, R2_SECRET_KEY, R2_ENDPOINT, R2_BUCKET
-  2. ~/.config/rclone/rclone.conf [r2] section
-  3. Hard-coded defaults (for this deployment)
+  1. Environment variables: B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_NAME
+  2. --env-file (defaults to /srv/secrets/b2-permanence.env if present)
+  3. rclone.conf [rugmunch-b2] section (account/key)
+
+B2 uses the native B2 API (via b2sdk) — the S3-compatible API is not
+enabled for the master application key.
 
 Schedule: 30 3 * * * (daily 3:30am UTC, after DB backups at 2am)
-Cron: cd /opt/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
+Cron: cd /srv/work/repos/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
 """
 
 import argparse
@@ -22,17 +27,22 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import boto3
 import requests
-from botocore.config import Config as BotoConfig
 from qdrant_client import QdrantClient
 
+# Allow importing the shared B2 helper module (scripts/b2_common.py)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import contextlib
+
+from b2_common import ensure_bucket, get_b2_api, list_object_keys, load_env_file, upload_file
+
 # ---------------------------------------------------------------------------
-# Defaults — override via env or rclone.conf
+# Defaults — override via env or --env-file
 # ---------------------------------------------------------------------------
-R2_ENDPOINT_DEFAULT = "https://8f9bd9165c1250b426c66dc1967deefd.r2.cloudflarestorage.com"
-R2_BUCKET_DEFAULT = "rag-backup"
-R2_KEY_PREFIX = "qdrant-snapshots"
+B2_BUCKET_DEFAULT = "rmi-rag-permanence"
+B2_KEY_PREFIX = "qdrant-snapshots"
+ENV_FILE_DEFAULT = "/srv/secrets/b2-permanence.env"
 RCLONE_CONF_PATH = os.getenv("RCLONE_CONF", "~/.config/rclone/rclone.conf")
 QDRANT_HOST_DEFAULT = "rmi-qdrant"
 QDRANT_PORT_DEFAULT = 6333
@@ -46,8 +56,8 @@ logger = logging.getLogger("backup_qdrant")
 # ---------------------------------------------------------------------------
 # Credential resolution
 # ---------------------------------------------------------------------------
-def _read_rclone_creds(profile: str = "r2") -> dict:
-    """Read R2 credentials from rclone.conf."""
+def _read_rclone_creds(profile: str = "rugmunch-b2") -> dict:
+    """Read B2 credentials from rclone.conf (account → key ID, key → app key)."""
     path = Path(RCLONE_CONF_PATH)
     if not path.exists():
         return {}
@@ -59,40 +69,44 @@ def _read_rclone_creds(profile: str = "r2") -> dict:
             return {}
         sec = cfg[profile]
         return {
-            "access_key": sec.get("access_key_id", ""),
-            "secret_key": sec.get("secret_access_key", ""),
-            "endpoint": sec.get("endpoint", ""),
+            "key_id": sec.get("account", ""),
+            "app_key": sec.get("key", ""),
         }
     except Exception as exc:
         logger.warning("Failed to read rclone.conf: %s", exc)
         return {}
 
 
-def _resolve_r2_config() -> dict:
-    """Resolve R2 connection config from env → rclone.conf → defaults."""
+def _resolve_b2_config() -> dict:
+    """Resolve B2 connection config from env → env-file → rclone.conf."""
     # 1. Env overrides
     config = {
-        "access_key": os.environ.get("R2_ACCESS_KEY") or "",
-        "secret_key": os.environ.get("R2_SECRET_KEY") or "",
-        "endpoint": os.environ.get("R2_ENDPOINT") or "",
-        "bucket": os.environ.get("R2_BUCKET") or "",
+        "key_id": os.environ.get("B2_APPLICATION_KEY_ID") or "",
+        "app_key": os.environ.get("B2_APPLICATION_KEY") or "",
+        "bucket": os.environ.get("B2_BUCKET_NAME") or "",
     }
 
-    # 2. Fill missing from rclone.conf
-    if not config["access_key"] or not config["secret_key"]:
-        rclone = _read_rclone_creds()
-        if not config["access_key"]:
-            config["access_key"] = rclone.get("access_key", "")
-        if not config["secret_key"]:
-            config["secret_key"] = rclone.get("secret_key", "")
-        if not config["endpoint"]:
-            config["endpoint"] = rclone.get("endpoint", "")
+    # 2. Fill missing from env file (deployed secrets)
+    if not config["key_id"] or not config["app_key"]:
+        env_path = Path(ENV_FILE_DEFAULT)
+        if env_path.exists():
+            try:
+                load_env_file(str(env_path))
+                config["key_id"] = config["key_id"] or os.environ.get("B2_APPLICATION_KEY_ID", "")
+                config["app_key"] = config["app_key"] or os.environ.get("B2_APPLICATION_KEY", "")
+                config["bucket"] = config["bucket"] or os.environ.get("B2_BUCKET_NAME", "")
+            except Exception as exc:
+                logger.warning("Failed to load env file %s: %s", env_path, exc)
 
-    # 3. Fallback to hard-coded defaults
-    if not config["endpoint"]:
-        config["endpoint"] = R2_ENDPOINT_DEFAULT
+    # 3. Fill missing from rclone.conf [rugmunch-b2]
+    if not config["key_id"] or not config["app_key"]:
+        rclone = _read_rclone_creds()
+        config["key_id"] = config["key_id"] or rclone.get("key_id", "")
+        config["app_key"] = config["app_key"] or rclone.get("app_key", "")
+
+    # 4. Fallback to default bucket
     if not config["bucket"]:
-        config["bucket"] = R2_BUCKET_DEFAULT
+        config["bucket"] = B2_BUCKET_DEFAULT
 
     return config
 
@@ -153,7 +167,7 @@ def cleanup_local_snapshots(dest_dir: str, keep: int = LOCAL_RETENTION_COUNT) ->
         coll_name = parts[0] if len(parts) == 2 else f.stem
         by_collection[coll_name].append(f)
 
-    for coll, files in by_collection.items():
+    for _coll, files in by_collection.items():
         files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for old in files[keep:]:
             try:
@@ -164,38 +178,48 @@ def cleanup_local_snapshots(dest_dir: str, keep: int = LOCAL_RETENTION_COUNT) ->
 
 
 # ---------------------------------------------------------------------------
-# S3 upload (R2)
+# B2 upload
 # ---------------------------------------------------------------------------
-def upload_to_r2(
+def upload_to_b2(
     local_path: str,
-    r2_config: dict,
+    b2_config: dict,
     bucket: str,
     key_prefix: str,
 ) -> bool:
-    """Upload a local file to R2 under ``{key_prefix}/{basename}``.
+    """Upload a local file to B2 under ``{key_prefix}/{basename}``.
 
     Returns ``True`` on success.
     """
     try:
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=r2_config["endpoint"],
-            region_name="auto",
-            aws_access_key_id=r2_config["access_key"],
-            aws_secret_access_key=r2_config["secret_key"],
-            config=BotoConfig(
-                s3={"addressing_style": "path"},
-                retries={"max_attempts": 3, "mode": "adaptive"},
-            ),
-        )
+        api = get_b2_api()
+        ensure_bucket(api, bucket)
         key = f"{key_prefix}/{os.path.basename(local_path)}"
-        s3.upload_file(local_path, bucket, key)
+        upload_file(api, bucket, Path(local_path), key)
         size = os.path.getsize(local_path)
         logger.info("Upload OK    bucket=%s key=%s size=%s", bucket, key, _fmt_size(size))
         return True
     except Exception as exc:
         logger.error("Upload FAILED  bucket=%s key=%s  error=%s", bucket, key, exc)
         return False
+
+
+def test_b2(b2_config: dict) -> int:
+    """Connect to B2 and list bucket contents (no Qdrant required)."""
+    try:
+        api = get_b2_api()
+        ensure_bucket(api, b2_config["bucket"])
+        keys = list_object_keys(api, b2_config["bucket"])
+        logger.info("B2 connection OK  bucket=%s objects=%d", b2_config["bucket"], len(keys))
+        for k in keys[:100]:
+            print("  " + k)
+        if len(keys) > 100:
+            print(f"  ... and {len(keys) - 100} more")
+        print(f"B2 OK: bucket={b2_config['bucket']} objects={len(keys)}")
+        return 0
+    except Exception as exc:
+        logger.error("B2 connection FAILED: %s", exc)
+        print(f"B2 FAILED: {exc}")
+        return 1
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +238,7 @@ def _fmt_size(bytes_: int) -> str:
 # ---------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Qdrant snapshot backup to Cloudflare R2",
+        description="Qdrant snapshot backup to Backblaze B2",
     )
     p.add_argument(
         "--qdrant-host",
@@ -230,12 +254,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--bucket",
         default="",
-        help="R2 bucket name (overrides env/rclone)",
+        help="B2 bucket name (overrides env/env-file)",
     )
     p.add_argument(
         "--key-prefix",
-        default=R2_KEY_PREFIX,
-        help=f"Key prefix in R2 bucket (default: {R2_KEY_PREFIX})",
+        default=B2_KEY_PREFIX,
+        help=f"Key prefix in B2 bucket (default: {B2_KEY_PREFIX})",
     )
     p.add_argument(
         "--dest-dir",
@@ -247,6 +271,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=LOCAL_RETENTION_COUNT,
         help=f"Number of recent local snapshots to keep per collection (default: {LOCAL_RETENTION_COUNT})",
+    )
+    p.add_argument(
+        "--env-file",
+        default="",
+        help=f"Load KEY=value env file with B2 credentials (default: {ENV_FILE_DEFAULT} if present)",
+    )
+    p.add_argument(
+        "--test",
+        action="store_true",
+        help="Connect to B2 and list bucket contents, then exit (no Qdrant needed)",
     )
     p.add_argument(
         "--dry-run",
@@ -285,13 +319,42 @@ def main() -> int:
         format="[%(asctime)s] %(levelname)-7s %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%SZ",
     )
-    # Quiet the noisy boto3/qdrant loggers
-    logging.getLogger("boto3").setLevel(logging.WARNING)
-    logging.getLogger("botocore").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    # Quiet the noisy b2sdk/qdrant loggers
+    logging.getLogger("b2sdk").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("qdrant_client").setLevel(logging.WARNING)
 
+    # ------------------------------------------------------------------
+    # Load env file (credentials) if explicitly requested or default exists
+    # ------------------------------------------------------------------
+    env_path = args.env_file or ENV_FILE_DEFAULT
+    if env_path and Path(env_path).exists():
+        try:
+            load_env_file(env_path)
+            logger.info("Loaded env file: %s", env_path)
+        except Exception as exc:
+            logger.warning("Failed to load env file %s: %s", env_path, exc)
+
     logger.info("=== Qdrant backup started ===")
+
+    # ------------------------------------------------------------------
+    # Resolve B2 config
+    # ------------------------------------------------------------------
+    b2_config = _resolve_b2_config()
+    bucket = args.bucket or b2_config["bucket"]
+    if not bucket:
+        logger.critical("No B2 bucket configured — set B2_BUCKET_NAME env or --bucket")
+        return 1
+
+    logger.info("B2 bucket:   %s", bucket)
+    logger.info("Key prefix:  %s", args.key_prefix)
+
+    # ------------------------------------------------------------------
+    # B2 connectivity test (--test) — no Qdrant required
+    # ------------------------------------------------------------------
+    if args.test:
+        return test_b2(b2_config)
+
     logger.info("Host: %s:%s", args.qdrant_host, args.qdrant_port)
 
     # ------------------------------------------------------------------
@@ -327,19 +390,6 @@ def main() -> int:
     if not collections:
         logger.warning("No collections to back up")
         return 0
-
-    # ------------------------------------------------------------------
-    # Resolve R2 config
-    # ------------------------------------------------------------------
-    r2_config = _resolve_r2_config()
-    bucket = args.bucket or r2_config["bucket"]
-    if not bucket:
-        logger.critical("No R2 bucket configured — set R2_BUCKET env or --bucket")
-        return 1
-
-    logger.info("R2 endpoint: %s", r2_config["endpoint"])
-    logger.info("R2 bucket:   %s", bucket)
-    logger.info("Key prefix:  %s", args.key_prefix)
 
     # ------------------------------------------------------------------
     # Destination directory
@@ -381,8 +431,8 @@ def main() -> int:
             fail_count += 1
             continue
 
-        # 2. Upload to R2
-        ok = upload_to_r2(local_path, r2_config, bucket, args.key_prefix)
+        # 2. Upload to B2
+        ok = upload_to_b2(local_path, b2_config, bucket, args.key_prefix)
         if ok:
             total_bytes += os.path.getsize(local_path)
             success_count += 1
@@ -401,10 +451,8 @@ def main() -> int:
     if not args.dest_dir:
         import shutil
 
-        try:
+        with contextlib.suppress(Exception):
             shutil.rmtree(dest_dir, ignore_errors=True)
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------
     # Summary

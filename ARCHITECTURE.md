@@ -326,11 +326,11 @@ wallet_profile 128/0% (fixed), social_post 256/5% (fixed), market_data 300/10%
 |-------|-------|------|-----------|
 | **L1 — process/Redis hot** | in-process + Redis | embedding cache `emb:{head}:{hash}`, scam-pattern cache `rag:pattern_cache:*`, semantic query cache | 24 h / 30 d / per-entry |
 | **L2 — Redis doc store** | Redis | `rag:{collection}:{doc_id}` (JSON) + index sets `rag:idx:{collection}` | per-collection TTL: permanent for `scam_patterns`, `contract_audits`, `transaction_patterns`, `forensic_reports`; 365 d for `wallet_profiles`, `known_scams`, `market_intel`; 90 d `token_analysis`; 30 d `news_articles`, `general` |
-| **L3 — R2 permanence** | Cloudflare R2 bucket `rag-backup` | nightly snapshots `rag_snapshots/{collection}/{ts}_chunkN.json` (5 MB chunks) + `latest.json` pointer; Qdrant API snapshots → `qdrant-snapshots/` | nightly; local 7-day cache (`/data/rag-storage`); opt-in HF mirror |
+| **L3 — B2 permanence** | Backblaze B2 bucket `rmi-rag-permanence` | nightly snapshots `rag_snapshots/{collection}/{ts}_chunkN.json` (5 MB chunks) + `latest.json` pointer; Qdrant API snapshots → `qdrant-snapshots/` | nightly; local 7-day cache (`/data/rag-storage`); opt-in HF mirror |
 
-> **Note:** L3 targets **Cloudflare R2** (not B2). The fleet's broader
-> backup tiering (R2/B2/HF) is handled by fleet-infra; the RAG-specific
-> permanence layer is R2.
+> **Note:** L3 targets **Backblaze B2** (migrated from Cloudflare R2 on
+> 2026-07-31). The fleet's broader backup tiering (B2/HF) is handled by
+> fleet-infra; the RAG-specific permanence layer is B2.
 
 ---
 
@@ -418,13 +418,13 @@ Cross-chain identity (`src/app/cross_chain.py`) and investigation narratives
 (`src/app/investigation_narratives.py`) consume wallet/entity data; both are
 part of the `src/app/` restore (WIP).
 
-### 5.4 Backup & permanence (nightly → R2)
+### 5.4 Backup & permanence (nightly → B2)
 
 ```
 Qdrant collections                        Redis-backed collections
   │ backup_qdrant.py (3:30 AM UTC cron)     │ permanence.snapshot_all()
   ▼                                         ▼
-Qdrant API snapshot  → R2 rag-backup      JSON chunks (≤5 MB) → R2
+Qdrant API snapshot  → B2 rmi-rag-permanence  JSON chunks (≤5 MB) → B2
   qdrant-snapshots/{coll}_{date}.snapshot    rag_snapshots/{coll}/{ts}_chunkN.json
                                             + latest.json pointer
                                             + local 7-day cache + opt-in HF mirror
@@ -434,9 +434,8 @@ Recovery:
   Redis:  permanence.restore_all() — reads latest.json, rehydrates Redis
 ```
 
-**Current state:** the permanence path (Redis→R2) is implemented; the Qdrant
-snapshot backup is **failing nightly** (`Credential access key has length 0`
-— missing S3/R2 credentials; see §7 P0).
+**Current state:** the permanence path (Redis→B2) is implemented; the Qdrant
+snapshot backup now uploads to B2 (`rmi-rag-permanence`) via b2sdk.
 
 ---
 
@@ -458,18 +457,17 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 `ingested_count: 0` (either fix or remove).
 
 ### 6.2 Backup
-- Redis-backed collections → R2 `rag_snapshots/` nightly (`permanence.nightly_cycle`).
-- Qdrant API snapshots → R2 `qdrant-snapshots/` nightly via cron
-  (`backup_qdrant.py`; local retention 3/collection). **Currently failing** —
-  credentials not configured.
-- 4-tier fleet backup (local → R2 → B2 → HF) is handled outside this repo by
+- Redis-backed collections → B2 `rag_snapshots/` nightly (`permanence.nightly_cycle`).
+- Qdrant API snapshots → B2 `qdrant-snapshots/` nightly via cron
+  (`backup_qdrant.py`; local retention 3/collection).
+- Fleet backup (local → B2 encrypted → HF) is handled outside this repo by
   fleet-infra cron jobs.
 
 ### 6.3 Recovery
 1. Restore Redis collections: run `permanence.restore_all()` (needs
-   `R2_API_TOKEN`); rehydrates `rag:{collection}:{id}` + index sets from
-   `latest.json` pointers.
-2. Restore Qdrant: download `qdrant-snapshots/{coll}_{date}.snapshot` from R2,
+   `B2_APPLICATION_KEY_ID`/`B2_APPLICATION_KEY`); rehydrates `rag:{collection}:{id}`
+   + index sets from `latest.json` pointers.
+2. Restore Qdrant: download `qdrant-snapshots/{coll}_{date}.snapshot` from B2,
    upload via Qdrant API (`/collections/{coll}/snapshots/upload`).
 3. Re-seed empty collections: `docker compose run --rm rag-ingest`
    (`seed_threat_intel.py`, idempotent).
@@ -501,7 +499,8 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    'app'`; the `src/app/` package (confidence, cross_chain,
    deployer_reputation, investigation_narratives) is being restored into the
    repo — packaging/PYTHONPATH must be fixed.
-5. **Qdrant nightly backup failing** — missing R2 S3 credentials.
+5. ~~Qdrant nightly backup failing (missing R2 credentials)~~ — fixed by the
+   R2→B2 migration (2026-07-31); snapshots now upload to B2.
 6. **Embedder fallback latency** — bge-m3 (1024-dim) is primary; nomic-embed-text
    (768-dim) is the backend fallback. Cross-model dimension mismatch is a real
    risk if a single collection mixes dims — collections are created per
@@ -523,7 +522,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
       `scams`) at 1024-dim
 - [ ] Wire rmi-backend scanner → Redis publish so subscriber/poller
       `ingested_count` moves
-- [ ] Fix Qdrant nightly backup (R2 credentials); verify snapshot restore
+- [x] Fix Qdrant nightly backup (R2→B2 migration); verify snapshot restore
 - [ ] Restore `src/app/` packaging → unblock `/investigate` + `/confidence`
 - [ ] Consolidate stores: one canonical collection set across
       rmi-backend and rmi-rag; retire stale seed paths
@@ -560,7 +559,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 | `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
 | `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |
 | `RMI_RAG_API_KEY` | (unset → open) | X-API-Key auth for the rmi-rag API |
-| `R2_API_TOKEN` / `R2_BUCKET` | — / `rag-backup` | R2 permanence credentials |
+| `B2_APPLICATION_KEY_ID` / `B2_APPLICATION_KEY` / `B2_BUCKET_NAME` | — / `rmi-rag-permanence` | B2 permanence credentials |
 | `RAG_HF_MIRROR` / `RAG_HF_REPO` | `false` | Opt-in HuggingFace mirror |
 
 ---

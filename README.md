@@ -27,7 +27,7 @@ commands, and the frontend's AI chat / wallet forensics.
   fused with Reciprocal Rank Fusion; optional MMR dedup + cross-encoder rerank.
 - **Ingestion:** scanner → Redis queues → subscriber/poller → embed → Qdrant;
   nightly news/social ingest; idempotent seed scripts.
-- **Permanence:** nightly snapshots to Cloudflare R2.
+- **Permanence:** nightly snapshots to Backblaze B2 (`rmi-rag-permanence`).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full document (components,
 API reference, data flows, operations, roadmap).
@@ -38,7 +38,7 @@ API reference, data flows, operations, roadmap).
 - Embedding model configs (bge-m3 primary) and chunking strategies
 - Ingestion scripts (threats, scams, news, wallet labels)
 - Three-pillar retrieval engine, RRF fusion, scam-check API
-- R2 permanence (backup/restore)
+- B2 permanence (backup/restore)
 
 ## Quick Start
 
@@ -80,7 +80,7 @@ Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
 | Collections in Qdrant | 3 exist (`threat_intel`, `rmi_agent_memory`, `rmi_community`), 0 points — seeding in progress |
 | Scanner → RAG ingestion | Wired (subscriber + poller), `ingested_count: 0` — backend not publishing yet |
 | `/investigate`, `/confidence` | WIP — 500 until `src/app/` packaging is restored |
-| Qdrant nightly backup → R2 | ❌ failing (missing R2 S3 credentials) |
+| Qdrant nightly backup → B2 | ✅ uploading to `rmi-rag-permanence` (b2sdk) |
 | Tests | 1 failing, coverage ~10% — see TODO.md |
 
 Source of truth for gaps: [TODO.md](TODO.md) (audited 2026-07-31).

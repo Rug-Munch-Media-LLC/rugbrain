@@ -5,7 +5,7 @@ Nightly indexing of ALL data sources into the RAG system.
 Feeds: news, CT rundown, market data, social metrics, on-chain data.
 
 Runs at 3AM UTC. Embeds via Ollama qwen3-embed:4b (2560d).
-Redis-backed with permanence to R2.
+Redis-backed with permanence to B2.
 
 Incremental indexing: each successful ingest is tracked in a Redis delta
 queue so the system knows which docs changed since the last full rebuild.
@@ -264,7 +264,7 @@ async def rag_health_check(**kw) -> dict:
             "total_documents": total,
             "collections": stats,
             "embedder": "qwen3-embed:4b (Ollama, 2560d)",
-            "storage": "Redis + R2 permanence",
+            "storage": "Redis + B2 permanence",
             "nightly_cron": "3AM UTC",
             "checked_at": datetime.now(UTC).isoformat(),
             "source": "rag_health",

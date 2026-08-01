@@ -17,6 +17,7 @@ module.exports = {
 				"build",
 				"revert",
 				"security",
+				"migrate",
 			],
 		],
 	},

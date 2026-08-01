@@ -1,14 +1,15 @@
 """
-RAG Permanence v2 - Cloudflare R2 cold storage via REST API.
-Hot (Redis) → Warm (local 7-day cache) → Cold (R2 permanent + HF mirror).
+RAG Permanence v2 - Backblaze B2 cold storage (native B2 API via b2sdk).
+Hot (Redis) → Warm (local 7-day cache) → Cold (B2 permanent + HF mirror).
 
-R2 free tier: 10GB storage, 10M Class A ops/month, zero egress.
-Uses CF REST API with Bearer token - no S3 credentials needed.
+Migrated from Cloudflare R2 to Backblaze B2 on 2026-07-31.
+Uses B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY credentials (b2sdk).
 HF mirror: opt-in dual-write to HuggingFace Storage Buckets via hf CLI.
 """
 
 import asyncio
 import contextlib
+import io
 import json
 import logging
 import os
@@ -17,17 +18,14 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
-
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════
 # CONFIG
 # ═══════════════════════════════════════════════════════════════
-R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID", "8f9bd9165c1250b426c66dc1967deefd")
-R2_BUCKET = os.getenv("R2_BUCKET", "rag-backup")
-R2_API_TOKEN = os.getenv("R2_API_TOKEN", "")
-R2_BASE = f"https://api.cloudflare.com/client/v4/accounts/{R2_ACCOUNT_ID}/r2/buckets/{R2_BUCKET}"
+B2_KEY_ID = os.getenv("B2_APPLICATION_KEY_ID", "")
+B2_APP_KEY = os.getenv("B2_APPLICATION_KEY", "")
+B2_BUCKET = os.getenv("B2_BUCKET_NAME", "rmi-rag-permanence")
 
 RAG_HF_MIRROR = os.getenv("RAG_HF_MIRROR", "false").lower() in ("true", "1", "yes")
 HF_REPO = os.getenv("RAG_HF_REPO", "your-username/your-repo")
@@ -39,83 +37,113 @@ EMBEDDING_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "v1")
 
 LOCAL_CACHE.mkdir(parents=True, exist_ok=True)
 
+# Lazy b2sdk client (authorized on first use)
+_b2_api = None
 
-def _headers():
-    return {"Authorization": f"Bearer {R2_API_TOKEN}", "Content-Type": "application/json"}
 
-
-# ═══════════════════════════════════════════════════════════════
-# R2 REST API OPERATIONS
-# ═══════════════════════════════════════════════════════════════
-async def _r2_put(key: str, data: bytes, content_type: str = "application/json") -> bool:
-    """Upload an object to R2 via REST API."""
-    if not R2_API_TOKEN:
-        logger.error("R2_API_TOKEN not set")
-        return False
-    url = f"{R2_BASE}/objects/{key}"
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            resp = await client.put(
-                url,
-                content=data,
-                headers={"Authorization": f"Bearer {R2_API_TOKEN}", "Content-Type": content_type},
+def _get_b2_api():
+    """Authorize a b2sdk client from B2_APPLICATION_KEY_ID/B2_APPLICATION_KEY."""
+    global _b2_api
+    if _b2_api is None:
+        if not B2_KEY_ID or not B2_APP_KEY:
+            raise RuntimeError(
+                "B2 credentials missing — set B2_APPLICATION_KEY_ID and B2_APPLICATION_KEY"
             )
-            if resp.status_code == 200:
-                return True
-            logger.error("R2 PUT %s: %s %s", key, resp.status_code, resp.text[:200])
-            return False
-        except Exception as e:
-            logger.error("R2 PUT %s: %s", key, e)
-            return False
+        from b2sdk.v2 import B2Api, InMemoryAccountInfo
+
+        api = B2Api(InMemoryAccountInfo())
+        api.authorize_account("production", B2_KEY_ID, B2_APP_KEY)
+        _b2_api = api
+    return _b2_api
 
 
-async def _r2_get(key: str) -> bytes | None:
-    """Download an object from R2 via REST API."""
-    if not R2_API_TOKEN:
-        return None
-    url = f"{R2_BASE}/objects/{key}"
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            resp = await client.get(url, headers=_headers())
-            if resp.status_code == 200:
-                return resp.content
-            return None
-        except Exception as e:
-            logger.error("R2 GET %s: %s", key, e)
-            return None
+def _b2_bucket():
+    """Return the B2 bucket handle for *B2_BUCKET* (sync helper)."""
+    return _get_b2_api().get_bucket_by_name(B2_BUCKET)
 
 
-async def _r2_list(prefix: str = "") -> list:
-    """List objects in R2 bucket."""
-    if not R2_API_TOKEN:
-        return []
-    url = f"{R2_BASE}/objects"
-    if prefix:
-        url += f"?prefix={prefix}"
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            resp = await client.get(url, headers=_headers())
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("result", [])
-            return []
-        except Exception as e:
-            logger.error("R2 LIST: %s", e)
-            return []
-
-
-async def _r2_delete(key: str) -> bool:
-    """Delete an object from R2."""
-    if not R2_API_TOKEN:
+# ═══════════════════════════════════════════════════════════════
+# B2 OPERATIONS (native B2 API via b2sdk; sync helpers run in executor)
+# ═══════════════════════════════════════════════════════════════
+def _b2_put_sync(key: str, data: bytes, content_type: str) -> bool:
+    """Upload an object to B2."""
+    try:
+        bucket = _b2_bucket()
+        bucket.upload_bytes(data_bytes=data, file_name=key, content_type=content_type)
+        return True
+    except Exception as e:
+        logger.error("B2 PUT %s: %s", key, e)
         return False
-    url = f"{R2_BASE}/objects/{key}"
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            resp = await client.delete(url, headers=_headers())
-            return resp.status_code in (200, 204, 404)
-        except Exception as e:
-            logger.error("R2 DELETE %s: %s", key, e)
-            return False
+
+
+async def _b2_put(key: str, data: bytes, content_type: str = "application/json") -> bool:
+    """Upload an object to B2."""
+    if not B2_KEY_ID or not B2_APP_KEY:
+        logger.error("B2 credentials not set (B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY)")
+        return False
+    return await asyncio.get_running_loop().run_in_executor(
+        None, _b2_put_sync, key, data, content_type
+    )
+
+
+def _b2_get_sync(key: str) -> bytes | None:
+    """Download an object from B2, returning bytes or None."""
+    try:
+        bucket = _b2_bucket()
+        buf = io.BytesIO()
+        bucket.download_file_by_name(key).save(buf)
+        return buf.getvalue()
+    except Exception as e:
+        logger.error("B2 GET %s: %s", key, e)
+        return None
+
+
+async def _b2_get(key: str) -> bytes | None:
+    """Download an object from B2."""
+    if not B2_KEY_ID or not B2_APP_KEY:
+        return None
+    return await asyncio.get_running_loop().run_in_executor(None, _b2_get_sync, key)
+
+
+def _b2_list_sync(prefix: str = "") -> list:
+    """List objects in the B2 bucket under *prefix*."""
+    try:
+        bucket = _b2_bucket()
+        out = []
+        for version, _folder in bucket.ls(prefix, recursive=True):
+            out.append({"file_name": version.file_name, "size": version.size})
+        return out
+    except Exception as e:
+        logger.error("B2 LIST: %s", e)
+        return []
+
+
+async def _b2_list(prefix: str = "") -> list:
+    """List objects in the B2 bucket."""
+    if not B2_KEY_ID or not B2_APP_KEY:
+        return []
+    return await asyncio.get_running_loop().run_in_executor(None, _b2_list_sync, prefix)
+
+
+def _b2_delete_sync(key: str) -> bool:
+    """Delete an object from B2."""
+    try:
+        bucket = _b2_bucket()
+        for version, _folder in bucket.ls(key, recursive=True):
+            if version.file_name == key:
+                bucket.delete_file_version(version.id_, version.file_name)
+                return True
+        return True  # already absent
+    except Exception as e:
+        logger.error("B2 DELETE %s: %s", key, e)
+        return False
+
+
+async def _b2_delete(key: str) -> bool:
+    """Delete an object from B2."""
+    if not B2_KEY_ID or not B2_APP_KEY:
+        return False
+    return await asyncio.get_running_loop().run_in_executor(None, _b2_delete_sync, key)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -173,7 +201,7 @@ def _hf_put(key: str, data: bytes) -> bool:
 # RAG PERSISTENCE OPERATIONS
 # ═══════════════════════════════════════════════════════════════
 async def snapshot_all():
-    """Snapshot all RAG collections to R2. Returns per-collection status."""
+    """Snapshot all RAG collections to B2. Returns per-collection status."""
     results = {}
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
@@ -212,7 +240,7 @@ async def snapshot_all():
                 except Exception:
                     logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 
-            # Upload in chunks if payload is large (R2 REST limit ~5GB but we chunk at 5MB)
+            # Upload in chunks if payload is large (B2 large-file threshold but we chunk at 5MB)
             MAX_CHUNK_SIZE = 5 * 1024 * 1024  # 5MB per chunk  # noqa: N806 - byte size constant
             all_items = items
             chunk_idx = 0
@@ -245,7 +273,7 @@ async def snapshot_all():
                 ).encode()
 
                 key = f"rag_snapshots/{name}/{ts}_chunk{chunk_idx}.json"
-                ok = await _r2_put(key, payload)
+                ok = await _b2_put(key, payload)
                 total_uploaded += len(chunk_items)
 
                 if RAG_HF_MIRROR:
@@ -276,7 +304,7 @@ async def snapshot_all():
 
             # Save latest pointer (only if at least one chunk succeeded)
             if chunk_idx > 0 or count == 0:
-                await _r2_put(
+                await _b2_put(
                     f"rag_snapshots/{name}/latest.json",
                     json.dumps(
                         {
@@ -331,7 +359,7 @@ async def snapshot_all():
 
 
 async def restore_all():
-    """Restore all RAG collections from latest R2 snapshots."""
+    """Restore all RAG collections from latest B2 snapshots."""
     # Get collections and Redis connection
     try:
         from rmi_rag.search_service import COLLECTIONS, _get_redis
@@ -345,7 +373,7 @@ async def restore_all():
     for name in COLLECTIONS:
         try:
             # Get latest pointer
-            latest_raw = await _r2_get(f"rag_snapshots/{name}/latest.json")
+            latest_raw = await _b2_get(f"rag_snapshots/{name}/latest.json")
             if not latest_raw:
                 results[name] = {"collection": name, "status": "no_snapshot"}
                 continue
@@ -354,7 +382,7 @@ async def restore_all():
             key = latest["key"]
 
             # Download the snapshot
-            data_raw = await _r2_get(key)
+            data_raw = await _b2_get(key)
             if not data_raw:
                 results[name] = {"collection": name, "status": "download_failed"}
                 continue
@@ -368,7 +396,7 @@ async def restore_all():
             if total_chunks > 1:
                 for ci in range(1, total_chunks):
                     chunk_key = f"rag_snapshots/{name}/{snapshot_ts}_chunk{ci}.json"
-                    chunk_raw = await _r2_get(chunk_key)
+                    chunk_raw = await _b2_get(chunk_key)
                     if chunk_raw:
                         chunk_data = json.loads(chunk_raw)
                         items.extend(chunk_data.get("items", []))
@@ -401,7 +429,7 @@ async def restore_all():
 
 
 async def nightly_cycle():
-    """Full nightly cycle: snapshot to R2, clean local cache."""
+    """Full nightly cycle: snapshot to B2, clean local cache."""
     snap = await snapshot_all()
     ok = sum(1 for v in snap.values() if v.get("status") in ("uploaded", "empty"))
     total = len(snap)
@@ -429,8 +457,8 @@ async def nightly_cycle():
     }
 
 
-async def r2_stats():
-    """Get R2 usage + local cache stats."""
+async def b2_stats():
+    """Get B2 usage + local cache stats."""
     # Get collections and Redis connection
     try:
         from rmi_rag.search_service import COLLECTIONS, _get_redis
@@ -441,8 +469,8 @@ async def r2_stats():
         COLLECTIONS = []  # noqa: N806 - fallback assignment, uppercase intentional for visibility
         has_redis = False
 
-    # R2 bucket stats
-    objects = await _r2_list("rag_snapshots/")
+    # B2 bucket stats
+    objects = await _b2_list("rag_snapshots/")
     total_size = 0
     snapshot_count = 0
     for obj in objects:
@@ -474,13 +502,12 @@ async def r2_stats():
                 coll_info[name] = 0
 
     return {
-        "r2": {
-            "bucket": R2_BUCKET,
-            "endpoint": R2_BASE,
+        "b2": {
+            "bucket": B2_BUCKET,
             "snapshot_count": snapshot_count,
             "total_size_bytes": total_size,
             "total_size_mb": round(total_size / 1024 / 1024, 2),
-            "has_token": bool(R2_API_TOKEN),
+            "has_credentials": bool(B2_KEY_ID and B2_APP_KEY),
         },
         "local": {
             "path": str(LOCAL_CACHE),

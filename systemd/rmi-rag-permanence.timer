@@ -1,0 +1,31 @@
+# rmi-rag-permanence.timer — Nightly RAG permanence sync to B2
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-permanence.timer
+# Deploy: /etc/systemd/system/rmi-rag-permanence.timer
+#
+# Triggers rmi-rag-permanence.service nightly at 03:00 UTC with up to
+# 5 minutes of jitter so the nightly B2 upload does not collide with
+# other 03:00 backups. Persistent=true catches up after downtime.
+#
+# Deploy:
+#   cp systemd/rmi-rag-permanence.timer /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-rag-permanence.timer
+#
+# See next run:
+#   systemctl list-timers rmi-rag-permanence.timer
+#
+# Manual trigger:
+#   systemctl start rmi-rag-permanence.service
+
+[Unit]
+Description=RMI RAG B2 Permanence — Nightly Qdrant Snapshot to B2
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Requires=rmi-rag-permanence.service
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

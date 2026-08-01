@@ -1,0 +1,54 @@
+# rmi-rag-permanence.service — Nightly Qdrant Snapshot → B2
+# Source: /srv/work/repos/rmi-rag/systemd/rmi-rag-permanence.service
+# Deploy: /etc/systemd/system/rmi-rag-permanence.service
+#
+# Runs the B2 permanence sync (scripts/b2_permanence.py) every night at
+# 03:00 UTC via rmi-rag-permanence.timer. Exports every Qdrant
+# collection as zstd-compressed, AES-256-GCM-encrypted NDJSON and uploads
+# it to the rmi-rag-permanence B2 bucket under snapshots/YYYY-MM-DD/.
+#
+# Data lifecycle: Hot (Qdrant, 90 days) → Cold (B2, forever). Pruning of
+# documents older than 90 days runs AFTER a successful upload — see
+# src/rmi_rag/qdrant_store.py::prune_old_documents.
+#
+# Deploy:
+#   cp systemd/rmi-rag-permanence.service /etc/systemd/system/
+#   cp systemd/rmi-rag-permanence.timer   /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rmi-rag-permanence.timer
+#
+# Manual run:
+#   systemctl start rmi-rag-permanence.service
+#
+# Logs:
+#   /var/log/rmi-rag-permanence.log
+#
+# Secrets: /srv/secrets/b2-permanence.env (B2_APPLICATION_KEY_ID,
+# B2_APPLICATION_KEY, B2_BUCKET_NAME, B2_ENCRYPTION_KEY — populated from
+# gopass rmi/infra/b2-*; never committed to git).
+
+[Unit]
+Description=RMI RAG B2 Permanence — Nightly Qdrant Snapshot to B2
+Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+After=network-online.target rmi-rag.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rmi-rag
+EnvironmentFile=/srv/secrets/b2-permanence.env
+ExecStart=/usr/bin/python3 /srv/work/repos/rmi-rag/scripts/b2_permanence.py
+StandardOutput=append:/var/log/rmi-rag-permanence.log
+StandardError=append:/var/log/rmi-rag-permanence.log
+TimeoutStartSec=3600
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
