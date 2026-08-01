@@ -22,6 +22,7 @@ from rmi_rag.pattern_extractor import extract_pattern_from_url
 from rmi_rag.qdrant_store import get_qdrant_store
 from rmi_rag.query_rewriter import rewrite_query
 from rmi_rag.realtime_alerts import AlertDispatcher, WatchlistManager
+from rmi_rag.reranker import Reranker, get_reranker
 from rmi_rag.search_service import search_multi_collection, search_similar, three_pillar_search
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "AlertDispatcher",
     "DeltaTracker",
     "EmbeddingTrainingData",
+    "Reranker",
     "WatchlistManager",
     "current_backend",
     "endpoints",
@@ -41,6 +43,7 @@ __all__ = [
     "get_fine_tuner",
     "get_parent_retriever",
     "get_qdrant_store",
+    "get_reranker",
     "rerank",
     "rewrite_query",
     "scam_check_router",

@@ -32,6 +32,16 @@ embed_latency = Histogram(
     "Embedding latency",
 )
 
+# ── Rerank (cross-encoder) ─────────────────────────────────────────
+rerank_requests = Counter(
+    "rag_rerank_total",
+    "Rerank requests",
+)
+rerank_latency = Histogram(
+    "rag_rerank_seconds",
+    "Rerank latency",
+)
+
 # ── Ingest ──────────────────────────────────────────────────────────
 ingest_total = Counter(
     "rag_ingest_total",

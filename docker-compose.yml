@@ -66,6 +66,9 @@ services:
       - .env.rag
     networks:
       - rmi_network
+    volumes:
+      # Shared HF cache: bge-reranker-v2-m3 weights persist across restarts
+      - /root/.cache/huggingface:/root/.cache/huggingface:ro
     environment:
       - QDRANT_URL=http://rmi-qdrant:6333
       - QDRANT_HOST=rmi-qdrant
@@ -79,6 +82,9 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - HF_HOME=/root/.cache/huggingface
+      - RERANK_MODEL=bge-reranker-v2-m3
+      - RERANK_MODEL_NAME=BAAI/bge-reranker-v2-m3
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8012/ready'); exit(0 if r.status_code == 200 else 1)"]
       interval: 30s

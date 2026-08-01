@@ -436,27 +436,52 @@ async def three_pillar_search(
             r["similarity"] = r.get("rrf_score", 0.0)
         pre_rerank = len(fused)
 
-        # Stage 1: Ollama qwen3-embed:4b cosine approximation
+        # Stage 1: BGE cross-encoder (bge-reranker-v2-m3) — true cross-encoder
         try:
-            from rmi_rag.cross_encoder import (
-                get_reranker as _get_ollama_reranker,  # external dependency
+            from rmi_rag.reranker import (
+                get_reranker as _get_bge_reranker,  # external dependency
             )
 
-            ollama_reranker = await _get_ollama_reranker()
-            fused = await ollama_reranker.rerank(query, fused, top_k=limit * 3)
-            reranker_applied = True
-            reranker_method = "ollama-cosine"
-            logger.info(
-                "Cross-encoder (ollama) reranked: %d → %d results",
-                pre_rerank,
-                len(fused),
-            )
+            reranker = await _get_bge_reranker()
+            reranked = await reranker.rerank(query, fused, top_k=limit * 3)
+            if reranked and reranked[0].get("rerank_method", "none") != "none":
+                fused = reranked
+                reranker_applied = True
+                reranker_method = reranked[0].get("rerank_method", "cross-encoder")
+                logger.info(
+                    "Cross-encoder (bge-reranker-v2-m3) reranked: %d → %d results",
+                    pre_rerank,
+                    len(fused),
+                )
+            else:
+                logger.debug("Reranker backend unavailable — skipping cross-encoder stage")
         except ImportError:
-            logger.debug("app.rag.cross_encoder not available")
+            logger.debug("rmi_rag.reranker not available")
         except Exception as e:
-            logger.debug("Ollama reranker failed (non-critical): %s", e)
+            logger.debug("BGE cross-encoder rerank failed (non-critical): %s", e)
 
-        # Stage 2: sentence-transformers CrossEncoder fallback
+        # Stage 2: Ollama bge-m3 cosine approximation fallback
+        if not reranker_applied:
+            try:
+                from rmi_rag.cross_encoder import (
+                    get_reranker as _get_ollama_reranker,  # external dependency
+                )
+
+                ollama_reranker = await _get_ollama_reranker()
+                fused = await ollama_reranker.rerank(query, fused, top_k=limit * 3)
+                reranker_applied = True
+                reranker_method = "ollama-cosine"
+                logger.info(
+                    "Cross-encoder (ollama) reranked: %d → %d results",
+                    pre_rerank,
+                    len(fused),
+                )
+            except ImportError:
+                logger.debug("app.rag.cross_encoder not available")
+            except Exception as e:
+                logger.debug("Ollama reranker failed (non-critical): %s", e)
+
+        # Stage 3: sentence-transformers CrossEncoder fallback
         if not reranker_applied:
             try:
                 from app.cross_encoder_reranker import get_reranker  # external dependency

@@ -260,6 +260,10 @@ async def search_threat_intel(
     ),
     limit: int = Query(default=10, ge=1, le=100),
     collection: str = Query(default="threat_intel", description="Qdrant collection to search"),
+    rerank: bool = Query(
+        default=False,
+        description="Rerank top-20 candidates with the bge-reranker-v2-m3 cross-encoder",
+    ),
 ) -> dict:
     """
     Semantic search across scanner findings ingested into Qdrant.
@@ -267,9 +271,14 @@ async def search_threat_intel(
     Queries the ``threat_intel`` collection (populated in real-time by the
     scanner subscriber) for tokens that match the query by semantic similarity.
 
+    When ``rerank=true``, the top-20 candidates from vector search are scored
+    by the bge-reranker-v2-m3 cross-encoder and re-sorted before truncating
+    to ``limit``. If the reranker backend is unavailable, results fall back
+    to the original vector ranking (search never breaks).
+
     Example::
 
-        curl "http://localhost:8012/api/v1/search?q=0xdead...&limit=5"
+        curl "http://localhost:8012/api/v1/search?q=0xdead...&limit=5&rerank=true"
     """
     from rmi_rag.embeddings import get_embedding
     from rmi_rag.qdrant_store import QdrantVectorStore
@@ -286,18 +295,36 @@ async def search_threat_intel(
         ) from e
 
     store = QdrantVectorStore()
+    candidate_limit = min(max(limit * 4, 20), 100) if rerank else limit
     results = await store.search(
         query_embedding=embedding,
         collection=collection,
-        limit=limit,
+        limit=candidate_limit,
         min_similarity=0.4,
     )
+
+    reranker_method = None
+    reranker_applied = False
+    if rerank and results:
+        try:
+            from rmi_rag.reranker import get_reranker
+
+            reranker = await get_reranker()
+            reranked = await reranker.rerank(q, results, top_k=limit)
+            if reranked and reranked[0].get("rerank_method", "none") != "none":
+                results = reranked
+                reranker_applied = True
+                reranker_method = reranked[0].get("rerank_method")
+        except Exception as e:
+            logger.debug("search rerank failed (non-critical): %s", e)
 
     return {
         "results": results,
         "query": q,
         "collection": collection,
         "total": len(results),
+        "reranker_applied": reranker_applied,
+        "reranker_method": reranker_method,
     }
 
 
