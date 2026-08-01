@@ -1,6 +1,6 @@
 # RMI RAG — Consolidation Blueprint (ARCHITECTURE-V2)
 
-**Status:** consolidation blueprint (v2) · supersedes the "two RAGs" status quo · **updated 2026-08-01 (session close): container rebuilt from HEAD, Ollama optimized, stale containers/clones removed**
+**Status:** consolidation blueprint (v2) · supersedes the "two RAGs" status quo · **updated 2026-08-01 (session close): container rebuilt from HEAD, Ollama optimized, stale containers/clones removed; product named RugSense (§0.2)**
 **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rmi-rag`
 **Scope:** design/planning contract + verified as-built record. This file is the contract the implementing agents follow AND the record of what actually shipped. No code was changed to produce the verification notes — they were confirmed against the live system on 2026-08-01.
 
@@ -44,6 +44,22 @@
 **Related systems:**
 - **Lite indexer parquet backup pipeline** (`RugMunchMedia/chain-indexer`): `src/parquet.ts` converts NDJSON → Parquet via DuckDB hourly and syncs to B2 (`b2:rmi-data/parquet/`) with rclone. This is the indexer-side analogue of rmi-rag's parquet permanence — separate repo, same format family, no code coupling. `[verified]`
 
+## 0.2 Product Naming Decision (canonical, 2026-08-01)
+
+**The RAG knowledge engine is named `RugSense`** (repo `RugMunchMedia/rugsense`; tagline **"RugSense — know before you munch"**).
+
+### Decision record
+- **Eliminated — RugProof:** `RugMunchMedia/RugProof` already exists (v1.0.0): a Claude Code smart-contract audit plugin ("Rugproof your code before someone else does"). Name collision with a live security product in the same portfolio — eliminated on evidence.
+- **Chosen — RugSense:** fits the existing Rug+ family (rugmunchbot, rugcharts, rugmaps); covers both capabilities (scam/hack/exploit detection **and** market-awareness news digestion — "sense the rug" + "sense the market"); works as a consumer claim and an open-source selling point; unencumbered (no existing repo/domain in ecosystem).
+- **Runner-up — MunchMind:** brand-mascot play; weaker on category clarity for outsiders.
+
+### Marketing notes
+- Consumer: "RugSense: know before you munch" — protection + market awareness in one line.
+- Enterprise/OSS: a knowledge engine that senses emerging scam patterns before they hit; open source, self-hostable, B2 permanence with SSE-AES256.
+- Family URL pattern: `rugsense` mirrors rugcharts/rugmaps/rugmunchbot.
+
+### Implementation impact
+- Public repo/package rename from `rmi-rag` → `rugsense` is a branding-only exercise; the internal service name `rmi-rag-api` stays (no churn). Product surface (docs, README, marketing) adopts RugSense. Do NOT rename internal modules/containers — branding only.
 ## 0. Target State (one picture)
 
 ```
