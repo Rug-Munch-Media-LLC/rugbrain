@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import uuid
 from typing import Any
 
@@ -89,6 +90,59 @@ async def _probe_qdrant() -> bool:
         return False
 
 
+# ── BM25 sparse embeddings (fastembed) ──────────────────────────────
+
+# Name of the sparse vector in hybrid collections. Qdrant collection
+# configs are immutable, so sparse support is provisioned by creating
+# ``{name}_v2`` collections (see scripts/migrate_to_sparse.py) and
+# pointing the original name at them via an alias.
+SPARSE_VECTOR_NAME = "bm25"
+
+_bm25_embedder: Any = None
+_bm25_embedder_lock = threading.Lock()
+
+
+def _get_bm25_embedder() -> Any | None:
+    """Lazily load the fastembed ``Qdrant/bm25`` sparse embedder.
+
+    Returns None when fastembed is unavailable or the model fails to
+    load so callers can degrade to dense-only behaviour instead of
+    crashing the ingest/search path.
+    """
+    global _bm25_embedder
+    if _bm25_embedder is not None:
+        return _bm25_embedder if _bm25_embedder is not False else None
+    with _bm25_embedder_lock:
+        try:
+            from fastembed import SparseTextEmbedding
+
+            _bm25_embedder = SparseTextEmbedding(model_name="Qdrant/bm25")
+            logger.info("bm25_embedder_loaded model=Qdrant/bm25")
+        except Exception as e:
+            logger.warning("bm25_embedder_unavailable err=%s", e)
+            _bm25_embedder = False
+    return _bm25_embedder if _bm25_embedder is not False else None
+
+
+async def _embed_sparse(text: str) -> tuple[list[int], list[float]] | None:
+    """Compute a BM25 sparse vector ``(indices, values)`` for *text*.
+
+    Returns None when *text* is empty or the BM25 embedder is not
+    available (callers fall back to dense-only vectors).
+    """
+    if not text or not text.strip():
+        return None
+    embedder = _get_bm25_embedder()
+    if embedder is None:
+        return None
+    try:
+        sparse = next(iter(embedder.embed([text])))
+        return (sparse.indices.tolist(), [float(v) for v in sparse.values.tolist()])
+    except Exception as e:
+        logger.warning("bm25_embed_error: %s", e)
+        return None
+
+
 # ── Collection management ─────────────────────────────────────────────
 
 _existing_collections: set[str] = set()
@@ -121,13 +175,18 @@ class QdrantVectorStore:
 
     Methods exposed:
       - search(query_embedding, collection, limit, min_similarity)
-      - hybrid_search(query_text, query_embedding, collection, limit)
+      - hybrid_search(query_text, query_embedding, collection, limit) —
+        dense + BM25 sparse → native Qdrant RRF fusion when the collection
+        carries a ``bm25`` sparse vector, else dense + keyword re-rank
       - insert(doc_id, collection, embedding, content, metadata, source, severity)
     """
 
     def __init__(self, url: str | None = None):
         self._url = (url or QDRANT_URL).rstrip("/")
         self._client: httpx.AsyncClient | None = None
+        # Per-instance cache of whether a collection carries a sparse
+        # vector config (avoids a GET per insert/search in production).
+        self._sparse_cache: dict[str, bool] = {}
 
     @property
     def url(self) -> str:
@@ -139,6 +198,26 @@ class QdrantVectorStore:
             logger.debug("qdrant_client_init url=%s", resolved)
             self._client = httpx.AsyncClient(base_url=resolved, timeout=30.0)
         return self._client
+
+    async def _collection_supports_sparse(self, collection: str, client: httpx.AsyncClient) -> bool:
+        """Return True when *collection* carries a sparse-vector config.
+
+        Results are cached per store instance so callers pay one extra
+        GET per collection per process.
+        """
+        cached = self._sparse_cache.get(collection)
+        if cached is not None:
+            return cached
+        supports = False
+        try:
+            r = await client.get(f"/collections/{collection}")
+            if r.status_code == 200:
+                params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
+                supports = bool(params.get("sparse_vectors"))
+        except Exception as e:
+            logger.debug("qdrant_sparse_probe_failed collection=%s err=%s", collection, e)
+        self._sparse_cache[collection] = supports
+        return supports
 
     async def search(
         self,
@@ -195,7 +274,26 @@ class QdrantVectorStore:
         limit: int = 10,
         vector_weight: float = 0.7,
     ) -> list[dict[str, Any]]:
+        """Dense + BM25 sparse hybrid search with Reciprocal Rank Fusion.
+
+        When the target collection carries the ``bm25`` sparse vector
+        (post-migration) and the BM25 embedder is available, Qdrant fuses
+        the dense and sparse result lists natively (``fusion="rrf"``).
+        Otherwise it falls back to the dense-only search with lightweight
+        keyword re-ranking so pre-migration collections keep working.
+        """
         coll = collection or "default"
+        client = await self._get_client()
+        await _ensure_collection(coll, len(query_embedding), client)
+
+        if query_text and await self._collection_supports_sparse(coll, client):
+            sparse = await _embed_sparse(query_text)
+            if sparse is not None:
+                fused = await self._hybrid_search_rrf(client, coll, query_embedding, sparse, limit)
+                if fused is not None:
+                    return fused
+
+        # ── Fallback: dense search + keyword re-rank (pre-sparse behaviour) ──
         results = await self.search(query_embedding, collection=coll, limit=limit * 2)
 
         if query_text and results:
@@ -224,6 +322,57 @@ class QdrantVectorStore:
             final.append(r)
         return final
 
+    async def _hybrid_search_rrf(
+        self,
+        client: httpx.AsyncClient,
+        collection: str,
+        dense_vector: list[float],
+        sparse: tuple[list[int], list[float]],
+        limit: int,
+    ) -> list[dict[str, Any]] | None:
+        """Native Qdrant hybrid search: named dense + BM25 sparse, RRF fusion.
+
+        Returns formatted results, or None when Qdrant rejects the request
+        so the caller can fall back to dense-only search.
+        """
+        payload: dict[str, Any] = {
+            "vector": {"name": "dense", "vector": dense_vector},
+            "sparse_vector": {
+                "name": SPARSE_VECTOR_NAME,
+                "vector": {"indices": sparse[0], "values": sparse[1]},
+            },
+            "fusion": "rrf",
+            "limit": limit,
+            "with_payload": True,
+        }
+        try:
+            r = await client.post(f"/collections/{collection}/points/search", json=payload)
+            if r.status_code != 200:
+                logger.warning(
+                    "qdrant_hybrid_rrf_failed status=%d body=%s",
+                    r.status_code,
+                    r.text,
+                )
+                return None
+            data = r.json()
+            results: list[dict[str, Any]] = []
+            for point in data.get("result", []):
+                payload_data = point.get("payload", {})
+                results.append(
+                    {
+                        "id": point.get("id"),
+                        "similarity": round(point.get("score", 0), 4),
+                        "content": payload_data.get("content", ""),
+                        "metadata": payload_data.get("metadata", {}),
+                        "source": payload_data.get("source", ""),
+                        "severity": payload_data.get("severity", ""),
+                    }
+                )
+            return results
+        except Exception as e:
+            logger.warning("qdrant_hybrid_rrf_error: %s", e)
+            return None
+
     @staticmethod
     def _to_uuid(doc_id: str) -> str:
         """Convert a string doc_id to a deterministic UUID v5.
@@ -245,15 +394,32 @@ class QdrantVectorStore:
         severity: str = "medium",
         chain: str = "",
     ) -> bool:
+        """Insert a document into *collection*.
+
+        When the target collection is configured with the ``bm25`` sparse
+        vector (hybrid collections created by scripts/migrate_to_sparse.py),
+        a BM25 sparse vector is computed from *content* and stored alongside
+        the dense vector so hybrid (RRF) search can use it. Dense-only
+        collections are written unchanged.
+        """
         client = await self._get_client()
         await _ensure_collection(collection, len(embedding), client)
 
         point_id = self._to_uuid(doc_id)
+        vector_field: Any = embedding
+        if await self._collection_supports_sparse(collection, client):
+            vector_field = {"dense": embedding}
+            sparse = await _embed_sparse(content)
+            if sparse is not None:
+                vector_field[SPARSE_VECTOR_NAME] = {
+                    "indices": sparse[0],
+                    "values": sparse[1],
+                }
         payload = {
             "points": [
                 {
                     "id": point_id,
-                    "vector": embedding,
+                    "vector": vector_field,
                     "payload": {
                         "content": content[:10000],
                         "metadata": metadata or {},

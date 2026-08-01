@@ -299,3 +299,190 @@ async def test_get_qdrant_store_singleton():
     s2 = await get_qdrant_store()
     assert s1 is s2
     await s1.close()
+
+
+def _mock_hybrid_collection(respx_mock, collection="default"):
+    """Mock collection existence check with a BM25 sparse config."""
+    respx_mock.get(f"/collections/{collection}").respond(
+        200,
+        json={"result": {"config": {"params": {"sparse_vectors": {"bm25": {}}}}}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
+    """insert() should add a BM25 sparse vector for hybrid collections."""
+    import rmi_rag.qdrant_store as qdrant_store
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text):
+        assert text == "solana honeypot rug"
+        return ([10, 20, 30], [1.5, 0.8, 0.4])
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        _mock_hybrid_collection(respx_mock, "hybrid_coll")
+        route = respx_mock.put("/collections/hybrid_coll/points").respond(
+            200, json={"result": {"status": "ok"}}
+        )
+        ok = await store.insert(
+            doc_id="doc_hybrid",
+            collection="hybrid_coll",
+            embedding=[0.1] * 1024,
+            content="solana honeypot rug",
+        )
+    assert ok is True
+    assert route.called
+    body = route.calls[0].request.content
+    assert b'"dense"' in body
+    assert b'"bm25"' in body
+    assert b'"indices"' in body
+    assert b'"values"' in body
+    assert b"10" in body and b"20" in body
+
+
+@pytest.mark.asyncio
+async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
+    """insert() should keep dense-only payload for legacy collections."""
+    import rmi_rag.qdrant_store as qdrant_store
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text):
+        raise AssertionError("sparse embedder must not be called for dense-only")
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        _mock_collection(respx_mock, "dense_only")
+        route = respx_mock.put("/collections/dense_only/points").respond(
+            200, json={"result": {"status": "ok"}}
+        )
+        ok = await store.insert(
+            doc_id="doc_dense",
+            collection="dense_only",
+            embedding=[0.1] * 256,
+            content="legacy content",
+        )
+    assert ok is True
+    body = route.calls[0].request.content
+    assert b'"bm25"' not in body
+    assert b'"sparse"' not in body
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_native_rrf(monkeypatch):
+    """hybrid_search() should use Qdrant's dense+sparse RRF fusion."""
+    import rmi_rag.qdrant_store as qdrant_store
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text):
+        assert text == "solana rug"
+        return ([5, 6], [0.9, 0.3])
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        _mock_hybrid_collection(respx_mock)
+        route = respx_mock.post("/collections/default/points/search").respond(
+            200,
+            json={
+                "result": [
+                    {
+                        "id": "hybrid_hit",
+                        "score": 0.75,
+                        "payload": {
+                            "content": "Solana token rug",
+                            "metadata": {},
+                            "source": "scan",
+                            "severity": "high",
+                        },
+                    }
+                ]
+            },
+        )
+        results = await store.hybrid_search(
+            query_text="solana rug",
+            query_embedding=[0.1] * 1024,
+            limit=5,
+        )
+    assert route.called
+    body = route.calls[0].request.content
+    assert b'"sparse_vector"' in body
+    assert b'"bm25"' in body
+    assert b'"fusion"' in body
+    assert b'"rrf"' in body
+    assert b'"dense"' in body
+    assert len(results) == 1
+    assert results[0]["id"] == "hybrid_hit"
+    assert results[0]["similarity"] == 0.75
+    assert results[0]["content"] == "Solana token rug"
+    assert results[0]["severity"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch):
+    """hybrid_search() should fall back to dense search when RRF errors."""
+    import rmi_rag.qdrant_store as qdrant_store
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text):
+        return ([1], [0.5])
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        _mock_hybrid_collection(respx_mock)
+        respx_mock.post("/collections/default/points/search").respond(400)
+        respx_mock.post("/collections/default/points/search").respond(
+            200,
+            json={
+                "result": [
+                    {
+                        "id": "fallback_hit",
+                        "score": 0.8,
+                        "payload": {
+                            "content": "Solana token risk",
+                            "metadata": {},
+                            "source": "scan",
+                            "severity": "high",
+                        },
+                    }
+                ]
+            },
+        )
+        results = await store.hybrid_search(
+            query_text="solana token",
+            query_embedding=[0.1] * 1024,
+            limit=5,
+        )
+    assert len(results) == 1
+    assert results[0]["id"] == "fallback_hit"
+    assert results[0]["similarity"] == 0.8
+
+
+@pytest.mark.asyncio
+async def test_hybrid_search_sparse_capability_cached(monkeypatch):
+    """Sparse-capability probe should be cached per store instance."""
+    import rmi_rag.qdrant_store as qdrant_store
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text):
+        return ([1], [0.5])
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        probe = respx_mock.get("/collections/default").respond(
+            200,
+            json={"result": {"config": {"params": {"sparse_vectors": {"bm25": {}}}}}},
+        )
+        respx_mock.post("/collections/default/points/search").respond(200, json={"result": []})
+        await store.hybrid_search(query_text="q1", query_embedding=[0.1] * 1024)
+        await store.hybrid_search(query_text="q2", query_embedding=[0.1] * 1024)
+    assert probe.call_count == 1
