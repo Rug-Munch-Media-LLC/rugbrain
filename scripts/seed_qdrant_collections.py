@@ -24,7 +24,7 @@ Data inputs (all FREE):
      etherscan_combined_labels.csv
   5. arXiv API (export.arxiv.org) — free, no key
 
-Embedding: bge-m3 via Ollama ``/api/embed`` (1024-dim), L2-normalized,
+Embedding: bge-m3 via Infinity ``/v1/embeddings`` (1024-dim), L2-normalized,
 batched (20 short / 8 long) to maximize CPU throughput. Point IDs are
 deterministic UUIDv5 (``uuid.NAMESPACE_DNS``) so reruns are idempotent and
 partial progress is preserved (existing IDs are skipped).
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Ollama at OLLAMA_URL (default http://localhost:11434) with bge-m3
+  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
   - redis-py, httpx, numpy, qdrant-client
   - Staged Postgres dumps in DATA_DIR (default /tmp/rag_seed)
 """
@@ -60,8 +60,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("seed_qdrant")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
 DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108
@@ -107,20 +107,23 @@ def _normalize(vec: list[float]) -> list[float]:
 
 
 async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
-    """Embed texts via Ollama /api/embed, returning normalized vectors."""
+    """Embed texts via Infinity /v1/embeddings, returning normalized vectors."""
     if not texts:
         return []
     try:
         r = await client.post(
-            f"{OLLAMA_URL}/api/embed",
-            json={"model": OLLAMA_MODEL, "input": [t[:8000] for t in texts]},
+            f"{INFINITY_URL}/v1/embeddings",
+            json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
             timeout=900.0,
         )
         if r.status_code != 200:
             logger.warning("embed_http_fail status=%d body=%s", r.status_code, r.text[:200])
             return []
         data = r.json()
-        vecs = data.get("embeddings", [])
+        items = data.get("data", [])
+        vecs = [
+            item.get("embedding", []) for item in sorted(items, key=lambda i: i.get("index", 0))
+        ]
         out: list[list[float]] = []
         for v in vecs:
             if isinstance(v, list) and v:
@@ -909,7 +912,7 @@ async def main() -> None:
 
     os.makedirs(DATA_DIR, exist_ok=True)
     logger.info(
-        "Qdrant=%s Ollama=%s model=%s data=%s", QDRANT_URL, OLLAMA_URL, OLLAMA_MODEL, DATA_DIR
+        "Qdrant=%s Infinity=%s model=%s data=%s", QDRANT_URL, INFINITY_URL, INFINITY_MODEL, DATA_DIR
     )
 
     # Inject limits via env for loaders that accept them

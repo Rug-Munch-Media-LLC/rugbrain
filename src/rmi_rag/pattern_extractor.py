@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 
 import httpx
 
@@ -35,8 +34,6 @@ Return ONLY valid JSON (no markdown, no explanation) with these fields:
 
 Incident report:
 {article_text}"""
-
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
 
 
 async def extract_pattern_from_url(url: str) -> dict:
@@ -78,16 +75,13 @@ async def extract_pattern_from_url(url: str) -> dict:
 async def _call_llm(article_text: str) -> dict | None:
     prompt = EXTRACT_PROMPT.format(article_text=article_text)
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={"model": "deepseek-v4-flash", "prompt": prompt, "stream": False},
-            )
-            data = resp.json()
-            raw = data.get("response", "").strip()
-            if raw.startswith("```"):
-                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
-            return json.loads(raw)
+        from app.llm_config import generate_content
+
+        raw = await generate_content(prompt, max_tokens=2048, temperature=0.3)
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
+        return json.loads(raw)
     except Exception as e:
         logger.warning("pattern_extractor: LLM call failed: %s", e)
         return None

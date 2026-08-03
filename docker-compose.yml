@@ -9,54 +9,7 @@ networks:
     external: true
 
 services:
-  # ── Ollama embedding server ────────────────────────────────────
-  ollama:
-    image: ollama/ollama:latest
-    container_name: rmi-ollama
-    restart: unless-stopped
-    networks:
-      - rmi_network
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - /usr/share/ollama/.ollama/models:/root/.ollama/models
-      # Post-start warmup: pre-loads bge-m3 + nomic-embed-text so the
-      # first RAG search doesn't pay a 30-45s cold-start penalty.
-      - ./scripts/ollama-warmup.sh:/opt/ollama-warmup.sh:ro
-    entrypoint: ["/bin/bash", "/opt/ollama-warmup.sh"]
-    command: []
-    environment:
-      - OLLAMA_NUM_PARALLEL=2
-      - OLLAMA_NUM_THREADS=2
-      - OLLAMA_CONTEXT_LENGTH=4096
-      - OLLAMA_KEEP_ALIVE=-1
-      - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_KV_CACHE_TYPE=q8_0
-      - OLLAMA_MAX_LOADED_MODELS=2
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: "4g"
-        reservations:
-          cpus: "1"
-          memory: "2g"
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
   # ── API server (always-on) ──────────────────────────────────────
-    labels:
-      - app.rugmunch.io/name=rmi-ollama
-      - app.rugmunch.io/role=inference
-      - app.rugmunch.io/description=Ollama local LLM inference
   rag-api:
     build:
       context: .
@@ -102,7 +55,8 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
-      - RERANK_MODEL=bge-reranker-v2-m3
+      - INFINITY_URL=http://infinity-rag:8001
+      - RERANK_MODEL=BAAI/bge-reranker-v2-m3
       - RERANK_MODEL_NAME=BAAI/bge-reranker-v2-m3
       # DuckDB query endpoint (/api/v1/rag/query) — B2 permanence snapshots.
       # B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY are required for the
@@ -148,6 +102,7 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
+      - INFINITY_URL=http://infinity-rag:8001
     volumes:
       - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py

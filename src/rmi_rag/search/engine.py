@@ -213,6 +213,7 @@ async def three_pillar_search(
     use_kg: bool = True,
     use_parent_child: bool = True,
     use_reranker: bool = False,
+    use_rating_boosts: bool = True,
 ) -> dict[str, Any]:
     """
     Three-pillar hybrid search with Knowledge Graph expansion, MMR dedup,
@@ -222,6 +223,8 @@ async def three_pillar_search(
       Pillar 2 - Sparse text search via SPLADE+BM25
       Pillar 3 - Entity exact-match + Knowledge Graph expansion
       Post-fusion - MMR deduplication + parent-child context expansion
+      Post-rank - Ground News-style rating boosts (when metadata carries a
+                  ``rating`` payload) improve quality for news retrieval
 
     Returns dict with merged results + pillar attribution + MMR metadata.
     """
@@ -460,28 +463,7 @@ async def three_pillar_search(
         except Exception as e:
             logger.debug("BGE cross-encoder rerank failed (non-critical): %s", e)
 
-        # Stage 2: Ollama bge-m3 cosine approximation fallback
-        if not reranker_applied:
-            try:
-                from rmi_rag.cross_encoder import (
-                    get_reranker as _get_ollama_reranker,  # external dependency
-                )
-
-                ollama_reranker = await _get_ollama_reranker()
-                fused = await ollama_reranker.rerank(query, fused, top_k=limit * 3)
-                reranker_applied = True
-                reranker_method = "ollama-cosine"
-                logger.info(
-                    "Cross-encoder (ollama) reranked: %d → %d results",
-                    pre_rerank,
-                    len(fused),
-                )
-            except ImportError:
-                logger.debug("app.rag.cross_encoder not available")
-            except Exception as e:
-                logger.debug("Ollama reranker failed (non-critical): %s", e)
-
-        # Stage 3: sentence-transformers CrossEncoder fallback
+        # Stage 2: sentence-transformers CrossEncoder fallback
         if not reranker_applied:
             try:
                 from app.cross_encoder_reranker import get_reranker  # external dependency
@@ -551,6 +533,22 @@ async def three_pillar_search(
 
     final_results = fused[:limit]
 
+    # ── Rating boosts (Ground News-style quality reweighting) ──
+    # Articles carrying a ``rating`` payload in metadata get boosted (or
+    # penalised, e.g. rumors) based on factuality, source reputation,
+    # market impact, corroboration and on-chain evidence.
+    rating_boosts_applied = False
+    if use_rating_boosts and final_results:
+        try:
+            from rmi_rag.ratings import apply_rating_boosts
+
+            final_results = apply_rating_boosts(final_results)
+            rating_boosts_applied = any(r.get("rating_boosted") for r in final_results)
+        except ImportError:
+            logger.debug("rmi_rag.ratings not available — skipping rating boosts")
+        except Exception as e:
+            logger.debug("Rating boost failed (non-critical): %s", e)
+
     # ── Confidence scoring ──
     confidence = None
     try:
@@ -587,6 +585,7 @@ async def three_pillar_search(
             "parent_child_applied": parent_child_applied,
             "reranker_applied": reranker_applied,
             "reranker_method": reranker_method,
+            "rating_boosts_applied": rating_boosts_applied,
         },
         "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,
         "query": query,

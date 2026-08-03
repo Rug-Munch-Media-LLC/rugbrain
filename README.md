@@ -1,10 +1,11 @@
-# RMI RAG — Retrieval-Augmented Generation for Crypto Intelligence
+# RugSense — Retrieval-Augmented Generation for Crypto Intelligence
 
-RAG layer for Rug Munch Intelligence. Embeds scam patterns, news/social
-intel, and wallet/entity intelligence into vectors and serves them back
-through semantic, hybrid, and entity-aware search. Powers the scanner's
-**Known Scam Patterns** check, the bot's `/research` and `/investigate`
-commands, and the frontend's AI chat / wallet forensics.
+RugSense (formerly RMI RAG) is the RAG layer for Rug Munch Intelligence. It
+embeds scam patterns, news/social intel, and wallet/entity intelligence into
+vectors and serves them back through semantic, hybrid, and entity-aware
+search. Powers the scanner's **Known Scam Patterns** check, the bot's
+`/research` and `/investigate` commands, and the frontend's AI chat / wallet
+forensics.
 
 **Status:** live service, collections being seeded (see
 [ARCHITECTURE.md](ARCHITECTURE.md) §7 for honest current gaps).
@@ -19,8 +20,8 @@ commands, and the frontend's AI chat / wallet forensics.
 
 ## Architecture
 
-- **Embedding:** BGE-M3 (primary, via Ollama, 1024-dim); nomic-embed-text
-  fallback (768-dim). No hash fallback — fails loud (HTTP 503).
+- **Embedding:** BGE-M3 (primary, via Infinity, 1024-dim). No hash fallback —
+  fails loud (HTTP 503).
 - **Vector store:** Qdrant (Cosine, 1024-dim), collections created on demand.
 - **Warm store:** Redis — documents, index sets, semantic cache, ingest queues.
 - **Retrieval:** three-pillar search (dense + sparse/BM25-SPLADE + entity)
@@ -50,7 +51,7 @@ cd rmi-rag
 # Install dependencies
 pip install -e .
 
-# Run the threat-intel seeder (requires Qdrant + Redis + Ollama running)
+# Run the threat-intel seeder (requires Qdrant + Redis + Infinity running)
 python scripts/seed_threat_intel.py
 
 # Run the ingest one-shot (same thing, inside the container)
@@ -62,7 +63,7 @@ python -m rmi_rag
 ```
 
 Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
-and Ollama with `bge-m3` pulled (`OLLAMA_URL`). See `.env.example`.
+and Infinity with `BAAI/bge-m3` loaded (`INFINITY_URL`). See `.env.example`.
 
 ## API docs
 

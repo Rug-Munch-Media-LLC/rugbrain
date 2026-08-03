@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for the RMI RAG B2 permanence pipeline.
+"""Shared helpers for the RugSense B2 permanence pipeline.
 
 Implements the on-disk formats used by ``b2_permanence.py`` (upload),
 ``b2_restore.py`` (download) and ``migrate_to_parquet.py`` (convert):

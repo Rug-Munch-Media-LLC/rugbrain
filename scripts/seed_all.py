@@ -19,7 +19,7 @@ Usage:
 
 Requires:
   - Qdrant running (default: http://rmi-qdrant:6333 or QDRANT_URL env)
-  - Ollama running (default: http://host.docker.internal:11434 or OLLAMA_URL env)
+  - Infinity running (default: http://infinity-rag:8001 or INFINITY_URL env)
 """
 
 from __future__ import annotations
@@ -38,35 +38,36 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 logger = logging.getLogger("seed_all")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen3-embed:4b")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://rmi-backend:8000")
-EMBEDDING_DIM = 2560
+EMBEDDING_DIM = 1024
 
 
 # ── Embedding ──────────────────────────────────────────────────────────
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Get embedding from Ollama qwen3-embed:4b via /api/embed (new API).
+    """Get embedding from Infinity BAAI/bge-m3 via /v1/embeddings.
 
-    Uses ``/api/embed`` with ``input`` as a list (faster, supports batching).
-    Returns L2-normalized 2560-dim vector or None on failure.
+    Uses the OpenAI-compatible ``/v1/embeddings`` endpoint with ``input``
+    as a list (faster, supports batching).
+    Returns L2-normalized 1024-dim vector or None on failure.
     """
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(
-                f"{OLLAMA_URL}/api/embed",
-                json={"model": OLLAMA_MODEL, "input": [text[:8000]]},
+                f"{INFINITY_URL}/v1/embeddings",
+                json={"model": INFINITY_MODEL, "input": [text[:8000]]},
             )
             if r.status_code != 200:
                 logger.warning("embed_http_fail status=%d", r.status_code)
                 return None
             data = r.json()
-            vecs = data.get("embeddings", [])
-            if not vecs or not isinstance(vecs, list) or not isinstance(vecs[0], list):
+            items = data.get("data", [])
+            if not items or not isinstance(items[0].get("embedding"), list):
                 return None
-            vec = vecs[0]
+            vec = items[0]["embedding"]
             # L2 normalize
             arr = np.asarray(vec, dtype=np.float32)
             n = float(np.linalg.norm(arr))
@@ -81,25 +82,26 @@ async def _embed(text: str) -> list[float] | None:
 async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
     """Embed multiple texts in a single batch call for efficiency.
 
-    Ollama's ``/api/embed`` endpoint supports multiple inputs in one request,
-    which avoids repeated model-load overhead.
+    Infinity's ``/v1/embeddings`` endpoint supports multiple inputs in one
+    request, which avoids repeated model-load overhead.
     """
     if not texts:
         return []
     try:
         async with httpx.AsyncClient(timeout=300.0) as c:
             r = await c.post(
-                f"{OLLAMA_URL}/api/embed",
-                json={"model": OLLAMA_MODEL, "input": [t[:8000] for t in texts]},
+                f"{INFINITY_URL}/v1/embeddings",
+                json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
             )
             if r.status_code != 200:
                 logger.warning("batch_embed_http_fail status=%d", r.status_code)
                 return await _embed_batch_fallback(texts)
             data = r.json()
-            vecs = data.get("embeddings", [])
+            items = sorted(data.get("data", []), key=lambda i: i.get("index", 0))
             results = []
-            for vec in vecs:
-                if isinstance(vec, list):
+            for item in items:
+                vec = item.get("embedding", [])
+                if isinstance(vec, list) and vec:
                     arr = np.asarray(vec, dtype=np.float32)
                     n = float(np.linalg.norm(arr))
                     if n > 0:
@@ -812,7 +814,7 @@ async def main() -> None:
             "rmi_community": totals.get("rmi_community", 0),
         },
         "total_docs": total,
-        "embedding_model": OLLAMA_MODEL,
+        "embedding_model": INFINITY_MODEL,
         "embedding_dim": EMBEDDING_DIM,
     }
     if "backend_scans" in totals:

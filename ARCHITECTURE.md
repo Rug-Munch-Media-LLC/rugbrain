@@ -1,4 +1,4 @@
-# RMI RAG — Architecture
+# RugSense — Architecture
 
 **Status:** canonical
 **Last updated:** 2026-07-31
@@ -14,7 +14,7 @@
 
 ## 1. System Overview
 
-RMI RAG is the retrieval-augmented generation layer for RugMunch Intelligence.
+RugSense (formerly RMI RAG) is the retrieval-augmented generation layer for RugMunch Intelligence.
 It makes crypto threat knowledge **semantically searchable**: instead of
 exact-match lookups, queries are embedded into vectors and matched against a
 curated corpus of scam patterns, news, and entity intelligence. Retrieved
@@ -89,7 +89,7 @@ in `src/app/` (currently being restored — see §7).
                        ▼
         ┌──────────────────────────────────────────────────────┐
         │                 EMBEDDING LAYER                       │
-        │  BGE-M3 (primary, Ollama, 1024-dim)                   │
+        │  BGE-M3 (primary, Infinity, 1024-dim)                 │
         │  nomic-embed-text (fallback, 768-dim, backend chain)  │
         │  legacy chain: OpenRouter → LocalBGE → HF (CryptoEmbedder)│
         └──────────────┬───────────────────────────────────────┘
@@ -136,8 +136,8 @@ in `src/app/` (currently being restored — see §7).
                     │                     │
         ┌───────────┴─────────────────────┴──────────────┐
         │              EMBEDDING LAYER                    │
-        │  PRIMARY:  bge-m3 via Ollama, 1024-dim          │
-        │  FALLBACK: nomic-embed-text via Ollama, 768-dim │
+        │  PRIMARY:  bge-m3 via Infinity, 1024-dim        │
+        │  FALLBACK: nomic-embed-text via Infinity, 768-dim │
         │  (legacy: OpenRouter → LocalBGE → HF)           │
         └───────────┬─────────────────────────────────────┘
                     │
@@ -161,7 +161,7 @@ in `src/app/` (currently being restored — see §7).
 | rmi-rag API | `rmi-rag-api` | 8012 | FastAPI service: search, scam-check, health |
 | Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
-| Ollama | `rmi-ollama` | 11434 | Embedding inference (bge-m3, nomic-embed-text) |
+| Infinity | `infinity-rag` | 8001 | Embedding/reranking inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
 | rmi-codebase-mcp | external | — | Code-pattern embeddings (ChromaDB) |
 
@@ -212,38 +212,38 @@ document overwrites the same point instead of duplicating it. Scanner findings
 use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 `pattern-<name>` / `hack-<name>` / `actor-<name>`.
 
-### 3.2 Ollama / BGE-M3 (embedding)
+### 3.2 Infinity / BGE-M3 (embedding + reranking)
 
 | Setting | Value |
 |---------|-------|
-| Primary model | `bge-m3` (1.2 GB, 1024-dim) |
-| Fallback model | `nomic-embed-text` (274 MB, 768-dim) — used by rmi-backend chain |
-| Container | `rmi-ollama`, CPU-only, 4 threads, 4 GB memory cap |
-| Concurrency | `OLLAMA_NUM_PARALLEL=2`, `OLLAMA_MAX_LOADED_MODELS=2` |
-| Context | `OLLAMA_CONTEXT_LENGTH=4096`, KV cache `q8_0`, flash attention |
-| Keep-alive | `OLLAMA_KEEP_ALIVE=30m` |
+| Primary model | `BAAI/bge-m3` (1024-dim, Infinity /embeddings) |
+| Fallback model | `BAAI/bge-small-en-v1.5` (384-dim) / OpenRouter — used by rmi-backend chain |
+| Container | `infinity-rag` (michaelfeil/infinity) on port 8001 |
+| Concurrency | Infinity native batching (`/embeddings` input arrays) |
+| Context | 8,000-char truncation per input; 1024-dim output |
+| Keep-alive | n/a (stateless HTTP server) |
 
 **Embedding chain (`embeddings.py`)** — strict two-tier, **no hash fallback**
 (per T04: hash embeddings returned confidently-wrong results and were removed;
 when both backends fail the API raises `RAGUnavailableError` → HTTP 503):
 
-1. **Ollama bge-m3** — `POST /api/embeddings` with `prompt` truncated to
-   8,000 chars, resized/L2-normalized to 1024 dims.
+1. **Infinity BAAI/bge-m3** — `POST /embeddings` (OpenAI-compatible) with
+   `input` truncated to 8,000 chars, L2-normalized to 1024 dims.
 2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 1024-dim resize.
 
-`RAG_EMBED_BACKEND` env can force `ollama` or `openrouter`; default `auto`
-(probe Ollama once per process, cache result).
+`RAG_EMBED_BACKEND` env can force `infinity` or `openrouter`; default `auto`
+(probe Infinity once per process, cache result).
 
 **Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — still used
-by search/ingest code paths: Ollama → OpenRouter → LocalBGE
+by search/ingest code paths: Infinity → OpenRouter → LocalBGE
 (`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`BAAI/bge-m3`) → hash
 (last resort, deprecated). Specialized heads: `embed_token_scam`,
 `embed_wallet`, `embed_scam_pattern`, `embed_news`, `embed_contract`
 (`ContractCodeEmbedder` — 128-dim structural + 192-dim semantic = 320-dim).
 
-**Batch strategy:** `get_embeddings()` is sequential (Ollama/OpenRouter handle
-large batches poorly; memory is kept bounded). Seed scripts use `/api/embed`
-with batched `input` arrays; `OllamaBGEEmbedder.embed` sends one request per
+**Batch strategy:** `get_embeddings()` is sequential (Infinity/OpenRouter handle
+large batches poorly; memory is kept bounded). Seed scripts use `/embeddings`
+with batched `input` arrays; `InfinityBGEEmbedder.embed` sends one request per
 text (120 s timeout). Embeddings are cached in Redis 24 h
 (`emb:{head}:{sha256(text)[:32]}`).
 
@@ -347,7 +347,7 @@ the API runs open (dev mode — a startup warning is logged).
 | POST | `/api/v1/rag/v2/search` | Semantic/hybrid search | `SearchRequest {query, collection="scam_intel", top_k=5, min_similarity=0, filters}` → `SearchResponse` with hits + scores |
 | POST | `/api/v1/rag/v2/ingest` | Document ingestion | `IngestRequest` → `IngestResult {doc_id, collection, status}` |
 | POST | `/api/v1/rag/v2/feedback` | Scanner→RAG feedback | Records feedback, ingests known scam into `known_scams` |
-| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `ollama:bge-m3`) |
+| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `infinity:BAAI/bge-m3`) |
 | POST | `/api/v1/rag/v2/bulk-ingest` | Batch ingest | max 500 items/call into one collection |
 
 ### 4.2 rmi-rag service (port 8012)
@@ -473,9 +473,9 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    (`seed_threat_intel.py`, idempotent).
 
 ### 6.4 Scaling
-- **Ollama:** concurrency bounded by `OLLAMA_NUM_PARALLEL=2`, 4 threads,
-  4 GB memory cap (bge-m3 uses ~1.24 GB → 3× headroom; cap raised when chat
-  models ship). CPU-only today.
+- **Infinity:** stateless OpenAI-compatible server on port 8001; concurrency
+  bounded by Infinity's native batching over `/embeddings` and `/rerank`
+  (BAAI/bge-m3 1024-dim + BAAI/bge-reranker-v2-m3).
 - **Qdrant:** single node, collections created with default (unsharded)
   config; sharding/replication not configured — revisit when collections
   exceed a single node.
@@ -552,9 +552,9 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 |-----|---------|---------|
 | `QDRANT_URL` | `http://rmi-qdrant:6333` | Qdrant REST endpoint |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `rmi-redis` / `6379` | Redis (DragonflyDB) connection |
-| `OLLAMA_URL` | `http://rmi-ollama:11434` | Ollama endpoint |
-| `OLLAMA_EMBED_MODEL` | `bge-m3` | Primary embedder |
-| `RAG_EMBED_BACKEND` | `auto` | `auto` \| `ollama` \| `openrouter` |
+| `INFINITY_URL` | `http://infinity-rag:8001` | Infinity embedding/rerank endpoint |
+| `RAG_INFINITY_EMBED_MODEL` | `BAAI/bge-m3` | Primary embedder |
+| `RAG_EMBED_BACKEND` | `auto` | `auto` \| `infinity` \| `openrouter` |
 | `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `bge-m3` / `1.1` | Embedding version stamp (ADR-0007) |
 | `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
 | `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |

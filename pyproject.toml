@@ -1,7 +1,7 @@
 [project]
-name = "rmi-rag"
+name = "rugsense"
 version = "0.1.0"
-description = "RMI RAG — hybrid search, embeddings, chunking, agentic retrieval for crypto intelligence"
+description = "RugSense (formerly RMI RAG) — hybrid search, embeddings, chunking, agentic retrieval for crypto intelligence"
 requires-python = ">=3.11"
 dependencies = [
     "duckdb>=1.1.0",

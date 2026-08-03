@@ -248,3 +248,22 @@ async def graph_rag_search(
         ),
     }
 
+
+def synthesize_answer(
+    answer: str,
+    sources: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Graph RAG ``synthesize_answer`` node — rating-aware answer synthesis.
+
+    Uses Ground News-style ratings to improve answer quality:
+      - **Verified sources are prioritized** in the citation list.
+      - **Rumor-based claims carry a disclaimer** in the formatted answer.
+      - **Corroboration counts are shown** in source badges and the
+        returned ``rating_summary``.
+
+    Delegates the heavy lifting to ``rmi_rag.ratings.synthesize_answer`` so
+    retrieval, rerank and graph synthesis share one rating implementation.
+    """
+    from rmi_rag.ratings import synthesize_answer as _synthesize_rated
+
+    return _synthesize_rated(answer, sources)

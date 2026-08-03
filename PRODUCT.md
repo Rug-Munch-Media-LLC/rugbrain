@@ -1,6 +1,6 @@
-# RMI RAG — Product Charter
+# RugSense — Product Charter
 
-**Product:** RMI RAG Permanence Layer
+**Product:** RugSense (formerly RMI RAG) Permanence Layer
 **Repo:** git.rugmunch.io/RugMunchMedia/rmi-rag
 **Status:** Active development
 

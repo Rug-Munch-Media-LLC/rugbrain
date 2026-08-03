@@ -10,8 +10,9 @@ score for the pair. Applying it to the top-20 candidates from dense+sparse
 hybrid search typically improves ranking quality by +15-20% NDCG.
 
 Backends (in priority order):
-  1. Ollama native ``/api/rerank`` — used when a reranker model
-     (``bge-reranker-v2-m3``) is already loaded in the local Ollama.
+  1. Infinity native ``/rerank`` — used when the reranker model
+     (``BAAI/bge-reranker-v2-m3``) is loaded on the local Infinity server
+     (OpenAI-compatible; the same server serves embeddings).
   2. sentence-transformers ``CrossEncoder('BAAI/bge-reranker-v2-m3')``
      — CPU-friendly, downloads weights to HF cache on first use.
   3. Graceful no-op — if neither backend is available, documents are
@@ -20,14 +21,13 @@ Backends (in priority order):
 
 Memory management:
   - Singleton pattern: the model loads once on first use and stays resident.
-  - ``OLLAMA_KEEP_ALIVE=30m`` keeps the Ollama-managed model warm.
   - Model load time and process RSS are logged for capacity planning.
 
 Environment variables:
-  - ``RERANK_MODEL`` — Ollama reranker model name (default: bge-reranker-v2-m3)
+  - ``INFINITY_URL`` — Infinity base URL (default: http://infinity-rag:8001)
+  - ``RERANK_MODEL`` — Infinity reranker model id (default: BAAI/bge-reranker-v2-m3)
   - ``RERANK_MODEL_NAME`` — HuggingFace model id (default: BAAI/bge-reranker-v2-m3)
   - ``RERANK_MAX_LENGTH`` — max tokens per pair (default: 512)
-  - ``OLLAMA_URL`` — Ollama base URL (reused from embedder config)
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434").rstrip("/")
-OLLAMA_RERANK_MODEL = os.getenv("RERANK_MODEL", "bge-reranker-v2-m3")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001").rstrip("/")
+INFINITY_RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
 ST_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
 RERANK_MAX_LENGTH = int(os.getenv("RERANK_MAX_LENGTH", "512"))
 
@@ -64,7 +64,7 @@ def _rss_mb() -> float:
 
 
 class Reranker:
-    """Cross-encoder reranker with Ollama → sentence-transformers fallback.
+    """Cross-encoder reranker with Infinity → sentence-transformers fallback.
 
     Singleton via ``Reranker.get_reranker()``. The heavy model is loaded
     lazily on the first ``rerank()`` call and kept in memory afterwards.
@@ -83,54 +83,54 @@ class Reranker:
                     cls._instance = cls()
         return cls._instance
 
-    def __init__(self, model_name: str = ST_MODEL_NAME, use_ollama: bool = True) -> None:
-        """Initialize reranker. Tries Ollama first, falls back to sentence-transformers.
+    def __init__(self, model_name: str = ST_MODEL_NAME, use_infinity: bool = True) -> None:
+        """Initialize reranker. Tries Infinity first, falls back to sentence-transformers.
 
         Parameters
         ----------
         model_name:
             HuggingFace model id for the sentence-transformers fallback.
-        use_ollama:
-            If True, attempt Ollama's native ``/api/rerank`` backend first
-            (requires a reranker model already present in Ollama).
+        use_infinity:
+            If True, attempt Infinity's native ``/rerank`` backend first
+            (requires the reranker model loaded on the Infinity server).
         """
         self._st_model_name = model_name
-        self._use_ollama = use_ollama
+        self._use_infinity = use_infinity
         self._st_model: Any | None = None
         self._st_loaded = False
         self._st_load_failed = False
-        self._ollama_checked = False
-        self._ollama_available = False
+        self._infinity_checked = False
+        self._infinity_available = False
         self._load_time_s = 0.0
 
     # ── backend discovery ────────────────────────────────────────
 
-    async def _ollama_has_reranker(self) -> bool:
-        """Check whether a reranker model is already loaded in Ollama.
+    async def _infinity_has_reranker(self) -> bool:
+        """Check whether the reranker model is loaded on Infinity.
 
-        Cached per process: the registry does not change at runtime.
+        Cached per process: the model registry does not change at runtime.
         """
-        if self._ollama_checked:
-            return self._ollama_available
-        self._ollama_checked = True
+        if self._infinity_checked:
+            return self._infinity_available
+        self._infinity_checked = True
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{OLLAMA_URL}/api/tags")
+                resp = await client.get(f"{INFINITY_URL}/models")
                 resp.raise_for_status()
-                names = {m.get("name", "") for m in resp.json().get("models", [])}
-                wanted = OLLAMA_RERANK_MODEL
-                self._ollama_available = any(
-                    n == wanted or n.split(":")[0] == wanted for n in names
+                ids = {m.get("id", "") for m in resp.json().get("data", [])}
+                wanted = INFINITY_RERANK_MODEL
+                self._infinity_available = any(
+                    mid == wanted or "bge-reranker" in mid for mid in ids
                 )
         except Exception as exc:
-            logger.debug("ollama_rerank_probe_failed: %s", exc)
-            self._ollama_available = False
-        if not self._ollama_available:
+            logger.debug("infinity_rerank_probe_failed: %s", exc)
+            self._infinity_available = False
+        if not self._infinity_available:
             logger.info(
-                "reranker: Ollama has no '%s' model — using sentence-transformers fallback",
-                OLLAMA_RERANK_MODEL,
+                "reranker: Infinity has no '%s' model — using sentence-transformers fallback",
+                INFINITY_RERANK_MODEL,
             )
-        return self._ollama_available
+        return self._infinity_available
 
     def _load_st_model(self) -> None:
         """Load the sentence-transformers CrossEncoder (once, lazily)."""
@@ -169,13 +169,18 @@ class Reranker:
 
     # ── scoring backends ─────────────────────────────────────────
 
-    async def _score_ollama(self, query: str, documents: list[dict[str, Any]]) -> list[float]:
-        """Score all (query, doc) pairs via Ollama native /api/rerank."""
+    async def _score_infinity(self, query: str, documents: list[dict[str, Any]]) -> list[float]:
+        """Score all (query, doc) pairs via Infinity native /rerank."""
         texts = [(doc.get("content") or doc.get("text") or "")[:2000] for doc in documents]
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/rerank",
-                json={"model": OLLAMA_RERANK_MODEL, "query": query, "documents": texts},
+                f"{INFINITY_URL}/rerank",
+                json={
+                    "model": INFINITY_RERANK_MODEL,
+                    "query": query,
+                    "documents": texts,
+                    "top_n": len(texts),
+                },
             )
             resp.raise_for_status()
             results = resp.json().get("results", [])
@@ -204,6 +209,7 @@ class Reranker:
         query: str,
         documents: list[dict[str, Any]],
         top_k: int = 5,
+        apply_ratings: bool = True,
     ) -> list[dict[str, Any]]:
         """Rerank *documents* against *query* with a cross-encoder.
 
@@ -217,6 +223,10 @@ class Reranker:
             present under ``score``/``rrf_score``/``similarity``.
         top_k:
             Number of top results to return (clamped to len(documents)).
+        apply_ratings:
+            When True, Ground News-style rating boosts are reapplied on top
+            of the cross-encoder ``combined_score`` so high-quality news
+            ranks above raw semantic matches.
 
         Returns
         -------
@@ -239,13 +249,13 @@ class Reranker:
                     return float(val)
             return 0.0
 
-        # ── try Ollama native /api/rerank ──
-        if self._use_ollama and await self._ollama_has_reranker():
+        # ── try Infinity native /rerank ──
+        if self._use_infinity and await self._infinity_has_reranker():
             try:
-                scores = await self._score_ollama(query, documents)
-                method = "ollama-bge-reranker-v2-m3"
+                scores = await self._score_infinity(query, documents)
+                method = "infinity-bge-reranker-v2-m3"
             except Exception as exc:
-                logger.debug("reranker: Ollama /api/rerank failed (%s) — ST fallback", exc)
+                logger.debug("reranker: Infinity /rerank failed (%s) — ST fallback", exc)
                 scores = []
                 method = "sentence-transformers"
         else:
@@ -288,6 +298,27 @@ class Reranker:
             entry["rerank_duration_ms"] = round(duration_ms, 1)
             results.append(entry)
 
+        # ── reapply Ground News-style rating boosts on top of rerank scores ──
+        # Cross-encoder relevance is not the same as source quality: a verified,
+        # corroborated article should outrank an equally-relevant rumor. Boosts
+        # are applied to ``combined_score`` and results re-sorted.
+        if apply_ratings:
+            try:
+                from rmi_rag.ratings import apply_rating_boosts
+
+                results = apply_rating_boosts(results)
+                if any(r.get("rating_boosted") for r in results):
+                    results.sort(
+                        key=lambda r: r.get("combined_score", 0.0),
+                        reverse=True,
+                    )
+                    for r in results:
+                        r["rating_boosted_after_rerank"] = True
+            except ImportError:
+                logger.debug("rmi_rag.ratings not available — skipping rerank rating boosts")
+            except Exception as e:
+                logger.debug("Rerank rating boost failed (non-critical): %s", e)
+
         # ── metrics ──
         if rerank_requests is not None and rerank_latency is not None:
             try:
@@ -307,8 +338,8 @@ class Reranker:
 
     def health_check(self) -> dict[str, Any]:
         return {
-            "backend": "ollama" if self._ollama_available else "sentence-transformers",
-            "ollama_model": OLLAMA_RERANK_MODEL,
+            "backend": "infinity" if self._infinity_available else "sentence-transformers",
+            "infinity_model": INFINITY_RERANK_MODEL,
             "st_model": self._st_model_name,
             "st_loaded": self._st_loaded,
             "st_load_failed": self._st_load_failed,
@@ -321,3 +352,15 @@ class Reranker:
 async def get_reranker() -> Reranker:
     """Async convenience function to obtain the singleton Reranker."""
     return await Reranker.get_reranker()
+
+
+async def rerank(
+    query: str, documents: list[dict[str, Any]], top_k: int = 5, apply_ratings: bool = True
+) -> list[dict[str, Any]]:
+    """Convenience wrapper — rerank documents against query via Infinity.
+
+    Replaces the legacy ``rmi_rag.cross_encoder.rerank`` (cosine
+    approximation) module. Infinity is the sole embedding/reranking engine.
+    """
+    reranker = await get_reranker()
+    return await reranker.rerank(query, documents, top_k=top_k, apply_ratings=apply_ratings)

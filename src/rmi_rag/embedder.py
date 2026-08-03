@@ -1,11 +1,13 @@
-"""RAG Embedder — bge-m3 primary (M5 migration complete).
+"""RAG Embedder — bge-m3 primary (Infinity migration complete).
 
-bge-m3 (1024d) is the primary embedding model.
+bge-m3 (1024d) is the primary embedding model, served by Infinity's
+OpenAI-compatible ``/embeddings`` endpoint (michaelfeil/infinity).
 qwen3-embed:4b (2560d) is retired. All Qdrant collections are 1024d Cosine.
 """
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 from typing import Any
 
@@ -23,6 +25,9 @@ _BACKEND_DIMS: dict[EmbedderBackend, int] = {
     EmbedderBackend.QWEN3_4B: 2560,
 }
 
+# Infinity model id for the BGE-M3 backend.
+INFINITY_MODEL: str = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+
 
 def backend_dim(backend: EmbedderBackend) -> int:
     """Return the embedding dimension for a backend."""
@@ -31,21 +36,22 @@ def backend_dim(backend: EmbedderBackend) -> int:
 
 # ── Dual-dim wrapper ────────────────────────────────────────────────────
 class DualDimEmbedder:
-    """Wraps Ollama embedding for any backend. Same interface regardless of dim."""
+    """Wraps Infinity embedding for any backend. Same interface regardless of dim."""
 
     def __init__(
         self,
         backend: EmbedderBackend,
-        ollama_url: str = "http://ollama:11434",
+        infinity_url: str = "http://infinity-rag:8001",
     ) -> None:
         self.backend = backend
-        self.ollama_url = ollama_url.rstrip("/")
+        self.infinity_url = infinity_url.rstrip("/")
         self.dim = backend_dim(backend)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts. Returns one vector per text.
 
-        Uses the Ollama /api/embeddings endpoint with the configured model.
+        Uses the Infinity /embeddings endpoint (OpenAI-compatible) with
+        the configured model (BAAI/bge-m3).
         """
         import httpx
 
@@ -54,18 +60,15 @@ class DualDimEmbedder:
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{self.ollama_url}/api/embeddings",
-                json={"model": self.backend.value, "prompt": texts},
+                f"{self.infinity_url}/embeddings",
+                json={"model": INFINITY_MODEL, "input": texts},
             )
             resp.raise_for_status()
             data = resp.json()
 
-        # Ollama returns {"embedding": [[...], [...]]} for single, or {"embeddings": [[...]]}
-        if "embeddings" in data:
-            vectors = data["embeddings"]
-        else:
-            # Single-text fallback - Ollama returns {"embedding": [...]}
-            vectors = [data["embedding"]] if "embedding" in data else []
+        # OpenAI-compatible response: {"data": [{"index": 0, "embedding": [...]}, ...]}
+        items = data.get("data", [])
+        vectors = [item["embedding"] for item in sorted(items, key=lambda i: i.get("index", 0))]
 
         # Validate dimensions to catch backend mismatches early.
         for i, vec in enumerate(vectors):
@@ -73,7 +76,7 @@ class DualDimEmbedder:
                 raise RuntimeError(
                     f"Embedder {self.backend.value} returned {len(vec)}d vector "
                     f"for text[{i}], expected {self.dim}d. "
-                    f"Check that ollama has the right model pulled."
+                    f"Check that Infinity has {INFINITY_MODEL} loaded."
                 )
         return vectors
 
@@ -85,11 +88,14 @@ class DualDimEmbedder:
 
 # ── Factory ────────────────────────────────────────────────────────────
 def get_embedder() -> DualDimEmbedder:
-    """Return the canonical embedder (bge-m3, 1024d).
+    """Return the canonical embedder (bge-m3, 1024d, via Infinity).
 
     Async interface: ``await embedder.embed([texts])`` or ``await embedder.embed_one(text)``.
     """
-    return DualDimEmbedder(EmbedderBackend.BGE_M3)
+    return DualDimEmbedder(
+        EmbedderBackend.BGE_M3,
+        infinity_url=os.getenv("INFINITY_URL", "http://infinity-rag:8001"),
+    )
 
 
 # ── Migration helpers ──────────────────────────────────────────────────

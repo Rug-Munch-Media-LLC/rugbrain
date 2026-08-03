@@ -1,6 +1,6 @@
-# RMI RAG — Consolidation Blueprint (ARCHITECTURE-V2)
+# RugSense — Consolidation Blueprint (ARCHITECTURE-V2)
 
-**Status:** consolidation blueprint (v2) · supersedes the "two RAGs" status quo · **updated 2026-08-01 (session close): container rebuilt from HEAD, Ollama optimized, stale containers/clones removed; product named RugSense (§0.2)**
+**Status:** consolidation blueprint (v2) · supersedes the "two RAGs" status quo · **updated 2026-08-03 (de-ollama): embeddings/reranking moved to Infinity; Ollama retained for LLM generation only; stale containers/clones removed; product named RugSense (§0.2)**
 **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rmi-rag`
 **Scope:** design/planning contract + verified as-built record. This file is the contract the implementing agents follow AND the record of what actually shipped. No code was changed to produce the verification notes — they were confirmed against the live system on 2026-08-01.
 
@@ -16,7 +16,7 @@
 ## 0.1 As-Built Reality (verified 2026-08-01 — final sweep)
 
 **What is live and correct:**
-- **BGE-M3 is the primary embedder** (1024d via Ollama, `embedder.py` + `embeddings.py`). The dead `:8001` container path is gone; `ollama:bge-m3` (1.16GB) is loaded. `qwen3-embed:4b` (2560d) is retired but the enum entry + dims table still exists (`embedder.py` lines 16–23) — cleanup item, not a live path. `[DONE]`
+- **BGE-M3 is the primary embedder** (1024d via Infinity, `embedder.py` + `embeddings.py`). The dead `:8001` container path is gone; `BAAI/bge-m3` is loaded on the Infinity server (`infinity-rag:8001`). `qwen3-embed:4b` (2560d) is retired. `[DONE]`
 - **Qdrant is the single store** (`rmi-qdrant:6333`, 20 collections, live). **BM25 sparse hybrid shipped**: `scripts/migrate_to_sparse.py` creates `{name}_v2` collections carrying named `dense` + `bm25` sparse vectors; 9 `_v2` collections live with points (scam_intel_v2 600, news_v2 623, scanner_v2 191, research_v2 60, threat_intel_v2 26; hacks_v2 0 — empty, see §10 gaps). `[DONE]`
 - **Parquet permanence shipped**: `scripts/b2_permanence.py` writes parquet snapshots (zstd) of all collections to B2 bucket `rmi-rag-permanence`; `scripts/migrate_to_parquet.py` converts legacy NDJSON; `scripts/b2_restore.py` restores. Verified dry-run: 20 collections, `format=parquet`, `encrypt=False`. `[DONE]`
 - **Client-side B2 encryption REMOVED**: `B2_ENCRYPTION_KEY` is deprecated; all objects are encrypted at rest by **B2 SSE-B2 (AES256)** — no client-side AES-GCM on new uploads. `[DONE]`
@@ -36,7 +36,7 @@
 - **Live search is slow when the embedder is cold**: first call after model expiry reloads bge-m3 (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
 
 **Session-close changes (2026-08-01):**
-- **Ollama optimized** — compose: `OLLAMA_KEEP_ALIVE=-1` (models stay resident, kills the 38-45s cold-start reload), `OLLAMA_MAX_LOADED_MODELS=3`, `OLLAMA_CONTEXT_LENGTH=4096`, cpus 8 / mem 8g. New `scripts/ollama-warmup.sh` entrypoint preloads bge-m3 + nomic-embed-text at container start. `qwen3:0.6b` removed (redundant vs 1.7b). Verified live. `[DONE]`
+- **Infinity is the sole embedding/reranking engine** — `infinity-rag` (michaelfeil/infinity) serves `BAAI/bge-m3` embeddings and `BAAI/bge-reranker-v2-m3` reranking on port 8001. Ollama is retained for LLM generation only. `[DONE]`
 - **Stale containers/clones cleaned** — `rmi-rag-eval-test` container removed; nested clone `/path/to/rmi-backend/rmi-rag/` removed + gitlink dropped; `/tmp/opencode/rmi-rag-main-verify` + `/tmp/opencode/rmi-rag-reranker` worktrees removed. Remaining: `rmi-rag-wt-ragas` worktree (branch merged) — remove with `git worktree remove`. `[PARTIAL]`
 - **News ingest flock guard** — `c17dc59` adds `flock -n` to `rmi-news-ingest.sh`; concurrent cron ticks skip instead of piling up. `[DONE]`
 - **BM25 alias swap NOT yet complete** — `hybrid_search` implemented in endpoints/qdrant_store (uncommitted WIP) but canonical-name → `_v2` aliases are NOT created (Qdrant aliases empty 2026-08-01). `[NOT DONE]`
@@ -79,7 +79,7 @@
                     ┌─────────────────────────────────────────────┐
                     │              rmi-rag-api  (:8012)            │
                     │  THE single RAG service                      │
-                    │  embedder.py (BGE-M3 1024d, Ollama)          │
+                    │  embedder.py (BGE-M3 1024d, Infinity)        │
                     │  qdrant_store.py → Qdrant (dense+BM25)      │
                     │  endpoints.py (all routes, NOT split)       │
                     │  evaluation.py / eval_ragas.py (RAGAS)      │
@@ -90,7 +90,7 @@
               ┌──────────────┼──────────────────────┐
               ▼              ▼                      ▼
     ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐
-    │ Qdrant          │  │ Ollama BGE-M3   │  │ B2 rmi-rag-      │
+    │ Qdrant          │  │ Infinity BGE-M3 │  │ B2 rmi-rag-      │
     │ rmi-qdrant:6333 │  │ 1024d (primary) │  │ permanence       │
     │ 20 collections  │  │ bge-reranker    │  │ parquet snapshots│
     │ dense + bm25    │  │ v2-m3 (opt-in)  │  │ SSE-B2 (AES256)  │
@@ -99,7 +99,7 @@
 ```
 
 **Non-negotiables (as-built status in brackets)**
-1. ONE embedding stack: BGE-M3 (1024d) via Ollama, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — bge-m3 live; qwen3 enum entry still present as cleanup]**
+1. ONE embedding stack: BGE-M3 (1024d) via Infinity, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — bge-m3 live via Infinity]**
 2. ONE store: Qdrant, `store.py` (wraps `qdrant_store.py`). No numpy ANN, no ChromaDB, no Redis vectors. **[DONE — Qdrant 20 collections; BM25 sparse `_v2` variants live]**
 3. ONE search path: dense + keyword filter + RRF, `retrieval.py`. No three-pillar facade. **[PARTIAL — search/ package + search_service.py still exist; retrieval is endpoint-driven hybrid]**
 4. Backend never embeds, never queries vectors. It proxies HTTP. **[NOT DONE — backend still imports `app.rag` in-process; RagApiClient never created]**
@@ -117,7 +117,7 @@
 
 | Concern | Lives in | Why |
 |---|---|---|
-| Embedding (BGE-M3 via Ollama) | rmi-rag | single model, single dim (1024), owns Ollama latency/retry |
+| Embedding/reranking (BGE-M3 + bge-reranker-v2-m3 via Infinity) | rmi-rag | single model, single dim (1024), owns Infinity latency/retry |
 | Vector storage (Qdrant) | rmi-rag | single writer to collections; backend must not touch Qdrant |
 | Retrieval (dense + keyword + RRF) | rmi-rag | one search implementation, one ranking contract |
 | Ingestion (scanner/news/wallet → embed → upsert) | rmi-rag | embedding is co-located with storage |
@@ -138,9 +138,9 @@
 
 ```
 src/rmi_rag/
-├── config.py              # NEW [decision]: settings (QDRANT_URL, OLLAMA_URL, collection names, timeouts).
+├── config.py              # NEW [decision]: settings (QDRANT_URL, INFINITY_URL, collection names, timeouts).
 │                          #   Only module embedder/store/retrieval/ingestion/api may import.
-├── embedder.py            # Single embedder: BGE-M3 via Ollama (/api/embeddings). 1024d.
+├── embedder.py            # Single embedder: BGE-M3 via Infinity (/embeddings). 1024d.
 │                          #   KEEP (verified working) — delete qwen3 legacy enum entries.
 ├── store.py               # NEW thin public wrapper over qdrant_store.py: get_collection(name),
 │                          #   upsert(points), search(query, filter, limit). Collection list is config.
@@ -396,7 +396,7 @@ All 31 files referencing `rag_service` [verified count] move to `RagApiClient` c
 
 | Failure | Raise / Return | HTTP |
 |---|---|---|
-| Ollama down / timeout / non-2xx | `EmbeddingError` (from `embedder.py`) | 503 |
+| Infinity down / timeout / non-2xx | `EmbeddingError` (from `embedder.py`) | 503 |
 | Qdrant down / timeout / non-2xx | `StoreError` (from `store.py`) | 503 |
 | Invalid collection name / bad payload / wrong dim | `ValidationError` (API layer) | 400 |
 | Missing points / no matches (infra healthy) | empty result list, `status: "ok"` | 200 |
@@ -501,7 +501,7 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 6. `RMI_RAG_API_URL=http://rmi-rag-api:8012` documented in backend `.env.example`; compose on shared `rmi_network`. **[backend commit e4685e84 re-points RAG clients to :8012 with API-key auth — partially met]**
 7. This document's §3.3/§3.4 disposition tables fully executed; `git log` shows conventional commits per phase (`feat(rag):`, `refactor(rag):`, `chore(rag):`, `delete(rag):`). **[PARTIAL — see §10 phase status]**
 8. **[ADDED] Rebuild `rmi-rag-api` from HEAD so `/api/v1/rag/query`, `/api/v1/eval/run`, `/metrics` are live; stop the stale `rmi-rag-eval-test` container (:8013); remove nested clone `rmi-backend/rmi-rag/` and merged-branch worktrees.**
-9. **[ADDED] Fix cold-embed latency: keep bge-m3 resident (Ollama `keep_alive`) and move the sync `httpx.Client(timeout=120)` embed call off the event loop (thread/async httpx) so concurrent searches can't wedge the API.**
+9. **[ADDED] Fix cold-embed latency: keep bge-m3 resident on Infinity and move the sync `httpx.Client(timeout=120)` embed call off the event loop (thread/async httpx) so concurrent searches can't wedge the API.**
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Cross-app Integration Test: Scanner → RMI-RAG Pipeline.
+Cross-app Integration Test: Scanner → RugSense Pipeline.
 
 Verifies the Redis pub/sub flow:
     Scanner (rmi-backend) → Redis ``rmi:rag:ingest`` → Subscriber → Qdrant ``threat_intel``

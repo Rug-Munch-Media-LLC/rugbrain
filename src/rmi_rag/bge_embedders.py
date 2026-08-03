@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BGE / embedding provider classes — local, Ollama, OpenRouter, HuggingFace, and
+BGE / embedding provider classes — local, Infinity, OpenRouter, HuggingFace, and
 specialized contract-code embedder.
 """
 
@@ -25,7 +25,7 @@ class LocalBGEEmbedder:
     Local BAAI BGE-small-en-v1.5 embedder.
     Runs on CPU, ~80MB RAM, 384-dim vectors.
     Loaded lazily - first call initializes the model.
-    FALLBACK only. Primary is Ollama qwen3-embed:4b.
+    FALLBACK only. Primary is Infinity BAAI/bge-m3.
     """
 
     MODEL_NAME = "BAAI/bge-small-en-v1.5"
@@ -52,15 +52,15 @@ class LocalBGEEmbedder:
         return results[0]
 
 
-class OllamaBGEEmbedder:
-    """Ollama embedding provider."""
+class InfinityBGEEmbedder:
+    """Infinity embedding provider (OpenAI-compatible /embeddings)."""
 
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://rmi-ollama:11434")
-    MODEL = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3")
-    DIMS = int(os.getenv("OLLAMA_EMBED_DIMS", "1024"))
+    INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001")
+    MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+    DIMS = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
 
-    def __init__(self, ollama_url: str | None = None):
-        self.url = ollama_url or os.getenv("OLLAMA_URL", self.OLLAMA_URL)
+    def __init__(self, infinity_url: str | None = None):
+        self.url = infinity_url or os.getenv("INFINITY_URL", self.INFINITY_URL)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         import httpx
@@ -70,14 +70,16 @@ class OllamaBGEEmbedder:
             for text in texts:
                 try:
                     resp = await client.post(
-                        f"{self.url}/api/embeddings",
-                        json={"model": self.MODEL, "prompt": text[:500]},
+                        f"{self.url}/embeddings",
+                        json={"model": self.MODEL, "input": [text[:8000]]},
                     )
                     if resp.status_code == 200:
-                        vec = resp.json().get("embedding", [])
-                        if len(vec) == self.DIMS:
-                            results.append(vec)
-                            continue
+                        data = resp.json().get("data", [])
+                        if data:
+                            vec = data[0].get("embedding", [])
+                            if len(vec) == self.DIMS:
+                                results.append(vec)
+                                continue
                 except Exception:
                     logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
                 # Fallback: zero vector
@@ -90,7 +92,7 @@ class OllamaBGEEmbedder:
 
 
 class OpenRouterEmbedder:
-    """OpenRouter embedding API - NVIDIA Nemotron primary, qwen3-embed:4b fallback."""
+    """OpenRouter embedding API - NVIDIA Nemotron primary, BAAI/bge-m3 fallback."""
 
     BASE = "https://openrouter.ai/api/v1/embeddings"
     MODEL = OR_PRIMARY_EMBED

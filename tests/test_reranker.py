@@ -39,7 +39,7 @@ def test_rerank_returns_top_k_sorted():
     """ST backend: returns top_k docs sorted by cross score, with metadata keys."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=False)
+    reranker = Reranker(use_infinity=False)
     reranker._st_loaded = True
     # fake cross-encoder: reentrancy-related docs score higher
     fake_scores = [0.9, 0.1, 0.8]
@@ -83,7 +83,7 @@ def test_rerank_graceful_no_backend():
     """No backend available: returns docs sorted by original score, never raises."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=False)
+    reranker = Reranker(use_infinity=False)
     reranker._st_load_failed = True
     reranker._st_loaded = False
 
@@ -108,7 +108,7 @@ def test_rerank_empty_documents():
     """Empty candidate list returns empty list."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=False)
+    reranker = Reranker(use_infinity=False)
 
     async def run():
         return await reranker.rerank("anything", [], top_k=5)
@@ -116,11 +116,11 @@ def test_rerank_empty_documents():
     assert asyncio.run(run()) == []
 
 
-def test_ollama_backend_preferred_when_available():
-    """When Ollama has a reranker model, /api/rerank is used."""
+def test_infinity_backend_preferred_when_available():
+    """When Infinity has a reranker model, /rerank is used."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=True)
+    reranker = Reranker(use_infinity=True)
 
     async def fake_has():
         return True
@@ -128,8 +128,8 @@ def test_ollama_backend_preferred_when_available():
     async def fake_score(query, docs):
         return [0.9, 0.1]
 
-    reranker._ollama_has_reranker = fake_has
-    reranker._score_ollama = fake_score
+    reranker._infinity_has_reranker = fake_has
+    reranker._score_infinity = fake_score
 
     async def run():
         return await reranker.rerank(
@@ -145,27 +145,27 @@ def test_ollama_backend_preferred_when_available():
 
     assert len(results) == 2
     assert results[0]["id"] == "1"
-    assert results[0]["rerank_method"] == "ollama-bge-reranker-v2-m3"
+    assert results[0]["rerank_method"] == "infinity-bge-reranker-v2-m3"
 
 
-def test_ollama_failure_falls_back_to_st():
-    """Ollama /api/rerank failure → sentence-transformers fallback."""
+def test_infinity_failure_falls_back_to_st():
+    """Infinity /rerank failure → sentence-transformers fallback."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=True)
+    reranker = Reranker(use_infinity=True)
     reranker._st_loaded = True
 
     async def fake_has():
         return True
 
-    async def fake_ollama_fail(query, docs):
-        raise RuntimeError("ollama rerank unavailable")
+    async def fake_infinity_fail(query, docs):
+        raise RuntimeError("infinity rerank unavailable")
 
     def fake_st(query, docs):
         return [0.9, 0.1]
 
-    reranker._ollama_has_reranker = fake_has
-    reranker._score_ollama = fake_ollama_fail
+    reranker._infinity_has_reranker = fake_has
+    reranker._score_infinity = fake_infinity_fail
     reranker._score_st = fake_st
 
     async def run():
@@ -188,7 +188,7 @@ def test_health_check_shape():
     """health_check returns backend state metadata."""
     from rmi_rag.reranker import Reranker
 
-    reranker = Reranker(use_ollama=False)
+    reranker = Reranker(use_infinity=False)
     hc = reranker.health_check()
 
     assert "backend" in hc

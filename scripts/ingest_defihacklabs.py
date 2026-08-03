@@ -10,7 +10,7 @@ that reproduces a real DeFi exploit. For every ``.sol`` file we:
      the incident metadata in ``past/*/README.md``), vulnerability description
      (leading comments), and the raw code snippet.
   2. Chunk large files into 500-char windows with 50-char overlap.
-  3. Embed each chunk with bge-m3 (1024-dim, Ollama /api/embeddings).
+  3. Embed each chunk with bge-m3 (1024-dim, Infinity /v1/embeddings).
   4. Upsert into the ``threat_intel`` collection with metadata:
      category, severity, ecosystem=EVM, source=defihacklabs, source_url.
 
@@ -24,7 +24,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Ollama at OLLAMA_URL (default http://localhost:11434) with bge-m3 pulled
+  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
   - git, httpx, numpy
 """
 
@@ -42,7 +42,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from rmi_rag.bge_embedders import OllamaBGEEmbedder
+from rmi_rag.bge_embedders import InfinityBGEEmbedder
 from rmi_rag.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -328,7 +328,7 @@ async def ingest_files(
         )
         return total_chunks
 
-    embedder = OllamaBGEEmbedder(ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434"))
+    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
     store = QdrantVectorStore()
     inserted = 0
     skipped = 0

@@ -4,7 +4,7 @@ Rug Munch Intelligence - RAG Ingestion Pipeline
 Nightly indexing of ALL data sources into the RAG system.
 Feeds: news, CT rundown, market data, social metrics, on-chain data.
 
-Runs at 3AM UTC. Embeds via Ollama qwen3-embed:4b (2560d).
+Runs at 3AM UTC. Embeds via Infinity BAAI/bge-m3 (1024d).
 Redis-backed with permanence to B2.
 
 Incremental indexing: each successful ingest is tracked in a Redis delta
@@ -263,7 +263,7 @@ async def rag_health_check(**kw) -> dict:
             "status": "healthy",
             "total_documents": total,
             "collections": stats,
-            "embedder": "qwen3-embed:4b (Ollama, 2560d)",
+            "embedder": "BAAI/bge-m3 (Infinity, 1024d)",
             "storage": "Redis + B2 permanence",
             "nightly_cron": "3AM UTC",
             "checked_at": datetime.now(UTC).isoformat(),

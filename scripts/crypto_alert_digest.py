@@ -14,7 +14,7 @@ Detection pipeline:
      severity, chain, amount_lost_usd, date, protocol, source_type).
   4. Dedupe with ``incident_key = sha256(protocol + date + amount)[:12]``
      against alert points already stored in ``news`` (category=alert).
-  5. Embed each new incident (bge-m3 via Ollama) and store it in ``news``
+  5. Embed each new incident (bge-m3 via Infinity) and store it in ``news``
      with ``metadata.category = alert`` and ``source_type = alert_digest``;
      embed failures are non-fatal — the digest is still printed.
 
@@ -25,7 +25,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Ollama at OLLAMA_URL (default http://localhost:11434) with bge-m3 pulled
+  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
   - httpx
 """
 
@@ -42,7 +42,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import OllamaBGEEmbedder
+from rmi_rag.bge_embedders import InfinityBGEEmbedder
 from rmi_rag.crypto_schema import (
     detect_attack_vector,
     detect_chain,
@@ -442,7 +442,7 @@ async def store_alerts(
     if dry_run:
         return len(incidents), 0
 
-    embedder = OllamaBGEEmbedder(ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434"))
+    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
     store = QdrantVectorStore()
     stored = failed = 0
 

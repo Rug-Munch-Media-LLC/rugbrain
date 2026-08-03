@@ -21,7 +21,7 @@ For each entry we:
   2. Map the SWC ID to a canonical ``attack_vector`` and default ``severity``
      (see ``rmi_rag.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
   3. Build a structured weakness document and embed with bge-m3 (1024-dim,
-     Ollama /api/embeddings).
+     Infinity /v1/embeddings).
   4. Upsert into ``threat_intel`` with ``source=swc_registry`` and canonical
      metadata (attack_vector, severity, chain=ethereum, protocol=SWC ID,
      source_type=swc_registry).
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Ollama at OLLAMA_URL (default http://localhost:11434) with bge-m3 pulled
+  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
   - httpx
 """
 
@@ -52,7 +52,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import OllamaBGEEmbedder
+from rmi_rag.bge_embedders import InfinityBGEEmbedder
 from rmi_rag.crypto_schema import SWC_SEVERITY, SWC_VECTORS
 from rmi_rag.qdrant_store import QdrantVectorStore
 
@@ -210,7 +210,7 @@ async def ingest_docs(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d SWC entries into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = OllamaBGEEmbedder(ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434"))
+    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
     store = QdrantVectorStore()
     inserted = failed = 0
     try:

@@ -81,7 +81,7 @@ async def generate_content(
             "Authorization": f"Bearer {cfg['api_key']}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://rugmunch.io",
-            "X-Title": "RMI RAG",
+            "X-Title": "RugSense",
         }
         payload = {
             "model": cfg["model"],

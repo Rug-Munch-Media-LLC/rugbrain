@@ -401,6 +401,20 @@ async def search_threat_intel(
         ge=0,
         description="Range filter: only points with amount_lost_usd <= this value",
     ),
+    factuality_filter: str | None = Query(
+        default=None,
+        pattern="^(verified|reported|rumor)$",
+        description="Rating filter: only articles with this factuality rating (verified|reported|rumor)",
+    ),
+    min_source_tier: str | None = Query(
+        default=None,
+        pattern="^(established|independent)$",
+        description="Rating filter: only articles with at least this source reputation tier (established|independent)",
+    ),
+    require_corroboration: bool = Query(
+        default=False,
+        description="Rating filter: only articles corroborated by >= 3 independent sources",
+    ),
 ) -> dict:
     """
     Semantic search across scanner findings ingested into Qdrant.
@@ -422,9 +436,15 @@ async def search_threat_intel(
     payload field) and ``filter_amount_min`` / ``filter_amount_max`` (USD,
     compared on ``amount_lost_usd``).
 
+    Ground News-style rating filters (applied post-search): ``factuality_filter``
+    (verified|reported|rumor), ``min_source_tier`` (established|independent),
+    and ``require_corroboration`` (>= 3 independent sources). When any rating
+    filter is supplied, results whose rating conflicts are dropped, and the
+    survivors are reweighted so verified/corroborated articles rank higher.
+
     Example::
 
-        curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5"
+        curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5&factuality_filter=verified&require_corroboration=1"
     """
     from rmi_rag.embeddings import get_embedding
     from rmi_rag.qdrant_store import QdrantVectorStore, build_search_filters
@@ -503,6 +523,33 @@ async def search_threat_intel(
         except Exception as e:
             logger.debug("search rerank failed (non-critical): %s", e)
 
+    # ── Ground News-style rating filters + boosts ──
+    # Optional post-search filters drop articles whose rating conflicts with
+    # the requested quality bar. Rating boosts then reweight the survivors so
+    # verified/corroborated news ranks above unrated or rumor content.
+    rating_filters_applied = any([factuality_filter, min_source_tier, require_corroboration])
+    rating_boosts_applied = False
+    try:
+        from rmi_rag.ratings import apply_rating_boosts, filter_docs_by_ratings
+
+        results = filter_docs_by_ratings(
+            results,
+            factuality_filter=factuality_filter,
+            min_source_tier=min_source_tier,
+            require_corroboration=require_corroboration,
+        )
+        results = apply_rating_boosts(results)
+        rating_boosts_applied = any(r.get("rating_boosted") for r in results)
+        if rating_boosts_applied:
+            # Re-sort on the boosted score field (preserve rerank ordering
+            # when reranking ran, otherwise the retrieval score).
+            score_field = "combined_score" if reranker_applied else "similarity"
+            results.sort(key=lambda r: r.get(score_field, 0.0), reverse=True)
+    except ImportError:
+        logger.debug("rmi_rag.ratings not available — skipping rating filters")
+    except Exception as e:
+        logger.debug("rating filter/boost failed (non-critical): %s", e)
+
     return {
         "results": results,
         "query": q,
@@ -511,6 +558,8 @@ async def search_threat_intel(
         "filters_applied": filters is not None,
         "reranker_applied": reranker_applied,
         "reranker_method": reranker_method,
+        "rating_filters_applied": rating_filters_applied,
+        "rating_boosts_applied": rating_boosts_applied,
     }
 
 

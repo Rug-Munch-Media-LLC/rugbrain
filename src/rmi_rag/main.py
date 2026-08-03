@@ -1,5 +1,5 @@
 """
-RMI RAG — FastAPI application entry point.
+RugSense (formerly RMI RAG) — FastAPI application entry point.
 
 Mounts the existing APIRouter from endpoints.py, adds health/readiness probes,
 CORS middleware, API key authentication, and OpenTelemetry integration.
@@ -260,8 +260,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 # ── App ───────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="RMI RAG API",
-    description="Hybrid search, embeddings, chunking, and agentic retrieval for crypto intelligence",
+    title="RugSense API",
+    description="Hybrid search, embeddings, chunking, and agentic retrieval for crypto intelligence (formerly RMI RAG)",
     version="0.1.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -312,6 +312,7 @@ async def health() -> dict[str, Any]:
 
     # Re-probe Redis
     redis_ok = False
+    queue_depth = 0
     try:
         import redis.asyncio as aioredis
 
@@ -323,6 +324,11 @@ async def health() -> dict[str, Any]:
         )
         await r.ping()
         redis_ok = True
+        # Scanner→RAG ingest queue backlog (LPUSH'd by rmi-backend, LPOP'd by poller)
+        try:
+            queue_depth = int(await r.llen("rmi:rag:findings_queue") or 0)
+        except Exception:
+            queue_depth = -1
         await r.close()
     except Exception:
         redis_ok = False
@@ -359,6 +365,7 @@ async def health() -> dict[str, Any]:
         "redis": redis_ok,
         "qdrant_url": _health_state["qdrant_url"],
         "redis_host": _health_state["redis_host"],
+        "queue_depth": queue_depth,
         "scanner_subscriber": sub_running,
         "subscriber_stats": sub_stats,
         "scanner_poller": poll_running,

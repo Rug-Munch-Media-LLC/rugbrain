@@ -1,4 +1,4 @@
-# RMI RAG — Roadmap
+# RugSense — Roadmap
 
 **Next 90 days.**
 

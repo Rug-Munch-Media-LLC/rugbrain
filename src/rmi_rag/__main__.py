@@ -1,5 +1,5 @@
 """
-RMI RAG — CLI entry point.
+RugSense — CLI entry point.
 
 Usage:
     python -m rmi_rag           # Start FastAPI dev server (default)
@@ -12,7 +12,7 @@ import argparse
 
 def _main() -> None:
     parser = argparse.ArgumentParser(
-        description="RMI RAG — hybrid search, embeddings, chunking, agentic retrieval"
+        description="RugSense — hybrid search, embeddings, chunking, agentic retrieval"
     )
     parser.add_argument(
         "--ingest",

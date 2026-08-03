@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SPLADE + BM25 Sparse Search Engine for RMI RAG
+SPLADE + BM25 Sparse Search Engine for RugSense
 ================================================
 Implements proper learned sparse representations (SPLADE-style) and BM25
 with IDF weighting, replacing the naive token-overlap sparse search.

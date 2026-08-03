@@ -101,8 +101,8 @@ else:
 from rmi_rag.bge_embedders import (  # noqa: E402
     ContractCodeEmbedder,
     HuggingFaceEmbedder,
+    InfinityBGEEmbedder,
     LocalBGEEmbedder,
-    OllamaBGEEmbedder,
     OpenRouterEmbedder,
 )
 from rmi_rag.feature_extractors import (  # noqa: E402
@@ -156,7 +156,7 @@ class CryptoEmbedder:
 
     def __init__(self):
         self._local: LocalBGEEmbedder | None = None
-        self._ollama: OllamaBGEEmbedder | None = None
+        self._infinity: InfinityBGEEmbedder | None = None
         self._openrouter: OpenRouterEmbedder | None = None
         self._huggingface: HuggingFaceEmbedder | None = None
         self._redis = None
@@ -170,8 +170,8 @@ class CryptoEmbedder:
         hf_token = os.environ.get("HUGGINGFACE_TOKEN", "") or HF_TOKEN
 
         # PRIMARY embedding provider
-        self._ollama = OllamaBGEEmbedder()
-        logger.info("CryptoEmbedder: primary ollama embedder ready")
+        self._infinity = InfinityBGEEmbedder()
+        logger.info("CryptoEmbedder: primary infinity embedder ready")
 
         self._local = LocalBGEEmbedder()
         logger.info("CryptoEmbedder: local fallback embedder ready")
@@ -203,7 +203,7 @@ class CryptoEmbedder:
     async def _semantic_embed(self, texts: list[str], head: str = "semantic") -> list[list[float]]:
         """
         Semantic embedding pipeline with tiered fallback:
-        PRIMARY:   Primary embedder (e.g., Ollama)
+        PRIMARY:   Primary embedder (Infinity BAAI/bge-m3)
         FALLBACK:  OpenRouter or API-based embedder
         FALLBACK:  Local embedder (always available)
         FALLBACK:  HuggingFace embedder
@@ -213,11 +213,11 @@ class CryptoEmbedder:
             return []
 
         # PRIMARY embedder
-        if self._ollama:
+        if self._infinity:
             try:
-                return await self._ollama.embed(texts)
+                return await self._infinity.embed(texts)
             except Exception as e:
-                logger.warning("Primary ollama embedding failed: %s", e)
+                logger.warning("Primary infinity embedding failed: %s", e)
 
         # Fallback: OpenRouter
         if self._openrouter:
@@ -638,7 +638,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         return {
             "initialized": self._initialized,
             "providers": {
-                "primary": self._ollama is not None,
+                "primary": self._infinity is not None,
                 "fallback_api": self._openrouter is not None,
                 "local": self._local is not None,
                 "huggingface": self._huggingface is not None,

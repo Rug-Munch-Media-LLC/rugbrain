@@ -1,10 +1,10 @@
 <!--
 SPDX-License-Identifier: MIT
 Copyright (c) 2026 Rug Munch Media LLC
-Part of RMI RAG — https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Part of RugSense — https://git.rugmunch.io/RugMunchMedia/rmi-rag
 -->
 
-# Contributing to RMI RAG
+# Contributing to RugSense
 
 > Qdrant collections, embeddings, ingestion scripts. Python 3.12.
 

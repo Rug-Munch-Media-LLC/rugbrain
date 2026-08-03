@@ -13,8 +13,8 @@
 set -euo pipefail
 
 # ── Concurrency guard: never run two ingests at once ─────────────────
-# Cron fires every 15 min but a run can exceed 15 min (Ollama cold
-# starts, slow RSS). Without a lock, runs pile up and saturate Ollama.
+# Cron fires every 15 min but a run can exceed 15 min (Infinity cold
+# starts, slow RSS). Without a lock, runs pile up and saturate Infinity.
 # flock -n fails fast: if another run holds the lock we exit 0 (skip,
 # the next scheduled run will pick up). The lock is auto-released when
 # this process exits (fd 200 closed), plus an explicit EXIT trap.
@@ -55,13 +55,13 @@ if [ -x "$PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-      OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}" \
+      INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
       "$PYTHON" scripts/news_to_rag.py)
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-      OLLAMA_URL="${OLLAMA_URL:-http://127.0.0.1:11434}" \
+      INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
       python3 scripts/news_to_rag.py)
 fi
 

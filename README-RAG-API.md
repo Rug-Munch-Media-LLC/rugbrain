@@ -1,8 +1,8 @@
-# RMI-RAG API — Shared Threat Intelligence
+# RugSense API — Shared Threat Intelligence
 
-RMI-RAG provides semantic search and scam detection across the RugMunch fleet.
-All RugMunch apps can query it for token safety, known scam patterns, and
-threat intelligence.
+RugSense (formerly RMI-RAG) provides semantic search and scam detection across
+the RugMunch fleet. All RugMunch apps can query it for token safety, known
+scam patterns, and threat intelligence.
 
 ## Base URL
 
@@ -25,7 +25,7 @@ GET /api/v1/search?q=<query>&limit=10&collection=threat_intel
 ```
 
 Semantic search across ingested scanner findings. Returns similar results
-by vector similarity (Ollama nomic-embed-text, 768 dimensions).
+by vector similarity (Infinity BAAI/bge-m3, 1024 dimensions).
 
 **Parameters:**
 - `q` (required) — search query, e.g., token address or scam description
@@ -158,7 +158,7 @@ console.log(data.scam_risk);
 │  Client  │ ────────▶ │  rmi-rag (FastAPI, port 8012)       │
 │  App     │           │                                      │
 └──────────┘           │  ┌────────┐  ┌──────────────────┐   │
-                       │  │ Qdrant │  │ Ollama Embeddings│   │
+                       │  │ Qdrant │  │ Infinity Embed │   │
                        │  │ Vector │  │ nomic-embed-text │   │
                        │  │ Store  │  │ 768d             │   │
                        │  └────────┘  └──────────────────┘   │

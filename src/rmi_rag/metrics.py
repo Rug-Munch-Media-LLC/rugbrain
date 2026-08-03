@@ -61,9 +61,9 @@ qdrant_healthy = Gauge(
     "rag_qdrant_healthy",
     "Qdrant health status",
 )
-ollama_healthy = Gauge(
-    "rag_ollama_healthy",
-    "Ollama health status",
+infinity_healthy = Gauge(
+    "rag_infinity_healthy",
+    "Infinity (embedding/reranking) health status",
 )
 
 

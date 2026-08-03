@@ -10,7 +10,7 @@ tags (chains / attack vectors), and an excerpt describing the incident.
 For each hack we:
   1. Build a structured description: protocol, date, amount, attack vector,
      chain, excerpt.
-  2. Embed with bge-m3 (1024-dim dense) via Ollama.
+  2. Embed with bge-m3 (1024-dim dense) via Infinity (OpenAI-compatible /v1/embeddings).
   3. Upsert into the ``hacks`` collection using the store ``insert`` method
      (dense-only collection; sparse vectors are auto-computed when the
      collection is configured with a ``bm25`` sparse vector).
@@ -28,7 +28,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Ollama at OLLAMA_URL (default http://localhost:11434) with bge-m3 pulled
+  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
   - httpx
 """
 
@@ -46,7 +46,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import OllamaBGEEmbedder
+from rmi_rag.bge_embedders import InfinityBGEEmbedder
 from rmi_rag.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -204,7 +204,7 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = OllamaBGEEmbedder(ollama_url=os.getenv("OLLAMA_URL", "http://localhost:11434"))
+    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
     store = QdrantVectorStore()
     inserted = 0
     failed = 0

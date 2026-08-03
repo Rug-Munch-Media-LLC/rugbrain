@@ -1,6 +1,6 @@
 [//]: # (SPDX-License-Identifier: MIT)
 [//]: # (Copyright (c) 2026 Rug Munch Media LLC)
-# AGENTS.md — RMI RAG
+# AGENTS.md — RugSense
 
 > AI agent contract. Read this before touching anything in this repo.
 
