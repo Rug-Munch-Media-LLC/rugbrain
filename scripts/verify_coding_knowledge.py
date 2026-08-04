@@ -11,6 +11,8 @@ collections) and reports PASS/FAIL:
      patterns (canonical bumps, seed validation).
   3. "Move vs Solidity resource model" → comparison of the linear resource
      model vs EVM accounting.
+  4. "what is a flash loan attack pattern" → exploit knowledge (defi_exploits,
+     scam_patterns) + coding guidance.
 
 Usage:
     python scripts/verify_coding_knowledge.py
@@ -46,22 +48,31 @@ DEFAULT_COLLECTIONS = (
     "audit_findings",
 )
 
-# (query, pass-keywords, label)
-QUERIES: list[tuple[str, tuple[str, ...], str]] = [
+# (query, collections, pass-keywords, label)
+QUERIES: list[tuple[str, tuple[str, ...], tuple[str, ...], str]] = [
     (
         "how to implement reentrancy guard in Solidity",
+        DEFAULT_COLLECTIONS,
         ("reentrancyguard", "nonreentrant", "checks-effects", "cei", "openzeppelin"),
         "reentrancy guard implementation",
     ),
     (
         "Solana PDA security best practices",
+        DEFAULT_COLLECTIONS,
         ("pda", "bump", "seed", "anchor", "derived"),
         "Solana PDA security",
     ),
     (
         "Move vs Solidity resource model",
+        DEFAULT_COLLECTIONS,
         ("resource", "move", "copy", "drop", "linear"),
         "Move vs Solidity resource model",
+    ),
+    (
+        "what is a flash loan attack pattern",
+        ("defi_exploits", "scam_patterns", "contract_security", "coding_knowledge"),
+        ("flash loan", "flashloan", "flash-loan", "borrow", "callback", "liquidity"),
+        "flash loan attack pattern",
     ),
 ]
 
@@ -106,8 +117,9 @@ async def verify_queries(collections: tuple[str, ...]) -> list[dict[str, Any]]:
     embedder = InfinityBGEEmbedder()
     results: list[dict[str, Any]] = []
     try:
-        for query, keywords, label in QUERIES:
-            hits = await run_query(store, embedder, query, collections)
+        for query, query_collections, keywords, label in QUERIES:
+            effective = query_collections or collections
+            hits = await run_query(store, embedder, query, effective)
             combined = " ".join(h.get("content", "") for h in hits).lower()
             matched = [kw for kw in keywords if kw.lower() in combined]
             passed = bool(matched)
@@ -115,7 +127,7 @@ async def verify_queries(collections: tuple[str, ...]) -> list[dict[str, Any]]:
                 {
                     "query": query,
                     "label": label,
-                    "collections": list(collections),
+                    "collections": list(effective),
                     "passed": passed,
                     "matched_keywords": matched,
                     "top_hits": [
