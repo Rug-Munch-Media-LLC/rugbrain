@@ -144,7 +144,7 @@ def _load_file(path: Path) -> list[dict[str, Any]]:
     except Exception:
         yaml = None
     if not entries:
-        entries = _parse_yaml_entries(raw, path.name, f"https://github.com/CryptoScamDB/blacklist")
+        entries = _parse_yaml_entries(raw, path.name, "https://github.com/CryptoScamDB/blacklist")
     return entries
 
 

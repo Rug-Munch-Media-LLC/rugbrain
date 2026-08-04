@@ -19,8 +19,6 @@ The main engine (``rmi_rag.news_rating``) merges this table into its
 
 from __future__ import annotations
 
-from typing import Any
-
 #: domain -> (0-100 reputation, tier label)
 EXTENDED_SOURCE_REPUTATION: dict[str, tuple[int, str]] = {
     # ── Global wire services / top-tier financial media ────────────────

@@ -273,3 +273,168 @@ async def test_search_token_address_includes_pattern_matches(client, monkeypatch
     assert resp.status_code in (200, 503)
     if resp.status_code == 200:
         assert resp.json()["pattern_matches"]["verdict"]["risk"] == "high"
+
+
+# ── Part 3: GET /api/v1/market/mood ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_market_mood_fail_open(client, monkeypatch):
+    """GET /api/v1/market/mood returns neutral values when providers fail."""
+    import rmi_rag.market_context as mc
+
+    async def fake_mood(chain: str) -> dict:
+        return {
+            "fear_index": 20.0,
+            "fear_classification": "fearful",
+            "market_sentiment": "fearful",
+            "recent_exploits_24h": 3,
+            "chain_volume_24h": -4.2,
+            "chain_activity": {
+                "chain": chain,
+                "tvl": 5e10,
+                "tvl_change_24h": -4.2,
+                "new_deploys_24h": 12,
+            },
+            "generated_at": "2026-08-04T00:00:00Z",
+        }
+
+    monkeypatch.setattr(mc, "build_market_mood", fake_mood)
+    resp = await client.get("/api/v1/market/mood?chain=ethereum")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["fear_index"] == 20.0
+    assert data["market_sentiment"] == "fearful"
+    assert data["recent_exploits_24h"] == 3
+
+
+@pytest.mark.asyncio
+async def test_market_mood_fallback_on_error(client, monkeypatch):
+    """GET /api/v1/market/mood degrades to neutral when build raises."""
+    import rmi_rag.market_context as mc
+
+    async def boom(chain: str) -> dict:
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(mc, "build_market_mood", boom)
+    resp = await client.get("/api/v1/market/mood")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["fear_index"] == 50.0
+    assert "error" in data
+
+
+# ── Part 3: GET /api/v1/market/context/{address} ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_market_context_invalid_address(client):
+    """GET /api/v1/market/context/{address} rejects non-address input."""
+    resp = await client.get("/api/v1/market/context/not-an-address")
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_market_context_token(client, monkeypatch):
+    """GET /api/v1/market/context/{address} returns the full context."""
+    import rmi_rag.market_context as mc
+
+    async def fake_context(address: str, chain: str) -> dict:
+        return {
+            "address": address,
+            "chain": chain,
+            "fear_index": 30.0,
+            "fear_classification": "fearful",
+            "market_sentiment": "fearful",
+            "chain_activity": {
+                "chain": chain,
+                "tvl": 1e9,
+                "tvl_change_24h": -2.0,
+                "new_deploys_24h": 5,
+            },
+            "chain_volume_24h": -2.0,
+            "recent_exploits": [{"protocol": "Example", "chain": chain}],
+            "social_signals": {
+                "sentiment": "bearish",
+                "confidence": 0.6,
+                "mentions": 8,
+                "mention_velocity": 40.0,
+            },
+            "deployer_freshness": "new",
+            "similar_tokens": [],
+            "generated_at": "2026-08-04T00:00:00Z",
+        }
+
+    monkeypatch.setattr(mc, "build_token_market_context", fake_context)
+    resp = await client.get(f"/api/v1/market/context/{VALID_ADDRESS}?chain=ethereum")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["fear_index"] == 30.0
+    assert data["social_signals"]["mention_velocity"] == 40.0
+    assert data["deployer_freshness"] == "new"
+    assert data["recent_exploits"][0]["protocol"] == "Example"
+
+
+# ── Part 4: GET /api/v1/analyze/{address}/full ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_analyze_full_invalid_address(client):
+    """GET /api/v1/analyze/{address}/full rejects non-address input."""
+    resp = await client.get("/api/v1/analyze/not-an-address/full")
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_analyze_full_sections(client, monkeypatch):
+    """GET /api/v1/analyze/{address}/full returns every section fail-open."""
+    import rmi_rag.endpoints as ep
+    import rmi_rag.market_context as mc
+
+    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+        return {
+            "address": address,
+            "chain": chain,
+            "verdict": {"risk": "high", "confidence": 0.8, "top_pattern": "honeypot"},
+            "fear_index": 30,
+            "matched_patterns": [{"name": "honeypot", "confidence": 0.8}],
+            "risk_signals": ["sell-tax-high"],
+            "cross_reference": {"backend": "none", "similar_tokens": [], "narrative": ""},
+            "contract_security": {"assessment": "unverified", "source_fetched": False},
+        }
+
+    async def fake_market(address: str, chain: str) -> dict:
+        return {
+            "address": address,
+            "chain": chain,
+            "fear_index": 30.0,
+            "market_sentiment": "fearful",
+            "recent_exploits": [],
+            "social_signals": {"sentiment": "neutral"},
+            "deployer_freshness": "new",
+            "similar_tokens": [],
+        }
+
+    monkeypatch.setattr(ep, "_analyze_address_findings", fake_findings)
+    monkeypatch.setattr(mc, "build_token_market_context", fake_market)
+    resp = await client.get(f"/api/v1/analyze/{VALID_ADDRESS}/full?chain=ethereum")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["address"] == VALID_ADDRESS
+    assert data["pattern_matching"]["verdict"]["risk"] == "high"
+    assert data["market_context"]["fear_index"] == 30.0
+    assert data["scanner_risk_score"]["available"] is False
+    assert data["social_sentiment"]["sentiment"] == "unknown"
+    assert data["code_analysis"]["assessment"] == "unverified"
+    assert data["known_scam_associations"]["matched"] is False
+    # Every section key must exist.
+    for section in (
+        "pattern_matching",
+        "cross_reference",
+        "market_context",
+        "scanner_risk_score",
+        "social_sentiment",
+        "code_analysis",
+        "known_scam_associations",
+    ):
+        assert section in data

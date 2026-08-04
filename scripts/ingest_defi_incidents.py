@@ -47,7 +47,7 @@ if sys_path_scripts not in os.sys.path:
     os.sys.path.insert(0, sys_path_scripts)
 
 from ingest_common import content_hash  # noqa: E402
-from ingest_common2 import build_doc, write_docs  # noqa: E402
+from ingest_common2 import write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/kismp123/DeFi-Security-Incident.git"
 REPO_DIR = os.getenv("DEFI_INCIDENTS_DIR", "/tmp/rag-defi-incidents")  # noqa: S108
@@ -168,7 +168,7 @@ def _parse_incident(path: Path) -> dict[str, Any] | None:
         "amount_lost_usd": amount,
         "root_cause": root_cause[:2000],
         "severity": "critical" if amount >= 1e7 else ("high" if amount else "medium"),
-        "source_url": poc or f"https://github.com/kismp123/DeFi-Security-Incident",
+        "source_url": poc or "https://github.com/kismp123/DeFi-Security-Incident",
         "rel_path": path.relative_to(path.parent.parent).as_posix(),
     }
     return {
@@ -233,7 +233,7 @@ def _date_to_ts(date_iso: str) -> int:
     try:
         return int(
             _dt.datetime(
-                int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=_dt.timezone.utc
+                int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=_dt.UTC
             ).timestamp()
         )
     except ValueError:

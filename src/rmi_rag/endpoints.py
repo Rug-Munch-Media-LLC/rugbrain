@@ -1205,3 +1205,255 @@ async def fear_index_history_endpoint(
             "source": "error",
             "error": str(exc)[:200],
         }
+
+
+@router.get("/market/mood")
+async def market_mood_endpoint(
+    request: Request,
+    chain: str = Query(default="ethereum", description="Chain to scope chain activity"),
+) -> dict[str, Any]:
+    """Global market mood digest (fear index + chain activity + recent exploits).
+
+    Called by the scanner before each scan (Part 1 — market-aware scanning)::
+
+        curl "http://localhost:8012/api/v1/market/mood?chain=ethereum"
+
+    Returns ``fear_index``, ``market_sentiment``, ``recent_exploits_24h``,
+    ``chain_volume_24h`` (TVL change) and ``chain_activity``. Fails open to
+    neutral values when providers are unreachable.
+    """
+    from rmi_rag.market_context import build_market_mood
+
+    try:
+        return await build_market_mood(chain=chain)
+    except Exception as exc:
+        logger.warning("market_mood_failed: %s", exc)
+        return {
+            "fear_index": 50.0,
+            "fear_classification": "neutral",
+            "market_sentiment": "neutral",
+            "recent_exploits_24h": 0,
+            "chain_volume_24h": 0.0,
+            "chain_activity": {
+                "chain": chain,
+                "tvl": 0.0,
+                "tvl_change_24h": 0.0,
+                "new_deploys_24h": 0,
+            },
+            "generated_at": datetime.now(UTC).isoformat(),
+            "error": str(exc)[:200],
+        }
+
+
+@router.get("/market/context/{address}")
+async def market_context_token_endpoint(
+    request: Request,
+    address: str,
+    chain: str = Query(default="ethereum", description="Chain of the token/contract"),
+) -> dict[str, Any]:
+    """Full market context for a token (Part 3 — called by the scanner).
+
+    Aggregates fear index, chain activity (24h volume + new deploys),
+    social signals (mentions + sentiment), recent exploits in the same
+    category/chain, and the performance of historically similar tokens::
+
+        curl "http://localhost:8012/api/v1/market/context/0xabc...?chain=ethereum"
+
+    Fails open: every provider degrades to neutral values so the scanner
+    always gets a well-formed context object.
+    """
+    if not _is_token_address(address):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_address",
+                "message": "address must be a 0x-prefixed 40-hex token/contract address",
+            },
+        )
+
+    from rmi_rag.market_context import build_token_market_context
+
+    try:
+        return await build_token_market_context(address=address, chain=chain)
+    except Exception as exc:
+        logger.warning("market_context_failed: %s", exc)
+        return {
+            "address": address,
+            "chain": chain,
+            "fear_index": 50.0,
+            "fear_classification": "neutral",
+            "market_sentiment": "neutral",
+            "chain_activity": {
+                "chain": chain,
+                "tvl": 0.0,
+                "tvl_change_24h": 0.0,
+                "new_deploys_24h": 0,
+            },
+            "chain_volume_24h": 0.0,
+            "recent_exploits": [],
+            "social_signals": {
+                "sentiment": "unknown",
+                "confidence": 0.0,
+                "mentions": 0,
+                "mention_velocity": 0.0,
+            },
+            "deployer_freshness": "unknown",
+            "similar_tokens": [],
+            "generated_at": datetime.now(UTC).isoformat(),
+            "error": str(exc)[:200],
+        }
+
+
+@router.get("/analyze/{address}/full")
+async def analyze_token_full(
+    request: Request,
+    address: str,
+    chain: str = Query(default="ethereum", description="Chain of the token/contract"),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> dict[str, Any]:
+    """Comprehensive "everything we know about this token" analysis.
+
+    Combines pattern matching, historical cross-reference (similar tokens),
+    market context, social sentiment, code analysis (when contract source is
+    verified) and known scam associations into a single report (Part 4)::
+
+        curl "http://localhost:8012/api/v1/analyze/0xabc.../full?chain=ethereum"
+
+    The scanner risk score is included when a prior scan of this address
+    exists in the ``scanner_feedback`` collection. Every section is
+    fail-open — an unavailable backend yields an empty block, never a 500.
+    """
+    if not _is_token_address(address):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_address",
+                "message": "address must be a 0x-prefixed 40-hex token/contract address",
+            },
+        )
+
+    # ── Section 1: Pattern matching + cross-reference (historical) ──
+    findings = await _analyze_address_findings(address, chain, limit)
+
+    # ── Section 2: Market context ──
+    try:
+        from rmi_rag.market_context import build_token_market_context
+
+        market_context = await build_token_market_context(address=address, chain=chain)
+    except Exception as exc:
+        logger.warning("analyze_full_market_failed: %s", exc)
+        market_context = {
+            "address": address,
+            "chain": chain,
+            "fear_index": 50.0,
+            "market_sentiment": "neutral",
+            "recent_exploits": [],
+            "social_signals": {},
+            "deployer_freshness": "unknown",
+            "similar_tokens": [],
+            "error": str(exc)[:200],
+        }
+
+    # ── Section 3: Scanner risk score (if a prior scan exists) ──
+    scanner_score: dict[str, Any] = {"available": False}
+    try:
+        from rmi_rag.scanner_feedback import FEEDBACK_COLLECTION
+        from rmi_rag.qdrant_store import QdrantVectorStore, build_qdrant_filter
+
+        store = QdrantVectorStore()
+        try:
+            qdrant_filter = build_qdrant_filter({"metadata.token_address": address.lower()})
+            results, _ = await store.scroll(
+                FEEDBACK_COLLECTION,
+                limit=1,
+                filters=qdrant_filter,
+            )
+            if results:
+                meta = results[0].get("metadata") or {}
+                scanner_score = {
+                    "available": True,
+                    "risk_score": meta.get("risk_score", 0.0),
+                    "risk_level": meta.get("risk_level", "unknown"),
+                    "signals": meta.get("signals", []),
+                    "scanner_version": meta.get("scanner_version", ""),
+                    "ingested_at": meta.get("ingested_at", ""),
+                }
+        finally:
+            await store.close()
+    except Exception as exc:
+        logger.debug("analyze_full_scanner_score_failed: %s", exc)
+
+    # ── Section 4: Social sentiment ──
+    try:
+        from rmi_rag.sentiment_engine import analyze_token_sentiment
+
+        sentiment = await analyze_token_sentiment(address=address, chain=chain)
+        social_sentiment = {
+            "sentiment": sentiment.sentiment,
+            "confidence": sentiment.confidence,
+            "signals": sentiment.signals,
+            "source_counts": sentiment.source_counts,
+        }
+    except Exception as exc:
+        logger.debug("analyze_full_sentiment_failed: %s", exc)
+        social_sentiment = {
+            "sentiment": "unknown",
+            "confidence": 0.0,
+            "signals": [],
+            "source_counts": {},
+        }
+
+    # ── Section 5: Code analysis (if contract verified) ──
+    code_analysis = findings.get("contract_security", {})
+    if not isinstance(code_analysis, dict):
+        code_analysis = {}
+
+    # ── Section 6: Known scam associations ──
+    known_scams: dict[str, Any] = {"matched": False, "entries": []}
+    try:
+        from rmi_rag.qdrant_store import QdrantVectorStore, build_search_filters
+
+        store = QdrantVectorStore()
+        try:
+            scam_filter = build_search_filters(chain=chain, collection="threat_intel")
+            results, _ = await store.scroll(
+                "threat_intel",
+                limit=10,
+                filters=scam_filter,
+            )
+            entries = []
+            for r in results or []:
+                meta = r.get("metadata") or {}
+                content = str(r.get("content", ""))[:300]
+                if address.lower() in content.lower():
+                    entries.append(
+                        {
+                            "severity": meta.get("severity", r.get("severity", "")),
+                            "source": meta.get("source", r.get("source", "")),
+                            "protocol": meta.get("protocol", ""),
+                            "content": content,
+                        }
+                    )
+            known_scams = {"matched": bool(entries), "entries": entries[:10]}
+        finally:
+            await store.close()
+    except Exception as exc:
+        logger.debug("analyze_full_scams_failed: %s", exc)
+
+    return {
+        "address": address,
+        "chain": chain,
+        "analyzed_at": datetime.now(UTC).isoformat(),
+        "pattern_matching": {
+            "verdict": findings.get("verdict"),
+            "fear_index": findings.get("fear_index"),
+            "matched_patterns": findings.get("matched_patterns", []),
+            "risk_signals": findings.get("risk_signals", []),
+        },
+        "cross_reference": findings.get("cross_reference"),
+        "market_context": market_context,
+        "scanner_risk_score": scanner_score,
+        "social_sentiment": social_sentiment,
+        "code_analysis": code_analysis,
+        "known_scam_associations": known_scams,
+    }

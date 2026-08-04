@@ -35,7 +35,7 @@ def clean_store(monkeypatch):
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     # Qdrant scroll is patched at the router level so /live falls back to
     # the process-local store instead of hitting a real Qdrant.
-    async def no_scroll(limit: int = 100):  # noqa: ANN001
+    async def no_scroll(limit: int = 100):
         return []
 
     monkeypatch.setattr(ar, "scroll_live_threats", no_scroll)

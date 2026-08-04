@@ -215,7 +215,7 @@ def _date_to_ts(date_iso: str) -> int:
         return 0
     try:
         return int(
-            _dt.datetime.fromisoformat(date_iso).replace(tzinfo=_dt.timezone.utc).timestamp()
+            _dt.datetime.fromisoformat(date_iso).replace(tzinfo=_dt.UTC).timestamp()
         )
     except ValueError:
         return 0

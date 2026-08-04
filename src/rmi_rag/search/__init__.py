@@ -17,10 +17,13 @@ from ._state import (
     _seeded,
 )
 from .engine import (
+    CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     _enrich_ann_results,
+    detect_coding_query,
     detect_scam_query,
     resolve_search_collections,
+    search_coding_knowledge,
     search_multi_collection,
     search_scam_knowledge,
     search_similar,
@@ -38,6 +41,8 @@ from .filters import (
 from .ranking import _classify_query
 
 __all__ = [
+    # Coding-knowledge collections
+    "CODING_COLLECTIONS",
     # External re-exports
     "COLLECTIONS",
     "KNOWN_SCAM_PATTERNS",
@@ -52,6 +57,7 @@ __all__ = [
     "_pattern_cache_loaded",
     "_preembed_scam_patterns",
     "_seeded",
+    "detect_coding_query",
     "detect_scam_patterns",
     "detect_scam_query",
     "get_goplus_analysis",
@@ -59,6 +65,7 @@ __all__ = [
     "ingest_document",
     "ingest_forensic_report",
     "resolve_search_collections",
+    "search_coding_knowledge",
     "search_multi_collection",
     "search_scam_knowledge",
     "search_similar",

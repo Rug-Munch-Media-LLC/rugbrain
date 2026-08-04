@@ -46,6 +46,89 @@ SCAM_COLLECTIONS: tuple[str, ...] = (
     "audit_findings",
 )
 
+# ═══════════════════════════════════════════════════════════════════
+# CODING-KNOWLEDGE COLLECTIONS
+# ═══════════════════════════════════════════════════════════════════
+# Populated by scripts/ingest_solidity_knowledge.py,
+# scripts/ingest_rust_solana_knowledge.py, scripts/ingest_alt_vm_knowledge.py
+# and scripts/ingest_security_guides.py. `coding_knowledge` carries
+# language/framework/security-guide docs with code snippets; the pattern
+# collections carry known-good/bad contract code. Code-intent queries
+# ("how to implement X in Solidity", "Rust Solana program example",
+# "secure ERC20") are routed here first so RugBrain answers as a
+# smart-contract development expert.
+CODING_COLLECTIONS: tuple[str, ...] = (
+    "coding_knowledge",
+    "solidity_patterns",
+    "solana_patterns",
+    "contract_security",
+    "audit_findings",
+)
+
+# Keywords that strongly indicate a smart-contract / coding question.
+_CODING_QUERY_HINTS = (
+    # Languages / ecosystems.
+    "solidity",
+    "smart contract",
+    "smart contracts",
+    "erc20",
+    "erc721",
+    "erc1155",
+    "erc4626",
+    "erc-20",
+    "erc-721",
+    "openzeppelin",
+    "yul",
+    "evm",
+    "abi encoding",
+    "abi.decode",
+    "abi.encode",
+    "storage layout",
+    "gas optimization",
+    "solana",
+    "anchor framework",
+    "anchor program",
+    "program derived address",
+    "pda",
+    "cpi",
+    "cross-program",
+    "spl token",
+    "token program",
+    "associated token",
+    "rent exemption",
+    "system program",
+    "bpf",
+    "move language",
+    "aptos",
+    "sui",
+    "cairo",
+    "starknet",
+    "starknet contract",
+    # Intent markers.
+    "how to implement",
+    "how to write",
+    "how to build",
+    "how to code",
+    "code example",
+    "code snippet",
+    "in solidity",
+    "in rust",
+    "in move",
+    "in cairo",
+    "smart contract development",
+    "contract development",
+    "reentrancy guard",
+    "nonreentrant",
+    "checks-effects-interactions",
+    "secure erc",
+    "secure token",
+    "secure contract",
+    "contract best practice",
+    "resource model",
+    "resource-oriented",
+    "formal verification",
+)
+
 # Keywords that strongly indicate a scam/exploit/intel query. Matching one
 # routes the search to SCAM_COLLECTIONS (in addition to any explicit list).
 _SCAM_QUERY_HINTS = (
@@ -96,6 +179,19 @@ def detect_scam_query(query: str) -> bool:
     return any(hint in q for hint in _SCAM_QUERY_HINTS)
 
 
+def detect_coding_query(query: str) -> bool:
+    """Return True when *query* looks like a smart-contract coding question.
+
+    Code-intent queries ("how to implement X in Solidity", "Solana PDA
+    security best practices", "secure ERC20") are routed to
+    CODING_COLLECTIONS first so RugBrain answers as a development expert.
+    """
+    q = (query or "").lower()
+    if not q:
+        return False
+    return any(hint in q for hint in _CODING_QUERY_HINTS)
+
+
 def resolve_search_collections(
     collections: list[str] | tuple[str, ...] | None,
     query: str | None = None,
@@ -103,11 +199,14 @@ def resolve_search_collections(
     """Resolve the effective collection list for a search.
 
     - Explicit ``collections`` is returned as-is (caller wins).
-    - Otherwise, scam/exploit queries search SCAM_COLLECTIONS first, then the
-      default COLLECTIONS; general queries use only COLLECTIONS.
+    - Otherwise, code-intent queries search CODING_COLLECTIONS first, then the
+      default COLLECTIONS; scam/exploit queries search SCAM_COLLECTIONS first;
+      general queries use only COLLECTIONS.
     """
     if collections:
         return list(collections)
+    if query and detect_coding_query(query):
+        return [*CODING_COLLECTIONS, *COLLECTIONS]
     if query and detect_scam_query(query):
         return [*SCAM_COLLECTIONS, *COLLECTIONS]
     return list(COLLECTIONS)
@@ -710,6 +809,54 @@ async def search_scam_knowledge(
         "query": query,
         "collections": colls,
         "scam_knowledge": True,
+        "results": results,
+        "total": len(results),
+    }
+
+
+async def search_coding_knowledge(
+    query: str,
+    collections: list[str] | None = None,
+    limit: int = 10,
+    min_similarity: float = 0.4,
+) -> dict[str, Any]:
+    """Search the smart-contract coding-knowledge base.
+
+    Defaults to CODING_COLLECTIONS (coding_knowledge, solidity_patterns,
+    solana_patterns, contract_security, audit_findings). Results whose content
+    carries code (contract/function/struct bodies) are flagged with
+    ``has_code_snippet`` so callers can render code-first answers with
+    explanations. Returns results plus the routed collection list so callers
+    can see which knowledge buckets were consulted.
+    """
+    colls = resolve_search_collections(collections or list(CODING_COLLECTIONS), query)
+    results = await search_multi_collection(
+        query, collections=colls, limit=limit, min_similarity=min_similarity
+    )
+    for r in results:
+        content = (r.get("content", "") or "").lower()
+        r["has_code_snippet"] = any(
+            marker in content
+            for marker in (
+                "contract ",
+                "function ",
+                "pub fn",
+                "struct ",
+                "mod ",
+                "fun ",
+                "fn ",
+                "pragma solidity",
+                "use anchor",
+                "mod ",
+                "```",
+                "contract {",
+                "struct {",
+            )
+        )
+    return {
+        "query": query,
+        "collections": colls,
+        "coding_knowledge": True,
         "results": results,
         "total": len(results),
     }

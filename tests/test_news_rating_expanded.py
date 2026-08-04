@@ -7,7 +7,6 @@ import pytest
 
 from rmi_rag import news_rating as nr
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Expanded source credibility database (100+ sources)
 # ═══════════════════════════════════════════════════════════════════════

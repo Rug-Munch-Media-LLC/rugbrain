@@ -48,7 +48,7 @@ sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
 if sys_path_scripts not in os.sys.path:
     os.sys.path.insert(0, sys_path_scripts)
 
-from ingest_common2 import build_doc, write_docs  # noqa: E402
+from ingest_common2 import write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/cryptosafetyfirst/csf-crypto-incident-database.git"
 REPO_DIR = os.getenv("CSF_INCIDENTS_DIR", "/tmp/rag-csf-incidents")  # noqa: S108
