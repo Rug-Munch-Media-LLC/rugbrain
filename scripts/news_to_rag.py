@@ -103,6 +103,37 @@ def _derive_category(article: dict) -> str:
     return "crypto"
 
 
+def _rate_article_payload(article: dict, text: str) -> tuple[dict, int]:
+    """Run the multi-axis news rating engine over one article.
+
+    Returns ``(rating_payload, quality_score)``. The payload carries the
+    legacy ``ratings.py`` keys plus the seven 0-100 axes and
+    ``quality_score``, so search-side boost/demote works unchanged.
+    Fail-open: on any rating error return an empty payload + neutral 50 so
+    ingestion never breaks on the enrichment step.
+    """
+    try:
+        from rmi_rag.news_rating import rate_article
+
+        rating = rate_article(
+            {
+                "url": article.get("url") or "",
+                "source": article.get("source") or "",
+                "title": article.get("title") or "",
+                "content": text,
+                "published_at": article.get("published_at"),
+                "corroborating_sources": 0,
+                "chains_mentioned": article.get("chains_mentioned") or [],
+                "tokens_mentioned": article.get("tokens_mentioned") or [],
+            }
+        )
+        payload = rating.to_payload()
+        return payload, int(payload.get("quality_score", 50))
+    except Exception as e:
+        logger.warning("news_rating_failed news_id=%s err=%s", article.get("news_id"), e)
+        return {}, 50
+
+
 # ── Qdrant REST helpers ────────────────────────────────────────────────
 async def _ensure_collection(client: httpx.AsyncClient, base: str) -> bool:
     """Create the `news` collection (1024d Cosine) if missing. Idempotent."""
@@ -305,6 +336,17 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
             # Group completed vectors by article and upsert
             for article, chunks in articles:
                 news_id = article["news_id"]
+                text = "\n".join(
+                    filter(
+                        None,
+                        [
+                            article.get("title") or "",
+                            article.get("summary") or "",
+                            article.get("body_markdown") or "",
+                        ],
+                    )
+                )
+                rating_payload, quality_score = _rate_article_payload(article, text)
                 points = []
                 chunk_total_for_article = 0
                 for idx, (a, chunk, vec) in enumerate(work):
@@ -326,6 +368,11 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                                     "chains_mentioned": article.get("chains_mentioned") or [],
                                     "tokens_mentioned": article.get("tokens_mentioned") or [],
                                     "news_id": news_id,
+                                    # Ground News-style multi-axis rating
+                                    # (see rmi_rag.news_rating). quality_score
+                                    # mirrors composite for Qdrant range filters.
+                                    "rating": rating_payload,
+                                    "quality_score": quality_score,
                                 },
                                 "source": article.get("source") or "",
                                 "severity": "info",

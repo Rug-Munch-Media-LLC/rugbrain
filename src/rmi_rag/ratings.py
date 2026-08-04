@@ -52,6 +52,14 @@ CORROBORATION_HIGH_MULTIPLIER = 1.15
 CORROBORATION_NONE_MULTIPLIER = 0.8
 ON_CHAIN_EVIDENCE_MULTIPLIER = 1.25
 
+# ── Multi-axis composite quality multiplier (news_rating engine) ────
+# The 0-100 `quality_score` written by rmi_rag.news_rating drives a
+# gentle boost for excellent articles and a demotion for poor ones.
+QUALITY_EXCELLENT_MULTIPLIER = 1.15
+QUALITY_GOOD_MULTIPLIER = 1.08
+QUALITY_POOR_MULTIPLIER = 0.9
+QUALITY_BAD_MULTIPLIER = 0.75
+
 # Valid filter values exposed to the API
 FACTUALITY_FILTERS = ("verified", "reported", "rumor")
 SOURCE_TIERS = ("established", "independent")
@@ -116,7 +124,32 @@ def rating_multiplier(rating: dict[str, Any]) -> float:
     if rating.get("on_chain_evidence"):
         multiplier *= ON_CHAIN_EVIDENCE_MULTIPLIER
 
+    quality = rating.get("quality_score")
+    if isinstance(quality, (int, float)):
+        multiplier *= quality_multiplier(quality)
+
     return multiplier
+
+
+def quality_multiplier(quality: int | float | None) -> float:
+    """Multiplier for a 0-100 composite article quality score.
+
+    Excellent (>= 85) and good (>= 70) articles are boosted; poor (< 40)
+    and bad (< 25) articles are demoted so low-credibility content ranks
+    lower. Returns 1.0 for unrated or mid-range articles.
+    """
+    if quality is None:
+        return 1.0
+    value = float(quality)
+    if value >= 85:
+        return QUALITY_EXCELLENT_MULTIPLIER
+    if value >= 70:
+        return QUALITY_GOOD_MULTIPLIER
+    if value < 40:
+        return QUALITY_BAD_MULTIPLIER
+    if value < 55:
+        return QUALITY_POOR_MULTIPLIER
+    return 1.0
 
 
 def apply_rating_boosts(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:

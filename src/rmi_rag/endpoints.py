@@ -92,13 +92,34 @@ async def _analyze_address_findings(address: str, chain: str, limit: int) -> dic
             matched_patterns=matched,
         )
 
+        # Contract-security assessment (contract-knowledge expansion): fetch
+        # verified source (Sourcify/Etherscan), run static heuristics, and
+        # compare against the solidity_patterns / contract_security /
+        # audit_findings knowledge collections. Fail-open: analyze returns a
+        # benign dict when no source or knowledge backend is available.
+        from rmi_rag.contract_analysis import analyze_contract_security
+
+        contract_security = await analyze_contract_security(address, chain=chain, limit=limit)
+
+        # Fearful market → higher risk on new tokens (search/analyze feed).
+        fear_value: int | None = None
+        try:
+            from rmi_rag.fear_index import adjust_risk_for_market, current_fear_value
+
+            fear_value = await current_fear_value()
+            verdict = adjust_risk_for_market(verdict, fear_value)
+        except Exception as e:
+            logger.debug("fear_index_adjust_failed (non-critical): %s", e)
+
         return {
             "address": address,
             "chain": chain,
             "verdict": verdict,
+            "fear_index": fear_value,
             "matched_patterns": matched[:limit],
             "risk_signals": signals[:25],
             "cross_reference": cross,
+            "contract_security": contract_security,
         }
     except Exception as e:
         logger.warning("analyze_address_findings failed (non-critical): %s", e)
@@ -106,6 +127,7 @@ async def _analyze_address_findings(address: str, chain: str, limit: int) -> dic
             "address": address,
             "chain": chain,
             "verdict": {"risk": "unknown", "confidence": 0.0, "top_pattern": ""},
+            "fear_index": None,
             "matched_patterns": [],
             "risk_signals": [],
             "cross_reference": {
@@ -114,6 +136,15 @@ async def _analyze_address_findings(address: str, chain: str, limit: int) -> dic
                 "backend": "none",
                 "similar_tokens": [],
                 "narrative": "",
+            },
+            "contract_security": {
+                "address": address,
+                "chain": chain,
+                "source_fetched": False,
+                "backend": "none",
+                "assessment": "unknown",
+                "summary": "",
+                "error": str(e)[:200],
             },
             "error": str(e)[:200],
         }
@@ -834,6 +865,9 @@ async def search_threat_intel(
         "chain_data_intent": chain_data_intent,
         "chain_data_error": chain_data_error,
         "pattern_matches": pattern_matches,
+        # Market context for scoring: fearful market → higher risk on new
+        # tokens. Populated for token-address queries (see pattern_matches).
+        "fear_index": (pattern_matches or {}).get("fear_index"),
     }
 
 
@@ -929,3 +963,227 @@ async def scam_check(
         "confidence": confidence,
         "total_matches": len(matches),
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# News rating + crypto fear index (RugBrain news ranking)
+# ═══════════════════════════════════════════════════════════════════════
+
+NEWS_TOP_MAX_SCROLL_PAGES = 10
+
+
+@router.get("/news/rate")
+async def news_rate_article(
+    request: Request,
+    url: str = Query(
+        default=...,
+        description=(
+            "Article URL — used for source-reputation scoring. Never fetched "
+            "server-side (SSRF-safe); rate only the provided metadata."
+        ),
+    ),
+    source: str | None = Query(default=None, description="Source name (optional, e.g. 'CoinDesk')"),
+    title: str | None = Query(default=None, description="Article title"),
+    content: str | None = Query(
+        default=None, description="Article body text — recommended for a full rating"
+    ),
+    published_at: str | None = Query(
+        default=None, description="ISO-8601 publish timestamp (e.g. 2026-08-04T09:00:00Z)"
+    ),
+    corroborating_sources: int | None = Query(
+        default=None, ge=0, le=100, description="Independent sources reporting the same event"
+    ),
+    source_reputation_override: int | None = Query(
+        default=None, ge=0, le=100, description="Explicit 0-100 source reputation score"
+    ),
+    aggregated: bool = Query(
+        default=False, description="True when the article aggregates multiple sources"
+    ),
+) -> dict[str, Any]:
+    """Rate a news article on seven quality axes (Ground News-style).
+
+    Computes a 0-100 score per axis (source credibility, factual density,
+    timeliness, bias, corroboration, technical depth, source diversity)
+    plus a weighted 0-100 composite and a tier. The URL is used only for
+    source reputation lookup — it is **never fetched server-side** (SSRF
+    safety). Pass the article body via ``content`` for a full rating::
+
+        curl "http://localhost:8012/api/v1/news/rate?url=https://coindesk.com/...&content=The%20protocol%20lost%20%2412m..."
+    """
+    from rmi_rag.news_rating import rate_article
+
+    rating = rate_article(
+        {
+            "url": url,
+            "source": source or "",
+            "title": title or "",
+            "content": content or "",
+            "published_at": published_at,
+            "corroborating_sources": corroborating_sources,
+            "source_reputation_override": source_reputation_override,
+            "aggregated": aggregated,
+        }
+    )
+    return {
+        "url": rating.url,
+        "source": rating.source,
+        "axes": rating.axes,
+        "composite": rating.composite,
+        "tier": rating.tier,
+        "factuality": rating.factuality,
+        "source_reputation": rating.source_reputation,
+        "corroborating_sources": rating.corroborating_sources,
+        "on_chain_evidence": rating.on_chain_evidence,
+        "signals": rating.signals,
+        "rated_at": datetime.now(UTC).isoformat(),
+        "note": (
+            "rating computed from provided metadata only; the URL is never fetched server-side"
+        ),
+    }
+
+
+@router.get("/news/top")
+async def news_top_articles(
+    request: Request,
+    category: str | None = Query(
+        default=None,
+        description="Filter by category (e.g. security, defi, ethereum, solana)",
+    ),
+    min_quality: int = Query(
+        default=70, ge=0, le=100, description="Minimum composite quality 0-100"
+    ),
+    limit: int = Query(default=20, ge=1, le=100, description="Max articles to return"),
+) -> dict[str, Any]:
+    """Return the best-rated articles from the Qdrant `news` collection.
+
+    Scrolls the collection (payload has no vector score), keeps only points
+    whose stored rating composite is >= ``min_quality`` (optionally filtered
+    by ``category``), and returns them sorted by quality descending. Legacy
+    unrated points are excluded — the rating engine runs at ingestion time.
+    Fails open to an empty list when Qdrant is unreachable.
+    """
+    from rmi_rag.news_rating import rate_article_from_rating_dict
+    from rmi_rag.qdrant_store import QdrantVectorStore
+
+    store = QdrantVectorStore()
+    collected: list[dict[str, Any]] = []
+    try:
+        offset: str | None = None
+        page = 0
+        while page < NEWS_TOP_MAX_SCROLL_PAGES and len(collected) < limit * 4:
+            results, offset = await store.scroll("news", limit=100, offset=offset)
+            if not results:
+                break
+            collected.extend(results)
+            page += 1
+            if not offset:
+                break
+    except Exception as exc:
+        logger.warning("news_top_scroll_failed: %s", exc)
+        return {
+            "articles": [],
+            "total": 0,
+            "category": category,
+            "min_quality": min_quality,
+            "collection": "news",
+            "error": str(exc)[:200],
+        }
+
+    articles: list[dict[str, Any]] = []
+    for result in collected:
+        metadata = result.get("metadata") or {}
+        if category and str(metadata.get("category", "")).lower() != str(category).lower():
+            continue
+        rating = metadata.get("rating")
+        if not isinstance(rating, dict):
+            continue  # unrated legacy points carry no quality signal
+        payload = rate_article_from_rating_dict(rating)
+        quality = int(payload.get("quality_score", 0))
+        if quality < min_quality:
+            continue
+        articles.append(
+            {
+                "id": result.get("id"),
+                "title": metadata.get("title", ""),
+                "source": metadata.get("source", result.get("source", "")),
+                "url": metadata.get("url", ""),
+                "published_at": metadata.get("published_at", ""),
+                "category": metadata.get("category", ""),
+                "quality": quality,
+                "tier": payload.get("tier", "fair"),
+                "factuality": payload.get("factuality", "reported"),
+                "axes": payload.get("axes", {}),
+                "rating": payload,
+            }
+        )
+
+    articles.sort(key=lambda article: article["quality"], reverse=True)
+    return {
+        "articles": articles[:limit],
+        "total": len(articles),
+        "category": category,
+        "min_quality": min_quality,
+        "collection": "news",
+    }
+
+
+@router.get("/fear-index")
+async def fear_index_current(
+    request: Request,
+    window: str = Query(
+        default="24h",
+        pattern="^(1h|6h|24h|7d)$",
+        description="Sample window for the returned trend (1h|6h|24h|7d)",
+    ),
+) -> dict[str, Any]:
+    """Current crypto panic/fear index (0 = extreme fear, 100 = extreme greed).
+
+    Blends Alternative.me Fear & Greed, SearXNG social sentiment, on-chain
+    exchange/whale/liquidation signals and aggregated news sentiment. The
+    snapshot is polled every 5 minutes, cached in Redis, and persisted to
+    ClickHouse. Fails open to a neutral 50 when no provider is reachable::
+
+        curl "http://localhost:8012/api/v1/fear-index?window=24h"
+    """
+    from rmi_rag.fear_index import get_fear_index
+
+    try:
+        return await get_fear_index(window=window)
+    except Exception as exc:
+        logger.warning("fear_index_endpoint_failed: %s", exc)
+        return {
+            "value": 50,
+            "classification": "neutral",
+            "components": {},
+            "timestamp": datetime.now(UTC).isoformat(),
+            "window": window,
+            "samples": [],
+            "source": "error",
+            "error": str(exc)[:200],
+        }
+
+
+@router.get("/fear-index/history")
+async def fear_index_history_endpoint(
+    request: Request,
+    days: int = Query(default=30, ge=1, le=365, description="Number of days of history"),
+) -> dict[str, Any]:
+    """Historical fear-index chart data (ClickHouse-first, memory fallback).
+
+    Returns ``{"days", "points": [{"ts", "value", "classification"}],
+    "source"}`` suitable for charting::
+
+        curl "http://localhost:8012/api/v1/fear-index/history?days=30"
+    """
+    from rmi_rag.fear_index import fear_index_history
+
+    try:
+        return await fear_index_history(days=days)
+    except Exception as exc:
+        logger.warning("fear_index_history_failed: %s", exc)
+        return {
+            "days": days,
+            "points": [],
+            "source": "error",
+            "error": str(exc)[:200],
+        }

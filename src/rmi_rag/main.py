@@ -222,17 +222,39 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("scanner_poller_start_failed: %s", exc)
         _health_state["scanner_poller"] = False
 
+    # Start crypto fear-index poller (every 5 min; feeds /fear-index and
+    # search/analyze risk scoring). Fail-open: the API degrades gracefully.
+    _fear_ok = False
+    try:
+        from rmi_rag.fear_index import is_fear_index_poller_running, start_fear_index_poller
+
+        await start_fear_index_poller()
+        _fear_ok = is_fear_index_poller_running()
+        _health_state["fear_index_poller"] = _fear_ok
+        logger.info("fear_index_poller status=%s", "ok" if _fear_ok else "fail")
+    except Exception as exc:
+        logger.warning("fear_index_poller_start_failed: %s", exc)
+        _health_state["fear_index_poller"] = False
+
     _health_state["status"] = "ok"
     logger.info(
-        "rmi_rag_started qdrant=%s redis=%s subscriber=%s",
+        "rmi_rag_started qdrant=%s redis=%s subscriber=%s fear=%s",
         _health_state["qdrant"],
         _health_state["redis"],
         _health_state["scanner_subscriber"],
+        _fear_ok,
     )
 
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
+    try:
+        from rmi_rag.fear_index import stop_fear_index_poller
+
+        await stop_fear_index_poller()
+    except Exception:
+        logger.debug("fear_index_poller_stop skipped")
+
     try:
         from rmi_rag.scanner_subscriber import stop_subscriber
 
@@ -359,6 +381,14 @@ async def health() -> dict[str, Any]:
         poll_running = False
         poll_stats = {}
 
+    # Check fear-index poller status
+    try:
+        from rmi_rag.fear_index import is_fear_index_poller_running
+
+        fear_running = is_fear_index_poller_running()
+    except Exception:
+        fear_running = False
+
     return {
         "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
         "qdrant": qdrant_ok,
@@ -370,6 +400,7 @@ async def health() -> dict[str, Any]:
         "subscriber_stats": sub_stats,
         "scanner_poller": poll_running,
         "poller_stats": poll_stats,
+        "fear_index_poller": fear_running,
     }
 
 

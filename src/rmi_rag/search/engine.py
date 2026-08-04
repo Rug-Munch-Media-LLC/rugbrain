@@ -37,6 +37,13 @@ SCAM_COLLECTIONS: tuple[str, ...] = (
     "defi_exploits",
     "scam_patterns",
     "crypto_vulnerabilities",
+    # Contract-knowledge expansion: known-good/bad contract code, security
+    # patterns, and audit findings (populated by scripts/ingest_codebase_
+    # knowledge.py, ingest_security_patterns.py, ingest_good_bad_contracts.py).
+    "solidity_patterns",
+    "solana_patterns",
+    "contract_security",
+    "audit_findings",
 )
 
 # Keywords that strongly indicate a scam/exploit/intel query. Matching one
