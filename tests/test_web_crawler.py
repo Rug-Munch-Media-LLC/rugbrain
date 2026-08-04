@@ -70,6 +70,11 @@ async def test_crawl_http_fallback_extracts_text(monkeypatch):
             "<html><p>Clean <b>content</b> here.</p><script>x()</script></html>"
         )
 
+    # Prevent crawl4ai from running (it is installed system-wide).
+    async def fake_crawl4ai(url: str) -> str | None:
+        return None
+
+    monkeypatch.setattr(c, "_crawl4ai_fetch", fake_crawl4ai)
     monkeypatch.setattr(c, "_httpx_fetch", fake_httpx)
     doc = await c.crawl("https://example.com/story/1", source="test", collection="c")
     assert "Clean content here" in doc.content
@@ -83,6 +88,11 @@ async def test_crawl_http_fallback_empty_when_blocked(monkeypatch):
     async def fake_httpx(url: str) -> str | None:
         return None
 
+    # Prevent crawl4ai from running (it is installed system-wide).
+    async def fake_crawl4ai(url: str) -> str | None:
+        return None
+
+    monkeypatch.setattr(c, "_crawl4ai_fetch", fake_crawl4ai)
     monkeypatch.setattr(c, "_httpx_fetch", fake_httpx)
     doc = await c.crawl("https://example.com/blocked", source="test", collection="c")
     assert doc.content == ""
@@ -146,7 +156,11 @@ async def test_crawl_crypto_news_homepage_fallback(monkeypatch):
     c = mod.WebCrawler()
     stored: list[list[mod.CrawlDocument]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
-    monkeypatch.setattr(mod, "fetch_rss_feed", lambda *a, **k: [])
+
+    async def fake_feed_empty(*a, **k):
+        return []
+
+    monkeypatch.setattr(mod, "fetch_rss_feed", fake_feed_empty)
 
     async def fake_httpx(url: str) -> str | None:
         return "homepage crawl content"

@@ -33,6 +33,8 @@ install_import_guard()
 from rmi_rag.endpoints import router as rag_router  # noqa: E402
 from rmi_rag.endpoints import scam_check_router  # noqa: E402
 from rmi_rag.metrics import metrics_router  # noqa: E402
+from rmi_rag.scanner_feedback import scanner_feedback_router  # noqa: E402
+from rmi_rag.sentiment_engine import sentiment_router  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -317,6 +319,8 @@ app.add_middleware(
 app.include_router(rag_router)
 app.include_router(scam_check_router)
 app.include_router(metrics_router)  # /metrics — Prometheus scrape target
+app.include_router(scanner_feedback_router)  # /api/v1/feedback/* + /api/v1/similar/*
+app.include_router(sentiment_router)  # /api/v1/sentiment/*
 
 
 # ── Health endpoints ──────────────────────────────────────────────────

@@ -87,7 +87,11 @@ async def test_fetch_source_cryptopanic_no_token(monkeypatch):
 async def test_fetch_source_rss_or_crawl_fallback(monkeypatch):
     cfg = mod.get_source("bankless")
     assert cfg is not None and cfg.kind == "rss_or_crawl"
-    monkeypatch.setattr(mod, "fetch_rss_feed", lambda *a, **k: [])
+
+    async def fake_feed_empty(*a, **k):
+        return []
+
+    monkeypatch.setattr(mod, "fetch_rss_feed", fake_feed_empty)
     c = mod.WebCrawler()
 
     async def fake_crawl(url, source="", category="", collection="default", published=""):
