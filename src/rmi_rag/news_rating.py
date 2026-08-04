@@ -73,32 +73,39 @@ def _clamp(value: float, low: int = 0, high: int = 100) -> int:
 # ═══════════════════════════════════════════════════════════════════════
 
 #: domain → (0-100 reputation, tier label). Unknown domains default low.
-SOURCE_REPUTATION: dict[str, tuple[int, str]] = {
-    "reuters.com": (96, "established"),
-    "bloomberg.com": (96, "established"),
-    "apnews.com": (96, "established"),
-    "coindesk.com": (95, "established"),
-    "ft.com": (95, "established"),
-    "wsj.com": (95, "established"),
-    "nytimes.com": (95, "established"),
-    "theblock.co": (94, "established"),
-    "theguardian.com": (92, "established"),
-    "decrypt.co": (92, "established"),
-    "cointelegraph.com": (90, "established"),
-    "blockworks.co": (90, "established"),
-    "thedefiant.io": (88, "established"),
-    "axios.com": (85, "established"),
-    "forbes.com": (85, "established"),
-    "bitcoinmagazine.com": (80, "established"),
-    "beincrypto.com": (72, "independent"),
-    "cryptonews.com": (70, "independent"),
-    "news.bitcoin.com": (70, "independent"),
-    "ambcrypto.com": (70, "independent"),
-    "u.today": (68, "independent"),
-    "dailyhodl.com": (66, "independent"),
-    "zycrypto.com": (64, "independent"),
-    "coinjournal.net": (62, "independent"),
-}
+# The expanded 100+ source database lives in ``news_sources`` and is merged
+# here so the single ``SOURCE_REPUTATION`` dict remains the lookup surface.
+try:
+    from rmi_rag.news_sources import merged_source_reputation
+
+    SOURCE_REPUTATION: dict[str, tuple[int, str]] = merged_source_reputation()
+except ImportError:  # pragma: no cover — fallback keeps the module importable
+    SOURCE_REPUTATION = {
+        "reuters.com": (96, "established"),
+        "bloomberg.com": (96, "established"),
+        "apnews.com": (96, "established"),
+        "coindesk.com": (95, "established"),
+        "ft.com": (95, "established"),
+        "wsj.com": (95, "established"),
+        "nytimes.com": (95, "established"),
+        "theblock.co": (94, "established"),
+        "theguardian.com": (92, "established"),
+        "decrypt.co": (92, "established"),
+        "cointelegraph.com": (90, "established"),
+        "blockworks.co": (90, "established"),
+        "thedefiant.io": (88, "established"),
+        "axios.com": (85, "established"),
+        "forbes.com": (85, "established"),
+        "bitcoinmagazine.com": (80, "established"),
+        "beincrypto.com": (72, "independent"),
+        "cryptonews.com": (70, "independent"),
+        "news.bitcoin.com": (70, "independent"),
+        "ambcrypto.com": (70, "independent"),
+        "u.today": (68, "independent"),
+        "dailyhodl.com": (66, "independent"),
+        "zycrypto.com": (64, "independent"),
+        "coinjournal.net": (62, "independent"),
+    }
 
 #: source *name* aliases → domain (fallback when the URL is absent).
 SOURCE_NAME_ALIASES: dict[str, str] = {
@@ -127,6 +134,12 @@ SOURCE_NAME_ALIASES: dict[str, str] = {
     "coinjournal": "coinjournal.net",
     "ambcrypto": "ambcrypto.com",
 }
+try:  # merge the expanded alias table (extended wins on conflict)
+    from rmi_rag.news_sources import EXTENDED_SOURCE_ALIASES
+
+    SOURCE_NAME_ALIASES.update(EXTENDED_SOURCE_ALIASES)
+except ImportError:  # pragma: no cover
+    pass
 
 DEFAULT_SOURCE_REPUTATION = 45
 
@@ -518,6 +531,222 @@ def corroboration_score(corroborating_sources: int | None) -> int:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Cross-referencing
+# ═══════════════════════════════════════════════════════════════════════
+
+_CROSS_REF_KEY_RE = re.compile(
+    r"\b(?:lost|stolen|hacked|exploited|drained|drained|attack)\b", re.IGNORECASE
+)
+
+
+def cross_reference_count(article: dict[str, Any]) -> int:
+    """Estimate how many *trusted* independent sources report the event.
+
+    Counts distinct trusted domains from the article's ``source_urls``,
+    ``references``, ``related_articles`` and ``citations`` lists, and treats
+    an explicit ``corroborating_sources`` field as authoritative when it is
+    higher. ``aggregated`` articles count as at least two corroborating
+    sources. A domain is trusted when it has an established/independent
+    rating in ``SOURCE_REPUTATION``; unknown domains still count (an
+    unknown blog corroborating a wire report is weak, so only trusted
+    domains push the count past one).
+    """
+    explicit = article.get("corroborating_sources")
+    if isinstance(explicit, int) and explicit > 0:
+        return max(0, int(explicit))
+
+    seen: set[str] = set()
+    trusted: set[str] = set()
+    for key in ("source_urls", "references", "related_articles", "citations"):
+        for item in article.get(key) or []:
+            if isinstance(item, str) and item.strip():
+                domain = domain_from_url(item)
+                if domain:
+                    seen.add(domain)
+                    if domain in SOURCE_REPUTATION:
+                        trusted.add(domain)
+            elif isinstance(item, dict):
+                for sub in (item.get("url"), item.get("source"), item.get("title")):
+                    if isinstance(sub, str) and sub.strip():
+                        domain = domain_from_url(sub)
+                        if domain:
+                            seen.add(domain)
+                            if domain in SOURCE_REPUTATION:
+                                trusted.add(domain)
+    count = len(seen)
+    if article.get("aggregated"):
+        count = max(count, 2)
+    # Without at least one trusted domain, a lone unknown source is weak.
+    if count >= 1 and not trusted:
+        count = min(count, 1)
+    return count
+
+
+def cross_reference_score(article: dict[str, Any]) -> int:
+    """0-100: independent trusted coverage of the same event.
+
+    Thin wrapper over ``cross_reference_count`` so callers can compute the
+    corroboration axis from the article dict alone.
+    """
+    return corroboration_score(cross_reference_count(article))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Clickbait detection
+# ═══════════════════════════════════════════════════════════════════════
+
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001f300-\U0001f5ff"
+    "\U0001f600-\U0001f64f"
+    "\U0001f680-\U0001f6ff"
+    "\U0001f900-\U0001f9ff"
+    "\U0001fa00-\U0001fa6f"
+    "\U0001fa70-\U0001faff"
+    "\U00002702-\U000027b0"
+    "\U000024c2-\U0001f251"
+    "]+"
+)
+
+CLICKBAIT_PHRASES: tuple[str, ...] = (
+    "you won't believe",
+    "you wont believe",
+    "this changes everything",
+    "insiders reveal",
+    "don't miss out",
+    "dont miss out",
+    "secret revealed",
+    "shocking truth",
+    "to the moon",
+    "buy now",
+    "number go up",
+    "wen lambo",
+    "100x gem",
+    "1000x",
+    "the truth about",
+    "what happens next",
+    "insane gains",
+    "guaranteed profit",
+    "act fast",
+    "limited time",
+    "last chance",
+    "click here",
+    "this one trick",
+    "shocked everyone",
+    "mind blowing",
+    "going to explode",
+    "x100",
+    "x1000",
+    "never sell",
+    "get rich",
+)
+
+
+def clickbait_score(text: str) -> int:
+    """0-100: how clickbait-y the headline/body is.
+
+    Detects classic clickbait phrases, ALL-CAPS shouting (ratio of
+    ALL-CAPS words), excessive exclamation/question punctuation, and
+    emoji density. Higher score = more clickbait.
+    """
+    if not (text or "").strip():
+        return 0
+    words = len(text.split())
+    if words < 5:
+        return 0
+    lowered = text.lower()
+
+    phrase_hits = _count_terms(lowered, CLICKBAIT_PHRASES)
+    punct_hits = len(_EMOTIONAL_PUNCTUATION_RE.findall(text))
+    emoji_hits = len(_EMOJI_RE.findall(text))
+
+    allcaps_words = len(_ALLCAPS_RE.findall(text))
+    allcaps_ratio = allcaps_words / words
+
+    score = 0.0
+    score += phrase_hits * 22
+    score += min(punct_hits * 8, 24)
+    score += min(emoji_hits * 6, 18)
+    if allcaps_ratio > 0.05:
+        score += min(allcaps_ratio * 120, 30)
+    return _clamp(score)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# On-chain verification
+# ═══════════════════════════════════════════════════════════════════════
+
+_CLAIM_USD_RE = re.compile(
+    r"(?:\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(?:million|billion|thousand|m|bn|b|k)?\s?"
+    r"(?:hacked|stolen|lost|drained|exploited|taken)"
+    r"|(?:hacked|stolen|lost|drained|exploited|taken)\s+"
+    r"\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(?:million|billion|thousand|m|bn|b|k)?)",
+    re.IGNORECASE,
+)
+_CLAIM_TOKEN_RE = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s?(ETH|BTC|SOL|USDT|USDC|BNB|XRP|DOGE|ADA|AVAX|MATIC|ARB|OP|TON)\b",
+    re.IGNORECASE,
+)
+
+
+def on_chain_claim_verification(article: dict[str, Any]) -> dict[str, Any]:
+    """Verify 'amount hacked' claims against on-chain artifacts in the text.
+
+    Returns a dict with:
+      - ``claims`` — list of parsed claims (amount, unit, verified)
+      - ``verified`` — True when at least one claim is backed by an
+        on-chain artifact (address/tx hash present in the article)
+      - ``artifact_count`` — number of addresses/tx hashes found
+
+    This is a *deterministic* verification: it does not call an RPC (the
+    engine is pure Python and network-free by design). It treats the
+    presence of a specific attacker address or transaction hash alongside
+    an amount claim as on-chain evidence — the same heuristic the legacy
+    ``on_chain_evidence`` flag used, now structured and per-claim.
+    """
+    text = _score_text(article)
+    claims: list[dict[str, Any]] = []
+
+    for m in _CLAIM_USD_RE.finditer(text):
+        amount_raw = m.group(1).replace(",", "")
+        unit = (m.group(2) or "").lower()
+        try:
+            amount = float(amount_raw)
+        except ValueError:
+            continue
+        if unit in ("million", "m"):
+            amount *= 1_000_000
+        elif unit in ("billion", "bn", "b"):
+            amount *= 1_000_000_000
+        elif unit in ("thousand", "k"):
+            amount *= 1_000
+        claims.append({"amount_usd": amount, "unit": unit, "verified": False})
+
+    for m in _CLAIM_TOKEN_RE.finditer(text):
+        amount_raw = m.group(1).replace(",", "")
+        token = m.group(2).upper()
+        try:
+            amount = float(amount_raw)
+        except ValueError:
+            continue
+        claims.append({"amount_token": amount, "token": token, "verified": False})
+
+    artifacts = _find_claims(text)
+    artifact_count = len(artifacts["addresses"]) + len(artifacts["tx_hashes"])
+    verified = artifact_count > 0
+    if verified:
+        for claim in claims:
+            claim["verified"] = True
+
+    return {
+        "claims": claims,
+        "verified": verified,
+        "artifact_count": artifact_count,
+        "verification_method": "on-chain-artifacts",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Technical depth
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -655,12 +884,18 @@ class ArticleRating(BaseModel):
     corroborating_sources: int = 0
     on_chain_evidence: bool = False
     signals: dict[str, list[str]] = Field(default_factory=dict)
+    # Extended fields (Part 3)
+    clickbait_score: int = 0
+    cross_referenced: int = 0
+    on_chain_claims: list[dict[str, Any]] = Field(default_factory=list)
+    on_chain_verified: bool = False
 
     def to_payload(self) -> dict[str, Any]:
         """Rating dict to store on Qdrant metadata / search results.
 
         Includes the legacy ``ratings.py`` keys plus the 0-100 axes and
-        ``quality_score`` (composite) used by ``ratings.quality_multiplier``.
+        ``quality_score`` (composite) used by ``ratings.quality_multiplier``,
+        and the extended cross-referencing/clickbait/on-chain fields.
         """
         return {
             "factuality": self.factuality,
@@ -671,6 +906,10 @@ class ArticleRating(BaseModel):
             "composite": self.composite,
             "quality_score": self.composite,
             "tier": self.tier,
+            "clickbait_score": self.clickbait_score,
+            "cross_referenced": self.cross_referenced,
+            "on_chain_claims": list(self.on_chain_claims),
+            "on_chain_verified": self.on_chain_verified,
         }
 
 
@@ -699,8 +938,19 @@ def rate_article(article: dict[str, Any], now: datetime | None = None) -> Articl
     )
     density = factual_density_score(text)
     fresh = timeliness_score(published, event_at=article.get("event_at"), now=now)
+
+    # Clickbait detection feeds the bias axis: a clickbait-heavy article is
+    # penalized on top of the emotional/hype lexicon penalties.
+    cb = clickbait_score(text)
     bias = bias_score(text)
-    corroboration = corroboration_score(article.get("corroborating_sources"))
+    if cb > 0:
+        bias = _clamp(bias - (cb // 4))
+
+    # Cross-referencing: corroboration axis computed from trusted sources
+    # listed on the article (explicit corroborating_sources wins).
+    xref = cross_reference_count(article)
+    corroboration = corroboration_score(xref)
+
     depth = technical_depth_score(text)
     diversity = source_diversity_score(article)
 
@@ -736,18 +986,23 @@ def rate_article(article: dict[str, Any], now: datetime | None = None) -> Articl
     on_chain = bool(article.get("on_chain_evidence")) or (
         len(_find_claims(text)["addresses"] + _find_claims(text)["tx_hashes"]) > 0 and density >= 60
     )
+    onchain_verification = on_chain_claim_verification(article)
 
     signals: dict[str, list[str]] = {}
     if density < 30:
         signals["factual_density"] = ["few_verifiable_claims"]
     if bias < 50:
         signals["bias"] = ["emotional_or_hype_language"]
+    if cb > 25:
+        signals["clickbait"] = ["clickbait_headline_or_body"]
     if corroboration <= 30:
         signals["corroboration"] = ["unconfirmed_single_source"]
     if depth < 40:
         signals["technical_depth"] = ["surface_level_only"]
     if diversity <= 40:
         signals["source_diversity"] = ["single_source"]
+    if not onchain_verification["verified"] and onchain_verification["claims"]:
+        signals["on_chain"] = ["unverified_amount_claim"]
 
     return ArticleRating(
         url=url,
@@ -758,9 +1013,13 @@ def rate_article(article: dict[str, Any], now: datetime | None = None) -> Articl
         tier=tier,
         factuality=factuality,
         source_reputation=source_reputation_label(credibility),
-        corroborating_sources=max(0, int(article.get("corroborating_sources") or 0)),
+        corroborating_sources=max(0, xref),
         on_chain_evidence=on_chain,
         signals=signals,
+        clickbait_score=cb,
+        cross_referenced=max(0, xref),
+        on_chain_claims=onchain_verification["claims"],
+        on_chain_verified=onchain_verification["verified"],
     )
 
 
@@ -792,6 +1051,14 @@ def rate_article_from_rating_dict(rating: dict[str, Any]) -> dict[str, Any]:
         "composite": int(rating.get("composite", rating.get("quality_score", 50))),
         "quality_score": int(rating.get("composite", rating.get("quality_score", 50))),
         "tier": rating.get("tier", "fair"),
+        "clickbait_score": int(rating.get("clickbait_score", 0)),
+        "cross_referenced": int(
+            rating.get("cross_referenced", rating.get("corroborating_sources", 0))
+        ),
+        "on_chain_claims": rating.get("on_chain_claims", []),
+        "on_chain_verified": bool(
+            rating.get("on_chain_verified", rating.get("on_chain_evidence", False))
+        ),
     }
 
 
@@ -801,9 +1068,13 @@ __all__ = [
     "SOURCE_REPUTATION",
     "ArticleRating",
     "bias_score",
+    "clickbait_score",
     "corroboration_score",
+    "cross_reference_count",
+    "cross_reference_score",
     "domain_from_url",
     "factual_density_score",
+    "on_chain_claim_verification",
     "rate_article",
     "rate_article_from_rating_dict",
     "source_diversity_score",

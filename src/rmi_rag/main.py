@@ -30,11 +30,13 @@ from rmi_rag.import_guard import install_import_guard
 install_import_guard()
 
 # Deliberately after install_import_guard() so app.* stubs exist first.
+from rmi_rag.alert_routes import router as alerts_router  # noqa: E402
 from rmi_rag.endpoints import router as rag_router  # noqa: E402
 from rmi_rag.endpoints import scam_check_router  # noqa: E402
 from rmi_rag.metrics import metrics_router  # noqa: E402
 from rmi_rag.scanner_feedback import scanner_feedback_router  # noqa: E402
 from rmi_rag.sentiment_engine import sentiment_router  # noqa: E402
+from rmi_rag.system_health import router as health_router  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,8 @@ _health_state: dict[str, Any] = {
     "subscriber_stats": {},
     "scanner_poller": False,
     "poller_stats": {},
+    "realtime_monitor": False,
+    "realtime_monitor_stats": {},
 }
 
 
@@ -247,6 +251,26 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         _fear_ok,
     )
 
+    # ── Start the real-time exploit monitor (SearXNG/on-chain/RPC) ──
+    # Independent of the 5-minute alert poller; publishes to
+    # ``alerts.crypto.critical`` when an exploit is detected.
+    _realtime_ok = False
+    try:
+        from rmi_rag.realtime_alerts import (
+            is_realtime_monitor_running,
+            realtime_monitor_stats,
+            start_realtime_monitor,
+        )
+
+        await start_realtime_monitor()
+        _realtime_ok = is_realtime_monitor_running()
+        _health_state["realtime_monitor"] = _realtime_ok
+        _health_state["realtime_monitor_stats"] = realtime_monitor_stats()
+        logger.info("realtime_monitor status=%s", "ok" if _realtime_ok else "fail")
+    except Exception as exc:
+        logger.warning("realtime_monitor_start_failed: %s", exc)
+        _health_state["realtime_monitor"] = False
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -270,6 +294,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await stop_poller()
     except Exception:
         logger.debug("poller_stop skipped")
+
+    try:
+        from rmi_rag.realtime_alerts import stop_realtime_monitor
+
+        await stop_realtime_monitor()
+    except Exception:
+        logger.debug("realtime_monitor_stop skipped")
 
     try:
         from rmi_rag.observability import _langfuse as langfuse_client
@@ -321,6 +352,8 @@ app.include_router(scam_check_router)
 app.include_router(metrics_router)  # /metrics — Prometheus scrape target
 app.include_router(scanner_feedback_router)  # /api/v1/feedback/* + /api/v1/similar/*
 app.include_router(sentiment_router)  # /api/v1/sentiment/*
+app.include_router(alerts_router)  # /api/v1/alerts/* — real-time exploits + webhooks
+app.include_router(health_router)  # /api/v1/health/full — aggregated dashboard
 
 
 # ── Health endpoints ──────────────────────────────────────────────────
@@ -393,6 +426,19 @@ async def health() -> dict[str, Any]:
     except Exception:
         fear_running = False
 
+    # Check realtime exploit monitor status
+    try:
+        from rmi_rag.realtime_alerts import (
+            is_realtime_monitor_running,
+            realtime_monitor_stats,
+        )
+
+        realtime_running = is_realtime_monitor_running()
+        realtime_stats = realtime_monitor_stats()
+    except Exception:
+        realtime_running = False
+        realtime_stats = {}
+
     return {
         "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
         "qdrant": qdrant_ok,
@@ -405,6 +451,8 @@ async def health() -> dict[str, Any]:
         "scanner_poller": poll_running,
         "poller_stats": poll_stats,
         "fear_index_poller": fear_running,
+        "realtime_monitor": realtime_running,
+        "realtime_monitor_stats": realtime_stats,
     }
 
 

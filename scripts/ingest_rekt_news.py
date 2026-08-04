@@ -158,6 +158,41 @@ async def fetch_leaderboard() -> list[dict[str, Any]]:
     return leaderboard
 
 
+async def fetch_article_body(slug: str) -> str:
+    """Fetch a Rekt News article page and extract readable text (fail-open).
+
+    Rekt articles embed their content in the same ``__NEXT_DATA__`` blob as
+    the leaderboard; we parse ``pageProps.post.content`` or fall back to a
+    lightweight HTML→text extraction.
+    """
+    if not slug:
+        return ""
+    url = f"https://rekt.news/{slug}/"
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "RMI-RAG/1.0 (data ingestion)"})
+            resp.raise_for_status()
+            html = resp.text
+        m = re.search(
+            r'<script id="__NEXT_DATA__" type="application/json"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        if m:
+            data = json.loads(m.group(1))
+            post = data.get("props", {}).get("pageProps", {}).get("post", {}) or {}
+            content = post.get("content", "") or post.get("body", "") or ""
+            if content:
+                return re.sub(r"<[^>]+>", " ", content)
+        # Fallback: strip scripts/styles and tags.
+        text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
+        text = re.sub(r"(?s)<[^>]+>", " ", text)
+        return re.sub(r"\s+", " ", text).strip()[:12000]
+    except Exception as e:
+        logger.debug("rekt_article_fetch_failed slug=%s err=%s", slug, str(e)[:120])
+        return ""
+
+
 def leaderboard_to_docs(entries: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
     """Transform leaderboard entries into structured hack docs."""
     docs: list[dict[str, Any]] = []
@@ -349,6 +384,20 @@ async def main_async(args: argparse.Namespace) -> int:
         entries = await fetch_leaderboard()
         docs = leaderboard_to_docs(entries, args.limit)
         logger.info("rekt_leaderboard_ok docs=%d", len(docs))
+        # Enhanced mode: fetch each article's full body and append it to the
+        # excerpt doc so retrieval surfaces the actual analysis, not just the
+        # one-line leaderboard summary. Fail-open on any per-article error.
+        if args.articles and docs:
+            enriched: list[dict[str, Any]] = []
+            for doc in docs:
+                slug = doc.get("slug", "")
+                body = await fetch_article_body(slug)
+                if body:
+                    enriched.append({**doc, "text": f"{doc['text']}\n\nArticle body:\n{body}"})
+                else:
+                    enriched.append(doc)
+            docs = enriched
+            logger.info("rekt_articles_enriched=%d/%d", len(enriched), len(docs))
     except Exception as e:
         logger.warning(
             "rekt_leaderboard_fetch_failed err=%s — falling back to DeFiHackLabs", str(e)[:150]
@@ -368,6 +417,11 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max hacks to ingest")
+    parser.add_argument(
+        "--articles",
+        action="store_true",
+        help="Also fetch each article's full body text (slower, richer embeddings)",
+    )
     args = parser.parse_args()
 
     inserted = asyncio.run(main_async(args))

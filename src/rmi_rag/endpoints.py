@@ -794,6 +794,24 @@ async def search_threat_intel(
             # when reranking ran, otherwise the retrieval score).
             score_field = "combined_score" if reranker_applied else "similarity"
             results.sort(key=lambda r: r.get(score_field, 0.0), reverse=True)
+
+        # Surface quality scores on news results: when a doc's metadata
+        # carries a rating payload (written by news_rating at ingestion),
+        # expose ``quality_score`` (+ new cross-reference / clickbait /
+        # on-chain fields) at the top level so callers can rank/filter
+        # news without digging into nested metadata.
+        for doc in results:
+            meta = doc.get("metadata")
+            if isinstance(meta, dict) and isinstance(meta.get("rating"), dict):
+                rating_payload = meta["rating"]
+                if isinstance(rating_payload.get("quality_score"), (int, float)):
+                    doc["quality_score"] = int(rating_payload["quality_score"])
+                if "cross_referenced" in rating_payload:
+                    doc["cross_referenced"] = rating_payload["cross_referenced"]
+                if "clickbait_score" in rating_payload:
+                    doc["clickbait_score"] = rating_payload["clickbait_score"]
+                if "on_chain_verified" in rating_payload:
+                    doc["on_chain_verified"] = rating_payload["on_chain_verified"]
     except ImportError:
         logger.debug("rmi_rag.ratings not available — skipping rating filters")
     except Exception as e:
