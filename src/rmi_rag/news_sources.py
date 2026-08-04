@@ -100,7 +100,6 @@ EXTENDED_SOURCE_REPUTATION: dict[str, tuple[int, str]] = {
     "rekt.news": (76, "independent"),
     "defiprime.com": (72, "independent"),
     "l2beat.com": (82, "established"),
-    "defillama.com": (85, "established"),
     "tokenterminal.com": (78, "independent"),
     "nansen.ai": (84, "established"),
     "dune.com": (82, "established"),

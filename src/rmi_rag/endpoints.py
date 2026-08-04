@@ -1357,8 +1357,8 @@ async def analyze_token_full(
     # ── Section 3: Scanner risk score (if a prior scan exists) ──
     scanner_score: dict[str, Any] = {"available": False}
     try:
-        from rmi_rag.scanner_feedback import FEEDBACK_COLLECTION
         from rmi_rag.qdrant_store import QdrantVectorStore, build_qdrant_filter
+        from rmi_rag.scanner_feedback import FEEDBACK_COLLECTION
 
         store = QdrantVectorStore()
         try:
