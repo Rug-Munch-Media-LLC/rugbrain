@@ -1,7 +1,7 @@
 [project]
-name = "rugsense"
+name = "rugbrain"
 version = "0.1.0"
-description = "RugSense (formerly RMI RAG) — hybrid search, embeddings, chunking, agentic retrieval for crypto intelligence"
+description = "RugBrain (formerly RugSense / RMI RAG) — crypto intelligence RAG engine with real-time security alert ingestion, market awareness, and hybrid retrieval"
 requires-python = ">=3.11"
 dependencies = [
     "duckdb>=1.1.0",
@@ -28,6 +28,12 @@ dev = [
     "interrogate>=1.7",
     "deptry>=0.25",
     "pip-audit>=2.10",
+    "respx>=0.21.0",
+]
+# Real-time alert ingestion extras (alerts.py, market_awareness.py).
+alerts = [
+    "nats-py>=2.9.0",
+    "clickhouse-connect>=0.8.0",
 ]
 
 [build-system]
@@ -43,7 +49,7 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rmi_rag*"]
+include = ["rmi_rag*", "rugbrain*"]
 
 [tool.ruff]
 line-length = 100

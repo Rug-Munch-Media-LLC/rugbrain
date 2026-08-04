@@ -64,6 +64,15 @@ from typing import Any
 import httpx
 import numpy as np
 
+from rmi_rag.ingest_smart import (
+    dedup_vectors,
+    filter_by_severity,
+    git_refresh,
+    repo_last_updated,
+    smart_split,
+    sort_by_priority,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_scam_knowledge")
 
@@ -85,15 +94,24 @@ CHUNK_OVERLAP = 70
 COLLECTION_DEFI_EXPLOITS = "defi_exploits"
 COLLECTION_SCAM_PATTERNS = "scam_patterns"
 COLLECTION_VULNERABILITIES = "crypto_vulnerabilities"
+COLLECTION_CONTRACT_AUDITS = "contract_audits"
 
 # source → collection routing
 SOURCE_COLLECTIONS: dict[str, str] = {
     "defihacklabs": COLLECTION_DEFI_EXPLOITS,
     "rekt_news": COLLECTION_DEFI_EXPLOITS,
+    "defillama_hacks": COLLECTION_DEFI_EXPLOITS,
+    "web3hacks": COLLECTION_DEFI_EXPLOITS,
+    "postmortems": COLLECTION_DEFI_EXPLOITS,
     "cryptoscamdb": COLLECTION_SCAM_PATTERNS,
     "slowmist": COLLECTION_VULNERABILITIES,
     "swc_registry": COLLECTION_VULNERABILITIES,
+    "immunefi": COLLECTION_VULNERABILITIES,
+    "openzeppelin_audits": COLLECTION_CONTRACT_AUDITS,
 }
+
+# Chunk deduplication: skip chunks whose top Qdrant hit scores >= this.
+DEDUP_THRESHOLD_DEFAULT = 0.95
 
 # ── Controlled vocabulary (mirrors rmi_rag.crypto_schema) ──────────────
 
@@ -316,14 +334,16 @@ def _point_id(source: str, rel_key: str, content_hash: str) -> str:
 class Checkpoint:
     """JSON checkpoint tracking which source files have been ingested.
 
-    Layout: {"sources": {"<source>": {"<rel_key>": "<sha256>"}}}.
+    Layout: {"sources": {"<source>": {"<rel_key>": "<sha256>"}},
+             "last_updated": {"<source>": "<iso>"}}.
     A file is skipped when its current sha256 matches the checkpoint.
     """
 
     def __init__(self, path: Path):
         self.path = path
-        # Layout: {"sources": {"<source>": {"<rel_key>": "<sha256>"}}}
-        self.data: dict[str, dict[str, dict[str, str]]] = {"sources": {}}
+        # Layout: {"sources": {"<source>": {"<rel_key>": "<sha256>"}},
+        #          "last_updated": {"<source>": "<iso>"}}
+        self.data: dict[str, Any] = {"sources": {}, "last_updated": {}}
 
     def load(self) -> None:
         if self.path.exists():
@@ -338,11 +358,17 @@ class Checkpoint:
                                 cleaned[src] = {
                                     str(k): str(v) for k, v in files.items() if isinstance(k, str)
                                 }
-                        self.data = {"sources": cleaned}
+                        self.data["sources"] = cleaned
+                    raw_last = loaded.get("last_updated")
+                    if isinstance(raw_last, dict):
+                        self.data["last_updated"] = {
+                            str(k): str(v) for k, v in raw_last.items() if isinstance(k, str)
+                        }
             except (json.JSONDecodeError, OSError, TypeError):
                 logger.warning("checkpoint unreadable, starting fresh: %s", self.path)
-                self.data = {"sources": {}}
+                self.data = {"sources": {}, "last_updated": {}}
         self.data.setdefault("sources", {})
+        self.data.setdefault("last_updated", {})
 
     def is_done(self, source: str, rel_key: str, text: str) -> bool:
         current = self.data["sources"].get(source, {}).get(rel_key)
@@ -351,6 +377,13 @@ class Checkpoint:
     def mark(self, source: str, rel_key: str, text: str) -> None:
         self.data.setdefault("sources", {})
         self.data["sources"].setdefault(source, {})[rel_key] = _content_hash(text)
+
+    def set_last_updated(self, source: str, stamp: str) -> None:
+        self.data.setdefault("last_updated", {})
+        self.data["last_updated"][source] = stamp
+
+    def get_last_updated(self, source: str) -> str:
+        return str(self.data.get("last_updated", {}).get(source, ""))
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -966,6 +999,355 @@ async def _swc_docs(limit: int | None) -> list[dict[str, Any]]:
     return docs
 
 
+# ── DeFiLlama hacks database ────────────────────────────────────────────
+
+DEFILLAMA_HACKS_API = "https://api.llama.fi/hacks"
+
+
+async def _defillama_hacks_docs(limit: int | None) -> list[dict[str, Any]]:
+    """Ingest the DeFiLlama hacks database (600+ incidents).
+
+    Finishes the Rekt/exploit database coverage with a structured,
+    maintained incident database (date, amount, technique, classification,
+    chain, language).
+    """
+    docs: list[dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            r = await c.get(DEFILLAMA_HACKS_API)
+            if r.status_code != 200:
+                logger.warning("defillama_hacks_fetch status=%d", r.status_code)
+                return docs
+            hacks = r.json() or []
+    except Exception as e:
+        logger.warning("defillama_hacks_error: %s", str(e)[:150])
+        return docs
+    if limit:
+        hacks = hacks[:limit]
+    for hack in hacks:
+        if not isinstance(hack, dict):
+            continue
+        ts = float(hack.get("date") or 0)
+        date_iso = datetime.fromtimestamp(ts, tz=UTC).date().isoformat() if ts > 0 else ""
+        name = str(hack.get("name", "")).strip() or "unknown"
+        amount = float(hack.get("amount") or 0)
+        chains = hack.get("chain") or []
+        chain = str(chains[0]).lower() if isinstance(chains, list) and chains else "EVM"
+        technique = str(hack.get("technique") or "").strip()
+        classification = str(hack.get("classification") or "").strip()
+        vector = _detect_attack_vector(f"{name} {technique} {classification}")
+        text = (
+            f"Title: {name}\n"
+            f"Date: {date_iso or 'unknown'}\n"
+            f"Funds lost: {amount if amount else 'unknown'}\n"
+            f"Technique: {technique or 'unknown'}\n"
+            f"Classification: {classification or 'unknown'}\n"
+            f"Chain: {chain}\n"
+            f"Language: {hack.get('language') or 'unknown'}"
+        )
+        docs.append(
+            {
+                "rel_key": (
+                    f"defillama_hacks:{re.sub(r'[^a-z0-9]+', '-', name.lower())}:{date_iso}"
+                ),
+                "title": f"DeFi hack: {name}",
+                "text": text,
+                "metadata": {
+                    "source_type": "defillama_hacks",
+                    "protocol": name,
+                    "date": date_iso,
+                    "date_ts": _date_to_ts(date_iso),
+                    "attack_vector": vector,
+                    "chain": chain,
+                    "amount_lost_usd": amount if amount else None,
+                    "severity": (
+                        "critical" if amount >= 1e7 else ("high" if amount >= 1e6 else "medium")
+                    ),
+                    "source_url": "https://defillama.com/hacks",
+                    "technique": technique,
+                    "classification": classification,
+                },
+            }
+        )
+    logger.info("defillama_hacks_docs=%d", len(docs))
+    return docs
+
+
+# ── Web3Hacks: Cyfrin/sc-exploits-minimized PoCs ────────────────────────
+
+
+def _web3hacks_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any]]:
+    """Parse Cyfrin ``sc-exploits-minimized`` Foundry PoCs (src/*.sol).
+
+    A maintained, public collection of minimized smart-contract exploits —
+    each file is a reproducible exploit PoC, ideal for exploit-pattern RAG.
+    """
+    docs: list[dict[str, Any]] = []
+    src_dir = repo_root / "src"
+    if not src_dir.exists():
+        return []
+    files = sorted(src_dir.rglob("*.sol"))
+    files = [f for f in files if f.name not in _SKIP_SOL]
+    if limit:
+        files = files[:limit]
+    for f in files:
+        try:
+            code = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if not code.strip():
+            continue
+        rel_path = f.relative_to(repo_root).as_posix()
+        contract_match = _CONTRACT_RE.search(code)
+        contract_name = contract_match.group(1) if contract_match else f.stem
+        description = _extract_description(code)
+        vector = _detect_attack_vector(f"{rel_path} {code[:2000]}")
+        chain = _detect_chain(rel_path)
+        title = f"Web3 exploit PoC: {contract_name}"
+        base_metadata: dict[str, Any] = {
+            "source_type": "web3hacks",
+            "protocol": contract_name,
+            "contract_name": contract_name,
+            "attack_vector": vector,
+            "chain": chain or "EVM",
+            "severity": "high",
+            "source_url": (f"https://github.com/Cyfrin/sc-exploits-minimized/blob/main/{rel_path}"),
+            "rel_path": rel_path,
+        }
+        chunks = smart_split(code)
+        for ci, chunk in enumerate(chunks):
+            chunk_key = f"{rel_path}:{ci}" if len(chunks) > 1 else rel_path
+            meta = dict(base_metadata)
+            if description:
+                meta["description"] = description[:500]
+            docs.append(
+                {
+                    "rel_key": f"web3hacks:{chunk_key}",
+                    "title": title,
+                    "text": chunk,
+                    "metadata": meta,
+                }
+            )
+    logger.info("web3hacks_docs=%d", len(docs))
+    return docs
+
+
+# ── Immunefi bug bounty programs ────────────────────────────────────────
+
+IMMUNEFI_EXPLORE_URL = "https://immunefi.com/explore/"
+_IMMUNEFI_STOPWORDS = {
+    "bounty",
+    "rewards",
+    "overview",
+    "audit",
+    "live",
+    "launch",
+    "view all",
+    "read more",
+    "loading",
+    "explore",
+    "immunefi",
+    "sign in",
+    "get started",
+    "dashboard",
+}
+
+
+async def _immunefi_docs(limit: int | None) -> list[dict[str, Any]]:
+    """Scrape the Immunefi bug-bounty explore page (best-effort).
+
+    The page is a Next.js RSC app; we pull text fragments from its
+    ``self.__next_f.push`` chunks and extract bounty program names. This is
+    intentionally conservative: if the page format changes, the source
+    degrades to a warning instead of failing the whole ingest.
+    """
+    docs: list[dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+            r = await c.get(IMMUNEFI_EXPLORE_URL, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                logger.warning("immunefi_fetch status=%d", r.status_code)
+                return docs
+            html = r.text
+    except Exception as e:
+        logger.warning("immunefi_error: %s", str(e)[:150])
+        return docs
+
+    fragments: list[str] = re.findall(r'self\.__next_f\.push\(\[1,"(.*?)"\]\)', html)
+    text = " ".join(fragments)
+    candidates = re.findall(
+        r"([A-Z][A-Za-z0-9][A-Za-z0-9 .&'-]{2,60}?)\s*(?:bug bounty|bounty)", text
+    )
+    candidates = [
+        c.strip()
+        for c in candidates
+        if len(c.strip()) >= 4 and c.strip().lower() not in _IMMUNEFI_STOPWORDS
+    ]
+    # Deduplicate preserving order.
+    candidates = list(dict.fromkeys(candidates))
+    if limit:
+        candidates = candidates[:limit]
+    for name in candidates:
+        vector = _detect_attack_vector(name)
+        docs.append(
+            {
+                "rel_key": f"immunefi:{re.sub(r'[^a-z0-9]+', '-', name.lower())}",
+                "title": f"Immunefi bounty program: {name}",
+                "text": (
+                    f"Immunefi bug bounty program: {name}. In-scope vulnerability "
+                    "research can earn bounties; attack surfaces and vulnerability "
+                    "classes are documented on the program page."
+                ),
+                "metadata": {
+                    "source_type": "immunefi",
+                    "protocol": name,
+                    "attack_vector": vector,
+                    "chain": "multi",
+                    "severity": "medium",
+                    "source_url": IMMUNEFI_EXPLORE_URL,
+                },
+            }
+        )
+    if not docs:
+        logger.warning("immunefi_parse_empty — page format may have changed")
+    logger.info("immunefi_docs=%d", len(docs))
+    return docs
+
+
+# ── OpenZeppelin audit reports (via Solodit listing) ────────────────────
+
+SOLODIT_URL = "https://solodit.xyz"
+
+
+async def _solodit_docs(limit: int | None) -> list[dict[str, Any]]:
+    """Scrape audit report listings from Solodit (best-effort).
+
+    Solodit aggregates public smart-contract audit reports — including
+    OpenZeppelin, Code4rena, Spearbit and many others — into one listing.
+    We extract report titles/links from the rendered HTML.
+    """
+    docs: list[dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+            r = await c.get(SOLODIT_URL, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                logger.warning("solodit_fetch status=%d", r.status_code)
+                return docs
+            html = r.text
+    except Exception as e:
+        logger.warning("solodit_error: %s", str(e)[:150])
+        return docs
+
+    anchors = re.findall(r'<a[^>]*href="(/reports/[^"]+)"[^>]*>([^<]{5,120})</a>', html)
+    seen: set[str] = set()
+    count = 0
+    for href, title in anchors:
+        title = re.sub(r"\s+", " ", title).strip()
+        if not title or title.lower() in seen:
+            continue
+        if any(w in title.lower() for w in ("read more", "view all", "loading", "load more")):
+            continue
+        seen.add(title.lower())
+        count += 1
+        vector = _detect_attack_vector(title)
+        docs.append(
+            {
+                "rel_key": f"openzeppelin_audits:{re.sub(r'[^a-z0-9]+', '-', title.lower())}",
+                "title": f"Audit report: {title}",
+                "text": (
+                    f"Public smart-contract audit report: {title}. "
+                    "Audit reports document findings, vulnerability classes, "
+                    "and fixes for reviewed protocols."
+                ),
+                "metadata": {
+                    "source_type": "openzeppelin_audits",
+                    "protocol": title.split(" by ")[0].strip(),
+                    "attack_vector": vector,
+                    "chain": "multi",
+                    "severity": "medium",
+                    "source_url": f"{SOLODIT_URL}{href}",
+                },
+            }
+        )
+        if limit and count >= limit:
+            break
+    if not docs:
+        logger.warning("solodit_parse_empty — page format may have changed")
+    logger.info("solodit_docs=%d", len(docs))
+    return docs
+
+
+# ── Solidity finance post-mortems (Rekt articles via Web Archive) ───────
+
+
+async def _postmortems_docs(limit: int | None) -> list[dict[str, Any]]:
+    """Fetch post-mortem articles for the most recent Rekt leaderboard hacks.
+
+    Rekt article bodies are fetched via the Web Archive (a stable mirror of
+    ``rekt.news/{slug}/``) and chunked per incident. Best-effort:
+    unreachable articles are skipped.
+    """
+    limit = min(limit or 5, 10)
+    try:
+        entries = await _fetch_rekt_leaderboard()
+    except Exception as e:
+        logger.warning("postmortems_rekt_fetch_failed: %s", str(e)[:150])
+        return []
+    base = REKT_LEADERBOARD_URL.rsplit("/", 1)[0]
+    docs: list[dict[str, Any]] = []
+    fetched = 0
+    for entry in entries:
+        slug = str(entry.get("slug", "")).strip()
+        title = str(entry.get("title", "")).strip()
+        if not slug or not title:
+            continue
+        url = f"https://web.archive.org/web/2/{base}/{slug}/"
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as c:
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                if r.status_code != 200:
+                    continue
+                text = _html_to_text(r.text)
+        except Exception as e:
+            logger.debug("postmortem_fetch_failed slug=%s err=%s", slug, str(e)[:100])
+            continue
+        if len(text) < 200:
+            continue
+        vector = _detect_attack_vector(text[:2000])
+        chain = _detect_chain(f"{title} {text[:2000]}")
+        chunks = smart_split(text)
+        for ci, chunk in enumerate(chunks):
+            chunk_key = f"postmortems:{slug}:{ci}" if len(chunks) > 1 else f"postmortems:{slug}"
+            docs.append(
+                {
+                    "rel_key": chunk_key,
+                    "title": f"Post-mortem: {title}",
+                    "text": chunk,
+                    "metadata": {
+                        "source_type": "postmortems",
+                        "protocol": title,
+                        "attack_vector": vector,
+                        "chain": chain,
+                        "severity": "high",
+                        "source_url": url,
+                        "slug": slug,
+                    },
+                }
+            )
+        fetched += 1
+        if limit and fetched >= limit:
+            break
+    logger.info("postmortems_docs=%d", len(docs))
+    return docs
+
+
+def _html_to_text(html: str) -> str:
+    """Minimal HTML→text: strip scripts/styles/tags and collapse whitespace."""
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 # ── Orchestration ──────────────────────────────────────────────────────
 
 SOURCE_TABLE: dict[str, tuple[str, str, tuple[str, ...] | None]] = {
@@ -977,6 +1359,11 @@ SOURCE_TABLE: dict[str, tuple[str, str, tuple[str, ...] | None]] = {
     ),
     "cryptoscamdb": ("https://github.com/CryptoScamDB/blacklist.git", "blacklist", ("data",)),
     "slowmist": ("https://github.com/slowmist/Knowledge-Base.git", "slowmist", None),
+    "web3hacks": (
+        "https://github.com/Cyfrin/sc-exploits-minimized.git",
+        "cyfrin-exploits",
+        ("src",),
+    ),
 }
 
 
@@ -984,25 +1371,23 @@ async def _collect_docs(
     source: str,
     limit: int | None,
     fetch_rekt: bool,
+    refresh: bool = False,
 ) -> list[dict[str, Any]]:
-    if source == "defihacklabs":
-        repo = SOURCE_TABLE["defihacklabs"]
+    if source in SOURCE_TABLE:
+        repo = SOURCE_TABLE[source]
         target = KNOWLEDGE_DIR / repo[1]
         if not target.exists():
             target = _clone_repo(repo[0], repo[1], repo[2])
-        return _defihacklabs_docs(target, limit)
-    if source == "cryptoscamdb":
-        repo = SOURCE_TABLE["cryptoscamdb"]
-        target = KNOWLEDGE_DIR / repo[1]
-        if not target.exists():
-            target = _clone_repo(repo[0], repo[1], repo[2])
-        return _cryptoscamdb_docs(target, limit)
-    if source == "slowmist":
-        repo = SOURCE_TABLE["slowmist"]
-        target = KNOWLEDGE_DIR / repo[1]
-        if not target.exists():
-            target = _clone_repo(repo[0], repo[1], repo[2])
-        return _slowmist_docs(target, limit)
+        elif refresh:
+            git_refresh(str(target))
+        if source == "defihacklabs":
+            return _defihacklabs_docs(target, limit)
+        if source == "cryptoscamdb":
+            return _cryptoscamdb_docs(target, limit)
+        if source == "slowmist":
+            return _slowmist_docs(target, limit)
+        if source == "web3hacks":
+            return _web3hacks_docs(target, limit)
     if source == "rekt_news":
         if not fetch_rekt:
             return []
@@ -1010,6 +1395,14 @@ async def _collect_docs(
         return _rekt_docs(entries, limit)
     if source == "swc_registry":
         return await _swc_docs(limit)
+    if source == "defillama_hacks":
+        return await _defillama_hacks_docs(limit)
+    if source == "immunefi":
+        return await _immunefi_docs(limit)
+    if source == "openzeppelin_audits":
+        return await _solodit_docs(limit)
+    if source == "postmortems":
+        return await _postmortems_docs(limit)
     raise ValueError(f"unknown source: {source}")
 
 
@@ -1021,19 +1414,32 @@ async def _ingest_source(
     dry_run: bool,
     force: bool,
     fetch_rekt: bool,
-) -> tuple[int, int, int]:
-    """Ingest one source. Returns (upserted, skipped_by_checkpoint, total_chunks)."""
+    dedup: bool = True,
+    dedup_threshold: float = DEDUP_THRESHOLD_DEFAULT,
+    priority_only: str | None = None,
+    refresh: bool = False,
+) -> tuple[int, int, int, int]:
+    """Ingest one source.
+
+    Returns (upserted, skipped_by_checkpoint, total_chunks, dedup_skipped).
+    """
     collection = SOURCE_COLLECTIONS[source]
-    docs = await _collect_docs(source, limit, fetch_rekt)
+    docs = await _collect_docs(source, limit, fetch_rekt, refresh=refresh)
     if not docs:
         logger.info("source=%s no docs collected", source)
-        return 0, 0, 0
+        return 0, 0, 0, 0
+    if priority_only:
+        docs = filter_by_severity(docs, priority_only)
+        logger.info("source=%s priority_only=%s kept=%d", source, priority_only, len(docs))
+    # Exploit/critical content first, reference/taxonomy later.
+    docs = sort_by_priority(docs)
     await _ensure_collection(client, collection)
     logger.info("source=%s docs=%d collection=%s", source, len(docs), collection)
 
     upserted = 0
     skipped = 0
     total_chunks = 0
+    dedup_skipped = 0
     pending: list[dict[str, Any]] = []  # (rel_key, text, metadata) not yet embedded
 
     for doc in docs:
@@ -1049,17 +1455,31 @@ async def _ingest_source(
 
     if dry_run:
         logger.info(
-            "[DRY RUN] source=%s would ingest %d chunks (skipped %d)", source, len(pending), skipped
+            "[DRY RUN] source=%s would ingest %d chunks (skipped %d)",
+            source,
+            len(pending),
+            skipped,
         )
-        return 0, skipped, len(pending)
+        return 0, skipped, len(pending), 0
 
     # Embed in batches of 50, upsert in batches of 50.
     for i in range(0, len(pending), BATCH_SIZE):
         batch = pending[i : i + BATCH_SIZE]
         texts = [b["text"] for b in batch]
         vectors = await _embed_batch(texts)
+        # Cross-reference new chunks against existing Qdrant content; chunks
+        # with a top hit >= dedup_threshold are already ingested → skip.
+        dups = (
+            await dedup_vectors(vectors, collection, client, dedup_threshold, QDRANT_URL)
+            if dedup
+            else [False] * len(vectors)
+        )
         points: list[dict[str, Any]] = []
-        for b, vec in zip(batch, vectors, strict=False):
+        for b, vec, is_dup in zip(batch, vectors, dups, strict=False):
+            if is_dup:
+                dedup_skipped += 1
+                checkpoint.mark(source, b["rel_key"], b["text"])  # don't re-embed next run
+                continue
             if vec is None:
                 logger.warning("embed_missing rel_key=%s", b["rel_key"][:60])
                 continue
@@ -1073,30 +1493,43 @@ async def _ingest_source(
                     vector=vec,
                 )
             )
+            checkpoint.mark(source, b["rel_key"], b["text"])
         if not points:
+            checkpoint.save()
             continue
         ok = await _upsert_batch(client, collection, points)
         upserted += ok
-        for b in batch:
-            checkpoint.mark(source, b["rel_key"], b["text"])
         checkpoint.save()
         if (i // BATCH_SIZE + 1) % 5 == 0 or i + BATCH_SIZE >= len(pending):
             logger.info(
-                "source=%s progress %d/%d chunks upserted=%d",
+                "source=%s progress %d/%d chunks upserted=%d dedup_skipped=%d",
                 source,
                 min(i + BATCH_SIZE, len(pending)),
                 len(pending),
                 upserted,
+                dedup_skipped,
             )
 
+    # Freshness: record when this source was last updated (git commit time
+    # for cloned repos, now for API sources).
+    if source in SOURCE_TABLE:
+        stamp = repo_last_updated(str(KNOWLEDGE_DIR / SOURCE_TABLE[source][1])) or ""
+    else:
+        stamp = datetime.now(UTC).isoformat()
+    if stamp:
+        checkpoint.set_last_updated(source, stamp)
+        checkpoint.save()
+
     logger.info(
-        "source=%s done upserted=%d skipped=%d total_chunks=%d",
+        "source=%s done upserted=%d skipped=%d total_chunks=%d dedup_skipped=%d last_updated=%s",
         source,
         upserted,
         skipped,
         total_chunks,
+        dedup_skipped,
+        stamp or "unknown",
     )
-    return upserted, skipped, total_chunks
+    return upserted, skipped, total_chunks, dedup_skipped
 
 
 async def main_async(
@@ -1105,6 +1538,10 @@ async def main_async(
     dry_run: bool,
     force: bool,
     fetch_rekt: bool,
+    dedup: bool = True,
+    dedup_threshold: float = DEDUP_THRESHOLD_DEFAULT,
+    priority_only: str | None = None,
+    refresh: bool = False,
 ) -> dict[str, dict[str, Any]]:
     checkpoint = Checkpoint(CHECKPOINT_PATH)
     checkpoint.load()
@@ -1115,13 +1552,35 @@ async def main_async(
     async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=120.0) as client:
         for source in sources:
             try:
-                upserted, skipped, total = await _ingest_source(
-                    source, client, checkpoint, limit, dry_run, force, fetch_rekt
+                upserted, skipped, total, dedup_skipped = await _ingest_source(
+                    source,
+                    client,
+                    checkpoint,
+                    limit,
+                    dry_run,
+                    force,
+                    fetch_rekt,
+                    dedup=dedup,
+                    dedup_threshold=dedup_threshold,
+                    priority_only=priority_only,
+                    refresh=refresh,
                 )
-                results[source] = {"upserted": upserted, "skipped": skipped, "chunks": total}
+                results[source] = {
+                    "upserted": upserted,
+                    "skipped": skipped,
+                    "chunks": total,
+                    "dedup_skipped": dedup_skipped,
+                    "last_updated": checkpoint.get_last_updated(source),
+                }
             except Exception as e:
                 logger.error("source=%s failed: %s", source, str(e)[:300])
-                results[source] = {"upserted": 0, "skipped": 0, "chunks": 0, "error": str(e)[:300]}
+                results[source] = {
+                    "upserted": 0,
+                    "skipped": 0,
+                    "chunks": 0,
+                    "dedup_skipped": 0,
+                    "error": str(e)[:300],
+                }
     return results
 
 
@@ -1129,8 +1588,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest scam/exploit knowledge bases into RAG")
     parser.add_argument(
         "--sources",
-        default="defihacklabs,rekt_news,cryptoscamdb,slowmist,swc_registry",
-        help="Comma-separated sources (all | defihacklabs,rekt_news,cryptoscamdb,slowmist,swc_registry)",
+        default=(
+            "defihacklabs,rekt_news,cryptoscamdb,slowmist,swc_registry,"
+            "defillama_hacks,web3hacks,immunefi,openzeppelin_audits,postmortems"
+        ),
+        help="Comma-separated sources (all | defihacklabs,rekt_news,cryptoscamdb,"
+        "slowmist,swc_registry,defillama_hacks,web3hacks,immunefi,"
+        "openzeppelin_audits,postmortems)",
     )
     parser.add_argument("--limit", type=int, default=None, help="Max docs per source")
     parser.add_argument(
@@ -1141,6 +1605,30 @@ def main() -> None:
     )
     parser.add_argument(
         "--no-rekt", action="store_true", help="Skip fetching rekt.news leaderboard (network)"
+    )
+    parser.add_argument(
+        "--no-dedup",
+        action="store_true",
+        help="Disable chunk deduplication against existing Qdrant content",
+    )
+    parser.add_argument(
+        "--dedup-threshold",
+        type=float,
+        default=DEDUP_THRESHOLD_DEFAULT,
+        help=f"Vector similarity above which a chunk is considered a duplicate "
+        f"(default {DEDUP_THRESHOLD_DEFAULT})",
+    )
+    parser.add_argument(
+        "--priority-only",
+        type=str,
+        default=None,
+        metavar="SEVERITY",
+        help="Only ingest chunks at or above SEVERITY (critical|high|medium|low|info|unknown)",
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="git pull cloned sources before ingesting (freshness)",
     )
     args = parser.parse_args()
 
@@ -1153,7 +1641,17 @@ def main() -> None:
         parser.error(f"unknown sources: {', '.join(unknown)}")
 
     results = asyncio.run(
-        main_async(sources, args.limit, args.dry_run, args.force, not args.no_rekt)
+        main_async(
+            sources,
+            args.limit,
+            args.dry_run,
+            args.force,
+            not args.no_rekt,
+            dedup=not args.no_dedup,
+            dedup_threshold=args.dedup_threshold,
+            priority_only=args.priority_only,
+            refresh=args.refresh,
+        )
     )
 
     print("=" * 70)
@@ -1161,9 +1659,12 @@ def main() -> None:
     print("=" * 70)
     for source, stats in results.items():
         print(
-            f"  {source:<16} collection={SOURCE_COLLECTIONS[source]:<22} "
-            f"upserted={stats.get('upserted', 0)} skipped={stats.get('skipped', 0)} chunks={stats.get('chunks', 0)}"
+            f"  {source:<22} collection={SOURCE_COLLECTIONS[source]:<22} "
+            f"upserted={stats.get('upserted', 0)} skipped={stats.get('skipped', 0)} "
+            f"dedup={stats.get('dedup_skipped', 0)} chunks={stats.get('chunks', 0)}"
         )
+        if stats.get("last_updated"):
+            print(f"    last_updated: {stats['last_updated']}")
         if stats.get("error"):
             print(f"    ERROR: {stats['error']}")
     print("=" * 70)

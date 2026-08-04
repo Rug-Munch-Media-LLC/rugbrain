@@ -1,11 +1,11 @@
-# RugSense — Retrieval-Augmented Generation for Crypto Intelligence
+# RugBrain — Crypto Intelligence RAG Engine
 
-RugSense (formerly RMI RAG) is the RAG layer for Rug Munch Intelligence. It
-embeds scam patterns, news/social intel, and wallet/entity intelligence into
-vectors and serves them back through semantic, hybrid, and entity-aware
-search. Powers the scanner's **Known Scam Patterns** check, the bot's
-`/research` and `/investigate` commands, and the frontend's AI chat / wallet
-forensics.
+RugBrain (formerly RugSense / RMI RAG) is the RAG layer for Rug Munch
+Intelligence. It embeds scam patterns, news/social intel, wallet/entity
+intelligence, and **real-time crypto security incidents** into vectors and
+serves them back through semantic, hybrid, and entity-aware search. Powers
+the scanner's **Known Scam Patterns** check, the bot's `/research` and
+`/investigate` commands, and the frontend's AI chat / wallet forensics.
 
 **Status:** live service, collections being seeded (see
 [ARCHITECTURE.md](ARCHITECTURE.md) §7 for honest current gaps).
@@ -17,6 +17,44 @@ forensics.
 | Scam Intelligence | Known scam patterns, historical hacks, scanner findings | `/api/v1/rag/v2/scam-check`, `/api/v1/search` |
 | Market Awareness | News, CT rundown, market brief, social sentiment | rmi-backend `/api/v1/rag/v2/search` |
 | Entity Intelligence | Wallet labels, entity profiles, cross-chain identities | `/api/v1/rag/investigate`, three-pillar search |
+| Security Alerts | Live exploit/rug-pull incidents (Qdrant `security_alerts`) | `src/rmi_rag/alerts.py` poller → NATS/Redis + ClickHouse |
+
+## Real-time security alert ingestion
+
+`src/rmi_rag/alerts.py` polls free security-intel sources every 5 minutes
+(CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
+via Nitter RSS or SearXNG) and, for each new incident:
+
+1. embeds the incident description (Infinity BAAI/bge-m3, 1024-dim)
+2. stores it in Qdrant `security_alerts`
+3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
+4. logs to ClickHouse `rag_security_alerts` for historical tracking
+
+```bash
+python -m rmi_rag.alerts --once    # single pass (cron friendly)
+python -m rmi_rag.alerts           # long-running poller
+```
+
+Optional extras (graceful degradation when absent): `nats-py`,
+`clickhouse-connect` (`pip install -e '.[alerts]'`).
+
+## Market awareness
+
+`src/rmi_rag/market_awareness.py` tracks the current landscape via the free
+DataBus-style APIs (CoinGecko, DeFiLlama, DexScreener, Fear & Greed) and
+returns:
+
+```json
+{
+  "trending_scams": [...],
+  "recent_exploits": [...],
+  "market_sentiment": "fearful|neutral|greedy"
+}
+```
+
+`score_awareness(query)` / `boosted_risk(query)` feed this awareness into RAG
+scoring for new token scans, so a token matching a recently exploited
+protocol or a trending scam is immediately flagged.
 
 ## Architecture
 
