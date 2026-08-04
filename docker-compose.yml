@@ -63,6 +63,16 @@ services:
       # endpoint; B2_S3_ENDPOINT defaults to s3.us-east-005.backblazeb2.com.
       # Supplied via env_file (.env.rag) — no bare .env in the repo (fleet
       # no-env-files hook; secrets sourced from gopass).
+      #
+      # Chain-data query endpoint (/api/v1/rag/chain/query) — chain-indexer
+      # parquet at b2-crypt:chain-data/parquet/. The b2-crypt remote is
+      # rclone-crypt encrypted, so the container needs rclone + a config
+      # with the b2-crypt remote. Provide RCLONE_CONF (mounted config) or
+      # RCLONE_CONFIG_* env vars (crypt + underlying b2 remotes).
+      - RCLONE_CONF=${RCLONE_CONF:-/home/rmi/.config/rclone/rclone.conf}
+      - B2_CHAIN_DATA_REMOTE=${B2_CHAIN_DATA_REMOTE:-b2-crypt}
+      - B2_CHAIN_DATA_BUCKET=${B2_CHAIN_DATA_BUCKET:-chain-data}
+      - B2_CHAIN_DATA_PREFIX=${B2_CHAIN_DATA_PREFIX:-parquet}
     deploy:
       resources:
         limits:

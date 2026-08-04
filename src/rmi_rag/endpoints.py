@@ -111,6 +111,102 @@ async def rag_query_snapshots(
     return result
 
 
+@router.post("/rag/chain/query", response_model=None)
+async def rag_chain_query(request: Request, data: dict[str, Any]) -> dict[str, Any] | JSONResponse:
+    """Run read-only SQL over chain-indexer parquet snapshots via DuckDB.
+
+    Body: ``{"query": "SELECT ...", "chain": "ethereum"?, "date":
+    "2026-08-03"?, "hour": "00"?, "limit": N?}``.
+
+    This is the *second* B2 parquet data source: the chain-indexer's
+    hourly on-chain snapshots (transfers + DEX swaps) at
+    ``b2-crypt:chain-data/parquet/{chain}/{YYYY}/{MM}/{DD}/{HH}/``.
+    Read-only ``chain_events`` (transfers) and ``chain_dex`` (DEX swaps)
+    views are exposed over the requested chain/date/hour prefix, so
+    callers can ask questions like:
+
+        SELECT chain, from_address, to_address, token_address, value
+        FROM chain_events WHERE chain = 'gnosis'
+        ORDER BY block_timestamp DESC LIMIT 10;
+
+    The prefix is downloaded through ``rclone`` (the ``b2-crypt`` remote
+    is content-encrypted, so DuckDB httpfs cannot read it directly) and
+    queried locally. ``chain`` is required when querying B2; ``date`` /
+    ``hour`` narrow the download. Credentials come from the rclone
+    config / process environment and are never exposed.
+    """
+    query = data.get("query", "")
+    if not query or not str(query).strip():
+        return {"error": "query is required", "code": "query.missing"}
+    chain = data.get("chain")
+    date = data.get("date")
+    hour = data.get("hour")
+    try:
+        limit = max(1, min(int(data.get("limit", 1000)), 5000))
+    except (TypeError, ValueError):
+        limit = 1000
+
+    from rmi_rag.chain_parquet import run_chain_query
+    from rmi_rag.parquet_analytics import validate_read_only_sql
+
+    try:
+        validate_read_only_sql(str(query))
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(exc), "code": "query.invalid"},
+        )
+
+    try:
+        result = run_chain_query(
+            str(query),
+            chain=str(chain) if chain else None,
+            date=str(date) if date else None,
+            hour=str(hour) if hour else None,
+            limit=limit,
+        )
+    except Exception as exc:
+        logger.warning("rag_chain_query_failed err=%s", exc)
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": f"chain query failed: {exc}",
+                "code": "query.execution_failed",
+            },
+        )
+    return result
+
+
+@router.get("/rag/chain/catalog")
+async def rag_chain_catalog(request: Request) -> dict[str, Any]:
+    """List the chain-data parquet source available to the RAG.
+
+    Returns the configured B2 remote/bucket/prefix, the chain names the
+    indexer writes, and an example prefix for reference. This is static
+    metadata (no B2 round-trip) so callers know what the
+    ``/api/v1/rag/chain/query`` endpoint can reach.
+    """
+    from rmi_rag.chain_parquet import (
+        DEFAULT_CHAIN_BUCKET,
+        DEFAULT_CHAIN_PREFIX,
+        DEFAULT_CHAIN_REMOTE,
+        KNOWN_CHAINS,
+    )
+
+    return {
+        "data_source": "chain-data-parquet",
+        "remote": f"{DEFAULT_CHAIN_REMOTE}:{DEFAULT_CHAIN_BUCKET}",
+        "prefix": DEFAULT_CHAIN_PREFIX,
+        "layout": "parquet/{chain}/{YYYY}/{MM}/{DD}/{HH}/*.parquet",
+        "views": ["chain_events (transfers)", "chain_dex (DEX swaps)"],
+        "chains": KNOWN_CHAINS,
+        "example_query": (
+            "SELECT chain, from_address, to_address, value "
+            "FROM chain_events ORDER BY block_timestamp DESC LIMIT 5"
+        ),
+    }
+
+
 @router.post("/rag/confidence")
 async def rag_confidence_score(request: Request, data: dict):
     from app.confidence import score_confidence  # external dependency
@@ -415,6 +511,15 @@ async def search_threat_intel(
         default=False,
         description="Rating filter: only articles corroborated by >= 3 independent sources",
     ),
+    chain_data: bool = Query(
+        default=False,
+        description=(
+            "Fall back to chain-indexer parquet (B2 chain-data) when vector "
+            "results are empty or the query asks an on-chain data question "
+            "(e.g. 'recent ETH transfers', 'who deployed tokens on Base yesterday'). "
+            "Results are tagged with source=chain-data-parquet."
+        ),
+    ),
 ) -> dict:
     """
     Semantic search across scanner findings ingested into Qdrant.
@@ -550,6 +655,47 @@ async def search_threat_intel(
     except Exception as e:
         logger.debug("rating filter/boost failed (non-critical): %s", e)
 
+    # ── Chain-data parquet fallback ──
+    # When the caller opts in (chain_data=true) and either (a) vector search
+    # returned nothing or (b) the query is clearly an on-chain data question
+    # ("recent ETH transfers", "who deployed tokens on Base yesterday"), fall
+    # back to the indexer's B2 chain-data parquet via the shared DuckDB path.
+    # Tagged with source=chain-data-parquet so consumers can distinguish.
+    chain_data_applied = False
+    chain_data_intent = False
+    chain_data_error: str | None = None
+    if chain_data:
+        try:
+            from rmi_rag.chain_parquet import (
+                build_intent_sql,
+                detect_chain_data_intent,
+                extract_chain_from_query,
+                extract_date_from_query,
+                run_chain_query,
+            )
+
+            chain_data_intent = detect_chain_data_intent(q)
+            if not results or chain_data_intent:
+                chain = extract_chain_from_query(q)
+                date = extract_date_from_query(q)
+                sql = build_intent_sql(q, chain=chain, date=date, limit=limit)
+                chain_result = run_chain_query(sql, chain=chain, date=date, limit=limit)
+                if chain_result.get("row_count", 0):
+                    chain_rows = []
+                    cols = chain_result["columns"]
+                    for row in chain_result["rows"]:
+                        rec = dict(zip(cols, row, strict=False))
+                        rec["source"] = "chain-data-parquet"
+                        rec["data_source"] = "b2:chain-data/parquet"
+                        rec["chain_data"] = True
+                        chain_rows.append(rec)
+                    results = list(results) + chain_rows
+                    chain_data_applied = True
+        except Exception as e:
+            # Never break vector search on a fallback failure.
+            chain_data_error = str(e)[:200]
+            logger.debug("chain_data_fallback failed (non-critical): %s", e)
+
     return {
         "results": results,
         "query": q,
@@ -560,6 +706,9 @@ async def search_threat_intel(
         "reranker_method": reranker_method,
         "rating_filters_applied": rating_filters_applied,
         "rating_boosts_applied": rating_boosts_applied,
+        "chain_data_applied": chain_data_applied,
+        "chain_data_intent": chain_data_intent,
+        "chain_data_error": chain_data_error,
     }
 
 
