@@ -3,7 +3,7 @@
 
 Reads `news_items` from Postgres (populated by rmi-backend RSS ingest),
 chunks each article into 500-char sliding windows with 50-char overlap,
-embeds every chunk with BGE-M3 (1024-dim) via Infinity `/v1/embeddings`,
+embeds every chunk with BGE-M3 (1024-dim) via Infinity `/embeddings`,
 and upserts the vectors into the Qdrant `news` collection with payload
 metadata: title, source, url, published_at, category, sentiment.
 
@@ -135,12 +135,12 @@ async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict]
 async def _embed_batch(
     client: httpx.AsyncClient, base: str, model: str, texts: list[str]
 ) -> list[list[float]] | None:
-    """Embed a list of texts via Infinity `/v1/embeddings`. Returns None on failure."""
+    """Embed a list of texts via Infinity `/embeddings`. Returns None on failure."""
     if not texts:
         return []
     try:
         r = await client.post(
-            f"{base}/v1/embeddings",
+            f"{base}/embeddings",
             json={"model": model, "input": texts},
             timeout=httpx.Timeout(300.0),
         )

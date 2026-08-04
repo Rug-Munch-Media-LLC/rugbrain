@@ -48,16 +48,16 @@ EMBEDDING_DIM = 1024
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Get embedding from Infinity BAAI/bge-m3 via /v1/embeddings.
+    """Get embedding from Infinity BAAI/bge-m3 via /embeddings.
 
-    Uses the OpenAI-compatible ``/v1/embeddings`` endpoint with ``input``
+    Uses the OpenAI-compatible ``/embeddings`` endpoint with ``input``
     as a list (faster, supports batching).
     Returns L2-normalized 1024-dim vector or None on failure.
     """
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(
-                f"{INFINITY_URL}/v1/embeddings",
+                f"{INFINITY_URL}/embeddings",
                 json={"model": INFINITY_MODEL, "input": [text[:8000]]},
             )
             if r.status_code != 200:
@@ -82,7 +82,7 @@ async def _embed(text: str) -> list[float] | None:
 async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
     """Embed multiple texts in a single batch call for efficiency.
 
-    Infinity's ``/v1/embeddings`` endpoint supports multiple inputs in one
+    Infinity's ``/embeddings`` endpoint supports multiple inputs in one
     request, which avoids repeated model-load overhead.
     """
     if not texts:
@@ -90,7 +90,7 @@ async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
     try:
         async with httpx.AsyncClient(timeout=300.0) as c:
             r = await c.post(
-                f"{INFINITY_URL}/v1/embeddings",
+                f"{INFINITY_URL}/embeddings",
                 json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
             )
             if r.status_code != 200:

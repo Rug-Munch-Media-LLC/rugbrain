@@ -24,7 +24,7 @@ Data inputs (all FREE):
      etherscan_combined_labels.csv
   5. arXiv API (export.arxiv.org) — free, no key
 
-Embedding: bge-m3 via Infinity ``/v1/embeddings`` (1024-dim), L2-normalized,
+Embedding: bge-m3 via Infinity ``/embeddings`` (1024-dim), L2-normalized,
 batched (20 short / 8 long) to maximize CPU throughput. Point IDs are
 deterministic UUIDv5 (``uuid.NAMESPACE_DNS``) so reruns are idempotent and
 partial progress is preserved (existing IDs are skipped).
@@ -107,12 +107,12 @@ def _normalize(vec: list[float]) -> list[float]:
 
 
 async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
-    """Embed texts via Infinity /v1/embeddings, returning normalized vectors."""
+    """Embed texts via Infinity /embeddings, returning normalized vectors."""
     if not texts:
         return []
     try:
         r = await client.post(
-            f"{INFINITY_URL}/v1/embeddings",
+            f"{INFINITY_URL}/embeddings",
             json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
             timeout=900.0,
         )

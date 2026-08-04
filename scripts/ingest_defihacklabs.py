@@ -10,7 +10,7 @@ that reproduces a real DeFi exploit. For every ``.sol`` file we:
      the incident metadata in ``past/*/README.md``), vulnerability description
      (leading comments), and the raw code snippet.
   2. Chunk large files into 500-char windows with 50-char overlap.
-  3. Embed each chunk with bge-m3 (1024-dim, Infinity /v1/embeddings).
+  3. Embed each chunk with bge-m3 (1024-dim, Infinity /embeddings).
   4. Upsert into the ``threat_intel`` collection with metadata:
      category, severity, ecosystem=EVM, source=defihacklabs, source_url.
 

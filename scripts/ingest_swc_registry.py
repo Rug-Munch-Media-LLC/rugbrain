@@ -21,7 +21,7 @@ For each entry we:
   2. Map the SWC ID to a canonical ``attack_vector`` and default ``severity``
      (see ``rmi_rag.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
   3. Build a structured weakness document and embed with bge-m3 (1024-dim,
-     Infinity /v1/embeddings).
+     Infinity /embeddings).
   4. Upsert into ``threat_intel`` with ``source=swc_registry`` and canonical
      metadata (attack_vector, severity, chain=ethereum, protocol=SWC ID,
      source_type=swc_registry).

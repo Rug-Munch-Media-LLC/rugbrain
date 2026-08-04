@@ -10,7 +10,7 @@ tags (chains / attack vectors), and an excerpt describing the incident.
 For each hack we:
   1. Build a structured description: protocol, date, amount, attack vector,
      chain, excerpt.
-  2. Embed with bge-m3 (1024-dim dense) via Infinity (OpenAI-compatible /v1/embeddings).
+  2. Embed with bge-m3 (1024-dim dense) via Infinity (OpenAI-compatible /embeddings).
   3. Upsert into the ``hacks`` collection using the store ``insert`` method
      (dense-only collection; sparse vectors are auto-computed when the
      collection is configured with a ``bm25`` sparse vector).
