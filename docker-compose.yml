@@ -41,6 +41,15 @@ services:
       # root-owned — the non-root container user (rmi, uid 999) cannot traverse
       # into /root to reach the mount point. HF_HOME is set to /opt/hf-cache.
       - /path/to/hf-cache:/opt/hf-cache:ro
+      # Rclone config for chain-parquet B2 access (b2-crypt remote). The
+      # container runs as non-root rmi (uid 999), so the source file must be
+      # world-readable (chmod 644 — /root is 0700 so only root can traverse
+      # to it on the host). RCLONE_CONF (set above) points rclone at
+      # /home/rmi/.config/rclone/rclone.conf. Set RCLONE_CONF_SOURCE to the
+      # host rclone config path at deploy time (no .env files in this repo —
+      # fleet no-env-files hook; e.g. RCLONE_CONF_SOURCE=... docker compose
+      # up -d rag-api).
+      - ${RCLONE_CONF_SOURCE:-/path/to/rclone.conf}:/home/rmi/.config/rclone/rclone.conf:ro
     environment:
       - QDRANT_URL=http://rmi-qdrant:6333
       - QDRANT_HOST=rmi-qdrant
