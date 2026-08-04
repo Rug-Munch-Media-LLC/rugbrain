@@ -5,7 +5,6 @@ Extracted from search_service.py to keep ranking/scoring concerns separate.
 """
 
 import re
-from typing import Any
 
 
 def _classify_query(query: str) -> str:

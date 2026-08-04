@@ -9,6 +9,7 @@ Architecture:
   3. Retrieve results for original + variants
   4. RRF fuse all result sets
 """
+
 from __future__ import annotations
 
 import json
@@ -58,9 +59,7 @@ Rules:
 Output only: ["variant1", "variant2", "variant3"]"""
 
 
-async def rewrite_query(
-    query: str, n_variants: int = 3, use_llm: bool = False
-) -> list[str]:
+async def rewrite_query(query: str, n_variants: int = 3, use_llm: bool = False) -> list[str]:
     """Generate query variants. Falls back to rule-based if no LLM available."""
     if not use_llm:
         return _rule_based_variants(query, n_variants)

@@ -32,18 +32,19 @@ def _redis():
 
 
 class DeltaTracker:
-
     @staticmethod
     def _record(doc_id: str, collection: str, action: DeltaAction) -> None:
         r = _redis()
         if r is None:
             log.warning("delta_track_redis_unavailable")
             return
-        entry = json.dumps({
-            "doc_id": doc_id,
-            "collection": collection,
-            "action": action,
-        })
+        entry = json.dumps(
+            {
+                "doc_id": doc_id,
+                "collection": collection,
+                "action": action,
+            }
+        )
         r.zadd(_DELTA_KEY, {entry: time.time()})
         log.debug("delta_track action=%s doc_id=%s collection=%s", action, doc_id, collection)
 

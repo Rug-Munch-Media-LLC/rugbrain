@@ -45,9 +45,21 @@ def _embed_deployer_fingerprint(wallet_profile: dict[str, Any]) -> list[float]:
     # ── Risk labels (dims 20-35) ──
     labels = metadata.get("labels", []) or metadata.get("risk_tags", [])
     risk_tags = [
-        "scam", "rug", "honeypot", "phishing", "drainer",
-        "mixer", "sanctioned", "exploiter", "theft", "ransomware",
-        "wash_trade", "insider", "sybil", "bot", "impersonator",
+        "scam",
+        "rug",
+        "honeypot",
+        "phishing",
+        "drainer",
+        "mixer",
+        "sanctioned",
+        "exploiter",
+        "theft",
+        "ransomware",
+        "wash_trade",
+        "insider",
+        "sybil",
+        "bot",
+        "impersonator",
     ]
     for i, tag in enumerate(risk_tags):
         if tag in labels or tag in str(metadata.get("classification", "")):
@@ -56,9 +68,22 @@ def _embed_deployer_fingerprint(wallet_profile: dict[str, Any]) -> list[float]:
     # ── Current chain encoding (dims 36-51) ──
     chain = metadata.get("chain", "ethereum").lower()
     chain_list = [
-        "ethereum", "solana", "base", "bsc", "arbitrum",
-        "polygon", "optimism", "avalanche", "fantom", "tron",
-        "sui", "aptos", "near", "blast", "linea", "zksync",
+        "ethereum",
+        "solana",
+        "base",
+        "bsc",
+        "arbitrum",
+        "polygon",
+        "optimism",
+        "avalanche",
+        "fantom",
+        "tron",
+        "sui",
+        "aptos",
+        "near",
+        "blast",
+        "linea",
+        "zksync",
     ]
     for i, ch in enumerate(chain_list):
         if ch in chain:
@@ -110,7 +135,9 @@ async def _query_wallet_profile(
         min_similarity=0.0,
         filters={"address": address},
     )
-    return [r for r in results if r.get("metadata", {}).get("address", "").lower() == address.lower()]
+    return [
+        r for r in results if r.get("metadata", {}).get("address", "").lower() == address.lower()
+    ]
 
 
 def _assess_cross_chain_risk(
@@ -140,7 +167,15 @@ def _assess_cross_chain_risk(
 
         if match_chain != source_chain:
             chains.add(match_chain)
-            addresses.append({"address": match_addr, "chain": match_chain, "similarity": sim, "source": m.get("source", ""), "severity": m.get("severity", "medium")})
+            addresses.append(
+                {
+                    "address": match_addr,
+                    "chain": match_chain,
+                    "similarity": sim,
+                    "source": m.get("source", ""),
+                    "severity": m.get("severity", "medium"),
+                }
+            )
 
         max_similarity = max(max_similarity, sim)
         if m.get("severity") in ("high", "critical"):
@@ -275,4 +310,8 @@ async def fingerprint_wallet(
     )
 
     logger.info("Stored cross-chain fingerprint for %s", address)
-    return {"fingerprint_id": fingerprint_id, "address": address, "fingerprint_dims": len(fingerprint)}
+    return {
+        "fingerprint_id": fingerprint_id,
+        "address": address,
+        "fingerprint_dims": len(fingerprint),
+    }

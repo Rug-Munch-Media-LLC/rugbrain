@@ -18,7 +18,8 @@ from rmi_rag.crypto_embeddings import (
     EmbeddingResult,
     get_embedder,
 )
-from ._state import _get_redis, _pattern_cache, _pattern_cache_loaded, _seeded
+
+from ._state import _get_redis, _pattern_cache, _seeded
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,7 @@ async def ingest_document(
         "content": content[:5000],
         "stored_at": datetime.now(UTC).isoformat(),
     }
-    _TTL_MAP = {
+    _ttl_map = {
         "scam_patterns": 0,
         "contract_audits": 0,
         "transaction_patterns": 0,
@@ -189,7 +190,7 @@ async def ingest_document(
         "token_analysis": 86400 * 90,
         "general": 86400 * 30,
     }
-    ttl = _TTL_MAP.get(collection, 86400 * 30)
+    ttl = _ttl_map.get(collection, 86400 * 30)
     key = f"rag:{collection}:{doc_id}"
     if ttl == 0:
         await r.set(key, json.dumps(doc))
@@ -293,7 +294,7 @@ async def get_stats() -> dict[str, Any]:
     except Exception:
         logger.warning("swallowed exception", exc_info=True)
 
-    from rmi_rag.crypto_embeddings import COLLECTIONS  # noqa: F811 - reimport for local scope
+    from rmi_rag.crypto_embeddings import COLLECTIONS
 
     collection_sizes = {}
     for coll in COLLECTIONS:

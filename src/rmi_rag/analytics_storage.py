@@ -100,7 +100,9 @@ class RedisStorage:
             self.client.zadd(wallet_key, {tx.tx_hash: tx.timestamp.timestamp()})
 
             # Update wallet history
-            self._update_wallet_history(tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address, tx)
+            self._update_wallet_history(
+                tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address, tx
+            )
 
             return True
         except Exception as e:
@@ -117,7 +119,9 @@ class RedisStorage:
             logger.error("Failed to get transaction: %s", e)
             return None
 
-    def get_wallet_history(self, wallet_address: str, chain: str = "ethereum") -> WalletHistory | None:
+    def get_wallet_history(
+        self, wallet_address: str, chain: str = "ethereum"
+    ) -> WalletHistory | None:
         """Get complete wallet history."""
         try:
             key = self.key_prefix("wallet", f"{wallet_address}_{chain}")
@@ -240,7 +244,9 @@ class RedisStorage:
             logger.error("Failed to get cluster: %s", e)
             return None
 
-    def get_or_create_wallet_history(self, wallet_address: str, chain: str = "ethereum") -> WalletHistory:
+    def get_or_create_wallet_history(
+        self, wallet_address: str, chain: str = "ethereum"
+    ) -> WalletHistory:
         """Get or create wallet history."""
         history = self.get_wallet_history(wallet_address, chain)
         if history is None:
@@ -290,7 +296,9 @@ class AnalyticsDatabase:
         """Store a wallet cluster."""
         self.redis.save_wallet_cluster(cluster_id, members, labels)
 
-    def get_wallet_history(self, wallet_address: str, chain: str = "ethereum") -> WalletHistory | None:
+    def get_wallet_history(
+        self, wallet_address: str, chain: str = "ethereum"
+    ) -> WalletHistory | None:
         """Get wallet history."""
         return self.redis.get_wallet_history(wallet_address, chain)
 
@@ -312,7 +320,9 @@ class AnalyticsDatabase:
 
     # ─── ANALYTICS QUERIES ────────────────────────────────────────────
 
-    def get_wallet_activity_summary(self, wallet_address: str, chain: str = "ethereum") -> dict[str, Any]:
+    def get_wallet_activity_summary(
+        self, wallet_address: str, chain: str = "ethereum"
+    ) -> dict[str, Any]:
         """Get activity summary for a wallet."""
         history = self.redis.get_wallet_history(wallet_address, chain)
 
@@ -447,4 +457,3 @@ if __name__ == "__main__":
     # Get activity summary
     summary = db.get_wallet_activity_summary(tx.from_address, "ethereum")
     print(f"Activity summary: {summary}")
-

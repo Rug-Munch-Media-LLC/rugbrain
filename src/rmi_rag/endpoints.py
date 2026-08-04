@@ -37,7 +37,7 @@ async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[
     try:
         rd = await _get_redis()
         limit = RATE_LIMITS.get(tier, RATE_LIMITS["free"])
-        key = f"rag:ratelimit:{identifier}:{hour_key}"
+        key = f"rag:ratelimit:{tier}:{identifier}:{hour_key}"
         current = await rd.incr(key)
         if current == 1:
             now = datetime.now(UTC)

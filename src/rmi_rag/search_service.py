@@ -7,7 +7,6 @@ New code should import directly from ``search.engine``, ``search.filters``,
 ``search.ranking``, or ``search`` package.
 """
 
-import json
 import logging
 import os
 
@@ -55,20 +54,4 @@ _pattern_cache_loaded = False
 # Search package import — safe now that shared state is defined
 # ═══════════════════════════════════════════════════════════════
 
-from rmi_rag.search import *  # noqa: E402, F401, F403
-from rmi_rag.search import (  # noqa: E402
-    _classify_query,
-    _embed_by_collection,
-    _enrich_ann_results,
-    _preembed_scam_patterns,
-    detect_scam_patterns,
-    get_goplus_analysis,
-    get_stats,
-    ingest_document,
-    ingest_forensic_report,
-    seed_known_scams,
-    search_multi_collection,
-    search_similar,
-    search_with_transform,
-    three_pillar_search,
-)
+from rmi_rag.search import *  # noqa: E402, F403

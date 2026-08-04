@@ -46,10 +46,10 @@ async def seed_known_scams() -> dict[str, Any]:
             await r.set(key, json.dumps(doc))  # permanent - seed data should never expire
             await r.sadd("rag:idx:known_scams", pid)
             count += 1
-            logger.info("Seeded scam pattern: %s", pattern['name'])
+            logger.info("Seeded scam pattern: %s", pattern["name"])
 
         except Exception as e:
-            logger.error("Failed to seed %s: %s", pattern['name'], e)
+            logger.error("Failed to seed %s: %s", pattern["name"], e)
 
     _ss._seeded = True
     return {

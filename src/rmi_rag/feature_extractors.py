@@ -190,7 +190,11 @@ def extract_transaction_features(tx_data: dict) -> np.ndarray:
         vec[12] = min(entropy / 3.2, 1.0)  # normalized entropy
         # Burstiness: ratio of txs in 10% of time to total
         window = max(1, (ts_sorted[-1] - ts_sorted[0]) // 10)
-        burst_txs = sum(1 for i in range(len(ts_sorted) - 1) if ts_sorted[i + 1] - ts_sorted[i] < max(60, window))
+        burst_txs = sum(
+            1
+            for i in range(len(ts_sorted) - 1)
+            if ts_sorted[i + 1] - ts_sorted[i] < max(60, window)
+        )
         vec[13] = min(burst_txs / max(1, len(ts_sorted)), 1.0)
 
     # ── Diversity metrics (dims 20-29) ──

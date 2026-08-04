@@ -18,10 +18,10 @@ log = logging.getLogger(__name__)
 
 class ParentRetriever:
     """Stores and retrieves parent documents in Redis for context expansion."""
+
     def __init__(self, redis=None):
         """Args: redis: optional async Redis client for DI/testing."""
         self._redis = redis
-
 
     async def store_parent(self, doc_id: str, content: str, metadata: dict) -> None:
         """Store the full parent document in Redis.
@@ -36,7 +36,9 @@ class ParentRetriever:
 
             r = get_redis_async()
             if r is None:
-                log.warning("parent_retriever: no Redis client, skipping store_parent for %s", doc_id)
+                log.warning(
+                    "parent_retriever: no Redis client, skipping store_parent for %s", doc_id
+                )
                 return
             key = f"rag:parent:{doc_id}"
             doc = {
@@ -72,9 +74,7 @@ class ParentRetriever:
             log.debug("parent_retriever: get_parent failed for %s: %s", doc_id, e)
         return None
 
-    async def expand_context(
-        self, chunks: list[dict], window_size: int = 1
-    ) -> list[dict]:
+    async def expand_context(self, chunks: list[dict], window_size: int = 1) -> list[dict]:
         """Enrich a list of matched chunks with parent document context.
 
         For each chunk that has a doc_id, fetches the parent document and
@@ -98,9 +98,7 @@ class ParentRetriever:
             enriched.append(chunk)
         return enriched
 
-    async def expand_context_around_chunk(
-        self, chunk: dict, context_chars: int = 2000
-    ) -> str:
+    async def expand_context_around_chunk(self, chunk: dict, context_chars: int = 2000) -> str:
         """For a single chunk, return surrounding text from the parent document.
 
         Finds where the chunk content appears in the parent document and

@@ -459,7 +459,7 @@ async def ingest_historical_source(source_id: str) -> dict:
     if not source:
         return {"error": f"Unknown source: {source_id}"}
 
-    logger.info("Ingesting %s → %s", source['name'], source['collection'])
+    logger.info("Ingesting %s → %s", source["name"], source["collection"])
 
     # Scrape
     scrapers = {
@@ -510,7 +510,9 @@ async def ingest_historical_source(source_id: str) -> dict:
                     result = resp.json()
                     ingested += result.get("ingested", len(batch))
                 else:
-                    logger.warning("Ingest batch failed for %s: HTTP %s", source_id, resp.status_code)
+                    logger.warning(
+                        "Ingest batch failed for %s: HTTP %s", source_id, resp.status_code
+                    )
     except Exception as e:
         logger.error("Ingest HTTP failed for %s: %s", source_id, e)
 
@@ -559,4 +561,3 @@ if __name__ == "__main__":
     else:
         result = asyncio.run(ingest_all_historical())
         print(json.dumps(result, indent=2))
-

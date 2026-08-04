@@ -48,6 +48,29 @@ def _redis_import_ok() -> bool:
         return False
 
 
+async def _redis_connect_ok() -> bool:
+    """Check whether Redis is reachable with configured credentials."""
+    if not _redis_import_ok():
+        return False
+    import redis.asyncio as aioredis
+
+    try:
+        r = aioredis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            password=REDIS_PASSWORD or None,
+            socket_connect_timeout=3,
+        )
+        await r.ping()
+        await r.close()
+        return True
+    except Exception:
+        return False
+
+
+RMI_RAG_API_KEY = os.environ.get("RMI_RAG_API_KEY", "")
+
+
 async def _service_healthy(url: str) -> bool:
     """Return True if *url*/health responds 200."""
     try:
@@ -149,8 +172,11 @@ async def test_scanner_to_rag_pipeline():
 
     Full end-to-end check of the scanner → Redis → subscriber → Qdrant flow.
     """
-    if not _redis_import_ok():
-        pytest.skip("redis.asyncio not installed — cannot publish to Redis")
+    if not await _redis_connect_ok():
+        pytest.skip(
+            f"Redis not reachable at {REDIS_HOST}:{REDIS_PORT} "
+            "(set TEST_REDIS_PASSWORD if auth is required)"
+        )
 
     if not await _service_healthy(RMI_RAG_URL):
         pytest.skip(f"rmi-rag service not reachable at {RMI_RAG_URL}")
@@ -189,10 +215,17 @@ async def test_rag_search_endpoint_returns_expected_schema():
     if not await _service_healthy(RMI_RAG_URL):
         pytest.skip(f"rmi-rag service not reachable at {RMI_RAG_URL}")
 
+    if not RMI_RAG_API_KEY:
+        pytest.skip(
+            "RMI_RAG_API_KEY not set — the search endpoint requires auth. "
+            "Set RMI_RAG_API_KEY to match the running service's key."
+        )
+
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(
             f"{RMI_RAG_URL}/api/v1/search",
             params={"q": "test finding", "limit": 5},
+            headers={"X-API-Key": RMI_RAG_API_KEY},
         )
 
     # May 503 if embeddings are unavailable (model not loaded)
@@ -233,22 +266,20 @@ async def test_redis_publish_survives_invalid_json():
     Whether the subscriber processes malformed input is verified via
     subscriber logs (not test-observable without direct Redis access).
     """
-    if not _redis_import_ok():
-        pytest.skip("redis.asyncio not installed")
+    if not await _redis_connect_ok():
+        pytest.skip(
+            f"Redis not reachable at {REDIS_HOST}:{REDIS_PORT} "
+            "(set TEST_REDIS_PASSWORD if auth is required)"
+        )
 
     import redis.asyncio as aioredis
 
-    try:
-        r = aioredis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=REDIS_PASSWORD or None,
-            decode_responses=True,
-        )
-        # Verify connection works before sending
-        await r.ping()
-    except Exception as exc:
-        pytest.skip(f"Redis not available: {exc}")
+    r = aioredis.Redis(
+        host=REDIS_HOST,
+        port=REDIS_PORT,
+        password=REDIS_PASSWORD or None,
+        decode_responses=True,
+    )
 
     try:
         # Publish raw invalid JSON

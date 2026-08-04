@@ -312,4 +312,3 @@ def _chunk_solidity_regex(
         chunks.append(current.strip())
 
     return [c for c in chunks if c]
-

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # any module-level code in this package tries to access them.
 # This import reads pre-existing attributes from the facade module,
 # which is already in sys.modules with these attrs set.
-from rmi_rag.search_service import (  # noqa: E402
+from rmi_rag.search_service import (  # noqa: E402, F401
     _get_redis,
     _pattern_cache,
     _pattern_cache_loaded,

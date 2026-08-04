@@ -66,7 +66,9 @@ async def record_scanner_result(
 
     try:
         is_scam = verdict in ("scam", "honeypot", "rug", "critical")
-        adjustment = SCAM_CONFIRMED_BOOST if is_scam else FALSE_POSITIVE_PENALTY if verdict == "safe" else 0
+        adjustment = (
+            SCAM_CONFIRMED_BOOST if is_scam else FALSE_POSITIVE_PENALTY if verdict == "safe" else 0
+        )
 
         if adjustment == 0:
             await r.aclose()
@@ -240,4 +242,3 @@ async def get_feedback_stats() -> dict[str, Any]:
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
-

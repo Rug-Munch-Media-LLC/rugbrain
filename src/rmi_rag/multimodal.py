@@ -354,4 +354,3 @@ def get_logo_db() -> TokenLogoDB:
     if _logo_db is None:
         _logo_db = TokenLogoDB()
     return _logo_db
-

@@ -243,4 +243,3 @@ async def list_active_watches() -> list[dict[str, Any]]:
         _updates.pop(wid, None)
 
     return active
-

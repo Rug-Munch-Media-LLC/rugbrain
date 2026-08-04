@@ -3,6 +3,7 @@
 Redis pub/sub pipeline: New scam ingested → `rag:new_scam` channel →
 listener checks watchlist → WebSocket + Telegram push.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,6 +29,7 @@ class WatchlistManager:
         }
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 await r.set(key, json.dumps(watch))
@@ -40,6 +42,7 @@ class WatchlistManager:
         key = f"rag:watch:{user_id}:{address.lower()}"
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 await r.delete(key)
@@ -54,6 +57,7 @@ class WatchlistManager:
         pattern = f"rag:watch:{user_id}:*"
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 keys = await r.keys(pattern)
@@ -77,6 +81,7 @@ class WatchlistManager:
                 scam_addresses.add(addr.lower())
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 keys = await r.keys("rag:watch:*")
@@ -102,7 +107,6 @@ class WatchlistManager:
 
 
 class AlertDispatcher:
-
     @staticmethod
     async def dispatch(watch: dict, alert: dict) -> None:
         channels = watch.get("channels", ["websocket"])
@@ -119,6 +123,7 @@ class AlertDispatcher:
     async def _dispatch_websocket(user_id: str, alert: dict) -> None:
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 channel = f"rag:alerts:{user_id}"
@@ -131,6 +136,7 @@ class AlertDispatcher:
     async def _dispatch_telegram(user_id: str, alert: dict) -> None:
         try:
             from app.core.redis import get_redis_async
+
             r = await get_redis_async()
             if r:
                 msg = (
@@ -152,6 +158,7 @@ async def start_alert_listener():
     while True:
         try:
             from app.core.redis import get_redis
+
             r = get_redis()
             if r:
                 pubsub = r.pubsub()
