@@ -545,6 +545,59 @@ class QdrantVectorStore:
             logger.warning("qdrant_hybrid_rrf_error: %s", e)
             return None
 
+    async def scroll(
+        self,
+        collection: str,
+        limit: int = 100,
+        offset: str | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Scroll through points in *collection* returning ``(results, next_offset)``.
+
+        Used by ingestion-side consumers (scam pattern extraction) to read
+        back every point in a collection without a vector query. Results are
+        formatted like ``search`` (id + payload fields) with ``similarity``
+        omitted (scroll has no score). Returns the next page offset when more
+        points remain, else ``None``.
+        """
+        coll = collection or "default"
+        client = await self._get_client()
+        await _ensure_collection(coll, 1, client)
+
+        payload: dict[str, Any] = {
+            "limit": limit,
+            "with_payload": True,
+        }
+        if offset:
+            payload["offset"] = offset
+        if filters:
+            qdrant_filter = normalize_filters(filters)
+            apply_payload_filter(payload, qdrant_filter)
+
+        try:
+            r = await client.post(f"/collections/{coll}/points/scroll", json=payload)
+            if r.status_code != 200:
+                logger.warning("qdrant_scroll_failed status=%d body=%s", r.status_code, r.text)
+                return [], None
+            data = r.json()
+            results: list[dict[str, Any]] = []
+            for point in data.get("result", {}).get("points", []):
+                payload_data = point.get("payload", {})
+                results.append(
+                    {
+                        "id": point.get("id"),
+                        "content": payload_data.get("content", ""),
+                        "metadata": payload_data.get("metadata", {}),
+                        "source": payload_data.get("source", ""),
+                        "severity": payload_data.get("severity", ""),
+                    }
+                )
+            next_offset = data.get("result", {}).get("next_page_offset")
+            return results, next_offset
+        except Exception as e:
+            logger.warning("qdrant_scroll_error: %s", e)
+            return [], None
+
     @staticmethod
     def _to_uuid(doc_id: str) -> str:
         """Convert a string doc_id to a deterministic UUID v5.

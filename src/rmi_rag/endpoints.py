@@ -6,6 +6,7 @@ multi-modal, investigation narratives, graph RAG, streaming, email.
 
 import logging
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -57,6 +58,118 @@ async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[
 
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
+
+
+_TOKEN_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+
+
+def _is_token_address(q: str) -> bool:
+    """True when *q* is a bare token/contract address (0x + 40 hex)."""
+    return bool(_TOKEN_ADDRESS_RE.fullmatch((q or "").strip()))
+
+
+async def _analyze_address_findings(address: str, chain: str, limit: int) -> dict[str, Any]:
+    """Run the historical pattern-matching + cross-reference pipeline.
+
+    Fail-open: any failure returns an empty finding block so the enclosing
+    search/analyze endpoint still serves results.
+    """
+    try:
+        from rmi_rag.cross_reference import cross_reference_token
+        from rmi_rag.pattern_matching import match_token_patterns, score_scam_risk
+
+        # Build a minimal token profile for matching (chain + address context).
+        token_data = {"address": address, "chain": chain, "token_address": address}
+        matching = await match_token_patterns(token_data)
+        matched = matching.get("matched_patterns", [])
+        signals = matching.get("risk_signals", [])
+        verdict = score_scam_risk(matched, signals)
+
+        cross = await cross_reference_token(
+            address,
+            chain=chain,
+            limit=limit,
+            matched_patterns=matched,
+        )
+
+        return {
+            "address": address,
+            "chain": chain,
+            "verdict": verdict,
+            "matched_patterns": matched[:limit],
+            "risk_signals": signals[:25],
+            "cross_reference": cross,
+        }
+    except Exception as e:
+        logger.warning("analyze_address_findings failed (non-critical): %s", e)
+        return {
+            "address": address,
+            "chain": chain,
+            "verdict": {"risk": "unknown", "confidence": 0.0, "top_pattern": ""},
+            "matched_patterns": [],
+            "risk_signals": [],
+            "cross_reference": {
+                "address": address,
+                "chain": chain,
+                "backend": "none",
+                "similar_tokens": [],
+                "narrative": "",
+            },
+            "error": str(e)[:200],
+        }
+
+
+@router.get("/analyze/{address}")
+async def analyze_token_address(
+    request: Request,
+    address: str,
+    chain: str = Query(default="ethereum", description="Chain of the token/contract"),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> dict[str, Any]:
+    """Run the full historical scam-analysis pipeline on a token address.
+
+    Combines the pattern-matching engine (bytecode + deployer behavior +
+    token economics against known scam patterns) with historical
+    cross-reference (similar tokens from lite-indexer LanceDB / Qdrant
+    threat-intel) and returns a structured verdict::
+
+        {
+          "address", "chain",
+          "verdict": {"risk": "high|medium|low|unknown", "confidence", "top_pattern"},
+          "matched_patterns": [{"name", "confidence", "reference_incident", "technique"}],
+          "risk_signals": ["..."],
+          "cross_reference": {"backend", "similar_tokens", "narrative"},
+        }
+
+    Rate-limited per client IP (free tier = 5/hour).
+    """
+    now = datetime.now(UTC)
+    hour_key = now.strftime("%Y%m%d%H")
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, ttl = await _check_rate_limit(client_ip, "free", hour_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "tier": "free",
+                "limit": RATE_LIMITS["free"],
+                "reset_in_seconds": ttl,
+            },
+            headers={"X-RateLimit-Reset": str(ttl)},
+        )
+
+    if not _is_token_address(address):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "invalid_address",
+                "message": "address must be a 0x-prefixed 40-hex token/contract address",
+            },
+        )
+
+    findings = await _analyze_address_findings(address, chain, limit)
+    return findings
 
 
 @router.post("/rag/query", response_model=None)
@@ -696,6 +809,17 @@ async def search_threat_intel(
             chain_data_error = str(e)[:200]
             logger.debug("chain_data_fallback failed (non-critical): %s", e)
 
+    # ── Historical pattern matching (token-address queries) ──
+    # When the caller searches a bare token/contract address, augment the
+    # vector results with the scam-pattern verdict + historical
+    # cross-reference. Fail-open: never break the search on analysis errors.
+    pattern_matches: dict[str, Any] | None = None
+    if _is_token_address(q):
+        chain_hint = filter_chain or "ethereum"
+        pattern_matches = await _analyze_address_findings(
+            q.strip().lower(), chain=chain_hint, limit=min(limit, 25)
+        )
+
     return {
         "results": results,
         "query": q,
@@ -709,6 +833,7 @@ async def search_threat_intel(
         "chain_data_applied": chain_data_applied,
         "chain_data_intent": chain_data_intent,
         "chain_data_error": chain_data_error,
+        "pattern_matches": pattern_matches,
     }
 
 

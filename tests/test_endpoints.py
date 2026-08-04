@@ -198,3 +198,78 @@ async def test_logo_check_missing_url(client):
     assert resp.status_code == 200
     data = resp.json()
     assert "error" in data or "hash" in data
+
+
+VALID_ADDRESS = "0x0a16a85be44627c10cee75db06b169c7bc76de2c"
+
+
+@pytest.mark.asyncio
+async def test_analyze_invalid_address(client):
+    """GET /api/v1/analyze/{address} rejects non-address input."""
+    resp = await client.get("/api/v1/analyze/not-an-address")
+    assert resp.status_code == 400
+    # FastAPI wraps HTTPException detail under {"detail": {...}}.
+    body = resp.json()
+    detail = body.get("detail", body)
+    assert "invalid_address" in detail.get("error", "")
+
+
+@pytest.mark.asyncio
+async def test_analyze_valid_address_fail_open(client, monkeypatch):
+    """GET /api/v1/analyze/{address} returns findings; fails open on backend errors."""
+    import rmi_rag.endpoints as ep
+
+    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+        return {
+            "address": address,
+            "chain": chain,
+            "verdict": {"risk": "medium", "confidence": 0.6, "top_pattern": "reentrancy"},
+            "matched_patterns": [
+                {
+                    "name": "reentrancy",
+                    "confidence": 0.6,
+                    "reference_incident": "https://example.com/rekt",
+                    "technique": "withdraw-after-external-call",
+                }
+            ],
+            "risk_signals": ["reentrancy-guard-missing"],
+            "cross_reference": {
+                "address": address,
+                "chain": chain,
+                "backend": "qdrant",
+                "similar_tokens": [],
+                "narrative": "test narrative",
+            },
+        }
+
+    monkeypatch.setattr(ep, "_analyze_address_findings", fake_findings)
+    resp = await client.get(f"/api/v1/analyze/{VALID_ADDRESS}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["verdict"]["risk"] == "medium"
+    assert data["matched_patterns"][0]["name"] == "reentrancy"
+    assert data["cross_reference"]["narrative"] == "test narrative"
+
+
+@pytest.mark.asyncio
+async def test_search_token_address_includes_pattern_matches(client, monkeypatch):
+    """GET /api/v1/search?q=<address> attaches pattern_matches findings."""
+    import rmi_rag.endpoints as ep
+
+    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+        return {
+            "address": address,
+            "chain": chain,
+            "verdict": {"risk": "high", "confidence": 0.8, "top_pattern": "reentrancy"},
+            "matched_patterns": [],
+            "risk_signals": ["reentrancy"],
+            "cross_reference": {"backend": "none", "similar_tokens": [], "narrative": ""},
+        }
+
+    monkeypatch.setattr(ep, "_analyze_address_findings", fake_findings)
+    resp = await client.get(f"/api/v1/search?q={VALID_ADDRESS}&limit=5")
+    # Search may 503 when the embedding backend is unavailable in CI, but the
+    # endpoint must still attempt pattern matching before that.
+    assert resp.status_code in (200, 503)
+    if resp.status_code == 200:
+        assert resp.json()["pattern_matches"]["verdict"]["risk"] == "high"

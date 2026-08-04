@@ -26,6 +26,85 @@ from .ranking import _classify_query
 
 logger = logging.getLogger(__name__)
 
+# ═══════════════════════════════════════════════════════════════════
+# SCAM / EXPLOIT KNOWLEDGE COLLECTIONS
+# ═══════════════════════════════════════════════════════════════════
+# Populated by scripts/ingest_scam_knowledge.py from public exploit/audit
+# datasets (DeFiHackLabs, rekt-news, CryptoScamDB, SlowMist, SWC Registry).
+# Queries about hacks/exploits/scams are routed here first so the RAG can
+# reference specific incidents, techniques, and patterns from day one.
+SCAM_COLLECTIONS: tuple[str, ...] = (
+    "defi_exploits",
+    "scam_patterns",
+    "crypto_vulnerabilities",
+)
+
+# Keywords that strongly indicate a scam/exploit/intel query. Matching one
+# routes the search to SCAM_COLLECTIONS (in addition to any explicit list).
+_SCAM_QUERY_HINTS = (
+    "hack",
+    "hacked",
+    "exploit",
+    "vulnerab",
+    "attack",
+    "attacker",
+    "rug pull",
+    "rugpull",
+    "scam",
+    "scammer",
+    "phishing",
+    "phish",
+    "fraud",
+    "stolen",
+    "theft",
+    "heist",
+    "rekt",
+    "breach",
+    "vuln",
+    "cve-",
+    "swc-",
+    "flash loan",
+    "reentrancy",
+    "oracle manipulation",
+    "lazarus",
+    "siphone",
+    "drainer",
+    "exploiter",
+    "exploit code",
+    "poc",
+    "proof of concept",
+    "how was .* hacked",
+)
+
+
+def detect_scam_query(query: str) -> bool:
+    """Return True when *query* looks like a scam/exploit knowledge query.
+
+    Used to prioritize SCAM_COLLECTIONS in ``three_pillar_search`` /
+    ``search_multi_collection`` when the caller did not pin collections.
+    """
+    q = (query or "").lower()
+    if not q:
+        return False
+    return any(hint in q for hint in _SCAM_QUERY_HINTS)
+
+
+def resolve_search_collections(
+    collections: list[str] | tuple[str, ...] | None,
+    query: str | None = None,
+) -> list[str]:
+    """Resolve the effective collection list for a search.
+
+    - Explicit ``collections`` is returned as-is (caller wins).
+    - Otherwise, scam/exploit queries search SCAM_COLLECTIONS first, then the
+      default COLLECTIONS; general queries use only COLLECTIONS.
+    """
+    if collections:
+        return list(collections)
+    if query and detect_scam_query(query):
+        return [*SCAM_COLLECTIONS, *COLLECTIONS]
+    return list(COLLECTIONS)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # CORE SEARCH
@@ -172,9 +251,13 @@ async def search_multi_collection(
     limit: int = 10,
     min_similarity: float = 0.5,
 ) -> list[dict[str, Any]]:
-    """Search across multiple collections and merge results."""
-    if collections is None:
-        collections = COLLECTIONS
+    """Search across multiple collections and merge results.
+
+    When *collections* is None, scam/exploit queries are routed to
+    SCAM_COLLECTIONS (then the defaults) so exploit knowledge is prioritised
+    automatically; see ``resolve_search_collections``.
+    """
+    collections = resolve_search_collections(collections, query)
 
     async def _search_one(coll: str) -> list[dict[str, Any]]:
         try:
@@ -228,8 +311,7 @@ async def three_pillar_search(
 
     Returns dict with merged results + pillar attribution + MMR metadata.
     """
-    if collections is None:
-        collections = COLLECTIONS
+    collections = resolve_search_collections(collections, query)
 
     limit = min(limit, 100)
 
@@ -593,6 +675,36 @@ async def three_pillar_search(
         "fusion_weights": {"dense": w_dense, "sparse": w_sparse, "entity": w_entity},
         "collections": collections,
         "confidence": confidence,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SCAM / EXPLOIT KNOWLEDGE SEARCH
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def search_scam_knowledge(
+    query: str,
+    collections: list[str] | None = None,
+    limit: int = 10,
+    min_similarity: float = 0.4,
+) -> dict[str, Any]:
+    """Search the scam/exploit knowledge base.
+
+    Defaults to SCAM_COLLECTIONS (defi_exploits, scam_patterns,
+    crypto_vulnerabilities). Returns results plus the routed collection list
+    so callers can see which knowledge buckets were consulted.
+    """
+    colls = resolve_search_collections(collections or list(SCAM_COLLECTIONS), query)
+    results = await search_multi_collection(
+        query, collections=colls, limit=limit, min_similarity=min_similarity
+    )
+    return {
+        "query": query,
+        "collections": colls,
+        "scam_knowledge": True,
+        "results": results,
+        "total": len(results),
     }
 
 

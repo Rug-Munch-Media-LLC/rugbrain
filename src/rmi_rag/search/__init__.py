@@ -17,8 +17,12 @@ from ._state import (
     _seeded,
 )
 from .engine import (
+    SCAM_COLLECTIONS,
     _enrich_ann_results,
+    detect_scam_query,
+    resolve_search_collections,
     search_multi_collection,
+    search_scam_knowledge,
     search_similar,
     search_with_transform,
     three_pillar_search,
@@ -37,6 +41,8 @@ __all__ = [
     # External re-exports
     "COLLECTIONS",
     "KNOWN_SCAM_PATTERNS",
+    # Scam/exploit knowledge collections
+    "SCAM_COLLECTIONS",
     # Shared state
     "_classify_query",
     "_embed_by_collection",
@@ -47,11 +53,14 @@ __all__ = [
     "_preembed_scam_patterns",
     "_seeded",
     "detect_scam_patterns",
+    "detect_scam_query",
     "get_goplus_analysis",
     "get_stats",
     "ingest_document",
     "ingest_forensic_report",
+    "resolve_search_collections",
     "search_multi_collection",
+    "search_scam_knowledge",
     "search_similar",
     "search_with_transform",
     "seed_known_scams",
