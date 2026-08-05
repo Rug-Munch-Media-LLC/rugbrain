@@ -576,8 +576,9 @@ def cross_reference_count(article: dict[str, Any]) -> int:
     count = len(seen)
     if article.get("aggregated"):
         count = max(count, 2)
-    # Without at least one trusted domain, a lone unknown source is weak.
-    if count >= 1 and not trusted:
+    # Without at least one trusted domain, a lone unknown source is weak
+    # (but an explicitly-aggregated article already counts as >= 2 sources).
+    if count >= 1 and not trusted and not article.get("aggregated"):
         count = min(count, 1)
     return count
 
@@ -677,10 +678,10 @@ def clickbait_score(text: str) -> int:
 # ═══════════════════════════════════════════════════════════════════════
 
 _CLAIM_USD_RE = re.compile(
-    r"(?:\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(?:million|billion|thousand|m|bn|b|k)?\s?"
-    r"(?:hacked|stolen|lost|drained|exploited|taken)"
-    r"|(?:hacked|stolen|lost|drained|exploited|taken)\s+"
-    r"\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(?:million|billion|thousand|m|bn|b|k)?)",
+    r"(?:\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(million|billion|thousand|m|bn|b|k)?\s?"
+    r"(?:hacked|stolen|lost|drained|moved|exploited|taken)"
+    r"|(?:hacked|stolen|lost|drained|moved|exploited|taken)\s+"
+    r"\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(million|billion|thousand|m|bn|b|k)?)",
     re.IGNORECASE,
 )
 _CLAIM_TOKEN_RE = re.compile(
@@ -708,8 +709,10 @@ def on_chain_claim_verification(article: dict[str, Any]) -> dict[str, Any]:
     claims: list[dict[str, Any]] = []
 
     for m in _CLAIM_USD_RE.finditer(text):
-        amount_raw = m.group(1).replace(",", "")
-        unit = (m.group(2) or "").lower()
+        # Two alternatives: "$12.4m hacked" (g1=amount, g2=unit) or
+        # "hacked $12.4m" (g3=amount, g4=unit). Exactly one side is set.
+        amount_raw = (m.group(1) or m.group(3) or "").replace(",", "")
+        unit = (m.group(2) or m.group(4) or "").lower()
         try:
             amount = float(amount_raw)
         except ValueError:

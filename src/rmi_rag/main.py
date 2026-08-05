@@ -34,6 +34,7 @@ from rmi_rag.alert_routes import router as alerts_router  # noqa: E402
 from rmi_rag.endpoints import router as rag_router  # noqa: E402
 from rmi_rag.endpoints import scam_check_router  # noqa: E402
 from rmi_rag.metrics import metrics_router  # noqa: E402
+from rmi_rag.news_feed import news_feed_router  # noqa: E402
 from rmi_rag.scanner_feedback import scanner_feedback_router  # noqa: E402
 from rmi_rag.sentiment_engine import sentiment_router  # noqa: E402
 from rmi_rag.system_health import router as health_router  # noqa: E402
@@ -73,6 +74,8 @@ _health_state: dict[str, Any] = {
     "poller_stats": {},
     "realtime_monitor": False,
     "realtime_monitor_stats": {},
+    "news_story_updater": False,
+    "news_story_updater_stats": {},
 }
 
 
@@ -271,6 +274,27 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("realtime_monitor_start_failed: %s", exc)
         _health_state["realtime_monitor"] = False
 
+    # ── Start the news story updater (auto-cluster + NATS publish) ──
+    # Polls the raw article collection, clusters unclustered articles into
+    # stories, reranks/scores them, and publishes news.story.updated.
+    # Fail-open: news clustering degrades to on-demand batch processing.
+    _news_ok = False
+    try:
+        from rmi_rag.news_realtime import (
+            is_news_story_updater_running,
+            news_story_updater_stats,
+            start_news_story_updater,
+        )
+
+        await start_news_story_updater()
+        _news_ok = is_news_story_updater_running()
+        _health_state["news_story_updater"] = _news_ok
+        _health_state["news_story_updater_stats"] = news_story_updater_stats()
+        logger.info("news_story_updater status=%s", "ok" if _news_ok else "fail")
+    except Exception as exc:
+        logger.warning("news_story_updater_start_failed: %s", exc)
+        _health_state["news_story_updater"] = False
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -301,6 +325,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await stop_realtime_monitor()
     except Exception:
         logger.debug("realtime_monitor_stop skipped")
+
+    try:
+        from rmi_rag.news_realtime import stop_news_story_updater
+
+        await stop_news_story_updater()
+    except Exception:
+        logger.debug("news_story_updater_stop skipped")
 
     try:
         from rmi_rag.observability import _langfuse as langfuse_client
@@ -353,6 +384,7 @@ app.include_router(metrics_router)  # /metrics — Prometheus scrape target
 app.include_router(scanner_feedback_router)  # /api/v1/feedback/* + /api/v1/similar/*
 app.include_router(sentiment_router)  # /api/v1/sentiment/*
 app.include_router(alerts_router)  # /api/v1/alerts/* — real-time exploits + webhooks
+app.include_router(news_feed_router)  # /api/v1/news/feed, /story, /trending, /topics
 app.include_router(health_router)  # /api/v1/health/full — aggregated dashboard
 
 
@@ -439,6 +471,19 @@ async def health() -> dict[str, Any]:
         realtime_running = False
         realtime_stats = {}
 
+    # Check news story updater status
+    try:
+        from rmi_rag.news_realtime import (
+            is_news_story_updater_running,
+            news_story_updater_stats,
+        )
+
+        news_running = is_news_story_updater_running()
+        news_stats = news_story_updater_stats()
+    except Exception:
+        news_running = False
+        news_stats = {}
+
     return {
         "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
         "qdrant": qdrant_ok,
@@ -453,6 +498,8 @@ async def health() -> dict[str, Any]:
         "fear_index_poller": fear_running,
         "realtime_monitor": realtime_running,
         "realtime_monitor_stats": realtime_stats,
+        "news_story_updater": news_running,
+        "news_story_updater_stats": news_stats,
     }
 
 
