@@ -97,15 +97,12 @@ wait_infinity
 step "re-run coding-knowledge ingesters"
 wait_infinity
 
+# Unified ingest CLI — coding subcommand delegates to individual lang ingesters
 if [ "$MODE" = "--full" ]; then
-  "$PYTHON" scripts/ingest_solidity_knowledge.py || log "WARN: solidity ingest failed"
-  "$PYTHON" scripts/ingest_rust_solana_knowledge.py || log "WARN: solana ingest failed"
-  "$PYTHON" scripts/ingest_alt_vm_knowledge.py || log "WARN: alt-vm ingest failed"
+  "$PYTHON" scripts/ingest.py coding --lang all || log "WARN: coding ingest failed"
 else
   # Fast path: curated docs only (no network fetch/clone), idempotent.
-  "$PYTHON" scripts/ingest_solidity_knowledge.py --no-fetch || log "WARN: solidity ingest failed"
-  "$PYTHON" scripts/ingest_rust_solana_knowledge.py --no-clone || log "WARN: solana ingest failed"
-  "$PYTHON" scripts/ingest_alt_vm_knowledge.py --no-clone || log "WARN: alt-vm ingest failed"
+  "$PYTHON" scripts/ingest.py coding --lang all --no-network || log "WARN: coding ingest failed"
 fi
 
 # ── 4. Verify ────────────────────────────────────────────────────────────
