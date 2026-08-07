@@ -31,6 +31,7 @@ overlapping the next run. A lockfile prevents concurrent executions.
 Run (host or inside a container with Postgres/Qdrant/Infinity reachable):
 
     python3 scripts/news_to_rag.py --limit 300
+    python3 scripts/news_to_rag.py --purge-orphans   # delete points with no news_items row
 
 Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
@@ -286,6 +287,139 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     return conn, qdrant_candidates[0], infinity_candidates[0]
 
 
+async def purge_orphans() -> dict:
+    """Delete Qdrant ``news`` (alias of ``news_v2``) points with no news_items row.
+
+    Two orphan classes are removed:
+      1. Legacy "story aggregation" points that carry no ``metadata.news_id``
+         at all (pre-pipeline schema).
+      2. Points whose ``metadata.news_id`` no longer exists in Postgres
+         ``news_items`` (rows pruned/never committed).
+
+    Runs under the same lockfile as the ingest pipeline so a purge never
+    races an embed run. Deleting via the ``news`` alias hits the same
+    underlying ``news_v2`` collection the pipeline writes to.
+    """
+    lock = await asyncio.to_thread(open, LOCK_PATH, "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        logger.warning("lock_held_skipping (another news_to_rag run in progress)")
+        return {"status": "skipped", "reason": "lock_held"}
+
+    conn, qdrant_base, _infinity_base = await _resolve_and_connect()
+    stats: dict = {
+        "points_scanned": 0,
+        "legacy_no_news_id": 0,
+        "missing_from_db": 0,
+        "points_deleted": 0,
+        "errors": 0,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # 1. Scroll every point id + its metadata.news_id (payload only,
+            #    no vectors — cheap).
+            news_id_by_point: dict[str, str | None] = {}
+            next_offset: object = None
+            while True:
+                scroll_payload: dict = {
+                    "limit": 1000,
+                    "with_payload": ["metadata"],
+                    "with_vector": False,
+                }
+                if next_offset is not None:
+                    scroll_payload["offset"] = next_offset
+                r = await client.post(
+                    f"{qdrant_base}/collections/{QDRANT_COLLECTION}/points/scroll",
+                    json=scroll_payload,
+                )
+                if r.status_code != 200:
+                    stats["errors"] += 1
+                    logger.warning(
+                        "qdrant_scroll_failed status=%d body=%s", r.status_code, r.text[:300]
+                    )
+                    break
+                result = r.json().get("result", {})
+                points = result.get("points", [])
+                stats["points_scanned"] += len(points)
+                for p in points:
+                    metadata = (p.get("payload") or {}).get("metadata") or {}
+                    news_id = metadata.get("news_id")
+                    news_id_by_point[str(p["id"])] = news_id if isinstance(news_id, str) else None
+                next_offset = result.get("next_page_offset")
+                if not points or next_offset is None:
+                    break
+
+            if not news_id_by_point:
+                logger.info("purge_orphans: no points to inspect")
+                return stats
+
+            # 2. Find which news_ids actually exist in Postgres (batched).
+            news_ids = sorted({n for n in news_id_by_point.values() if n is not None})
+            existing: set[str] = set()
+            for i in range(0, len(news_ids), 500):
+                chunk = news_ids[i : i + 500]
+                rows = await conn.fetch(
+                    "SELECT news_id FROM news_items WHERE news_id = ANY($1::text[])",
+                    chunk,
+                )
+                existing.update(r["news_id"] for r in rows)
+
+            # 3. Classify orphans.
+            legacy_ids = [pid for pid, nid in news_id_by_point.items() if nid is None]
+            missing_ids = [
+                pid
+                for pid, nid in news_id_by_point.items()
+                if nid is not None and nid not in existing
+            ]
+            orphan_ids = legacy_ids + missing_ids
+            stats["legacy_no_news_id"] = len(legacy_ids)
+            stats["missing_from_db"] = len(missing_ids)
+            logger.info(
+                "purge_orphans scanned=%d legacy_no_news_id=%d missing_from_db=%d total_orphans=%d",
+                len(news_id_by_point),
+                len(legacy_ids),
+                len(missing_ids),
+                len(orphan_ids),
+            )
+
+            # 4. Delete in batches.
+            for i in range(0, len(orphan_ids), 1000):
+                batch = orphan_ids[i : i + 1000]
+                r = await client.post(
+                    f"{qdrant_base}/collections/{QDRANT_COLLECTION}/points/delete",
+                    json={"points": batch},
+                )
+                if r.status_code in (200, 201):
+                    stats["points_deleted"] += len(batch)
+                    logger.info(
+                        "purge_orphans_deleted batch=%d total_deleted=%d",
+                        len(batch),
+                        stats["points_deleted"],
+                    )
+                else:
+                    stats["errors"] += 1
+                    logger.warning(
+                        "qdrant_delete_failed status=%d body=%s", r.status_code, r.text[:300]
+                    )
+
+        await conn.execute("COMMIT")
+    finally:
+        await conn.close()
+        lock.close()
+
+    logger.info(
+        "purge_orphans complete: scanned=%d legacy_no_news_id=%d missing_from_db=%d deleted=%d errors=%d",
+        stats["points_scanned"],
+        stats["legacy_no_news_id"],
+        stats["missing_from_db"],
+        stats["points_deleted"],
+        stats["errors"],
+    )
+    return stats
+
+
 async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool = True) -> dict:
     lock = await asyncio.to_thread(open, LOCK_PATH, "w")
     try:
@@ -484,6 +618,15 @@ def main() -> None:
         action="store_true",
         help="embed oldest articles first (default is newest-first)",
     )
+    parser.add_argument(
+        "--purge-orphans",
+        action="store_true",
+        help=(
+            "delete news_v2 points that have no corresponding news_items row "
+            "(legacy no-news_id points + news_id missing from Postgres); "
+            "skips the embed pipeline entirely"
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -495,7 +638,12 @@ def main() -> None:
     max_chunks = args.max_chunks if args.max_chunks > 0 else 10_000_000
 
     try:
-        stats = asyncio.run(run(limit, max_chunks, args.model, newest_first=not args.oldest_first))
+        if args.purge_orphans:
+            stats = asyncio.run(purge_orphans())
+        else:
+            stats = asyncio.run(
+                run(limit, max_chunks, args.model, newest_first=not args.oldest_first)
+            )
     except Exception as e:  # surface cleanly to cron/journald
         logger.error("news_to_rag_failed err=%s", e)
         sys.exit(1)
