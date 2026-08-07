@@ -926,7 +926,10 @@ async def scam_check(
 
     results_data = await three_pillar_search(
         query=query,
-        collections=["threat_intel", "rmi_community"],
+        # Search the collections where known-scam / scam-pattern data is
+        # actually stored (known_scams + scam_patterns), plus the legacy
+        # threat_intel alias and community reports.
+        collections=["known_scams", "scam_patterns", "threat_intel", "rmi_community"],
         limit=limit,
         min_similarity=0.4,
         entity_boost=2.0,
