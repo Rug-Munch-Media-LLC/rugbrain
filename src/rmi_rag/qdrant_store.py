@@ -321,6 +321,10 @@ class QdrantVectorStore:
         # Per-instance cache of whether a collection carries a sparse
         # vector config (avoids a GET per insert/search in production).
         self._sparse_cache: dict[str, bool] = {}
+        # Per-instance cache of whether a collection is configured with
+        # named vectors (named dense and/or sparse). Named-vector
+        # collections reject the bare vector format.
+        self._named_cache: dict[str, bool] = {}
 
     @property
     def url(self) -> str:
@@ -353,6 +357,45 @@ class QdrantVectorStore:
         self._sparse_cache[collection] = supports
         return supports
 
+    async def _collection_uses_named_vectors(
+        self, collection: str, client: httpx.AsyncClient
+    ) -> bool:
+        """Return True when *collection* is configured with named vectors.
+
+        A collection created with a named-vector config (``{"dense": ...}``
+        or ``{"dense": ..., "bm25": ...}``) rejects a bare vector with
+        "Not existing vector name", so the caller must send the named
+        dense format. Only legacy collections created with a bare
+        ``{"size": N, "distance": "Cosine"}`` config accept the bare
+        vector. Named dense-only collections (e.g. ``news_v2``) do NOT
+        report sparse support, so callers must probe named vectors, not
+        just ``sparse_vectors``, before choosing the request shape.
+
+        Results are cached per store instance so callers pay one extra
+        GET per collection per process.
+        """
+        cached = self._named_cache.get(collection)
+        if cached is not None:
+            return cached
+        named = False
+        try:
+            r = await client.get(f"/collections/{collection}")
+            if r.status_code == 200:
+                params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
+                vectors = params.get("vectors")
+                # Named dense vector config is a dict mapping name → spec.
+                # A legacy config is a plain ``{"size": N, "distance": ...}``
+                # which also happens to be a dict — distinguish by checking
+                # for the named dense key we actually write.
+                if isinstance(vectors, dict) and DENSE_VECTOR_NAME in vectors:
+                    named = True
+                if params.get("sparse_vectors"):
+                    named = True
+        except Exception as e:
+            logger.debug("qdrant_named_probe_failed collection=%s err=%s", collection, e)
+        self._named_cache[collection] = named
+        return named
+
     async def search(
         self,
         query_embedding: list[float],
@@ -372,13 +415,14 @@ class QdrantVectorStore:
         client = await self._get_client()
         await _ensure_collection(coll, len(query_embedding), client)
 
-        # Hybrid collections (created by scripts/migrate_to_sparse.py) carry
-        # named dense + BM25 sparse vectors. A bare vector is rejected by
-        # Qdrant against a named-vector collection ("Not existing vector
-        # name"), so send the named dense vector when the collection is
-        # hybrid. Dense-only collections keep using the bare vector.
+        # Hybrid collections (created by scripts/migrate_to_sparse.py) and
+        # named dense-only collections (e.g. news_v2) carry named vectors.
+        # A bare vector is rejected by Qdrant against a named-vector
+        # collection ("Not existing vector name"), so send the named dense
+        # vector when the collection uses named vectors. Dense-only legacy
+        # collections keep using the bare vector.
         vector_field: Any = query_embedding
-        if await self._collection_supports_sparse(coll, client):
+        if await self._collection_uses_named_vectors(coll, client):
             vector_field = {"name": DENSE_VECTOR_NAME, "vector": query_embedding}
 
         payload: dict[str, Any] = {
@@ -621,25 +665,28 @@ class QdrantVectorStore:
     ) -> bool:
         """Insert a document into *collection*.
 
-        When the target collection is configured with the ``bm25`` sparse
-        vector (hybrid collections created by scripts/migrate_to_sparse.py),
-        a BM25 sparse vector is computed from *content* and stored alongside
-        the dense vector so hybrid (RRF) search can use it. Dense-only
-        collections are written unchanged.
+        When the target collection is configured with named vectors
+        (named dense, or dense + ``bm25`` sparse hybrid), the dense
+        vector is stored under the ``dense`` name. For hybrid collections
+        (created by scripts/migrate_to_sparse.py) a BM25 sparse vector is
+        computed from *content* and stored alongside the dense vector so
+        hybrid (RRF) search can use it. Legacy collections with a bare
+        ``{"size": ...}`` config are written unchanged.
         """
         client = await self._get_client()
         await _ensure_collection(collection, len(embedding), client)
 
         point_id = self._to_uuid(doc_id)
         vector_field: Any = embedding
-        if await self._collection_supports_sparse(collection, client):
+        if await self._collection_uses_named_vectors(collection, client):
             vector_field = {DENSE_VECTOR_NAME: embedding}
-            sparse = await _embed_sparse(content)
-            if sparse is not None:
-                vector_field[SPARSE_VECTOR_NAME] = {
-                    "indices": sparse[0],
-                    "values": sparse[1],
-                }
+            if await self._collection_supports_sparse(collection, client):
+                sparse = await _embed_sparse(content)
+                if sparse is not None:
+                    vector_field[SPARSE_VECTOR_NAME] = {
+                        "indices": sparse[0],
+                        "values": sparse[1],
+                    }
         payload = {
             "points": [
                 {
