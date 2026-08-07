@@ -9,11 +9,20 @@ metadata: title, source, url, published_at, category, sentiment.
 
 Tracking / idempotency:
   - `news_items.rag_embedding_id` is set to the deterministic Qdrant
-    point UUID for the article (uuid5 over `news:{news_id}`) once every
-    chunk has been upserted. Rows where `rag_embedding_id IS NULL` or
+    point UUID of the first chunk (uuid5 over `news:{news_id}:0`) once
+    every chunk has been upserted, so the marker always references a real
+    Qdrant point. Rows where `rag_embedding_id IS NULL` or
     `rag_embedding_id = news_id` (the old fake marker) are re-embedded.
   - Chunk point ids are deterministic uuid5s, so re-runs upsert in place
     (no duplicate points).
+
+Qdrant named-vector support:
+  The `news` collection is an alias of `news_v2`, which is configured
+  with named vectors (`{"dense": ...}`) plus BM25 sparse. A bare vector
+  upsert against a named-vector collection is silently accepted by Qdrant
+  (HTTP 200) but the point is NOT stored. This script probes the
+  collection config and sends the named `{"dense": ...}` vector format so
+  points actually persist (matching rmi_rag.qdrant_store behavior).
 
 Bounded runs: by default each run embeds at most 300 articles
 (newest-first) so the 15-minute cron makes steady progress without
@@ -54,6 +63,7 @@ QDRANT_COLLECTION = "news"
 UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rmi_rag.qdrant_store._to_uuid
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "news_to_rag.lock")
 _ORDER_CLAUSES = {"asc": "ORDER BY published_at ASC", "desc": "ORDER BY published_at DESC"}
+_named_cache: dict[str, bool] = {}
 
 
 # ── URL resolution (docker names first, loopback fallback) ─────────────
@@ -86,10 +96,6 @@ def _chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP)
         if len(chunk) >= overlap:  # drop tiny trailing slivers
             chunks.append(chunk)
     return chunks
-
-
-def _article_point_id(news_id: str) -> str:
-    return str(uuid.uuid5(UUID_NS, f"news:{news_id}"))
 
 
 def _chunk_point_id(news_id: str, idx: int) -> str:
@@ -149,12 +155,49 @@ async def _ensure_collection(client: httpx.AsyncClient, base: str) -> bool:
     return False
 
 
+async def _collection_uses_named_vectors(client: httpx.AsyncClient, base: str) -> bool:
+    """Return True when the `news` collection is configured with named vectors.
+
+    Qdrant 1.18 silently drops (HTTP 200, no store) a bare-vector upsert
+    against a named-vector collection such as ``news_v2`` (which ``news``
+    aliases). Detect the ``dense`` key in the collection's vectors config
+    so the caller sends the named vector format. Results are cached per
+    run so we only probe once.
+    """
+    if _named_cache.get("news") is not None:
+        return _named_cache["news"]
+    named = False
+    try:
+        r = await client.get(f"{base}/collections/{QDRANT_COLLECTION}")
+        if r.status_code == 200:
+            params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
+            vectors = params.get("vectors")
+            if isinstance(vectors, dict) and "dense" in vectors:
+                named = True
+            if params.get("sparse_vectors"):
+                named = True
+    except Exception as e:
+        logger.debug("qdrant_named_probe_failed collection=%s err=%s", QDRANT_COLLECTION, e)
+    _named_cache["news"] = named
+    return named
+
+
 async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict]) -> bool:
     if not points:
         return True
+    named = await _collection_uses_named_vectors(client, base)
+    payload_points = []
+    for p in points:
+        pp = dict(p)
+        if named and isinstance(pp.get("vector"), list):
+            # Send the named dense format — a bare vector is silently
+            # dropped (HTTP 200 but point not stored) by Qdrant against
+            # named-vector collections.
+            pp["vector"] = {"dense": pp["vector"]}
+        payload_points.append(pp)
     r = await client.put(
         f"{base}/collections/{QDRANT_COLLECTION}/points",
-        json={"points": points},
+        json={"points": payload_points},
     )
     if r.status_code not in (200, 201):
         logger.warning("qdrant_upsert_failed status=%d body=%s", r.status_code, r.text[:300])
@@ -317,21 +360,27 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                 max_chunks,
             )
 
-            # (article, chunk_text, vector) flat list; vectors filled by batch embed
+            # (article, chunk_idx, chunk_text, vector) flat list; vectors
+            # filled by batch embed. chunk_idx is the PER-ARTICLE index —
+            # using the global flat index here corrupts point IDs (chunk 0 of
+            # article N would get uuid5 "news:{id}:{global_idx}", never
+            # matching the first-chunk marker "news:{id}:0").
             work: list[list] = [
-                [article, chunk, None] for article, chunks in articles for chunk in chunks
+                [article, chunk_idx, chunk, None]
+                for article, chunks in articles
+                for chunk_idx, chunk in enumerate(chunks)
             ]
 
             batch_size = 16
             for i in range(0, len(work), batch_size):
                 batch = work[i : i + batch_size]
-                texts = [item[1] for item in batch]
+                texts = [item[2] for item in batch]
                 vecs = await _embed_batch(client, infinity_base, embed_model, texts)
                 if vecs is None:
                     stats["errors"] += len(batch)
                     continue
                 for item, vec in zip(batch, vecs, strict=True):
-                    item[2] = vec
+                    item[3] = vec
 
             # Group completed vectors by article and upsert
             for article, chunks in articles:
@@ -349,12 +398,12 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                 rating_payload, quality_score = _rate_article_payload(article, text)
                 points = []
                 chunk_total_for_article = 0
-                for idx, (a, chunk, vec) in enumerate(work):
+                for a, chunk_idx, chunk, vec in work:
                     if a["news_id"] != news_id or vec is None:
                         continue
                     points.append(
                         {
-                            "id": _chunk_point_id(news_id, idx),
+                            "id": _chunk_point_id(news_id, chunk_idx),
                             "vector": vec,
                             "payload": {
                                 "content": chunk,
@@ -393,10 +442,13 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                     stats["errors"] += 1
                     continue
 
-                # Mark article embedded with its deterministic article point id
+                # Mark article embedded with the first chunk's deterministic
+                # Qdrant point id — the marker must reference a real point
+                # (chunk ids are `uuid5("news:{news_id}:{idx}")`, NOT the
+                # article-level id which is never a point).
                 await conn.execute(
                     "UPDATE news_items SET rag_embedding_id=$1 WHERE news_id=$2",
-                    _article_point_id(news_id),
+                    _chunk_point_id(news_id, 0),
                     news_id,
                 )
                 stats["articles_embedded"] += 1
