@@ -83,7 +83,11 @@ SKIP_FILE_PARTS = (".t.sol", ".spec.ts", ".test.ts", "Mock", "mock")
 
 
 def _clone_repo(protocol: dict[str, Any], base_dir: Path) -> Path:
-    """Shallow-clone *protocol* into ``base_dir/<id>`` (idempotent)."""
+    """Shallow-clone *protocol* into ``base_dir/<id>`` (idempotent).
+
+    If the configured tag no longer exists upstream (tags drift), falls back
+    to the default branch with a warning instead of aborting the ingest.
+    """
     target = base_dir / protocol["id"]
     if (target / ".git").exists():
         logger.info("repo_present id=%s dir=%s", protocol["id"], target)
@@ -91,18 +95,31 @@ def _clone_repo(protocol: dict[str, Any], base_dir: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     tag = protocol.get("tag")
     logger.info("cloning id=%s tag=%s → %s", protocol["id"], tag or "default", target)
-    tmp = Path(tempfile.mkdtemp(prefix=f"kb-{protocol['id']}-"))
-    try:
+
+    def _clone(branch: str | None) -> subprocess.CompletedProcess[str]:
         cmd = ["git", "clone", "--depth", "1"]
-        if tag:
-            cmd += ["--branch", tag]
+        if branch:
+            cmd += ["--branch", branch]
         cmd += ["--single-branch", protocol["repo"], str(tmp)]
-        result = subprocess.run(  # noqa: S603 — repo/tag are fixed constants
+        return subprocess.run(  # noqa: S603 — repo/tag are fixed constants
             cmd,
             capture_output=True,
             text=True,
             timeout=600,
         )
+
+    tmp = Path(tempfile.mkdtemp(prefix=f"kb-{protocol['id']}-"))
+    try:
+        result = _clone(tag)
+        if result.returncode != 0 and tag:
+            # Tag drifted upstream (e.g. removed) — retry on the default branch.
+            logger.warning(
+                "clone_tag_missing id=%s tag=%s err=%s — falling back to default branch",
+                protocol["id"],
+                tag,
+                result.stderr[-200:],
+            )
+            result = _clone(None)
         if result.returncode != 0:
             raise RuntimeError(f"git clone failed for {protocol['id']}: {result.stderr[-300:]}")
         if target.exists():
@@ -326,6 +343,8 @@ async def main_async(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def main() -> None:
+    global REPO_DIR  # must be declared before any use of REPO_DIR below
+
     parser = argparse.ArgumentParser(
         description="Ingest known-good contract codebases into solidity_patterns / solana_patterns"
     )
@@ -343,7 +362,6 @@ def main() -> None:
     parser.add_argument("--repo-dir", default=REPO_DIR, help="Directory to clone repos into")
     args = parser.parse_args()
 
-    global REPO_DIR
     REPO_DIR = args.repo_dir
 
     stats = asyncio.run(main_async(args))
