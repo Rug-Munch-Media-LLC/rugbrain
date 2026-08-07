@@ -1,0 +1,24 @@
+# rmi-news-ingest — logrotate config for the RSS ingest + RAG pipeline.
+# Source: /path/to/rmi-rag/systemd/rmi-news-ingest.logrotate
+# Deploy: /etc/logrotate.d/rmi-news-ingest
+#
+# Install:
+#   cp systemd/rmi-news-ingest.logrotate /etc/logrotate.d/rmi-news-ingest
+#   logrotate -d /etc/logrotate.d/rmi-news-ingest   # dry-run validate
+#
+# Cron appends to /var/log/rmi-news-ingest.log every 15 min:
+#   */15 * * * * ... rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
+# This rotated the 739MB blowup that accumulated while news_items was
+# missing (every 15-min run dumped a full UndefinedTableError traceback).
+# copytruncate keeps the cron-opened fd valid; delaycompress gives the
+# running process a chance to flush the previous day's file.
+/var/log/rmi-news-ingest.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su root root
+}
