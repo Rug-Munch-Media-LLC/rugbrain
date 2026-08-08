@@ -49,9 +49,9 @@ PROTOCOLS: list[dict[str, Any]] = [
         "verdict": "good",
         "include": (
             "token/program/src",
-            "token/2022/src",
-            "token/associated-token-account/program/src",
-            "token/stake-pool/program/src",
+            "token/program-2022/src",
+            "associated-token-account/program/src",
+            "stake-pool/program/src",
             "account-compression/programs",
         ),
         "exclude_dirs": ("test", "tests", "bench", "benches", "examples", "js"),
@@ -126,7 +126,7 @@ PROTOCOLS: list[dict[str, Any]] = [
         "language": "solidity",
         "collection": "solidity_patterns",
         "verdict": "good",
-        "include": ("src/",),
+        "include": ("contracts/protocol/",),
         "exclude_dirs": ("test", "tests", "examples", "mocks"),
         "vulnerability_history": (
             "Lending-protocol reference (liquidation, isolation mode, e-mode). "
