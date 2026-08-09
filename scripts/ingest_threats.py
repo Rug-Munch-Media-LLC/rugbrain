@@ -8,7 +8,7 @@ import asyncio
 
 import httpx
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, VectorParams
+from qdrant_client.models import Distance, PointStruct, VectorParams
 from sentence_transformers import SentenceTransformer
 
 COLLECTION = "rag_threats"
@@ -31,7 +31,7 @@ def embed_and_store(threats: list[dict]):
     if not any(c.name == COLLECTION for c in existing):
         client.create_collection(
             collection_name=COLLECTION,
-            vectors_config=VectorParams(size=VECTOR_SIZE, distance="Cosine"),
+            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
         )
         print(f"Created collection {COLLECTION} (size={VECTOR_SIZE})")
     points = []
