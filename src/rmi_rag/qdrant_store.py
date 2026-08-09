@@ -8,6 +8,10 @@ Connection strategy:
   2. Fallback to http://127.0.0.1:{QDRANT_PORT or 6333} for local dev
   3. Fallback to http://localhost:{QDRANT_PORT or 6333}
   First URL that responds to GET / is used for the session.
+
+Write gate: RMI_RAG_QDRANT_WRITE_MODE env var (default: readonly).
+  - readonly: rmi-rag writes only to its own collections (rag_* + known owned).
+  - owner:    full write access (legacy behaviour).
 """
 
 from __future__ import annotations
@@ -278,6 +282,22 @@ def normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 # ── Collection management ─────────────────────────────────────────────
+
+# Collections owned by rmi-rag (write-allowed when mode=readonly).
+# rmi-backend owns rmi_documents — rmi-rag must never write there.
+_RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
+    {
+        "threat_intel",
+        "rag_threats",
+        "rag_docs",
+        "wallet_clusters",
+        "bundle_patterns",
+        "cluster_labels",
+        "wallet_profiles",
+    }
+)
+
+_RMI_RAG_QDRANT_WRITE_MODE = os.getenv("RMI_RAG_QDRANT_WRITE_MODE", "readonly").lower()
 
 _existing_collections: set[str] = set()
 
@@ -673,6 +693,17 @@ class QdrantVectorStore:
         hybrid (RRF) search can use it. Legacy collections with a bare
         ``{"size": ...}`` config are written unchanged.
         """
+        # Write gate: refuse writes to non-owned collections in readonly mode.
+        if (
+            _RMI_RAG_QDRANT_WRITE_MODE == "readonly"
+            and collection not in _RMI_RAG_OWNED_COLLECTIONS
+        ):
+            logger.warning(
+                "qdrant_write_gate_blocked collection=%s mode=readonly owned_by=rmi-backend",
+                collection,
+            )
+            return False
+
         client = await self._get_client()
         await _ensure_collection(collection, len(embedding), client)
 
