@@ -5,7 +5,7 @@ def _rrf_fuse(
     ranked_lists: list[list[dict[str, Any]]],
     k: int = 60,
     entity_boost: float = 1.5,
-    entity_doc_ids: set | None = None,
+    entity_doc_ids: set[str] | None = None,
     pillar_weights: list[float] | None = None,
 ) -> list[dict[str, Any]]:
     """
