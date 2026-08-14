@@ -10,6 +10,11 @@ Architecture:
   4. RRF fuse all result sets
 """
 
+# NOTE (deprecated): archived in _legacy/ — kept for reference only, has zero
+# live references, and is not type-checked in CI. Per-line pyright ignores
+# below silence diagnostics that would otherwise require porting private
+# monorepo dependencies that do not exist in the OSS rugbrain package.
+
 from __future__ import annotations
 
 import json
@@ -65,7 +70,7 @@ async def rewrite_query(query: str, n_variants: int = 3, use_llm: bool = False) 
         return _rule_based_variants(query, n_variants)
 
     try:
-        from app import ai_router
+        from app import ai_router  # pyright: ignore[reportAttributeAccessIssue]
 
         prompt = REWRITE_PROMPT.format(query=query, n=n_variants)
         result = await ai_router.chat_completion(

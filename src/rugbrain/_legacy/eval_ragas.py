@@ -11,6 +11,11 @@ Metrics:
   - hit_rate (% queries with at least one relevant hit)
 """
 
+# NOTE (deprecated): archived in _legacy/ — kept for reference only, has zero
+# live references, and is not type-checked in CI. Per-line pyright ignores
+# below silence diagnostics that would otherwise require porting private
+# monorepo dependencies that do not exist in the OSS rugbrain package.
+
 import asyncio
 import logging
 import math
@@ -453,7 +458,9 @@ async def faithfulness(answer: str, context_chunks: list[str]) -> float:
         return 0.0
 
     try:
-        from app.hallucination_guard import HallucinationGuard  # external dependency
+        from app.hallucination_guard import (
+            HallucinationGuard,
+        )  # external dependency  # pyright: ignore[reportMissingImports]
 
         guard = await HallucinationGuard.get_guard()
         combined_context = "\n\n".join(context_chunks[:5])

@@ -11,6 +11,11 @@ Provides persistent storage for:
 Uses Redis for fast-access cache and optional PostgreSQL for long-term storage.
 """
 
+# NOTE (deprecated): archived in _legacy/ — kept for reference only, has zero
+# live references, and is not type-checked in CI. Per-line pyright ignores
+# below silence diagnostics that would otherwise require porting private
+# monorepo dependencies that do not exist in the OSS rugbrain package.
+
 import json
 import logging
 from datetime import datetime
@@ -101,7 +106,8 @@ class RedisStorage:
 
             # Update wallet history
             self._update_wallet_history(
-                tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address, tx
+                tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address,
+                tx,  # pyright: ignore[reportAttributeAccessIssue]
             )
 
             return True

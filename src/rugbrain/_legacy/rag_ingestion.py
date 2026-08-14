@@ -11,6 +11,11 @@ Incremental indexing: each successful ingest is tracked in a Redis delta
 queue so the system knows which docs changed since the last full rebuild.
 """
 
+# NOTE (deprecated): archived in _legacy/ — kept for reference only, has zero
+# live references, and is not type-checked in CI. Per-line pyright ignores
+# below silence diagnostics that would otherwise require porting private
+# monorepo dependencies that do not exist in the OSS rugbrain package.
+
 import hashlib
 import json
 import logging
