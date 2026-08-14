@@ -371,6 +371,8 @@ async def _fallback_search(query: str, *, limit: int) -> dict[str, Any]:
                     "kind": "code" if r.get("has_code_snippet") else "knowledge",
                     "id": r.get("id"),
                     "content": r.get("content", ""),
+                    "code_blocks": r.get("code_blocks", []),
+                    "code_answer": r.get("code_answer", ""),
                     "score": r.get("similarity", 0.0),
                     "metadata": r.get("metadata", {}),
                     "source": r.get("source", ""),

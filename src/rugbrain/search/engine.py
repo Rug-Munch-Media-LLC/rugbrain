@@ -15,11 +15,13 @@ All cross-module deps resolved via search._state / inline imports.
 import asyncio
 import json
 import logging
+import re
 from typing import Any, cast
 
 from rugbrain.crypto_embeddings import COLLECTIONS, get_embedder
 from rugbrain.rrf_fusion import _rrf_fuse
 from rugbrain.sparse_search import _sparse_text_search
+from rugbrain.splade_bm25 import BM25Index
 
 from ._state import _get_redis
 from .ranking import _classify_query
@@ -166,6 +168,56 @@ _SCAM_QUERY_HINTS = (
     "how was .* hacked",
 )
 
+# ── Code-term regex tier (second detection layer) ──────────────────────
+# ``detect_coding_query`` checks the phrase hints above first, then these
+# word-boundary regexes so code-intent queries that do not contain a hint
+# phrase verbatim ("what is the ABI", "function selector", "write a Python
+# SDK wrapper", "how does reentrancy work") still route to code retrieval.
+# Strong terms are unambiguous code vocabulary; contextual terms ("code",
+# "example", "reentrancy", …) only count when paired with a second code term
+# or a "how does" phrasing so exploit-framed queries ("reentrancy hack 2023",
+# "exploit code") keep routing to scam/exploit knowledge.
+_CODING_TERMS_STRONG = (
+    r"solidity|smart\s?contract|contracts?|erc\d{3,4}|openzeppelin|yul|vyper|bytecode|opcode|"
+    r"solana|anchor|spl\s?token|associated\s?token|rent\s?exemption|system\s?program|"
+    r"program\s?derived\s?address|\bpda\b|\bcpi\b|\bbpf\b|"
+    r"move\s?language|aptos|sui|cairo|starknet|rust|python|typescript|javascript|golang|"
+    r"\babi\b|\bmodifier\b|\bfunction\b|\bsdk\b|\bsnippet\b|\bsyntax\b|compil(?:e|er|ation)|"
+    r"storage\s?layout|gas\s?optimization|formal\s?verification|checks[- ]effects|"
+    r"nonreentrant|reentrancy\s?guard|\bmev\b|\bconstructor\b|abi\s?encoding"
+)
+_CODING_TERMS_CONTEXTUAL = (
+    r"interface|library|struct|enum|event|class|def|impl|trait|fn|mod|"
+    r"code|example|implementation|program|bot|deploy|script|reentrancy|\bapi\b"
+)
+_CODING_TERM_RE = re.compile(rf"\b(?:{_CODING_TERMS_STRONG})\b")
+_CODING_CTX_RE = re.compile(rf"\b(?:{_CODING_TERMS_CONTEXTUAL})\b")
+_HOW_DOES_RE = re.compile(r"\bhow (?:do|does|is|are|can)\b")
+
+# Content cap used for code-intent queries: fenced code blocks must not be
+# truncated mid-block by the retrieval enrichment (default prose cap is 500).
+_CODE_CONTENT_LIMIT = 8000
+# Small similarity bonus applied to code-carrying chunks on code queries —
+# enough to float a code chunk above equally-ranked prose, not enough to
+# overturn a genuinely better semantic match.
+_CODE_CHUNK_BONUS = 0.05
+
+# ═══════════════════════════════════════════════════════════════════
+# HYBRID RETRIEVAL (keyword/BM25 lane, additive)
+# ═══════════════════════════════════════════════════════════════════
+# Opt-in `hybrid=True` path: a lightweight in-memory Okapi BM25 lane runs
+# alongside the vector search over the same Redis chunk corpus, and both
+# lanes are fused with reciprocal rank fusion (RRF). Defaults are OFF so
+# pure-vector behavior is preserved for existing callers.
+
+# Per-collection doc cap for the keyword lane — keeps the per-query BM25
+# index lightweight (tokenizing 1k chunks/collection is ~tens of ms).
+_HYBRID_KEYWORD_MAX_DOCS = 1000
+# Keyword hits fetched per collection relative to the requested limit.
+_HYBRID_KEYWORD_LIMIT_FACTOR = 2
+# Content preview attached to keyword-only hits (surfaces without vector hit).
+_HYBRID_CONTENT_PREVIEW = 500
+
 
 def detect_scam_query(query: str) -> bool:
     """Return True when *query* looks like a scam/exploit knowledge query.
@@ -183,13 +235,26 @@ def detect_coding_query(query: str) -> bool:
     """Return True when *query* looks like a smart-contract coding question.
 
     Code-intent queries ("how to implement X in Solidity", "Solana PDA
-    security best practices", "secure ERC20") are routed to
-    CODING_COLLECTIONS first so RugBrain answers as a development expert.
+    security best practices", "secure ERC20", "what is the ABI of a
+    function") are routed to CODING_COLLECTIONS first so RugBrain answers
+    as a development expert.
+
+    Two tiers: the phrase hints above, then word-boundary code-term regexes.
+    Bare ambiguous terms (e.g. "reentrancy", "code") only count when paired
+    with a second code term or a "how does" phrasing, so exploit-framed
+    queries ("reentrancy hack 2023") keep routing to scam/exploit knowledge.
     """
     q = (query or "").lower()
     if not q:
         return False
-    return any(hint in q for hint in _CODING_QUERY_HINTS)
+    if any(hint in q for hint in _CODING_QUERY_HINTS):
+        return True
+    if _CODING_TERM_RE.search(q):
+        return True
+    ctx = list(_CODING_CTX_RE.finditer(q))
+    if len(ctx) >= 2:
+        return True
+    return bool(ctx and _HOW_DOES_RE.search(q))
 
 
 def resolve_search_collections(
@@ -213,6 +278,112 @@ def resolve_search_collections(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# CODE-CARRYING CHUNK HELPERS
+# ═══════════════════════════════════════════════════════════════════
+# Shared by the code-query answer path: ``search_coding_knowledge`` flags and
+# the code-chunk bias used by ``search_multi_collection`` /
+# ``three_pillar_search``. Markers are deliberately loose (contract/function/
+# fn/struct/fence) — enough to separate code-carrying chunks from prose.
+
+# Markers that indicate a chunk carries code (contract/function bodies,
+# fenced blocks) rather than prose.
+_CODE_MARKER_RE = re.compile(
+    r"(?:"
+    r"pragma\s+solidity|contract\s+\w+|interface\s+\w+|library\s+\w+|"
+    r"function\s+\w+|modifier\s+\w+|constructor\s*\(|"
+    r"event\s+\w+|error\s+\w+|struct\s+\w+|enum\s+\w+|"
+    r"pub\s+fn\b|\bfn\s+\w+|impl\s+\w+|trait\s+\w+|"
+    r"\bmod\s+\w+|fun\s+\w+|use\s+\w+::|use\s+anchor|"
+    r"\bdef\s+\w+|class\s+\w+|import\s+.*\bfrom\b|```"
+    r")",
+    re.IGNORECASE,
+)
+
+# Fenced markdown code blocks (```lang … ``` or ~~~ … ~~~), language-tagged.
+_FENCED_BLOCK_RE = re.compile(r"^([`~]{3,})\s*([\w.+-]*)\s*$(.*?)^\1\s*$", re.MULTILINE | re.DOTALL)
+
+
+def _is_code_result(result: dict[str, Any]) -> bool:
+    """True when *result* carries code content or code-typed metadata."""
+    metadata = result.get("metadata") or {}
+    doc_type = str(metadata.get("doc_type", "") or "").lower()
+    if doc_type in ("contract_code", "code", "solidity", "rust", "solana"):
+        return True
+    if result.get("has_code_snippet") or result.get("chunk_type") == "code":
+        return True
+    return bool(_CODE_MARKER_RE.search((result.get("content") or "").lower()))
+
+
+def bias_toward_code_chunks(
+    results: list[dict[str, Any]],
+    query: str,
+) -> list[dict[str, Any]]:
+    """Re-rank *results* so code-carrying chunks float above prose.
+
+    Only applied for code-intent queries (``detect_coding_query``) — non-code
+    queries return *results* unchanged (behavior-preserving). A small bonus
+    (``_CODE_CHUNK_BONUS``) is added to the similarity score of code chunks,
+    and the sort is stable so equal scores keep the retrieval order.
+    """
+    if not results or not detect_coding_query(query):
+        return results
+
+    def _score(r: dict[str, Any]) -> float:
+        base = r.get("similarity", 0.0) or r.get("rrf_score", 0.0) or 0.0
+        return float(base) + (_CODE_CHUNK_BONUS if _is_code_result(r) else 0.0)
+
+    return sorted(results, key=_score, reverse=True)
+
+
+def extract_code_blocks(content: str) -> list[dict[str, str]]:
+    """Extract fenced code blocks from *content*, intact and language-tagged.
+
+    Each block keeps its original fence marker + language tag so the answer
+    path can surface code verbatim instead of flattening it into prose.
+    Returns ``[{"language", "code", "fence"}, ...]`` (empty when prose-only).
+    """
+    blocks: list[dict[str, str]] = []
+    for m in _FENCED_BLOCK_RE.finditer(content or ""):
+        blocks.append(
+            {
+                "language": (m.group(2) or "").strip(),
+                "code": (m.group(3) or "").strip("\n"),
+                "fence": m.group(1),
+            }
+        )
+    return blocks
+
+
+def format_code_answer(content: str, max_chars: int = 8000) -> str:
+    """Return *content* with fenced code blocks surfaced intact.
+
+    Rebuilds each fenced block with its original fence + language tag so
+    downstream answer formatting never flattens code into prose. Content
+    without fenced code is returned unchanged (trimmed to *max_chars*).
+    """
+    text = (content or "").strip()
+    if not text:
+        return ""
+    if not _FENCED_BLOCK_RE.search(text):
+        return text[:max_chars]
+    out: list[str] = []
+    pos = 0
+    for m in _FENCED_BLOCK_RE.finditer(text):
+        prefix = text[pos : m.start()].rstrip()
+        if prefix:
+            out.append(prefix)
+        fence = m.group(1)
+        lang = (m.group(2) or "").strip()
+        code = (m.group(3) or "").strip("\n")
+        out.append(f"{fence}{lang}\n{code}\n{fence}")
+        pos = m.end()
+    tail = text[pos:].lstrip("\n")
+    if tail:
+        out.append(tail)
+    return "\n\n".join(out)[:max_chars]
+
+
+# ═══════════════════════════════════════════════════════════════════
 # CORE SEARCH
 # ═══════════════════════════════════════════════════════════════════
 
@@ -222,10 +393,13 @@ async def search_similar(
     collection: str = "wallet_profiles",
     limit: int = 10,
     min_similarity: float = 0.0,
+    content_limit: int = 500,
 ) -> list[dict[str, Any]]:
     """
     Semantic search across any collection.
     Uses FAISS ANN index for fast retrieval, with semantic cache.
+
+    ``content_limit`` caps per-result content (see ``_enrich_ann_results``).
     """
     import time
 
@@ -270,7 +444,9 @@ async def search_similar(
             if ann_results:
                 needs_enrich = [r for r in ann_results if "content" not in r]
                 enriched = (
-                    await _enrich_ann_results(collection, needs_enrich) if needs_enrich else []
+                    await _enrich_ann_results(collection, needs_enrich, content_limit=content_limit)
+                    if needs_enrich
+                    else []
                 )
                 results = [r for r in ann_results if "content" in r] + enriched
         else:
@@ -314,10 +490,14 @@ async def search_similar(
 async def _enrich_ann_results(
     collection: str,
     ann_results: list[dict[str, Any]],
+    content_limit: int = 500,
 ) -> list[dict[str, Any]]:
     """
     Given ANN results (id + similarity), fetch full documents from Redis
     and merge the content/metadata.
+
+    ``content_limit`` caps how much content is returned per result; code-intent
+    queries pass a larger cap so fenced code blocks are not truncated mid-block.
     """
     if not ann_results:
         return []
@@ -339,7 +519,7 @@ async def _enrich_ann_results(
                 {
                     "id": doc.get("id", ar["id"]),
                     "similarity": ar["similarity"],
-                    "content": doc.get("content", "")[:500],
+                    "content": doc.get("content", "")[:content_limit],
                     "metadata": doc.get("metadata", {}),
                     "model": doc.get("model", ""),
                     "collection": doc.get("collection", collection),
@@ -351,24 +531,167 @@ async def _enrich_ann_results(
     return enriched
 
 
+# ═══════════════════════════════════════════════════════════════════
+# HYBRID RETRIEVAL HELPERS (keyword/BM25 lane)
+# ═══════════════════════════════════════════════════════════════════
+# The keyword lane reuses the existing stdlib-only Okapi BM25 core
+# (``rugbrain.splade_bm25.BM25Index``) — no heavy deps, no duplication.
+# A fresh in-memory index is built per query over chunk texts read from the
+# same Redis keys the vector lane enriches from, so doc ids match exactly
+# when RRF-fusing the two lanes.
+
+
+async def _hybrid_keyword_search(
+    query: str,
+    collections: list[str],
+    limit: int = 20,
+    max_docs_per_collection: int = _HYBRID_KEYWORD_MAX_DOCS,
+) -> list[dict[str, Any]]:
+    """Run the lightweight keyword/BM25 lane for *query* over *collections*.
+
+    Reads chunk docs from Redis (``rag:{collection}:{doc_id}``), builds a
+    fresh in-memory Okapi BM25 index, and returns ranked hits with
+    ``bm25_score``. Doc ids are un-prefixed so RRF fusion with the vector
+    lane (which uses plain doc ids) merges correctly. Returns ``[]`` when
+    the corpus is empty or the lane fails — callers degrade to pure vector.
+    """
+    r = await _get_redis()
+    # corpus rows: (doc_id, collection, content, metadata)
+    corpus: list[tuple[str, str, str, dict[str, Any]]] = []
+    for coll in collections:
+        try:
+            doc_ids = list(await r.smembers(f"rag:idx:{coll}"))
+        except Exception as e:
+            logger.debug("hybrid: doc index read failed for %s: %s", coll, e)
+            continue
+        if not doc_ids:
+            continue
+        sample = doc_ids[:max_docs_per_collection]
+        keys = [f"rag:{coll}:{did}" for did in sample]
+        try:
+            pipe = r.pipeline()
+            for k in keys:
+                pipe.get(k)
+            raw_docs = await pipe.execute()
+        except Exception as e:
+            logger.debug("hybrid: redis fetch failed for %s: %s", coll, e)
+            continue
+        for did, data in zip(sample, raw_docs, strict=False):
+            if not data:
+                continue
+            try:
+                doc = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            content = doc.get("content", "") or ""
+            if not content.strip():
+                continue
+            corpus.append((str(did), coll, content, doc.get("metadata") or {}))
+
+    if not corpus:
+        return []
+
+    def _bm25_rank(
+        rows: list[tuple[str, str, str, dict[str, Any]]],
+        q: str,
+        n: int,
+    ) -> list[dict[str, Any]]:
+        index = BM25Index(k1=1.2, b=0.75)
+        for did, _coll, content, metadata in rows:
+            index.add_document(did, content, metadata)
+        return index.search(q, limit=n)
+
+    try:
+        # Index build + scoring are CPU work — keep the event loop free.
+        hits = await asyncio.to_thread(_bm25_rank, corpus, query, limit)
+    except Exception as e:
+        logger.debug("hybrid: BM25 build/search failed: %s", e)
+        return []
+
+    by_id = {did: (coll, content, metadata) for did, coll, content, metadata in corpus}
+    results: list[dict[str, Any]] = []
+    for hit in hits:
+        did = str(hit.get("id", ""))
+        coll, content, metadata = by_id.get(did, ("unknown", "", {}))
+        results.append(
+            {
+                "id": did,
+                "doc_id": did,
+                "bm25_score": float(hit.get("bm25_score", 0.0)),
+                "collection": coll,
+                "metadata": metadata,
+                "content": content[:_HYBRID_CONTENT_PREVIEW],
+                "hybrid_source": "bm25",
+            }
+        )
+    return results
+
+
+def _hybrid_fuse(
+    vector_lists: list[list[dict[str, Any]]],
+    keyword_results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fuse per-collection vector results with the keyword lane via RRF.
+
+    Each list is ranked (vector lists by ``similarity``, keyword hits by
+    ``bm25_score``) and merged with reciprocal rank fusion
+    (``rugbrain.rrf_fusion._rrf_fuse``). Keyword-only hits surface in the
+    fused output alongside vector hits; duplicates are merged on doc id.
+    """
+    ranked_lists: list[list[dict[str, Any]]] = [
+        sorted(vlist, key=lambda x: float(x.get("similarity", 0.0) or 0.0), reverse=True)
+        for vlist in vector_lists
+    ]
+    ranked_lists.append(
+        sorted(keyword_results, key=lambda x: float(x.get("bm25_score", 0.0) or 0.0), reverse=True)
+    )
+    return _rrf_fuse(ranked_lists, k=60)
+
+
 async def search_multi_collection(
     query: str,
     collections: list[str] | None = None,
     limit: int = 10,
     min_similarity: float = 0.5,
+    content_limit: int = 500,
+    hybrid: bool = False,
+    rerank: bool = False,
+    rerank_top_k: int = 20,
+    rerank_keep: int | None = None,
 ) -> list[dict[str, Any]]:
     """Search across multiple collections and merge results.
 
     When *collections* is None, scam/exploit queries are routed to
     SCAM_COLLECTIONS (then the defaults) so exploit knowledge is prioritised
     automatically; see ``resolve_search_collections``.
+
+    Code-intent queries fetch longer content (``content_limit`` is raised so
+    fenced code blocks stay intact) and the merged results are re-ranked so
+    code-carrying chunks float above prose (see ``bias_toward_code_chunks``).
+
+    Additive search-quality parameters (all default OFF — behavior for
+    existing callers is preserved):
+
+    * ``hybrid`` — when True, a lightweight keyword/BM25 lane runs alongside
+      the vector search and the two lanes are fused with reciprocal rank
+      fusion (RRF), surfacing keyword-only hits the vector search missed.
+    * ``rerank`` — when True, the top ``rerank_top_k`` candidate chunks are
+      re-ranked with a cross-encoder (BGE reranker; graceful no-op when the
+      model is not installed) and the best ``rerank_keep`` (defaults to
+      *limit*) are kept before truncation.
     """
     collections = resolve_search_collections(collections, query)
+    if detect_coding_query(query):
+        content_limit = max(content_limit, _CODE_CONTENT_LIMIT)
 
     async def _search_one(coll: str) -> list[dict[str, Any]]:
         try:
             results = await search_similar(
-                query, collection=coll, limit=limit, min_similarity=min_similarity
+                query,
+                collection=coll,
+                limit=limit,
+                min_similarity=min_similarity,
+                content_limit=content_limit,
             )
             for r in results:
                 if "collection" not in r:
@@ -380,10 +703,30 @@ async def search_multi_collection(
 
     # Search all collections in parallel
     all_per_collection = await asyncio.gather(*[_search_one(c) for c in collections])
-    all_results = [r for results in all_per_collection for r in results]
 
-    all_results.sort(key=lambda x: x["similarity"], reverse=True)
-    return all_results[:limit]
+    if hybrid:
+        # Keyword/BM25 lane alongside the vector search; RRF-fuse both lanes.
+        keyword_results = await _hybrid_keyword_search(
+            query, collections, limit=limit * _HYBRID_KEYWORD_LIMIT_FACTOR
+        )
+        if keyword_results:
+            fused = _hybrid_fuse(list(all_per_collection), keyword_results)
+        else:
+            fused = [r for results in all_per_collection for r in results]
+    else:
+        fused = [r for results in all_per_collection for r in results]
+
+    if rerank and fused:
+        from .rerank import rerank_chunks
+
+        fused = await rerank_chunks(
+            query,
+            fused,
+            top_n=rerank_top_k,
+            keep=rerank_keep if rerank_keep is not None else limit,
+        )
+
+    return bias_toward_code_chunks(fused, query)[:limit]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -403,6 +746,10 @@ async def three_pillar_search(
     use_parent_child: bool = True,
     use_reranker: bool = False,
     use_rating_boosts: bool = True,
+    hybrid: bool = False,
+    rerank: bool = False,
+    rerank_top_k: int = 20,
+    rerank_keep: int | None = None,
 ) -> dict[str, Any]:
     """
     Three-pillar hybrid search with Knowledge Graph expansion, MMR dedup,
@@ -415,11 +762,28 @@ async def three_pillar_search(
       Post-rank - Ground News-style rating boosts (when metadata carries a
                   ``rating`` payload) improve quality for news retrieval
 
+    Additive search-quality parameters (all default OFF — behavior for
+    existing callers is preserved):
+
+    * ``hybrid`` — when True, a lightweight in-memory keyword/BM25 lane runs
+      alongside the pillars and is fused into the RRF as an extra signal,
+      surfacing keyword-only chunks the dense/sparse/entity lanes missed.
+    * ``rerank`` — when True, the top ``rerank_top_k`` fused candidates are
+      re-ranked with a cross-encoder (BGE reranker; graceful no-op when the
+      model is not installed) and the best ``rerank_keep`` (defaults to
+      *limit*) are kept before truncation. Independent of ``use_reranker``
+      (the news-lane reranker): ``rerank`` uses the search-lane reranker.
+
     Returns dict with merged results + pillar attribution + MMR metadata.
     """
     collections = resolve_search_collections(collections, query)
 
     limit = min(limit, 100)
+
+    # Code-intent queries get longer per-result content (fenced code blocks
+    # must not be truncated mid-block) and a code-chunk bias at the end.
+    is_code_query = detect_coding_query(query)
+    content_limit = _CODE_CONTENT_LIMIT if is_code_query else 500
 
     embedder = await get_embedder()
     query_vec = await embedder.embed_query(query)
@@ -447,7 +811,9 @@ async def three_pillar_search(
                         limit=limit,
                         min_similarity=min_similarity,
                     )
-                    enriched = await _enrich_ann_results(coll, ann_hits)
+                    enriched = await _enrich_ann_results(
+                        coll, ann_hits, content_limit=content_limit
+                    )
                     for r in enriched:
                         r["pillar"] = "dense"
                     pillar1_results.extend(enriched)
@@ -538,6 +904,20 @@ async def three_pillar_search(
     except Exception as e:
         logger.warning("Pillar 3 (entity) failed: %s", e)
 
+    # ── Keyword/BM25 lane (hybrid, optional additive signal) ──
+    keyword_results: list[dict[str, Any]] = []
+    if hybrid:
+        try:
+            keyword_results = await _hybrid_keyword_search(
+                query, collections, limit=limit * _HYBRID_KEYWORD_LIMIT_FACTOR
+            )
+            for r in keyword_results:
+                r["pillar"] = "sparse"
+            if keyword_results:
+                logger.info("Hybrid keyword lane: %s hits", len(keyword_results))
+        except Exception as e:
+            logger.warning("Hybrid keyword lane failed (non-critical): %s", e)
+
     # ── RRF fusion with query-adaptive weights ──
     query_type = _classify_query(query)
     weights = {
@@ -556,6 +936,19 @@ async def three_pillar_search(
     )
     p3_ranked = sorted(pillar3_results, key=lambda x: x.get("score", 0), reverse=True)
 
+    # Keyword lane joins the fusion as a 4th ranked list when hybrid is on
+    # (weighted like the sparse pillar — it is a lexical signal).
+    fusion_lists: list[list[dict[str, Any]]] = [p1_ranked, p2_ranked, p3_ranked]
+    fusion_weights: list[float] = [w_dense, w_sparse, w_entity]
+    if hybrid:
+        kw_ranked = sorted(
+            keyword_results,
+            key=lambda x: x.get("bm25_score", 0) or 0,
+            reverse=True,
+        )
+        fusion_lists.append(kw_ranked)
+        fusion_weights.append(w_sparse)
+
     entity_doc_ids = set()
     for r in pillar3_results:
         did = r.get("doc_id") or r.get("id")
@@ -563,11 +956,11 @@ async def three_pillar_search(
             entity_doc_ids.add(did)
 
     fused = _rrf_fuse(
-        [p1_ranked, p2_ranked, p3_ranked],
+        fusion_lists,
         k=60,
         entity_boost=entity_boost,
         entity_doc_ids=entity_doc_ids,
-        pillar_weights=[w_dense, w_sparse, w_entity],
+        pillar_weights=fusion_weights,
     )
 
     # Add pillar attribution
@@ -720,7 +1113,36 @@ async def three_pillar_search(
     except Exception as e:
         logger.debug("ParentRetriever.expand_context failed (non-critical): %s", e)
 
-    final_results = fused[:limit]
+    # ── Search-lane cross-encoder reranking (optional, before truncation) ──
+    # Re-ranks the top ``rerank_top_k`` fused candidates and keeps the best
+    # ``rerank_keep`` (defaults to ``limit``). Independent of ``use_reranker``
+    # above — this uses the search-lane reranker with a graceful no-op when
+    # the model is not installed.
+    search_reranker_applied = False
+    search_reranker_method: str | None = None
+    if rerank and fused:
+        from .rerank import rerank_chunks
+
+        pre_rerank = len(fused)
+        reranked = await rerank_chunks(
+            query,
+            fused,
+            top_n=rerank_top_k,
+            keep=rerank_keep if rerank_keep is not None else limit,
+        )
+        if reranked:
+            fused = reranked
+            search_reranker_applied = any(r.get("reranked") for r in reranked)
+            methods = {r.get("rerank_method") for r in reranked if r.get("rerank_method")}
+            search_reranker_method = next(iter(methods), None)
+            logger.info(
+                "Search-lane reranker: %d → %d results (method=%s)",
+                pre_rerank,
+                len(fused),
+                search_reranker_method,
+            )
+
+    final_results = bias_toward_code_chunks(fused, query)[:limit]
 
     # ── Rating boosts (Ground News-style quality reweighting) ──
     # Articles carrying a ``rating`` payload in metadata get boosted (or
@@ -737,6 +1159,9 @@ async def three_pillar_search(
             logger.debug("rugbrain.ratings not available — skipping rating boosts")
         except Exception as e:
             logger.debug("Rating boost failed (non-critical): %s", e)
+
+    # Code-intent queries keep code chunks on top even when rating boosts ran.
+    final_results = bias_toward_code_chunks(final_results, query)
 
     # ── Confidence scoring ──
     confidence = None
@@ -775,6 +1200,9 @@ async def three_pillar_search(
             "reranker_applied": reranker_applied,
             "reranker_method": reranker_method,
             "rating_boosts_applied": rating_boosts_applied,
+            "hybrid_keyword_hits": len(keyword_results),
+            "search_reranker_applied": search_reranker_applied,
+            "search_reranker_method": search_reranker_method,
         },
         "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,
         "query": query,
@@ -826,34 +1254,21 @@ async def search_coding_knowledge(
     Defaults to CODING_COLLECTIONS (coding_knowledge, solidity_patterns,
     solana_patterns, contract_security, audit_findings). Results whose content
     carries code (contract/function/struct bodies) are flagged with
-    ``has_code_snippet`` so callers can render code-first answers with
-    explanations. Returns results plus the routed collection list so callers
-    can see which knowledge buckets were consulted.
+    ``has_code_snippet`` and enriched with ``code_blocks`` (fenced blocks
+    extracted intact, language-tagged) and ``code_answer`` (the content with
+    fenced code surfaced verbatim) so callers can render code-first answers
+    without flattening code into prose. Returns results plus the routed
+    collection list so callers can see which knowledge buckets were consulted.
     """
     colls = resolve_search_collections(collections or list(CODING_COLLECTIONS), query)
     results = await search_multi_collection(
         query, collections=colls, limit=limit, min_similarity=min_similarity
     )
     for r in results:
-        content = (r.get("content", "") or "").lower()
-        r["has_code_snippet"] = any(
-            marker in content
-            for marker in (
-                "contract ",
-                "function ",
-                "pub fn",
-                "struct ",
-                "mod ",
-                "fun ",
-                "fn ",
-                "pragma solidity",
-                "use anchor",
-                "mod ",
-                "```",
-                "contract {",
-                "struct {",
-            )
-        )
+        content = r.get("content", "") or ""
+        r["has_code_snippet"] = bool(_CODE_MARKER_RE.search(content.lower()))
+        r["code_blocks"] = extract_code_blocks(content)
+        r["code_answer"] = format_code_answer(content)
     return {
         "query": query,
         "collections": colls,

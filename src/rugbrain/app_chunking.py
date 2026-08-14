@@ -22,6 +22,20 @@ Crypto-aware behavior (added 2026-08):
     boundaries; each chunk carries the active section heading as context
     and metadata.
 
+Top-tier techniques (added 2026-08):
+  - Tree-sitter AST code chunking: when the tree-sitter grammars are
+    installed (``tree-sitter-solidity`` / ``tree-sitter-rust``; Vyper via
+    the published Python grammar), ``code_chunk`` splits Solidity/Rust/
+    Vyper at real function/contract/struct AST nodes instead of
+    brace-balancing, and each unit keeps its preceding comments/docstrings
+    (see :mod:`rugbrain.tree_sitter_chunking`). The regex path remains the
+    fallback when the grammars are missing.
+  - Parent-child document mapping: ``split_doc_parent_child`` returns
+    small search-oriented child chunks (~512 tokens, heading + metadata)
+    that each reference a larger parent context window (the full section
+    or a 2-4k-token slice) via ``parent_id`` — for parent retriever
+    pipelines.
+
 Standards (2026 consensus, token-targeted for embedding models):
   - Default: recursive, 512 tokens (~2048 chars), 15% overlap
   - News: recursive, 512 tokens (~2048 chars), 15% overlap
@@ -41,7 +55,10 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
+
+from rugbrain.tree_sitter_chunking import ts_code_unit_spans
 
 logger = logging.getLogger("rag.chunking")
 
@@ -77,7 +94,10 @@ CODE_SEPARATORS = ["\n\nclass ", "\n\ndef ", "\n\n", "\n", " ", ""]
 # ── Crypto atom protection ──
 # Spans matching these patterns are swapped out for tiny placeholders before
 # splitting and restored afterwards, so a boundary never lands mid-address.
-_PH_RE = re.compile(r"\x00K\d+\x00")
+# Two placeholder namespaces exist so nested protection passes never collide:
+# ``\x00K<idx>\x00`` (prose atoms from ``_protect_atoms``) and ``\x00KC<idx>\x00``
+# (code-unit atoms from ``code_chunk``'s pre-protection pass).
+_PH_RE = re.compile(r"\x00K(?:C)?\d+\x00")
 
 _ATOM_PATTERNS: tuple[re.Pattern[str], ...] = (
     # URLs first: they can contain 0x/base58 runs in query strings.
@@ -100,19 +120,30 @@ def _protect_atoms(text: str) -> tuple[str, dict[str, str]]:
 
     Returns ``(protected_text, atoms)`` where ``atoms`` maps each placeholder
     back to the original span. Call :func:`_restore_atoms` after splitting.
+
+    Inline code spans (`` `code` ``) are protected first so a span that
+    contains an address is kept whole (backticks included) and a chunk
+    boundary never splits mid-span.
     """
-    spans: list[tuple[int, int]] = []
+    spans: list[tuple[int, int]] = _inline_code_spans(text)
     for pat in _ATOM_PATTERNS:
         for m in pat.finditer(text):
             s, e = m.span()
             if any(s < e2 and e > s2 for s2, e2 in spans):
-                continue  # already covered by an earlier, longer pattern
+                continue  # already covered by a wider inline code span
             spans.append((s, e))
     return _protect_spans(text, spans)
 
 
-def _protect_spans(text: str, spans: list[tuple[int, int]]) -> tuple[str, dict[str, str]]:
-    """Replace *spans* (non-overlapping) with ``\\x00K<idx>\\x00`` placeholders."""
+def _protect_spans(
+    text: str, spans: list[tuple[int, int]], prefix: str = ""
+) -> tuple[str, dict[str, str]]:
+    """Replace *spans* (non-overlapping) with ``\\x00K<prefix><idx>\\x00`` placeholders.
+
+    *prefix* (e.g. ``"C"`` for code units) separates namespaces so a later
+    ``_protect_atoms`` pass inside :func:`recursive_chunk` never reuses a
+    placeholder id already taken by this pass.
+    """
     out: list[str] = []
     atoms: dict[str, str] = {}
     prev = 0
@@ -121,7 +152,7 @@ def _protect_spans(text: str, spans: list[tuple[int, int]]) -> tuple[str, dict[s
         if s >= e or s >= len(text):
             continue
         out.append(text[prev:s])
-        ph = f"\x00K{i}\x00"
+        ph = f"\x00K{prefix}{i}\x00"
         atoms[ph] = text[s:e]
         out.append(ph)
         prev = e
@@ -171,6 +202,18 @@ _CODE_UNIT_RE = re.compile(
 )
 _FENCE_RE = re.compile(r"^([`~]{3,})\s*(\S*)\s*$", re.MULTILINE)
 _ABI_KEY_RE = re.compile(r'"(?:type|name|inputs|outputs|stateMutability)"')
+
+# Inline code spans (`` `code` `` / reST `` ``code`` ``). Fenced blocks are
+# handled separately by ``_fence_spans``; this protects short single-line
+# spans so a chunk boundary never splits mid-span. Balanced 1-2 backtick
+# delimiters with bounded content: triple-backtick fences and unmatched
+# backticks never match here.
+_CODE_SPAN_RE = re.compile(r"(?<!`)`{1,2}(?=[^`\n])([^`\n]{1,200})`{1,2}(?!`)")
+
+
+def _inline_code_spans(text: str) -> list[tuple[int, int]]:
+    """Find inline code spans (`` `foo` ``, `` ``bar`` ``) as atom spans."""
+    return [m.span() for m in _CODE_SPAN_RE.finditer(text)]
 
 
 def _match_code_brace(text: str, open_pos: int) -> int:
@@ -315,25 +358,37 @@ def _abi_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _code_atom_spans(text: str, max_atom: int) -> list[tuple[int, int]]:
+def _code_atom_spans(
+    text: str,
+    max_atom: int,
+    units: list[tuple[int, int]] | None = None,
+) -> list[tuple[int, int]]:
     """Combine fences, code units and ABI arrays into one atom span list.
 
     Small fenced blocks are atomic wholesale; oversized ones fall back to
     protecting their inner code units so a huge block is still split at
-    function boundaries rather than mid-function.
+    function boundaries rather than mid-function. Inline code spans are also
+    protected unless they sit inside a larger protected unit (so a function
+    body containing `` `foo` `` in a comment stays atomic).
+
+    *units* overrides the code-unit spans (``_code_unit_spans`` by default).
+    ``code_chunk`` passes tree-sitter AST-derived spans here when the
+    grammars are available; the regex/brace-balancing path stays the fallback.
     """
     spans: list[tuple[int, int]] = []
     for fs, fe in _fence_spans(text):
         if fe - fs <= max_atom:
             spans.append((fs, fe))
     protected_fences = list(spans)
-    units = [
-        u
-        for u in _code_unit_spans(text)
-        if not any(fs <= u[0] and u[1] <= fe for fs, fe in protected_fences)
+    unit_spans = _code_unit_spans(text) if units is None else units
+    units_kept = [
+        u for u in unit_spans if not any(fs <= u[0] and u[1] <= fe for fs, fe in protected_fences)
     ]
-    spans.extend(units)
+    spans.extend(units_kept)
     spans.extend(a for a in _abi_spans(text) if not any(s <= a[0] and a[1] <= e for s, e in spans))
+    spans.extend(
+        s for s in _inline_code_spans(text) if not any(s0 < s[0] and s[1] < e0 for s0, e0 in spans)
+    )
     return _innermost_spans(spans)
 
 
@@ -514,11 +569,24 @@ def code_chunk(
     Functions/contracts/events/structs (and ABI JSON arrays / fenced code
     blocks) are kept atomic: splits happen between logical units, never
     mid-function. Falls back to plain recursive splitting on prose.
+
+    Upgraded 2026-08: when the tree-sitter grammars are installed the code
+    units come from a real AST (see :mod:`rugbrain.tree_sitter_chunking`),
+    so boundaries land on function/contract/struct nodes — each unit keeps
+    its preceding comments/docstrings. Without tree-sitter the regex +
+    brace-balancing path is used unchanged.
     """
     if not code or len(code) < 50:
         return [code] if code else []
     max_chars = max_chars or chunk_size
-    protected, atoms = _protect_spans(code, _code_atom_spans(code, max_atom=max_chars))
+    # Tree-sitter AST-aware units when available; the regex brace-balancing
+    # path remains the fallback (also used for prose/unknown languages).
+    units = ts_code_unit_spans(code)
+    if units is None:
+        units = _code_unit_spans(code)
+    protected, atoms = _protect_spans(
+        code, _code_atom_spans(code, max_atom=max_chars, units=units), prefix="C"
+    )
     chunks = recursive_chunk(protected, chunk_size, overlap, CODE_SEPARATORS, max_chars)
     return [_restore_atoms(c, atoms) for c in chunks]
 
@@ -687,6 +755,132 @@ def split_doc_into_chunks(
     for c in chunks:
         c["total_chunks"] = len(chunks)
     return chunks
+
+
+# ── Parent-Child Document Chunking ──
+
+
+@dataclass
+class ParentChunk:
+    """One parent context window plus its search-oriented child chunks.
+
+    Attributes:
+        content: Parent context text — the full section (with its heading)
+            when it fits the parent window budget, otherwise a sequential
+            slice of the section. Children are subdivisions of this text.
+        child_chunks: Small search-oriented chunks (same shape as
+            :func:`split_doc_into_chunks` output) that each reference their
+            parent via ``parent_id`` / ``parent_index`` / ``parent_total``
+            metadata keys.
+        metadata: Parent-level metadata: ``section``, ``doc_type``,
+            ``parent_id``, ``parent_index``, ``parent_total``,
+            ``estimated_tokens`` plus any ``doc_meta`` fields.
+    """
+
+    content: str
+    child_chunks: list[dict[str, Any]]
+    metadata: dict[str, Any]
+
+
+def _parent_id(content: str) -> str:
+    """Stable, content-addressed id for a parent window (dedup-safe)."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+
+
+def split_doc_parent_child(
+    text: str,
+    content_type: str = "default",
+    custom_strategy: dict[str, Any] | None = None,
+    *,
+    doc_meta: dict[str, Any] | None = None,
+    parent_token_target: int = 3000,
+    parent_max_chars: int = 16000,
+) -> list[ParentChunk]:
+    """Parent-child split for retrieval-augmented pipelines.
+
+    Produces small, search-oriented child chunks (~512 tokens, heading +
+    metadata) that each reference a larger parent context window (the full
+    section, or a 2-4k-token slice when the section is oversized). Use with a
+    parent retriever: match on children, then expand to ``parent.content``
+    for the LLM context window.
+
+    Additive API — :func:`split_doc_into_chunks` and :func:`chunk_document`
+    are unchanged.
+
+    Args:
+        text: Document text to chunk.
+        content_type: Strategy preset (same values as
+            :func:`split_doc_into_chunks`).
+        custom_strategy: Override with ``{'strategy': ..., 'chunk_size': N,
+            'overlap': F}``.
+        doc_meta: Document metadata copied onto parents and children
+            (``title``, ``source``, ``url``, …).
+        parent_token_target: Desired parent window size in tokens (~4
+            chars/token) used when a section must be split into windows.
+        parent_max_chars: Hard cap on a single parent window's length.
+
+    Returns:
+        List of :class:`ParentChunk`; empty for blank input. ``chunk_index``
+        / ``total_chunks`` on child chunks are relative to their parent;
+        ``parent_index`` / ``parent_total`` are relative to their section.
+    """
+    meta = dict(doc_meta or {})
+    title = meta.get("title", "")
+    source = meta.get("source", "")
+    url = meta.get("url", "")
+
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    parent_target_chars = max(parent_token_target, 1) * CHARS_PER_TOKEN
+    parent_max = max(parent_max_chars, 1)
+    sections = _sectionize(text, title)
+    parents_out: list[ParentChunk] = []
+
+    for sec_text, heading, label in sections:
+        section_context = f"{heading}\n{sec_text}" if heading else sec_text
+        if len(section_context) <= parent_max:
+            windows = [section_context]
+        else:
+            # Oversized section: several sequential parent windows, each
+            # still carrying the section heading as context. No overlap —
+            # parents are context windows, not search chunks.
+            parts = recursive_chunk(
+                sec_text,
+                chunk_size=parent_target_chars,
+                overlap=0.0,
+                max_chars=parent_max,
+            )
+            windows = [f"{heading}\n{p}" if heading else p for p in parts if p.strip()]
+
+        for p_idx, parent_text in enumerate(windows):
+            parent_id = _parent_id(parent_text)
+            children = split_doc_into_chunks(
+                parent_text, content_type, custom_strategy, doc_meta=meta
+            )
+            for child in children:
+                child["parent_id"] = parent_id
+                child["parent_index"] = p_idx
+                child["parent_total"] = len(windows)
+            parents_out.append(
+                ParentChunk(
+                    content=parent_text,
+                    child_chunks=children,
+                    metadata={
+                        "section": label,
+                        "doc_type": content_type,
+                        "parent_id": parent_id,
+                        "parent_index": p_idx,
+                        "parent_total": len(windows),
+                        "estimated_tokens": estimate_tokens(parent_text),
+                        "source": source,
+                        "url": url,
+                        "title": title,
+                    },
+                )
+            )
+    return parents_out
 
 
 # ── Content Hash Dedup ──

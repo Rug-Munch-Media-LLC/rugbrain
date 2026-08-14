@@ -20,8 +20,11 @@ from .engine import (
     CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     _enrich_ann_results,
+    bias_toward_code_chunks,
     detect_coding_query,
     detect_scam_query,
+    extract_code_blocks,
+    format_code_answer,
     resolve_search_collections,
     search_coding_knowledge,
     search_multi_collection,
@@ -39,6 +42,7 @@ from .filters import (
     ingest_forensic_report,
 )
 from .ranking import _classify_query
+from .rerank import get_reranker, rerank_chunks
 
 __all__ = [
     # Coding-knowledge collections
@@ -57,13 +61,18 @@ __all__ = [
     "_pattern_cache_loaded",
     "_preembed_scam_patterns",
     "_seeded",
+    "bias_toward_code_chunks",
     "detect_coding_query",
     "detect_scam_patterns",
     "detect_scam_query",
+    "extract_code_blocks",
+    "format_code_answer",
     "get_goplus_analysis",
+    "get_reranker",
     "get_stats",
     "ingest_document",
     "ingest_forensic_report",
+    "rerank_chunks",
     "resolve_search_collections",
     "search_coding_knowledge",
     "search_multi_collection",
