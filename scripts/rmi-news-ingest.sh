@@ -7,7 +7,7 @@
 # Scheduled via crontab (see below) or the rmi-news-ingest systemd timer
 # in systemd/ (deploy: cp systemd/rmi-news-ingest.* /etc/systemd/system/).
 #
-#   */15 * * * * /bin/bash /path/to/rmi-rag/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
+#   */15 * * * * /bin/bash /path/to/rugbrain/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
 #
 # Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /path/to/backend.env.
 set -euo pipefail
@@ -54,10 +54,10 @@ if [ -f "$LOG_FILE" ]; then
 fi
 
 BACKEND_DIR="${RMI_BACKEND_DIR:-/path/to/rmi-backend}"
-RAG_DIR="${RMI_RAG_DIR:-/path/to/rmi-rag}"
+RAG_DIR="${RMI_RAG_DIR:-/path/to/rugbrain}"
 PYTHON="${RMI_BACKEND_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
-# Step 2 (news_to_rag) imports rmi_rag.* from the RAG repo's own venv;
-# the backend venv does not ship rmi_rag. Using RAG_PYTHON keeps the
+# Step 2 (news_to_rag) imports rugbrain.* from the RAG repo's own venv;
+# the backend venv does not ship rugbrain. Using RAG_PYTHON keeps the
 # embed→Qdrant half of the pipeline alive.
 RAG_PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
 SECRETS="${RMI_SECRETS_FILE:-/path/to/backend.env}"

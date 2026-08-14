@@ -28,7 +28,7 @@ def _mock_search(respx_mock, results: list[dict], collection="default"):
 @pytest.mark.asyncio
 async def test_search_returns_results():
     """search() should return formatted results from Qdrant."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -61,7 +61,7 @@ async def test_search_returns_results():
 @pytest.mark.asyncio
 async def test_search_empty_when_no_results():
     """search() should return empty list when no results found."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -74,7 +74,7 @@ async def test_search_empty_when_no_results():
 @pytest.mark.asyncio
 async def test_search_with_filters():
     """search() should pass filters to Qdrant."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -97,7 +97,7 @@ async def test_search_with_filters():
 @pytest.mark.asyncio
 async def test_search_handles_http_500():
     """search() should handle HTTP errors gracefully."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -110,7 +110,7 @@ async def test_search_handles_http_500():
 @pytest.mark.asyncio
 async def test_search_handles_network_error():
     """search() should handle network errors gracefully."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -125,7 +125,7 @@ async def test_search_handles_network_error():
 @pytest.mark.asyncio
 async def test_search_with_custom_collection():
     """search() should use the specified collection name."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -146,7 +146,7 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection():
     """search() against a hybrid (named-vector) collection must send the
     named dense vector, not a bare vector — Qdrant rejects bare vectors
     against named-vector collections with 400 "Not existing vector name"."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -169,7 +169,7 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection():
 @pytest.mark.asyncio
 async def test_insert_stores_document():
     """insert() should PUT document to Qdrant and return True."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -201,7 +201,7 @@ async def test_insert_stores_document():
 @pytest.mark.asyncio
 async def test_insert_fails_on_http_error():
     """insert() should return False on HTTP error."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -218,7 +218,7 @@ async def test_insert_fails_on_http_error():
 @pytest.mark.asyncio
 async def test_insert_creates_collection_if_missing():
     """insert() should create the collection if it doesn't exist."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -239,7 +239,7 @@ async def test_insert_creates_collection_if_missing():
 @pytest.mark.asyncio
 async def test_hybrid_search():
     """hybrid_search() should include keyword matching in ranking."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -284,7 +284,7 @@ async def test_hybrid_search():
 @pytest.mark.asyncio
 async def test_hybrid_search_fallback_to_vector():
     """Without query text, hybrid_search should fall back to vector search."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -318,7 +318,7 @@ async def test_hybrid_search_fallback_to_vector():
 @pytest.mark.asyncio
 async def test_get_qdrant_store_singleton():
     """get_qdrant_store() should return a singleton."""
-    from rmi_rag.qdrant_store import get_qdrant_store
+    from rugbrain.qdrant_store import get_qdrant_store
 
     s1 = await get_qdrant_store()
     s2 = await get_qdrant_store()
@@ -337,8 +337,8 @@ def _mock_hybrid_collection(respx_mock, collection="default"):
 @pytest.mark.asyncio
 async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
     """insert() should add a BM25 sparse vector for hybrid collections."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         assert text == "solana honeypot rug"
@@ -371,8 +371,8 @@ async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
 @pytest.mark.asyncio
 async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
     """insert() should keep dense-only payload for legacy collections."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         raise AssertionError("sparse embedder must not be called for dense-only")
@@ -400,8 +400,8 @@ async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_search_native_rrf(monkeypatch):
     """hybrid_search() should use Qdrant's dense+sparse RRF fusion."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         assert text == "solana rug"
@@ -451,8 +451,8 @@ async def test_hybrid_search_native_rrf(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch):
     """hybrid_search() should fall back to dense search when RRF errors."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         return ([1], [0.5])
@@ -493,8 +493,8 @@ async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_search_sparse_capability_cached(monkeypatch):
     """Sparse-capability probe should be cached per store instance."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         return ([1], [0.5])

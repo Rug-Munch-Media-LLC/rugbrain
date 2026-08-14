@@ -35,21 +35,22 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_web3hack_archive")
 
 # scripts/ dir on sys.path so sibling helpers import cleanly.
 sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
-if sys_path_scripts not in os.sys.path:
-    os.sys.path.insert(0, sys_path_scripts)
+if sys_path_scripts not in sys.path:
+    sys.path.insert(0, sys_path_scripts)
 
 from ingest_common import content_hash, embed_many  # noqa: E402
 
@@ -160,7 +161,7 @@ def _chronicle_doc(event: dict[str, Any]) -> dict[str, Any]:
     attack_vector = str(event.get("attackVector", "") or "")
     lessons = event.get("lessons") or []
     references = event.get("references") or []
-    txns = event.get("transactions") or []
+    _txns = event.get("transactions") or []
     attackers = event.get("attackers") or []
 
     vector = _detect_vector(f"{title} {attack_vector} {root_cause} {' '.join(categories)}")
@@ -181,7 +182,7 @@ def _chronicle_doc(event: dict[str, Any]) -> dict[str, Any]:
         f"Root cause: {root_cause}\n"
         f"Attack vector: {attack_vector or vector}\n"
         f"Description: {description}\n"
-        f"Lessons: {'; '.join(str(l) for l in lessons)}\n"
+        f"Lessons: {'; '.join(str(lesson) for lesson in lessons)}\n"
         f"Attacker addresses: {', '.join(str(a) for a in attackers[:3])}"
     )
     metadata = {

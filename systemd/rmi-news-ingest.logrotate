@@ -1,5 +1,5 @@
 # rmi-news-ingest — logrotate config for the RSS ingest + RAG pipeline.
-# Source: /path/to/rmi-rag/systemd/rmi-news-ingest.logrotate
+# Source: /path/to/rugbrain/systemd/rmi-news-ingest.logrotate
 # Deploy: /etc/logrotate.d/rmi-news-ingest
 #
 # Install:

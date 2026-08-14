@@ -34,21 +34,22 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_cryptoscamdb")
 
 # scripts/ dir on sys.path so sibling helpers import cleanly.
 sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
-if sys_path_scripts not in os.sys.path:
-    os.sys.path.insert(0, sys_path_scripts)
+if sys_path_scripts not in sys.path:
+    sys.path.insert(0, sys_path_scripts)
 
 from ingest_common import content_hash  # noqa: E402
 from ingest_common2 import build_doc, write_docs  # noqa: E402

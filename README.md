@@ -17,11 +17,11 @@ the scanner's **Known Scam Patterns** check, the bot's `/research` and
 | Scam Intelligence | Known scam patterns, historical hacks, scanner findings | `/api/v1/rag/v2/scam-check`, `/api/v1/search` |
 | Market Awareness | News, CT rundown, market brief, social sentiment | rmi-backend `/api/v1/rag/v2/search` |
 | Entity Intelligence | Wallet labels, entity profiles, cross-chain identities | `/api/v1/rag/investigate`, three-pillar search |
-| Security Alerts | Live exploit/rug-pull incidents (Qdrant `security_alerts`) | `src/rmi_rag/alerts.py` poller → NATS/Redis + ClickHouse |
+| Security Alerts | Live exploit/rug-pull incidents (Qdrant `security_alerts`) | `src/rugbrain/alerts.py` poller → NATS/Redis + ClickHouse |
 
 ## Real-time security alert ingestion
 
-`src/rmi_rag/alerts.py` polls free security-intel sources every 5 minutes
+`src/rugbrain/alerts.py` polls free security-intel sources every 5 minutes
 (CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
 via Nitter RSS or SearXNG) and, for each new incident:
 
@@ -31,8 +31,8 @@ via Nitter RSS or SearXNG) and, for each new incident:
 4. logs to ClickHouse `rag_security_alerts` for historical tracking
 
 ```bash
-python -m rmi_rag.alerts --once    # single pass (cron friendly)
-python -m rmi_rag.alerts           # long-running poller
+python -m rugbrain.alerts --once    # single pass (cron friendly)
+python -m rugbrain.alerts           # long-running poller
 ```
 
 Optional extras (graceful degradation when absent): `nats-py`,
@@ -40,7 +40,7 @@ Optional extras (graceful degradation when absent): `nats-py`,
 
 ## Market awareness
 
-`src/rmi_rag/market_awareness.py` tracks the current landscape via the free
+`src/rugbrain/market_awareness.py` tracks the current landscape via the free
 DataBus-style APIs (CoinGecko, DeFiLlama, DexScreener, Fear & Greed) and
 returns:
 
@@ -83,8 +83,8 @@ API reference, data flows, operations, roadmap).
 
 ```bash
 # Clone the repo
-git clone https://github.com/RugMunchMedia/rmi-rag.git
-cd rmi-rag
+git clone https://github.com/RugMunchMedia/rugbrain.git
+cd rugbrain
 
 # Install dependencies
 pip install -e .
@@ -96,7 +96,7 @@ python scripts/seed_threat_intel.py
 docker compose run --rm rag-ingest
 
 # Start the API server (FastAPI on :8012)
-python -m rmi_rag
+python -m rugbrain
 # or: docker compose up -d rag-api
 ```
 

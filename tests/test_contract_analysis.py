@@ -7,7 +7,7 @@ assessment aggregation) so they can be verified without live Qdrant/Infinity.
 
 from __future__ import annotations
 
-from rmi_rag.contract_analysis import (
+from rugbrain.contract_analysis import (
     CHAIN_IDS,
     _aggregate_assessment,
     _etherscan_sources_to_text,

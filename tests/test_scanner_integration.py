@@ -1,13 +1,13 @@
 """
-Cross-app Integration Test: Scanner → RugSense Pipeline.
+Cross-app Integration Test: Scanner → RugBrain Pipeline.
 
 Verifies the Redis pub/sub flow:
     Scanner (rmi-backend) → Redis ``rmi:rag:ingest`` → Subscriber → Qdrant ``threat_intel``
 
-The test publishes a realistic scan finding to Redis, then polls the rmi-rag
+The test publishes a realistic scan finding to Redis, then polls the rugbrain
 search endpoint until the finding is discoverable via semantic search.
 
-Skips gracefully when required services (Redis, rmi-rag) are not running.
+Skips gracefully when required services (Redis, rugbrain) are not running.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ async def _search_for_token(
     poll_timeout: float = POLL_TIMEOUT,
     interval: float = POLL_INTERVAL,
 ) -> dict[str, Any] | None:
-    """Poll rmi-rag search until *address_fragment* appears, or return None."""
+    """Poll rugbrain search until *address_fragment* appears, or return None."""
     import asyncio
 
     deadline = time.time() + poll_timeout
@@ -168,7 +168,7 @@ async def _search_for_token(
 
 @pytest.mark.asyncio
 async def test_scanner_to_rag_pipeline():
-    """Publish a scan finding to Redis and verify rmi-rag ingests it.
+    """Publish a scan finding to Redis and verify rugbrain ingests it.
 
     Full end-to-end check of the scanner → Redis → subscriber → Qdrant flow.
     """
@@ -179,7 +179,7 @@ async def test_scanner_to_rag_pipeline():
         )
 
     if not await _service_healthy(RMI_RAG_URL):
-        pytest.skip(f"rmi-rag service not reachable at {RMI_RAG_URL}")
+        pytest.skip(f"rugbrain service not reachable at {RMI_RAG_URL}")
 
     # Build a finding with a unique token address to avoid collisions
     unique_suffix = hex(int(time.time() * 1_000_000))[-12:]
@@ -194,7 +194,7 @@ async def test_scanner_to_rag_pipeline():
         result = await _search_for_token(client, token_address)
 
     assert result is not None, (
-        f"Finding {token_address} not found in rmi-rag search after "
+        f"Finding {token_address} not found in rugbrain search after "
         f"{POLL_TIMEOUT}s. Verify the subscriber is running and Qdrant is healthy."
     )
 
@@ -213,7 +213,7 @@ async def test_scanner_to_rag_pipeline():
 async def test_rag_search_endpoint_returns_expected_schema():
     """Verify the search endpoint schema matches what the frontend expects."""
     if not await _service_healthy(RMI_RAG_URL):
-        pytest.skip(f"rmi-rag service not reachable at {RMI_RAG_URL}")
+        pytest.skip(f"rugbrain service not reachable at {RMI_RAG_URL}")
 
     if not RMI_RAG_API_KEY:
         pytest.skip(
@@ -296,9 +296,9 @@ async def test_redis_publish_survives_invalid_json():
 
 @pytest.mark.asyncio
 async def test_subscriber_health_check():
-    """The rmi-rag subscriber health endpoint reflects subscriber status."""
+    """The rugbrain subscriber health endpoint reflects subscriber status."""
     if not await _service_healthy(RMI_RAG_URL):
-        pytest.skip(f"rmi-rag service not reachable at {RMI_RAG_URL}")
+        pytest.skip(f"rugbrain service not reachable at {RMI_RAG_URL}")
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(f"{RMI_RAG_URL}/health")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared helpers for the RugSense B2 permanence pipeline.
+"""Shared helpers for the RugBrain B2 permanence pipeline.
 
 Implements the on-disk formats used by ``b2_permanence.py`` (upload),
 ``b2_restore.py`` (download) and ``migrate_to_parquet.py`` (convert):
@@ -121,7 +121,7 @@ def get_b2_api() -> B2Api:
             "B2 credentials missing — set B2_APPLICATION_KEY_ID and "
             "B2_APPLICATION_KEY (systemd: EnvironmentFile=/path/to/b2-permanence.env)"
         )
-    api = B2Api(InMemoryAccountInfo())
+    api = B2Api(InMemoryAccountInfo())  # type: ignore[arg-type]
     api.authorize_account("production", key_id, key)
     return api
 
@@ -130,8 +130,8 @@ def ensure_bucket(api: B2Api, bucket_name: str) -> Bucket:
     """Return the bucket, creating it (private) if it does not exist."""
     for bucket in api.list_buckets():
         if bucket.name == bucket_name:
-            return bucket
-    return api.create_bucket(bucket_name, "allPrivate")
+            return bucket  # type: ignore[return-type]
+    return api.create_bucket(bucket_name, "allPrivate")  # type: ignore[return-type]
 
 
 def upload_file(api: B2Api, bucket_name: str, local_path: Path, key: str) -> None:
@@ -299,7 +299,7 @@ def read_parquet_records(path: Path) -> list[dict[str, Any]]:
 
     Local-file reads (after a B2 download) keep restore simple and
     credential-free; direct-from-B2 queries use the same schema through
-    DuckDB's httpfs extension (see src/rmi_rag/parquet_analytics.py).
+    DuckDB's httpfs extension (see src/rugbrain/parquet_analytics.py).
     """
     import duckdb
 

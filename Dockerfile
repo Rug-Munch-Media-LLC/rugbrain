@@ -1,4 +1,4 @@
-# rmi-rag — multi-mode container
+# rugbrain — multi-mode container
 # Default: FastAPI server (uvicorn)
 # Override CMD for ingest: docker run ... python scripts/ingest_threats.py
 
@@ -49,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     || exit 1
 
 # ── Default: start FastAPI server ───────────────────────────────────
-CMD ["uvicorn", "rmi_rag.main:app", "--host", "0.0.0.0", "--port", "8012", "--log-level", "info"]
+CMD ["uvicorn", "rugbrain.main:app", "--host", "0.0.0.0", "--port", "8012", "--log-level", "info"]

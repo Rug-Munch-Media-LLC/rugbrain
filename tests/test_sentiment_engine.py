@@ -1,8 +1,8 @@
-"""Tests for rmi_rag.sentiment_engine — crypto-specific sentiment analysis."""
+"""Tests for rugbrain.sentiment_engine — crypto-specific sentiment analysis."""
 
 from __future__ import annotations
 
-from rmi_rag.sentiment_engine import (
+from rugbrain.sentiment_engine import (
     SentimentResult,
     analyze_text_sentiment,
 )

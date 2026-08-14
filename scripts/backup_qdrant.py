@@ -15,7 +15,7 @@ B2 uses the native B2 API (via b2sdk) — the S3-compatible API is not
 enabled for the master application key.
 
 Schedule: 30 3 * * * (daily 3:30am UTC, after DB backups at 2am)
-Cron: cd /path/to/rmi-rag && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
+Cron: cd /path/to/rugbrain && python3 scripts/backup_qdrant.py >> /var/log/qdrant-backup.log 2>&1
 """
 
 import argparse
@@ -130,7 +130,7 @@ def snapshot_collection(
     date_str = datetime.now().strftime("%Y-%m-%d")
     try:
         snap = client.create_snapshot(collection_name=name)
-        snap_name = snap.name
+        snap_name = snap.name  # type: ignore[union-attr]
         local_path = os.path.join(dest_dir, f"{name}_{date_str}.snapshot")
 
         # Download via REST API (download_snapshot not available in this client version)
@@ -190,6 +190,7 @@ def upload_to_b2(
 
     Returns ``True`` on success.
     """
+    key = ""
     try:
         api = get_b2_api()
         ensure_bucket(api, bucket)
@@ -225,7 +226,7 @@ def test_b2(b2_config: dict) -> int:
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
-def _fmt_size(bytes_: int) -> str:
+def _fmt_size(bytes_: float) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if bytes_ < 1024:
             return f"{bytes_:.1f}{unit}"

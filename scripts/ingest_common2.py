@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
 

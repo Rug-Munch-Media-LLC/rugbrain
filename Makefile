@@ -1,6 +1,6 @@
-# ── rmi-rag Makefile ──────────────────────────────────────────
+# ── rugbrain Makefile ──────────────────────────────────────────
 # Rug Munch Media fleet standard (from fleet-template/Makefile.python.template)
-# Source of truth: https://git.rugmunch.io/RugMunchMedia/rmi-rag
+# Source of truth: https://git.rugmunch.io/RugMunchMedia/rugbrain
 #
 # Modes:
 #   make api-dev   — start FastAPI dev server on :8012
@@ -8,7 +8,7 @@
 #   make backup    — snapshot Qdrant collection
 #
 # Layout:
-#   src/rmi_rag/   — Python package (53 modules, ~15K LOC)
+#   src/rugbrain/   — Python package (53 modules, ~15K LOC)
 #   scripts/       — operational scripts
 #   Dockerfile     — multi-mode container (API default, ingest override)
 
@@ -26,7 +26,7 @@ install: ## Install Python deps (pyproject.toml + requirements.txt)
 dev: api-dev ## Alias for starting the API server
 
 api-dev: ## Start FastAPI dev server on :8012 with hot-reload
-	uvicorn rmi_rag.main:app --host 0.0.0.0 --port 8012 --reload --log-level debug
+	uvicorn rugbrain.main:app --host 0.0.0.0 --port 8012 --reload --log-level debug
 
 ingest: ## Run threat ingest into Qdrant (requires QDRANT_URL env)
 	@test -n "$$QDRANT_URL" || echo "QDRANT_URL not set - using default http://rmi-qdrant:6333"

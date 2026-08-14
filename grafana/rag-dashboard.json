@@ -1,49 +1,87 @@
 {
-  "title": "RMI RAG — Crypto Intelligence OS",
-  "refresh": "15s",
-  "panels": [
-    {
-      "title": "Collection Sizes",
-      "targets": [{"expr": "rmi_rag_collection_docs", "legendFormat": "{{collection}}"}],
-      "type": "bargauge"
-    },
-    {
-      "title": "Ingest Rate (docs/hour)",
-      "targets": [{"expr": "rate(rmi_rag_ingest_total[1h])", "legendFormat": "{{collection}}"}],
-      "type": "timeseries"
-    },
-    {
-      "title": "Scam Pattern Types",
-      "targets": [{"expr": "rmi_rag_scam_patterns_total", "legendFormat": "{{scam_type}}"}],
-      "type": "piechart"
-    },
-    {
-      "title": "Searches (by query type)",
-      "targets": [{"expr": "rate(rmi_rag_search_total[5m])", "legendFormat": "{{query_type}}"}],
-      "type": "timeseries"
-    },
-    {
-      "title": "Feedback Loop Efficacy",
-      "targets": [
-        {"expr": "rmi_rag_feedback_confirmed_total", "legendFormat": "confirmed"},
-        {"expr": "rmi_rag_feedback_false_positive_total", "legendFormat": "false_positives"}
-      ],
-      "type": "timeseries"
-    },
-    {
-      "title": "Alerts Dispatched",
-      "targets": [{"expr": "rate(rmi_rag_alerts_dispatched_total[5m])", "legendFormat": "{{channel}}"}],
-      "type": "stat"
-    },
-    {
-      "title": "Cross-Chain Detections",
-      "targets": [{"expr": "rate(rmi_rag_cross_chain_total[1h])", "legendFormat": "detections"}],
-      "type": "timeseries"
-    },
-    {
-      "title": "Embedding Latency (ms)",
-      "targets": [{"expr": "histogram_quantile(0.50, rate(rmi_rag_embedding_latency_bucket[5m]))", "legendFormat": "p50"}],
-      "type": "timeseries"
-    }
-  ]
+	"title": "RMI RAG — Crypto Intelligence OS",
+	"refresh": "15s",
+	"panels": [
+		{
+			"title": "Collection Sizes",
+			"targets": [
+				{ "expr": "rugbrain_collection_docs", "legendFormat": "{{collection}}" }
+			],
+			"type": "bargauge"
+		},
+		{
+			"title": "Ingest Rate (docs/hour)",
+			"targets": [
+				{
+					"expr": "rate(rugbrain_ingest_total[1h])",
+					"legendFormat": "{{collection}}"
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"title": "Scam Pattern Types",
+			"targets": [
+				{
+					"expr": "rugbrain_scam_patterns_total",
+					"legendFormat": "{{scam_type}}"
+				}
+			],
+			"type": "piechart"
+		},
+		{
+			"title": "Searches (by query type)",
+			"targets": [
+				{
+					"expr": "rate(rugbrain_search_total[5m])",
+					"legendFormat": "{{query_type}}"
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"title": "Feedback Loop Efficacy",
+			"targets": [
+				{
+					"expr": "rugbrain_feedback_confirmed_total",
+					"legendFormat": "confirmed"
+				},
+				{
+					"expr": "rugbrain_feedback_false_positive_total",
+					"legendFormat": "false_positives"
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"title": "Alerts Dispatched",
+			"targets": [
+				{
+					"expr": "rate(rugbrain_alerts_dispatched_total[5m])",
+					"legendFormat": "{{channel}}"
+				}
+			],
+			"type": "stat"
+		},
+		{
+			"title": "Cross-Chain Detections",
+			"targets": [
+				{
+					"expr": "rate(rugbrain_cross_chain_total[1h])",
+					"legendFormat": "detections"
+				}
+			],
+			"type": "timeseries"
+		},
+		{
+			"title": "Embedding Latency (ms)",
+			"targets": [
+				{
+					"expr": "histogram_quantile(0.50, rate(rugbrain_embedding_latency_bucket[5m]))",
+					"legendFormat": "p50"
+				}
+			],
+			"type": "timeseries"
+		}
+	]
 }

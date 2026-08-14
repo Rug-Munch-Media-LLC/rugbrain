@@ -1,5 +1,5 @@
 # rmi-news-ingest.timer — News Ingest Every 15 Minutes
-# Source: /path/to/rmi-rag/systemd/rmi-news-ingest.timer
+# Source: /path/to/rugbrain/systemd/rmi-news-ingest.timer
 # Deploy: /etc/systemd/system/rmi-news-ingest.timer
 #
 # Runs rmi-news-ingest.service every 15 minutes for continuous
@@ -18,7 +18,7 @@
 
 [Unit]
 Description=RMI News Ingest — Every 15 min
-Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
 Requires=rmi-news-ingest.service
 
 [Timer]

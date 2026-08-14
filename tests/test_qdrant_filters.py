@@ -7,7 +7,7 @@ Qdrant search payloads (RRF and dense fallback), using respx mocks.
 import pytest
 import respx
 
-from rmi_rag.qdrant_store import build_qdrant_filter, build_search_filters
+from rugbrain.qdrant_store import build_qdrant_filter, build_search_filters
 
 
 class TestBuildQdrantFilter:
@@ -98,8 +98,8 @@ def _mock_hybrid_collection(respx_mock, collection="default"):
 @pytest.mark.asyncio
 async def test_hybrid_search_rrf_sends_filter(monkeypatch):
     """hybrid_search() must include the structured filter in the RRF request."""
-    import rmi_rag.qdrant_store as qdrant_store
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     async def _fake_embed_sparse(text):
         return ([5, 6], [0.9, 0.3])
@@ -134,7 +134,7 @@ async def test_hybrid_search_rrf_sends_filter(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_search_dense_fallback_sends_filter():
     """hybrid_search() must forward filters to the dense fallback path."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -164,7 +164,7 @@ async def test_hybrid_search_dense_fallback_sends_filter():
 @pytest.mark.asyncio
 async def test_hybrid_search_no_filter_omits_filter_key():
     """hybrid_search() must omit the filter key when no filters are given."""
-    from rmi_rag.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:

@@ -10,7 +10,7 @@ Detection pipeline:
   1. Scroll ``news`` points with ``published_at`` within the last N days.
   2. Flag content that matches security-incident indicators (hack, exploit,
      stolen, lost $X, rug pull, phishing, breach, drain).
-  3. Derive canonical metadata via ``rmi_rag.crypto_schema`` (attack_vector,
+  3. Derive canonical metadata via ``rugbrain.crypto_schema`` (attack_vector,
      severity, chain, amount_lost_usd, date, protocol, source_type).
   4. Dedupe with ``incident_key = sha256(protocol + date + amount)[:12]``
      against alert points already stored in ``news`` (category=alert).
@@ -42,8 +42,8 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import InfinityBGEEmbedder
-from rmi_rag.crypto_schema import (
+from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.crypto_schema import (
     detect_attack_vector,
     detect_chain,
     infer_severity_from_amount,
@@ -51,7 +51,7 @@ from rmi_rag.crypto_schema import (
     parse_amount_usd,
     parse_date,
 )
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("crypto_alert_digest")

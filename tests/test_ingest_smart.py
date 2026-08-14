@@ -1,5 +1,5 @@
 """
-Tests for rmi_rag.ingest_smart — smarter ingestion helpers.
+Tests for rugbrain.ingest_smart — smarter ingestion helpers.
 
 Covers incident-aware chunking, priority ordering, severity filtering,
 vector dedup against Qdrant (httpx MockTransport), and git freshness.
@@ -11,7 +11,7 @@ import asyncio
 
 import httpx
 
-from rmi_rag.ingest_smart import (
+from rugbrain.ingest_smart import (
     filter_by_severity,
     git_refresh,
     is_duplicate_vector,
@@ -133,7 +133,7 @@ async def test_dedup_vectors_none_embedding_not_dup():
 
 
 async def _dedup(vectors, client, collection):
-    from rmi_rag.ingest_smart import dedup_vectors
+    from rugbrain.ingest_smart import dedup_vectors
 
     return await dedup_vectors(
         vectors,

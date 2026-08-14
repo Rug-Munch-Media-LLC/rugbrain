@@ -129,7 +129,7 @@ class CheckpointStore:
 
 async def _job_security_alerts(dry_run: bool) -> dict[str, Any]:
     """Poll crypto security sources (CoinGecko/DeFiLlama/Rekt/Nitter+SearXNG)."""
-    from rmi_rag import alerts
+    from rugbrain import alerts
 
     result = await alerts.poll_once(dry_run=dry_run)
     return {"source": "security_alerts", "result": result}
@@ -137,7 +137,7 @@ async def _job_security_alerts(dry_run: bool) -> dict[str, Any]:
 
 async def _job_market_snapshot(dry_run: bool) -> dict[str, Any]:
     """Build + store the at-a-glance market snapshot (includes fear & greed)."""
-    from rmi_rag.market_snapshot import MarketSnapshotStore, build_market_snapshot
+    from rugbrain.market_snapshot import MarketSnapshotStore, build_market_snapshot
 
     snapshot = await build_market_snapshot()
     stored = False
@@ -148,8 +148,8 @@ async def _job_market_snapshot(dry_run: bool) -> dict[str, Any]:
 
 async def _job_news_crawl(dry_run: bool) -> dict[str, Any]:
     """News feeds + additional data sources (RSS/API/crawl)."""
-    from rmi_rag.sources_registry import ingest_all_sources
-    from rmi_rag.web_crawler import WebCrawler, crawl_crypto_news
+    from rugbrain.sources_registry import ingest_all_sources
+    from rugbrain.web_crawler import WebCrawler, crawl_crypto_news
 
     c = WebCrawler()
     news = await crawl_crypto_news(c)
@@ -159,14 +159,14 @@ async def _job_news_crawl(dry_run: bool) -> dict[str, Any]:
 
 async def _job_social_intel(dry_run: bool) -> dict[str, Any]:
     """X + Reddit + Farcaster social intelligence into Qdrant."""
-    from rmi_rag.social_intel import collect_social_intel
+    from rugbrain.social_intel import collect_social_intel
 
     return await collect_social_intel(dry_run=dry_run)
 
 
 async def _job_codebase_repos(dry_run: bool) -> dict[str, Any]:
     """Check GitHub for new audit reports, post-mortems, PoCs."""
-    from rmi_rag.web_crawler import WebCrawler, crawl_github_audits
+    from rugbrain.web_crawler import WebCrawler, crawl_github_audits
 
     result = await crawl_github_audits(WebCrawler())
     return {"source": "codebase_repos", "result": result}
@@ -174,8 +174,8 @@ async def _job_codebase_repos(dry_run: bool) -> dict[str, Any]:
 
 async def _job_full_recrawl(dry_run: bool) -> dict[str, Any]:
     """Full source re-crawl every 6h: news + security + social + github + sources."""
-    from rmi_rag.sources_registry import ingest_all_sources
-    from rmi_rag.web_crawler import (
+    from rugbrain.sources_registry import ingest_all_sources
+    from rugbrain.web_crawler import (
         WebCrawler,
         crawl_crypto_news,
         crawl_github_audits,

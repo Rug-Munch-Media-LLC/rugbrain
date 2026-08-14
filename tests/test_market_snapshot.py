@@ -1,10 +1,10 @@
-"""Tests for rmi_rag.market_snapshot — market state digest + ClickHouse log."""
+"""Tests for rugbrain.market_snapshot — market state digest + ClickHouse log."""
 
 from __future__ import annotations
 
 import respx
 
-from rmi_rag import market_snapshot as mod
+from rugbrain import market_snapshot as mod
 
 TICKERS_PAYLOAD = [
     {

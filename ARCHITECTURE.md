@@ -1,9 +1,9 @@
-# RugSense — Architecture
+# RugBrain — Architecture
 
 **Status:** canonical
 **Last updated:** 2026-07-31
 **Owner:** crmuncher
-**Repo:** [RugMunchMedia/rmi-rag](https://git.rugmunch.io/RugMunchMedia/rmi-rag)
+**Repo:** [RugMunchMedia/rugbrain](https://git.rugmunch.io/RugMunchMedia/rugbrain)
 
 > This document describes the RAG system **as it exists today** — what is live,
 > what is wired but idle, and what is explicitly work-in-progress. It does not
@@ -14,7 +14,7 @@
 
 ## 1. System Overview
 
-RugSense (formerly RMI RAG) is the retrieval-augmented generation layer for RugMunch Intelligence.
+RugBrain (formerly RMI RAG) is the retrieval-augmented generation layer for RugMunch Intelligence.
 It makes crypto threat knowledge **semantically searchable**: instead of
 exact-match lookups, queries are embedded into vectors and matched against a
 curated corpus of scam patterns, news, and entity intelligence. Retrieved
@@ -75,7 +75,7 @@ in `src/app/` (currently being restored — see §7).
         ┌──────────────────────────────────────────────────────┐
         │                  RETRIEVAL LAYER                      │
         │  rmi-backend  /api/v1/rag/v2/*  (search/ingest/stats)│
-        │  rmi-rag      /api/v1/rag/v2/scam-check  /api/v1/search│
+        │  rugbrain      /api/v1/rag/v2/scam-check  /api/v1/search│
         │  three-pillar: dense + sparse + entity → RRF fusion  │
         └──────────────┬───────────────────────┬───────────────┘
                        │                       │
@@ -119,7 +119,7 @@ in `src/app/` (currently being restored — see §7).
      │  rmi-backend: POST /api/v1/rag/v2/search (LIVE)       │
      │              POST /api/v1/rag/v2/ingest (LIVE)        │
      │              GET  /api/v1/rag/v2/stats (LIVE)         │
-     │  rmi-rag:     GET  /api/v1/rag/v2/scam-check (LIVE)   │
+     │  rugbrain:     GET  /api/v1/rag/v2/scam-check (LIVE)   │
      │              GET  /api/v1/search (LIVE)               │
      │              POST /api/v1/rag/investigate (WIP 500)   │
      │              POST /api/v1/rag/confidence (WIP 500)    │
@@ -158,7 +158,7 @@ in `src/app/` (currently being restored — see §7).
 
 | Component | Hostname (Docker) | Port | Purpose |
 |-----------|-------------------|------|---------|
-| rmi-rag API | `rmi-rag-api` | 8012 | FastAPI service: search, scam-check, health |
+| rugbrain API | `rugbrain-api` | 8012 | FastAPI service: search, scam-check, health |
 | Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
 | Infinity | `infinity-rag` | 8001 | Embedding/reranking inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3) |
@@ -350,7 +350,7 @@ the API runs open (dev mode — a startup warning is logged).
 | GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `infinity:BAAI/bge-m3`) |
 | POST | `/api/v1/rag/v2/bulk-ingest` | Batch ingest | max 500 items/call into one collection |
 
-### 4.2 rmi-rag service (port 8012)
+### 4.2 rugbrain service (port 8012)
 
 | Method | Path | Status | Purpose |
 |--------|------|--------|---------|
@@ -448,7 +448,7 @@ snapshot backup now uploads to B2 (`rmi-rag-permanence`) via b2sdk.
 | Qdrant/Redis health | `GET /health` | LIVE (per-request probes + startup probes) |
 | Subscriber/poller state | `GET /health` → `subscriber_stats`, `poller_stats` (`running`, `connected`, `ingested_count`) | LIVE |
 | Collection sizes + embedder backend | `GET /api/v1/rag/v2/stats` | LIVE |
-| Collection sizes, ingest rate, pattern mix | Grafana dashboard `grafana/rag-dashboard.json` (Prometheus `rmi_rag_*` metrics) | PARTIAL — metrics not yet fully exported |
+| Collection sizes, ingest rate, pattern mix | Grafana dashboard `grafana/rag-dashboard.json` (Prometheus `rugbrain_*` metrics) | PARTIAL — metrics not yet fully exported |
 | Queue depth (`rmi:rag:ingest`, `rmi:rag:findings_queue`) | redis-cli / Redis dashboard | manual |
 | Embedding/retrieval latency | `metrics_api.py` → `/api/v1/rag/metrics` | ⚠️ defined, not mounted |
 
@@ -494,7 +494,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    `research`, `scams` don't exist in Qdrant; must be created at 1024-dim.
 3. **Scanner ingestion idle** — subscriber/poller running but nothing
    publishes to Redis queues (`ingested_count: 0`).
-4. **rmi-rag-api 500s** — `/api/v1/rag/investigate` and
+4. **rugbrain-api 500s** — `/api/v1/rag/investigate` and
    `/api/v1/rag/confidence` fail with `ModuleNotFoundError: No module named
    'app'`; the `src/app/` package (confidence, cross_chain,
    deployer_reputation, investigation_narratives) is being restored into the
@@ -525,7 +525,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 - [x] Fix Qdrant nightly backup (R2→B2 migration); verify snapshot restore
 - [ ] Restore `src/app/` packaging → unblock `/investigate` + `/confidence`
 - [ ] Consolidate stores: one canonical collection set across
-      rmi-backend and rmi-rag; retire stale seed paths
+      rmi-backend and rugbrain; retire stale seed paths
 
 **P1 — Retrieval quality**
 - [ ] BM25 sparse: verify SPLADE+BM25 wiring end-to-end in live search paths
@@ -558,7 +558,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 | `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `bge-m3` / `1.1` | Embedding version stamp (ADR-0007) |
 | `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
 | `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |
-| `RMI_RAG_API_KEY` | (unset → open) | X-API-Key auth for the rmi-rag API |
+| `RMI_RAG_API_KEY` | (unset → open) | X-API-Key auth for the rugbrain API |
 | `B2_APPLICATION_KEY_ID` / `B2_APPLICATION_KEY` / `B2_BUCKET_NAME` | — / `rmi-rag-permanence` | B2 permanence credentials |
 | `RAG_HF_MIRROR` / `RAG_HF_REPO` | `false` | Opt-in HuggingFace mirror |
 

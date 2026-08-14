@@ -24,7 +24,7 @@ Data lifecycle this serves:
     Cold (B2):     everything, forever, nightly snapshots
     Pruning:       documents older than 90 days are moved to B2 only
                    (kept in Qdrant if high severity) — see
-                   ``src/rmi_rag/qdrant_store.py::prune_old_documents``
+                   ``src/rugbrain/qdrant_store.py::prune_old_documents``
 
 Usage:
     python scripts/b2_permanence.py --dry-run
@@ -80,7 +80,7 @@ from b2_common import (
 
 logger = logging.getLogger("b2_permanence")
 
-# Qdrant fallback chain (mirrors src/rmi_rag/qdrant_store.py)
+# Qdrant fallback chain (mirrors src/rugbrain/qdrant_store.py)
 DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333")
 DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")
 
@@ -292,7 +292,7 @@ def snapshot_collection(
         "format": fmt,
         "object_key": object_key,
         "point_count": point_count,
-        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,
+        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,  # type: ignore[possibly-undefined]
         "bytes_stored": upload_path.stat().st_size,
         "compression": "zstd-19" if fmt == "ndjson" else "parquet-zstd-19",
         "encrypted": False,  # SSE-B2 encrypts at rest; no client-side encryption

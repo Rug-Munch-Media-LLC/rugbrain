@@ -1,7 +1,7 @@
-# RugSense — Product Charter
+# RugBrain — Product Charter
 
-**Product:** RugSense (formerly RMI RAG) Permanence Layer
-**Repo:** git.rugmunch.io/RugMunchMedia/rmi-rag
+**Product:** RugBrain (formerly RMI RAG) Permanence Layer
+**Repo:** git.rugmunch.io/RugMunchMedia/rugbrain
 **Status:** Active development
 
 ## Problem

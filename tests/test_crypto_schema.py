@@ -1,8 +1,8 @@
-"""Unit tests for rmi_rag.crypto_schema — canonical crypto metadata helpers."""
+"""Unit tests for rugbrain.crypto_schema — canonical crypto metadata helpers."""
 
 import pytest
 
-from rmi_rag.crypto_schema import (
+from rugbrain.crypto_schema import (
     detect_attack_vector,
     detect_chain,
     enrich_payload,

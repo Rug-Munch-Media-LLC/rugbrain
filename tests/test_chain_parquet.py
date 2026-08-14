@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from rmi_rag.chain_parquet import (
+from rugbrain.chain_parquet import (
     build_intent_sql,
     chain_prefix,
     detect_chain_data_intent,
@@ -25,7 +25,7 @@ from rmi_rag.chain_parquet import (
     extract_date_from_query,
     run_chain_query,
 )
-from rmi_rag.parquet_analytics import validate_read_only_sql
+from rugbrain.parquet_analytics import validate_read_only_sql
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

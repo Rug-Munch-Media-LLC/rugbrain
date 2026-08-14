@@ -1,6 +1,6 @@
 # RMI RAG — Crypto Security Data Strategy
 
-**Status:** implementation spec (v1) · **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rmi-rag`
+**Status:** implementation spec (v1) · **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rugbrain`
 **Scope:** pure design/planning. This file is the contract implementing agents follow for data ingestion. No code was changed to produce it.
 
 > **How to use this document**
@@ -125,7 +125,7 @@ This is what keeps "most knowledgeable in existence" and "doesn't bog down the s
 ### 4.2 Knowledge layer (`threat_intel`, `hacks`) — dense + sparse
 - Doc per weakness / PoC / hack report / pattern.
 - Vector: dense 1024d BGE-M3 (L2-normalized, via Ollama `/api/embed`, existing batch helper `_embed_batch`: 20 short / 8 long) **+** BM25 sparse.
-- Chunking: reuse `_chunk_text` (2000 chars, 100 overlap) from `seed_qdrant_collections.py` for articles >2000 chars; Solidity PoCs use `src/rmi_rag/solidity_chunker.py`. Chunks share `parent_doc_id` + `chunk_index` in payload.
+- Chunking: reuse `_chunk_text` (2000 chars, 100 overlap) from `seed_qdrant_collections.py` for articles >2000 chars; Solidity PoCs use `src/rugbrain/solidity_chunker.py`. Chunks share `parent_doc_id` + `chunk_index` in payload.
 
 ---
 
@@ -153,7 +153,7 @@ All scripts: `--dry-run`, `--limit`, `--source <name>` flags; idempotent (skip e
 |---|---|---|
 | Daily 04:00 | `ingest_scam_indicators.py` (existing MetaMask/ScamSniffer fetch) | Diff: new domains/addresses upserted; **entries no longer in the source snapshot are deleted** (list is a full snapshot — stale entries are false positives). Redis sets rebuilt in place. |
 | 15-min | `rmi-news-ingest` (exists) | News RSS → `news`. Do not touch beyond adding the flock fix (TODO). |
-| Weekly Mon 03:00 | `rmi-rag-ingest` (exists, repointed to new scripts) | Rekt leaderboard refresh (new entries), SlowMist blockchainSecurityDB pull, DeFiHackLabs `git pull`, Immunefi best-effort. |
+| Weekly Mon 03:00 | `rugbrain-ingest` (exists, repointed to new scripts) | Rekt leaderboard refresh (new entries), SlowMist blockchainSecurityDB pull, DeFiHackLabs `git pull`, Immunefi best-effort. |
 | Weekly Mon 03:30 | `rmi-rag-permanence-restore` | Restore test to a scratch collection → verify counts → drop (fleet standard). |
 
 ---
@@ -331,9 +331,9 @@ Daily × 7 · weekly (last of each week) × 4 · monthly × forever. Enforced by
 | `rmi-news-ingest.timer` (exists) | 15-min | news RSS → `news` | flock (fix the pileup — TODO HIGH) |
 | `rmi-rag-permanence.timer` (new) | daily 03:30 | §10 snapshots → B2 + lifecycle sweep | flock |
 | `rmi-scam-refresh.timer` (new) | daily 04:00 | `ingest_scam_indicators.py` diff | flock |
-| `rmi-rag-ingest.timer` (exists, repoint) | Mon 03:00 | knowledge refresh (Rekt, SlowMist, DeFiHackLabs, Immunefi) | flock |
+| `rugbrain-ingest.timer` (exists, repoint) | Mon 03:00 | knowledge refresh (Rekt, SlowMist, DeFiHackLabs, Immunefi) | flock |
 
-All ingest services: `Type=oneshot`, `TimeoutStartSec` generous, `ExecStart` wrapped in `flock -n /run/rmi-rag-{job}.lock` — a missed run is better than two overlapping runs saturating Ollama (the exact failure mode documented in TODO).
+All ingest services: `Type=oneshot`, `TimeoutStartSec` generous, `ExecStart` wrapped in `flock -n /run/rugbrain-{job}.lock` — a missed run is better than two overlapping runs saturating Ollama (the exact failure mode documented in TODO).
 
 ---
 

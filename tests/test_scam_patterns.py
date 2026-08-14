@@ -7,7 +7,7 @@ patterns without any external services (pure function tests).
 
 from __future__ import annotations
 
-from rmi_rag.scam_patterns import (
+from rugbrain.scam_patterns import (
     build_token_scam_profile,
     detect_attack_vectors,
     detect_indicators,

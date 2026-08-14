@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import respx
 
-from rmi_rag.cross_reference import (
+from rugbrain.cross_reference import (
     _funds_from_metadata,
     build_narrative,
     find_similar_historical_tokens,
@@ -76,13 +76,13 @@ async def test_find_similar_historical_tokens_qdrant_fallback(monkeypatch):
     """LanceDB is unavailable → Qdrant fallback path (mocked via respx)."""
     # Force the Qdrant fallback path deterministically instead of assuming
     # whether lancedb happens to be installed in the current environment.
-    monkeypatch.setattr("rmi_rag.cross_reference._import_lance_store", lambda: None)
+    monkeypatch.setattr("rugbrain.cross_reference._import_lance_store", lambda: None)
 
     # Mock the embedding backend so no Infinity/OpenRouter call escapes.
     async def fake_embedding(text: str) -> list[float]:
         return [0.1] * 1024
 
-    monkeypatch.setattr("rmi_rag.embeddings.get_embedding", fake_embedding)
+    monkeypatch.setattr("rugbrain.embeddings.get_embedding", fake_embedding)
 
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
         respx_mock.get("/collections/threat_intel").respond(
@@ -126,7 +126,7 @@ async def test_find_similar_historical_tokens_qdrant_fallback(monkeypatch):
 
 
 async def test_cross_reference_token_builds_narrative():
-    import rmi_rag.cross_reference as cr
+    import rugbrain.cross_reference as cr
 
     async def fake_similar(address: str, chain: str, limit: int) -> list[dict]:
         return [

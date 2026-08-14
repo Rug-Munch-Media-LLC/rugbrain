@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Execute an RMI Codebase MCP tool and print the JSON result to stdout.
 
-Spawned by ``rmi_rag.mcp_bridge`` as a subprocess under an interpreter that
+Spawned by ``rugbrain.mcp_bridge`` as a subprocess under an interpreter that
 has ``fastmcp`` + ``chromadb`` installed (see ``RMI_MCP_PYTHON``). The runner
 imports the MCP server modules from ``RMI_MCP_DIR``, calls the requested tool
 with JSON kwargs from argv, and prints ``json.dumps(result, default=str)`` to

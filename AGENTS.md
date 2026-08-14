@@ -14,7 +14,7 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 `backend` · language=Python 3.12
 
 ## Where It Lives
-- Source: `https://github.com/RugMunchMedia/rmi-rag`
+- Source: `https://github.com/RugMunchMedia/rugbrain`
 
 ## Built With
 - Standards: See the project documentation for development standards

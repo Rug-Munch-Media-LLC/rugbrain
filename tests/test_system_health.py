@@ -1,4 +1,4 @@
-"""Tests for rmi_rag.system_health — aggregated health dashboard.
+"""Tests for rugbrain.system_health — aggregated health dashboard.
 
 Covers probe degradation, SQL builders, zombie detection, and the full
 aggregation with all external services mocked.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-import rmi_rag.system_health as sh
+import rugbrain.system_health as sh
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQL builders

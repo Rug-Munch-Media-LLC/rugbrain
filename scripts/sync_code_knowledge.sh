@@ -6,7 +6,7 @@
 #   1. Refresh the RMI Codebase MCP index (rmi_refresh) so codebase search
 #      reflects recent repo changes.
 #   2. Pull fresh security patterns from the MCP ChromaDB into the RAG
-#      `coding_knowledge` collection (via rmi_rag.mcp_bridge sync).
+#      `coding_knowledge` collection (via rugbrain.mcp_bridge sync).
 #   3. Re-run the three coding-knowledge ingesters (Solidity / Rust-Solana /
 #      Move-Cairo) — deterministic point IDs make re-runs overwrite in place.
 #   4. Verify end-to-end with verify_coding_knowledge.py.
@@ -17,7 +17,7 @@
 #             + MCP patterns only, which is fast and offline-friendly)
 #
 # Cron (daily 03:15 UTC):
-#   15 3 * * *  /srv/work/repos/rmi-rag/scripts/sync_code_knowledge.sh >> /var/log/rmi-rag/sync_code_knowledge.log 2>&1
+#   15 3 * * *  /srv/work/repos/rugbrain/scripts/sync_code_knowledge.sh >> /var/log/rugbrain/sync_code_knowledge.log 2>&1
 #
 # Requires (host):
 #   - Qdrant at QDRANT_URL (default http://localhost:6333)
@@ -68,10 +68,10 @@ step() { log "── $1"; }
 # ── 1. Refresh the Codebase MCP index ────────────────────────────────────
 step "refresh RMI Codebase MCP index (rmi_refresh)"
 if [ -d "$RMI_MCP_DIR" ] && [ -x "$(dirname "$RMI_MCP_PYTHON")/python" ]; then
-  "$PYTHON" -m rmi_rag.mcp_bridge status >/dev/null 2>&1 &&
+  "$PYTHON" -m rugbrain.mcp_bridge status >/dev/null 2>&1 &&
     "$PYTHON" - <<'PY'
 import asyncio, json, sys
-from rmi_rag.mcp_bridge import _call_mcp
+from rugbrain.mcp_bridge import _call_mcp
 
 async def main() -> int:
     try:
@@ -91,7 +91,7 @@ fi
 # ── 2. Pull MCP security patterns into RAG coding_knowledge ─────────────
 step "pull MCP security patterns into coding_knowledge"
 wait_infinity
-"$PYTHON" -m rmi_rag.mcp_bridge sync || log "WARN: mcp pattern sync returned non-zero"
+"$PYTHON" -m rugbrain.mcp_bridge sync || log "WARN: mcp pattern sync returned non-zero"
 
 # ── 3. Re-run coding-knowledge ingesters (idempotent) ────────────────────
 step "re-run coding-knowledge ingesters"

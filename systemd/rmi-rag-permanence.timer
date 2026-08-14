@@ -1,5 +1,5 @@
 # rmi-rag-permanence.timer — Nightly RAG permanence sync to B2
-# Source: /path/to/rmi-rag/systemd/rmi-rag-permanence.timer
+# Source: /path/to/rugbrain/systemd/rmi-rag-permanence.timer
 # Deploy: /etc/systemd/system/rmi-rag-permanence.timer
 #
 # Triggers rmi-rag-permanence.service nightly at 03:00 UTC with up to
@@ -19,7 +19,7 @@
 
 [Unit]
 Description=RMI RAG B2 Permanence — Nightly Qdrant Snapshot to B2
-Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
 Requires=rmi-rag-permanence.service
 
 [Timer]

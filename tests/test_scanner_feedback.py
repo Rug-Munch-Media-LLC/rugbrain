@@ -1,8 +1,8 @@
-"""Tests for rmi_rag.scanner_feedback — scanner-to-RAG feedback loop."""
+"""Tests for rugbrain.scanner_feedback — scanner-to-RAG feedback loop."""
 
 from __future__ import annotations
 
-from rmi_rag import scanner_feedback as mod
+from rugbrain import scanner_feedback as mod
 
 
 def test_feedback_collection_default():

@@ -1,4 +1,4 @@
-name: rmi-rag CI
+name: rugbrain CI
 on:
   push:
     branches: [main, feat/*]

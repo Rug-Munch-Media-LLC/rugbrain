@@ -7,7 +7,7 @@ and the full orchestrator. Pure-function tests (no external services).
 
 from __future__ import annotations
 
-from rmi_rag.pattern_matching import (
+from rugbrain.pattern_matching import (
     match_bytecode,
     match_deployer_behavior,
     match_token_economics,

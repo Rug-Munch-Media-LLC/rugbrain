@@ -1,10 +1,10 @@
 <!--
 SPDX-License-Identifier: MIT
 Copyright (c) 2026 Rug Munch Media LLC
-Part of RugSense — https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Part of RugBrain — https://git.rugmunch.io/RugMunchMedia/rugbrain
 -->
 
-# Contributing to RugSense
+# Contributing to RugBrain
 
 > Qdrant collections, embeddings, ingestion scripts. Python 3.12.
 
@@ -17,7 +17,7 @@ git checkout -b feat/my-change
 make lint test            # pre-push gate
 make commit               # conventional commits via commitizen
 git push origin feat/my-change
-# Open a PR on Forgejo (git.rugmunch.io/RugMunchMedia/rmi-rag)
+# Open a PR on Forgejo (git.rugmunch.io/RugMunchMedia/rugbrain)
 ```
 
 ## Repository Model
@@ -53,7 +53,7 @@ Allowed types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`,
 
 | Remote      | URL                                                       | Role                          |
 |-------------|-----------------------------------------------------------|-------------------------------|
-| `origin`    | `ssh://git@git.rugmunch.io:2222/RugMunchMedia/rmi-rag.git`| Canonical — Forgejo.          |
+| `origin`    | `ssh://git@git.rugmunch.io:2222/RugMunchMedia/rugbrain.git`| Canonical — Forgejo.          |
 
 ## Pre-Push Checklist
 

@@ -47,7 +47,7 @@ import httpx
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ingest_common import embed_many
 
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_stablecoin_market")

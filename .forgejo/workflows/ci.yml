@@ -104,7 +104,7 @@ jobs:
         with:
           files: coverage.xml
           flags: unittests
-          name: rmi-rag
+          name: rugbrain
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 

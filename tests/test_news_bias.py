@@ -7,8 +7,8 @@ news_sources.py source-credibility database.
 
 from __future__ import annotations
 
-from rmi_rag import news_clustering as nc
-from rmi_rag.news_sources import EXTENDED_SOURCE_LEANINGS
+from rugbrain import news_clustering as nc
+from rugbrain.news_sources import EXTENDED_SOURCE_LEANINGS
 
 
 def _articles():

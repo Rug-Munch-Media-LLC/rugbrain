@@ -107,7 +107,7 @@ async def test_run_due_filters_by_names(monkeypatch):
 
 
 async def test_job_market_snapshot_wiring(monkeypatch):
-    from rmi_rag import market_snapshot as ms
+    from rugbrain import market_snapshot as ms
 
     async def fake_build(client=None):
         return {

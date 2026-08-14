@@ -1,10 +1,10 @@
-"""Tests for rmi_rag.market_data — CoinPaprika + LunarCrush enrichment."""
+"""Tests for rugbrain.market_data — CoinPaprika + LunarCrush enrichment."""
 
 from __future__ import annotations
 
 import respx
 
-from rmi_rag import market_data as mod
+from rugbrain import market_data as mod
 
 TICKERS_PAYLOAD = [
     {

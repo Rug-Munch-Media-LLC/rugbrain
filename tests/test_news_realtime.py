@@ -1,4 +1,4 @@
-"""Tests for real-time news story updates (rmi_rag.news_realtime)."""
+"""Tests for real-time news story updates (rugbrain.news_realtime)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,8 @@ import asyncio
 
 import pytest
 
-from rmi_rag import news_realtime as nrt
-from rmi_rag.news_clustering import Story, StorySource
-
+from rugbrain import news_realtime as nrt
+from rugbrain.news_clustering import Story, StorySource
 
 # ── publish_story_update ──────────────────────────────────────────────────
 
@@ -33,7 +32,7 @@ async def test_publish_story_update_success(monkeypatch):
             return None
 
     captured: dict = {}
-    import rmi_rag.alerts as alerts
+    import rugbrain.alerts as alerts
 
     class FakeAlertBus(FakeBus):
         def __init__(self, subject=None):
@@ -64,7 +63,7 @@ async def test_publish_story_update_fails_open(monkeypatch):
         async def close(self):
             return None
 
-    import rmi_rag.alerts as alerts
+    import rugbrain.alerts as alerts
 
     monkeypatch.setattr(alerts, "AlertBus", BoomBus)
     story = Story(id="s1", title="Ethereum ETF approved", sources=[])
@@ -106,7 +105,7 @@ async def test_process_news_batch_creates_story(monkeypatch):
         return None
 
     async def fake_cluster_articles(articles, threshold=0.72):
-        from rmi_rag.news_clustering import build_story
+        from rugbrain.news_clustering import build_story
 
         return [build_story(articles)]
 
@@ -120,8 +119,8 @@ async def test_process_news_batch_creates_story(monkeypatch):
     async def fake_publish(story):
         return True
 
-    import rmi_rag.news_realtime as mod
-    import rmi_rag.news_ranking as rk
+    import rugbrain.news_ranking as rk
+    import rugbrain.news_realtime as mod
 
     monkeypatch.setattr(mod, "find_matching_story", fake_find_matching)
     monkeypatch.setattr(mod, "cluster_articles", fake_cluster_articles)
@@ -134,7 +133,7 @@ async def test_process_news_batch_creates_story(monkeypatch):
     async def fake_get_embedding(text):
         return [1.0] * 4
 
-    import rmi_rag.embeddings as emb
+    import rugbrain.embeddings as emb
 
     monkeypatch.setattr(emb, "get_embedding", fake_get_embedding)
 
@@ -177,7 +176,7 @@ async def test_process_news_batch_extends_existing(monkeypatch):
     async def fake_publish(story):
         return True
 
-    import rmi_rag.news_realtime as mod
+    import rugbrain.news_realtime as mod
 
     monkeypatch.setattr(mod, "find_matching_story", fake_find_matching)
     monkeypatch.setattr(mod, "rank_story", fake_rank_story)
@@ -187,7 +186,7 @@ async def test_process_news_batch_extends_existing(monkeypatch):
     async def fake_get_embedding(text):
         return [1.0] * 4
 
-    import rmi_rag.embeddings as emb
+    import rugbrain.embeddings as emb
 
     monkeypatch.setattr(emb, "get_embedding", fake_get_embedding)
 

@@ -1,5 +1,5 @@
 # rmi-news-ingest — News RSS Ingest + Embed → Qdrant (15-min)
-# Source: /path/to/rmi-rag/systemd/rmi-news-ingest.service
+# Source: /path/to/rugbrain/systemd/rmi-news-ingest.service
 # Deploy: /etc/systemd/system/rmi-news-ingest.service
 #
 # Runs every 15 minutes via rmi-news-ingest.timer:
@@ -21,7 +21,7 @@
 
 [Unit]
 Description=RMI News RSS Ingest + Embed to Qdrant (Every 15 min)
-Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
 After=network-online.target
 Wants=network-online.target
 
@@ -29,8 +29,8 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
-WorkingDirectory=/path/to/rmi-rag
-ExecStart=/bin/bash /path/to/rmi-rag/scripts/rmi-news-ingest.sh
+WorkingDirectory=/path/to/rugbrain
+ExecStart=/bin/bash /path/to/rugbrain/scripts/rmi-news-ingest.sh
 TimeoutStartSec=1800
 
 # Security hardening

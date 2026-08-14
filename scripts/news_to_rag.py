@@ -22,7 +22,7 @@ Qdrant named-vector support:
   upsert against a named-vector collection is silently accepted by Qdrant
   (HTTP 200) but the point is NOT stored. This script probes the
   collection config and sends the named `{"dense": ...}` vector format so
-  points actually persist (matching rmi_rag.qdrant_store behavior).
+  points actually persist (matching rugbrain.qdrant_store behavior).
 
 Bounded runs: by default each run embeds at most 300 articles
 (newest-first) so the 15-minute cron makes steady progress without
@@ -61,7 +61,7 @@ CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 EMBED_DIM = 1024
 QDRANT_COLLECTION = "news"
-UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rmi_rag.qdrant_store._to_uuid
+UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rugbrain.qdrant_store._to_uuid
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "news_to_rag.lock")
 _ORDER_CLAUSES = {"asc": "ORDER BY published_at ASC", "desc": "ORDER BY published_at DESC"}
 _named_cache: dict[str, bool] = {}
@@ -120,7 +120,7 @@ def _rate_article_payload(article: dict, text: str) -> tuple[dict, int]:
     ingestion never breaks on the enrichment step.
     """
     try:
-        from rmi_rag.news_rating import rate_article
+        from rugbrain.news_rating import rate_article
 
         rating = rate_article(
             {
@@ -552,7 +552,7 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                                     "tokens_mentioned": article.get("tokens_mentioned") or [],
                                     "news_id": news_id,
                                     # Ground News-style multi-axis rating
-                                    # (see rmi_rag.news_rating). quality_score
+                                    # (see rugbrain.news_rating). quality_score
                                     # mirrors composite for Qdrant range filters.
                                     "rating": rating_payload,
                                     "quality_score": quality_score,

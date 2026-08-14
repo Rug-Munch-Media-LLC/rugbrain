@@ -32,12 +32,12 @@ def sample_docs():
 
 def test_reranker_module_imports():
     """The reranker module must import cleanly (no hard deps at import time)."""
-    import rmi_rag.reranker  # noqa: F401
+    import rugbrain.reranker  # noqa: F401
 
 
 def test_rerank_returns_top_k_sorted():
     """ST backend: returns top_k docs sorted by cross score, with metadata keys."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
     reranker._st_loaded = True
@@ -81,7 +81,7 @@ def test_rerank_returns_top_k_sorted():
 
 def test_rerank_graceful_no_backend():
     """No backend available: returns docs sorted by original score, never raises."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
     reranker._st_load_failed = True
@@ -106,7 +106,7 @@ def test_rerank_graceful_no_backend():
 
 def test_rerank_empty_documents():
     """Empty candidate list returns empty list."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
 
@@ -118,7 +118,7 @@ def test_rerank_empty_documents():
 
 def test_infinity_backend_preferred_when_available():
     """When Infinity has a reranker model, /rerank is used."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=True)
 
@@ -150,7 +150,7 @@ def test_infinity_backend_preferred_when_available():
 
 def test_infinity_failure_falls_back_to_st():
     """Infinity /rerank failure → sentence-transformers fallback."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=True)
     reranker._st_loaded = True
@@ -186,7 +186,7 @@ def test_infinity_failure_falls_back_to_st():
 
 def test_health_check_shape():
     """health_check returns backend state metadata."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
     hc = reranker.health_check()
@@ -199,7 +199,7 @@ def test_health_check_shape():
 
 def test_singleton():
     """get_reranker returns the same instance."""
-    from rmi_rag.reranker import get_reranker
+    from rugbrain.reranker import get_reranker
 
     async def run():
         a = await get_reranker()
@@ -214,7 +214,7 @@ def test_search_endpoint_signature_has_rerank_param():
     """/api/v1/search accepts the new rerank query param."""
     import inspect
 
-    from rmi_rag.endpoints import search_threat_intel
+    from rugbrain.endpoints import search_threat_intel
 
     sig = inspect.signature(search_threat_intel)
     assert "rerank" in sig.parameters

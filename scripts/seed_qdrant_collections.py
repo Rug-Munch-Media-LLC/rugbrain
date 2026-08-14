@@ -171,7 +171,7 @@ async def _upsert(
     severity: str = "medium",
     chain: str = "",
 ) -> bool:
-    """Upsert a single point into Qdrant (payload format matches rmi_rag)."""
+    """Upsert a single point into Qdrant (payload format matches rugbrain)."""
     point_id = _to_uuid(doc_id)
     payload = {
         "points": [

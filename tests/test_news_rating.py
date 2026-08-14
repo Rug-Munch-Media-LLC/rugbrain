@@ -2,8 +2,8 @@
 
 import pytest
 
-from rmi_rag import news_rating as nr
-from rmi_rag.ratings import quality_multiplier, rating_multiplier
+from rugbrain import news_rating as nr
+from rugbrain.ratings import quality_multiplier, rating_multiplier
 
 
 def _factual_text() -> str:
@@ -304,7 +304,7 @@ def test_rating_multiplier_applies_quality():
 
 
 def test_apply_rating_boosts_uses_quality():
-    from rmi_rag.ratings import apply_rating_boosts
+    from rugbrain.ratings import apply_rating_boosts
 
     doc = {
         "id": "1",

@@ -18,7 +18,7 @@ Target collections (one per knowledge type):
                              attack-surface notes.
                              Sources: SlowMist Knowledge-Base, SWC Registry.
 
-Each chunk carries canonical metadata (see rmi_rag.crypto_schema):
+Each chunk carries canonical metadata (see rugbrain.crypto_schema):
 source, date (ISO + date_ts), severity, protocol, chain, attack_vector,
 amount_lost_usd, source_url — plus a short ``title``.
 
@@ -64,7 +64,7 @@ from typing import Any
 import httpx
 import numpy as np
 
-from rmi_rag.ingest_smart import (
+from rugbrain.ingest_smart import (
     dedup_vectors,
     filter_by_severity,
     git_refresh,
@@ -113,7 +113,7 @@ SOURCE_COLLECTIONS: dict[str, str] = {
 # Chunk deduplication: skip chunks whose top Qdrant hit scores >= this.
 DEDUP_THRESHOLD_DEFAULT = 0.95
 
-# ── Controlled vocabulary (mirrors rmi_rag.crypto_schema) ──────────────
+# ── Controlled vocabulary (mirrors rugbrain.crypto_schema) ──────────────
 
 ATTACK_VECTORS = (
     "reentrancy",

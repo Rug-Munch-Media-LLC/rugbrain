@@ -1002,7 +1002,7 @@ SECURITY_PATTERNS: list[dict[str, Any]] = [
 
 # A short doc per SWC-100..136 (title + canonical vector/severity) so the
 # contract_security collection has full SWC coverage even if the SWC registry
-# fetch is rate-limited. Values come from rmi_rag.crypto_schema.
+# fetch is rate-limited. Values come from rugbrain.crypto_schema.
 SWC_FALLBACK_TITLES: dict[str, str] = {
     "SWC-100": "Function Default Visibility",
     "SWC-101": "Integer Overflow and Underflow",

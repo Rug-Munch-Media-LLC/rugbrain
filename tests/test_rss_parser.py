@@ -1,8 +1,8 @@
-"""Tests for rmi_rag.rss_parser — minimal RSS 2.0 / Atom parser."""
+"""Tests for rugbrain.rss_parser — minimal RSS 2.0 / Atom parser."""
 
 from __future__ import annotations
 
-from rmi_rag.rss_parser import parse_feed, parse_rss
+from rugbrain.rss_parser import parse_feed, parse_rss
 
 RSS_XML = """<?xml version="1.0"?>
 <rss version="2.0"><channel>

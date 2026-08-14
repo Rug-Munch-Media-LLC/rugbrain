@@ -1,10 +1,10 @@
-"""Tests for rmi_rag.sources_registry — additional data source pipelines."""
+"""Tests for rugbrain.sources_registry — additional data source pipelines."""
 
 from __future__ import annotations
 
 import respx
 
-from rmi_rag import sources_registry as mod
+from rugbrain import sources_registry as mod
 
 
 def test_all_requested_sources_present():

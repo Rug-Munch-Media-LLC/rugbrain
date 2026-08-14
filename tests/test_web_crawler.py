@@ -1,4 +1,4 @@
-"""Tests for rmi_rag.web_crawler — crawl4ai integration + polite crawling."""
+"""Tests for rugbrain.web_crawler — crawl4ai integration + polite crawling."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import time
 import httpx
 import respx
 
-from rmi_rag import web_crawler as mod
+from rugbrain import web_crawler as mod
 
 # ── Politeness helpers ───────────────────────────────────────────────────
 

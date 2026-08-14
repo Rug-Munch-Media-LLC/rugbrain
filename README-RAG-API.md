@@ -1,6 +1,6 @@
-# RugSense API — Shared Threat Intelligence
+# RugBrain API — Shared Threat Intelligence
 
-RugSense (formerly RMI-RAG) provides semantic search and scam detection across
+RugBrain (formerly RMI-RAG) provides semantic search and scam detection across
 the RugMunch fleet. All RugMunch apps can query it for token safety, known
 scam patterns, and threat intelligence.
 
@@ -8,9 +8,9 @@ scam patterns, and threat intelligence.
 
 | Environment | URL |
 |-------------|-----|
-| Production  | `https://rmi-rag.rugmunch.io/api/v1` |
+| Production  | `https://rugbrain.rugmunch.io/api/v1` |
 | Local       | `http://localhost:8012/api/v1` |
-| Docker      | `http://rmi-rag:8012/api/v1` |
+| Docker      | `http://rugbrain:8012/api/v1` |
 
 ## Authentication
 
@@ -109,7 +109,7 @@ import httpx
 
 async with httpx.AsyncClient(timeout=5) as client:
     resp = await client.get(
-        "http://rmi-rag:8012/api/v1/rag/v2/scam-check",
+        "http://rugbrain:8012/api/v1/rag/v2/scam-check",
         params={"address": "0x...", "chain": "ethereum", "limit": 5},
     )
     if resp.status_code == 200:
@@ -127,7 +127,7 @@ curl -s "http://localhost:8012/api/v1/rag/v2/scam-check?address=0x...&chain=ethe
 
 ```rust
 let resp = reqwest::get(
-    "http://rmi-rag:8012/api/v1/rag/v2/scam-check?address=0x...&chain=ethereum"
+    "http://rugbrain:8012/api/v1/rag/v2/scam-check?address=0x...&chain=ethereum"
 ).await?.json::<serde_json::Value>().await?;
 ```
 
@@ -135,7 +135,7 @@ let resp = reqwest::get(
 
 ```typescript
 const resp = await fetch(
-  "http://rmi-rag:8012/api/v1/rag/v2/scam-check?address=0x...&chain=ethereum"
+  "http://rugbrain:8012/api/v1/rag/v2/scam-check?address=0x...&chain=ethereum"
 );
 const data = await resp.json();
 console.log(data.scam_risk);
@@ -155,7 +155,7 @@ console.log(data.scam_risk);
 
 ```
 ┌──────────┐   HTTP    ┌──────────────────────────────────────┐
-│  Client  │ ────────▶ │  rmi-rag (FastAPI, port 8012)       │
+│  Client  │ ────────▶ │  rugbrain (FastAPI, port 8012)       │
 │  App     │           │                                      │
 └──────────┘           │  ┌────────┐  ┌──────────────────┐   │
                        │  │ Qdrant │  │ Infinity Embed │   │

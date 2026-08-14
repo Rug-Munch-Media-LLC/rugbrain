@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-import rmi_rag.fear_index as fi
+import rugbrain.fear_index as fi
 
 # ═══════════════════════════════════════════════════════════════════════
 # Classification + composite
@@ -153,7 +153,7 @@ async def test_fetch_news_sentiment_aggregates(monkeypatch):
                 None,
             )
 
-    import rmi_rag.qdrant_store as qs
+    import rugbrain.qdrant_store as qs
 
     monkeypatch.setattr(qs, "QdrantVectorStore", FakeStore)
     # (0.8 + -0.2 + 0.0) / 3 = 0.2 → (0.2 + 1) / 2 * 100 = 60

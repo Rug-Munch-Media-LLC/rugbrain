@@ -12,7 +12,7 @@
 #
 # Scheduled via crontab (see below) or a systemd timer:
 #
-#  30 */6 * * * /bin/bash /srv/work/repos/rmi-rag/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
+#  30 */6 * * * /bin/bash /srv/work/repos/rugbrain/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
 #
 # No secrets: reads QDRANT_URL / INFINITY_URL from env or defaults.
 set -euo pipefail
@@ -26,7 +26,7 @@ if ! flock -n 200; then
 fi
 trap 'flock -u 200 2>/dev/null || true' EXIT
 
-RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
+RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rugbrain}"
 PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }

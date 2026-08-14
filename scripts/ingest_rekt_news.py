@@ -46,8 +46,8 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import InfinityBGEEmbedder
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_rekt")

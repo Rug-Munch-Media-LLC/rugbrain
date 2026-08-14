@@ -1,29 +1,29 @@
-# rmi-rag — RAG API Server
-# Source: /path/to/rmi-rag/systemd/rmi-rag.service
-# Deploy: /etc/systemd/system/rmi-rag.service
+# rugbrain — RAG API Server
+# Source: /path/to/rugbrain/systemd/rugbrain.service
+# Deploy: /etc/systemd/system/rugbrain.service
 #
-# Manages the rmi-rag FastAPI server via docker compose.
+# Manages the rugbrain FastAPI server via docker compose.
 # Depends on: Docker, rmi_network (created by infra stack), Qdrant, Redis
 #
 # Health check: curl http://localhost:8012/ready  → 200 OK
 #
 # Deploy:
-#   cp systemd/rmi-rag.service /etc/systemd/system/
+#   cp systemd/rugbrain.service /etc/systemd/system/
 #   systemctl daemon-reload
-#   systemctl enable --now rmi-rag.service
+#   systemctl enable --now rugbrain.service
 #
 # View logs:
-#   journalctl -u rmi-rag.service -f
-#   docker logs rmi-rag-api
+#   journalctl -u rugbrain.service -f
+#   docker logs rugbrain-api
 #
 # Manual rebuild:
-#   systemctl stop rmi-rag.service
-#   cd /path/to/rmi-rag && docker compose build rag-api
-#   systemctl start rmi-rag.service
+#   systemctl stop rugbrain.service
+#   cd /path/to/rugbrain && docker compose build rag-api
+#   systemctl start rugbrain.service
 
 [Unit]
 Description=RMI RAG API Server (FastAPI + Qdrant)
-Documentation=https://git.rugmunch.io/RugMunchMedia/rmi-rag
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
 After=docker.service network-online.target
 Wants=docker.service network-online.target
 Requires=docker.service
@@ -33,11 +33,11 @@ Type=oneshot
 RemainAfterExit=yes
 User=root
 Group=root
-WorkingDirectory=/path/to/rmi-rag
-ExecStartPre=docker compose -f /path/to/rmi-rag/docker-compose.yml pull rag-api
-ExecStart=docker compose -f /path/to/rmi-rag/docker-compose.yml up -d rag-api
-ExecStop=docker compose -f /path/to/rmi-rag/docker-compose.yml stop rag-api --timeout 30
-ExecReload=docker compose -f /path/to/rmi-rag/docker-compose.yml up -d --force-recreate --no-deps rag-api
+WorkingDirectory=/path/to/rugbrain
+ExecStartPre=docker compose -f /path/to/rugbrain/docker-compose.yml pull rag-api
+ExecStart=docker compose -f /path/to/rugbrain/docker-compose.yml up -d rag-api
+ExecStop=docker compose -f /path/to/rugbrain/docker-compose.yml stop rag-api --timeout 30
+ExecReload=docker compose -f /path/to/rugbrain/docker-compose.yml up -d --force-recreate --no-deps rag-api
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120
@@ -49,8 +49,8 @@ ProtectSystem=full
 ProtectHome=false
 PrivateTmp=true
 
-# Environment (override via /etc/default/rmi-rag or systemctl edit)
-EnvironmentFile=-/etc/default/rmi-rag
+# Environment (override via /etc/default/rugbrain or systemctl edit)
+EnvironmentFile=-/etc/default/rugbrain
 
 [Install]
 WantedBy=multi-user.target

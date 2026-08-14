@@ -1,4 +1,4 @@
-from rmi_rag.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING_DIM
+from rugbrain.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING_DIM
 
 
 def test_embedding_dim():
@@ -16,7 +16,7 @@ def test_version_stamp():
 
 
 def test_embeddings_importable():
-    from rmi_rag.embeddings import current_backend, get_embedding, get_embeddings
+    from rugbrain.embeddings import current_backend, get_embedding, get_embeddings
 
     assert callable(get_embedding)
     assert callable(get_embeddings)

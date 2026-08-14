@@ -31,10 +31,11 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from typing import Any
 
-from rmi_rag.bge_embedders import InfinityBGEEmbedder
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -132,7 +133,7 @@ async def verify_queries() -> list[dict[str, Any]]:
 
 
 async def analyze_address(address: str, chain: str) -> dict[str, Any]:
-    from rmi_rag.contract_analysis import analyze_contract_security
+    from rugbrain.contract_analysis import analyze_contract_security
 
     return await analyze_contract_security(address, chain=chain, limit=5)
 
@@ -171,8 +172,8 @@ def main() -> None:
 
     # scripts/ dir on sys.path (not needed here, but keeps parity with ingesters).
     sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
-    if sys_path_scripts not in os.sys.path:
-        os.sys.path.insert(0, sys_path_scripts)
+    if sys_path_scripts not in sys.path:
+        sys.path.insert(0, sys_path_scripts)
 
     raise SystemExit(asyncio.run(main_async(args)))
 

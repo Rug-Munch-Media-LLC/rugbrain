@@ -9,7 +9,7 @@ def client():
     """Create a test client for the RAG routers."""
     from fastapi import FastAPI
 
-    from rmi_rag.endpoints import router, scam_check_router
+    from rugbrain.endpoints import router, scam_check_router
 
     app = FastAPI()
     app.include_router(router)
@@ -161,7 +161,7 @@ async def test_news_top_sorts_by_quality(client, monkeypatch):
                 "done",
             )
 
-    import rmi_rag.qdrant_store as qs
+    import rugbrain.qdrant_store as qs
 
     monkeypatch.setattr(qs, "QdrantVectorStore", FakeStore)
     resp = await client.get(
@@ -214,7 +214,7 @@ async def test_news_top_category_filter(client, monkeypatch):
                 None,
             )
 
-    import rmi_rag.qdrant_store as qs
+    import rugbrain.qdrant_store as qs
 
     monkeypatch.setattr(qs, "QdrantVectorStore", FakeStore)
     resp = await client.get("/api/v1/news/top", params={"category": "security", "min_quality": 70})
@@ -230,7 +230,7 @@ async def test_news_top_category_filter(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fear_index_current(client, monkeypatch):
-    import rmi_rag.fear_index as fi
+    import rugbrain.fear_index as fi
 
     async def fake_get_fear_index(window="24h", force=False):
         return {
@@ -265,7 +265,7 @@ async def test_fear_index_invalid_window_rejected(client):
 
 @pytest.mark.asyncio
 async def test_fear_index_history(client, monkeypatch):
-    import rmi_rag.fear_index as fi
+    import rugbrain.fear_index as fi
 
     async def fake_history(days=30):
         return {

@@ -15,7 +15,7 @@ def client():
     """Create a test client for all RAG routers."""
     from fastapi import FastAPI
 
-    from rmi_rag.endpoints import router, scam_check_router
+    from rugbrain.endpoints import router, scam_check_router
 
     app = FastAPI()
     app.include_router(router)
@@ -217,7 +217,7 @@ async def test_analyze_invalid_address(client):
 @pytest.mark.asyncio
 async def test_analyze_valid_address_fail_open(client, monkeypatch):
     """GET /api/v1/analyze/{address} returns findings; fails open on backend errors."""
-    import rmi_rag.endpoints as ep
+    import rugbrain.endpoints as ep
 
     async def fake_findings(address: str, chain: str, limit: int) -> dict:
         return {
@@ -254,7 +254,7 @@ async def test_analyze_valid_address_fail_open(client, monkeypatch):
 @pytest.mark.asyncio
 async def test_search_token_address_includes_pattern_matches(client, monkeypatch):
     """GET /api/v1/search?q=<address> attaches pattern_matches findings."""
-    import rmi_rag.endpoints as ep
+    import rugbrain.endpoints as ep
 
     async def fake_findings(address: str, chain: str, limit: int) -> dict:
         return {
@@ -281,7 +281,7 @@ async def test_search_token_address_includes_pattern_matches(client, monkeypatch
 @pytest.mark.asyncio
 async def test_market_mood_fail_open(client, monkeypatch):
     """GET /api/v1/market/mood returns neutral values when providers fail."""
-    import rmi_rag.market_context as mc
+    import rugbrain.market_context as mc
 
     async def fake_mood(chain: str) -> dict:
         return {
@@ -311,7 +311,7 @@ async def test_market_mood_fail_open(client, monkeypatch):
 @pytest.mark.asyncio
 async def test_market_mood_fallback_on_error(client, monkeypatch):
     """GET /api/v1/market/mood degrades to neutral when build raises."""
-    import rmi_rag.market_context as mc
+    import rugbrain.market_context as mc
 
     async def boom(chain: str) -> dict:
         raise RuntimeError("provider down")
@@ -337,7 +337,7 @@ async def test_market_context_invalid_address(client):
 @pytest.mark.asyncio
 async def test_market_context_token(client, monkeypatch):
     """GET /api/v1/market/context/{address} returns the full context."""
-    import rmi_rag.market_context as mc
+    import rugbrain.market_context as mc
 
     async def fake_context(address: str, chain: str) -> dict:
         return {
@@ -388,8 +388,8 @@ async def test_analyze_full_invalid_address(client):
 @pytest.mark.asyncio
 async def test_analyze_full_sections(client, monkeypatch):
     """GET /api/v1/analyze/{address}/full returns every section fail-open."""
-    import rmi_rag.endpoints as ep
-    import rmi_rag.market_context as mc
+    import rugbrain.endpoints as ep
+    import rugbrain.market_context as mc
 
     async def fake_findings(address: str, chain: str, limit: int) -> dict:
         return {

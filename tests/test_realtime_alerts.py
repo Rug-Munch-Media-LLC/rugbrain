@@ -1,4 +1,4 @@
-"""Tests for rmi_rag.realtime_alerts — real-time exploit detection.
+"""Tests for rugbrain.realtime_alerts — real-time exploit detection.
 
 Covers exploit heuristics, model determinism, HMAC signing, the webhook
 registry + signed delivery, SearXNG polling (RSS + JSON), ClickHouse
@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-import rmi_rag.realtime_alerts as ra
+import rugbrain.realtime_alerts as ra
 
 # ═══════════════════════════════════════════════════════════════════════
 # Model + heuristics

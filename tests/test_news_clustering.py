@@ -1,4 +1,4 @@
-"""Tests for news story clustering (rmi_rag.news_clustering)."""
+"""Tests for news story clustering (rugbrain.news_clustering)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ import asyncio
 
 import pytest
 
-from rmi_rag import news_clustering as nc
-
+from rugbrain import news_clustering as nc
 
 # ── Embedding / cosine ────────────────────────────────────────────────────
 
@@ -261,14 +260,14 @@ async def test_cluster_articles_empty_input():
 
 
 def test_embed_titles_uses_embeddings_module(monkeypatch):
-    """embed_titles delegates to rmi_rag.embeddings.get_embeddings."""
+    """embed_titles delegates to rugbrain.embeddings.get_embeddings."""
     calls: list[list[str]] = []
 
     async def fake_get_embeddings(texts: list[str]) -> list[list[float]]:
         calls.append(texts)
         return [[1.0] * 4 for _ in texts]
 
-    import rmi_rag.embeddings as emb
+    import rugbrain.embeddings as emb
 
     monkeypatch.setattr(emb, "get_embeddings", fake_get_embeddings)
 

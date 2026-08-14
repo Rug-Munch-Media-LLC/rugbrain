@@ -35,7 +35,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag import qdrant_store
+from rugbrain import qdrant_store
 
 logger = logging.getLogger("migrate_to_sparse")
 

@@ -1,4 +1,4 @@
-"""Tests for rmi_rag.market_context — RugBrain market context (Part 3).
+"""Tests for rugbrain.market_context — RugBrain market context (Part 3).
 
 Covers ``build_market_mood`` and ``build_token_market_context`` with mocked
 HTTP providers so no external service is contacted.
@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from rmi_rag import market_context as mod
+from rugbrain import market_context as mod
 
 
 def _transport(
@@ -59,7 +59,7 @@ def _fresh_client(*a, **k):
 
 @pytest.mark.asyncio
 @pytest.mark.xfail(
-    reason="_fetch_fear_index now calls rmi_rag.fear_index.get_fear_index which creates its own HTTP connections — mock transport bypassed"
+    reason="_fetch_fear_index now calls rugbrain.fear_index.get_fear_index which creates its own HTTP connections — mock transport bypassed"
 )
 async def test_build_market_mood() -> None:
     transport = _transport(
@@ -94,7 +94,7 @@ async def test_build_market_mood() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.xfail(
-    reason="_fetch_fear_index calls rmi_rag.fear_index.get_fear_index (bypasses mock transport)"
+    reason="_fetch_fear_index calls rugbrain.fear_index.get_fear_index (bypasses mock transport)"
 )
 async def test_build_market_mood_fail_open() -> None:
     """Provider outage yields neutral values, not an exception."""
@@ -127,7 +127,7 @@ async def test_build_token_market_context() -> None:
     with (
         patch("httpx.AsyncClient", side_effect=lambda *a, **k: _fresh_client(transport=transport)),
         patch(
-            "rmi_rag.market_context._fetch_social_signals",
+            "rugbrain.market_context._fetch_social_signals",
             new_callable=AsyncMock,
             return_value={
                 "sentiment": "bullish",
@@ -137,7 +137,7 @@ async def test_build_token_market_context() -> None:
             },
         ),
         patch(
-            "rmi_rag.market_context._fetch_similar_tokens",
+            "rugbrain.market_context._fetch_similar_tokens",
             new_callable=AsyncMock,
             return_value=[{"address": "0xbbb", "outcome": "rug"}],
         ),
@@ -184,7 +184,7 @@ async def test_build_token_market_context_deployer_freshness_new() -> None:
             return_value=httpx.AsyncClient(transport=httpx.MockTransport(handler=handler)),
         ),
         patch(
-            "rmi_rag.market_context._fetch_social_signals",
+            "rugbrain.market_context._fetch_social_signals",
             new_callable=AsyncMock,
             return_value={
                 "sentiment": "neutral",
@@ -194,7 +194,7 @@ async def test_build_token_market_context_deployer_freshness_new() -> None:
             },
         ),
         patch(
-            "rmi_rag.market_context._fetch_similar_tokens", new_callable=AsyncMock, return_value=[]
+            "rugbrain.market_context._fetch_similar_tokens", new_callable=AsyncMock, return_value=[]
         ),
     ):
         ctx = await mod.build_token_market_context(address=address, chain="ethereum")

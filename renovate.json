@@ -1,6 +1,6 @@
 {
 	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"description": "rmi-rag — extends RugMunch shared preset",
+	"description": "rugbrain — extends RugMunch shared preset",
 	"extends": ["local>RugMunchMedia/standards:renovate-presets/rugmunch.json"],
 	"labels": ["dependencies", "automated"],
 	"prCreation": "not-pending"

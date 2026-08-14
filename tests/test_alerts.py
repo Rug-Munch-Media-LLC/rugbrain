@@ -1,5 +1,5 @@
 """
-Tests for rmi_rag.alerts — real-time crypto security alert ingestion.
+Tests for rugbrain.alerts — real-time crypto security alert ingestion.
 
 Covers alert identity determinism, vector/chain detection, RSS/API parsing,
 pollers (httpx MockTransport), rate-limit/dedup state, Qdrant storage (respx),
@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import httpx
 import respx
 
-from rmi_rag import alerts as mod
+from rugbrain import alerts as mod
 
 # ── Model / helpers ──────────────────────────────────────────────────────
 

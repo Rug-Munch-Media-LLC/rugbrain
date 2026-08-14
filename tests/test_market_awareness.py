@@ -1,5 +1,5 @@
 """
-Tests for rmi_rag.market_awareness — market awareness for token scans.
+Tests for rugbrain.market_awareness — market awareness for token scans.
 
 Covers Fear & Greed classification, suspicious-profile heuristics, exploit
 fetching (httpx MockTransport), awareness scoring, and snapshot building.
@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from rmi_rag import market_awareness as mod
+from rugbrain import market_awareness as mod
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

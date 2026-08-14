@@ -1,4 +1,4 @@
-"""Tests for rmi_rag.alert_routes — /api/v1/alerts/* endpoints.
+"""Tests for rugbrain.alert_routes — /api/v1/alerts/* endpoints.
 
 Uses httpx ASGITransport against a minimal FastAPI app (no auth
 middleware), matching the existing endpoints.py test pattern.
@@ -9,8 +9,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-import rmi_rag.realtime_alerts as ra
-from rmi_rag.alert_routes import router
+import rugbrain.realtime_alerts as ra
+from rugbrain.alert_routes import router
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ async def _no_redis():
 @pytest.fixture
 def clean_store(monkeypatch):
     """Hermetic store: no Redis, no Qdrant — everything process-local."""
-    import rmi_rag.alert_routes as ar
+    import rugbrain.alert_routes as ar
 
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     # Qdrant scroll is patched at the router level so /live falls back to

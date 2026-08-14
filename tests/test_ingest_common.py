@@ -1,8 +1,8 @@
-"""Tests for rmi_rag.ingest_common — shared ingestion helpers."""
+"""Tests for rugbrain.ingest_common — shared ingestion helpers."""
 
 from __future__ import annotations
 
-from rmi_rag import ingest_common as mod
+from rugbrain import ingest_common as mod
 
 
 def test_content_hash_stable_and_short():

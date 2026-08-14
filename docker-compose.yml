@@ -1,4 +1,4 @@
-# rmi-rag docker-compose
+# rugbrain docker-compose
 # Two modes:
 #   rag-api     — FastAPI server (default, always-on)
 #   rag-ingest  — One-shot threat ingest (run via: docker compose run --rm rag-ingest)
@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rmi-rag-api
+    container_name: rugbrain-api
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -23,9 +23,9 @@ services:
     labels:
       - "dockflare.enable=true"
       - "dockflare.hostname=rag.rugmunch.io"
-      - "dockflare.service=http://rmi-rag-api:8012"
+      - "dockflare.service=http://rugbrain-api:8012"
       - "dockflare.zonename=rugmunch.io"
-      - app.rugmunch.io/name=rmi-rag-api
+      - app.rugmunch.io/name=rugbrain-api
       - app.rugmunch.io/role=api
       - app.rugmunch.io/description=RAG retrieval API
     ports:
@@ -102,7 +102,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rmi-rag-ingest
+    container_name: rugbrain-ingest
     restart: "no"
     profiles:
       - ingest
@@ -126,6 +126,6 @@ services:
       - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py
     labels:
-      - app.rugmunch.io/name=rmi-rag-ingest
+      - app.rugmunch.io/name=rugbrain-ingest
       - app.rugmunch.io/role=worker
       - app.rugmunch.io/description=RAG ingestion worker

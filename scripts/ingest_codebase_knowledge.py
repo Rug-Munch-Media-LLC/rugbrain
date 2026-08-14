@@ -45,22 +45,23 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from rmi_rag.qdrant_store import QdrantVectorStore
-from rmi_rag.solidity_chunker import chunk_solidity_ast
+from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.solidity_chunker import chunk_solidity_ast
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_codebase")
 
 # scripts/ dir on sys.path so sibling data modules import cleanly.
 sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
-if sys_path_scripts not in os.sys.path:
-    os.sys.path.insert(0, sys_path_scripts)
+if sys_path_scripts not in sys.path:
+    sys.path.insert(0, sys_path_scripts)
 
 from codebase_protocols_data import PROTOCOLS  # noqa: E402
 from ingest_common import content_hash, embed_many  # noqa: E402

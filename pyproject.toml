@@ -54,7 +54,7 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["rmi_rag*", "rugbrain*"]
+include = ["rugbrain*"]
 
 [tool.ruff]
 line-length = 100

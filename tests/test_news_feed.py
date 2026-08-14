@@ -1,4 +1,4 @@
-"""Tests for the news feed API endpoints (rmi_rag.news_feed)."""
+"""Tests for the news feed API endpoints (rugbrain.news_feed)."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from rmi_rag.news_clustering import Story, StorySource
+from rugbrain.news_clustering import Story, StorySource
 
 
 @pytest.fixture
 def client():
     from fastapi import FastAPI
 
-    from rmi_rag.news_feed import news_feed_router
+    from rugbrain.news_feed import news_feed_router
 
     app = FastAPI()
     app.include_router(news_feed_router)
@@ -78,7 +78,7 @@ async def test_news_feed_empty_without_store(client, monkeypatch):
     async def fake_ranked_feed(topic=None, min_quality=70.0, limit=20):
         return []
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "ranked_feed", fake_ranked_feed)
     resp = await client.get("/api/v1/news/feed", params={"topic": "security", "min_quality": 70})
@@ -97,7 +97,7 @@ async def test_news_feed_returns_ranked_stories(client, monkeypatch):
     async def fake_ranked_feed(topic=None, min_quality=70.0, limit=20):
         return [story2, story]
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "ranked_feed", fake_ranked_feed)
     resp = await client.get("/api/v1/news/feed")
@@ -124,7 +124,7 @@ async def test_news_story_detail(client, monkeypatch):
     async def fake_load_story(story_id):
         return story
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "load_story", fake_load_story)
     resp = await client.get("/api/v1/news/story/story-1")
@@ -145,7 +145,7 @@ async def test_news_story_detail_404(client, monkeypatch):
     async def fake_load_story(story_id):
         return None
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "load_story", fake_load_story)
     resp = await client.get("/api/v1/news/story/missing")
@@ -165,7 +165,7 @@ async def test_news_trending_velocity_sorted(client, monkeypatch):
     async def fake_trending(limit=20):
         return [hot, cold]
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "trending_stories", fake_trending)
     resp = await client.get("/api/v1/news/trending")
@@ -185,7 +185,7 @@ async def test_news_topics_counts(client, monkeypatch):
     async def fake_topic_counts(limit=50):
         return {"ethereum": 5, "bitcoin": 3, "security": 1}
 
-    import rmi_rag.news_feed as nf
+    import rugbrain.news_feed as nf
 
     monkeypatch.setattr(nf, "topic_counts", fake_topic_counts)
     resp = await client.get("/api/v1/news/topics")

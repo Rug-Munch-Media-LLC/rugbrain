@@ -1,12 +1,12 @@
-"""Tests for rmi_rag.social_intel — X/Reddit/Farcaster social intelligence."""
+"""Tests for rugbrain.social_intel — X/Reddit/Farcaster social intelligence."""
 
 from __future__ import annotations
 
 import httpx
 import respx
 
-from rmi_rag import social_intel as mod
-from rmi_rag.ingest_common import doc_from_article
+from rugbrain import social_intel as mod
+from rugbrain.ingest_common import doc_from_article
 
 REDDIT_PAYLOAD = {
     "data": {

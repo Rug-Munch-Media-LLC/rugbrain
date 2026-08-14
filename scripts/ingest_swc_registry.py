@@ -19,7 +19,7 @@ For each entry we:
   1. Parse the markdown: title, description, remediation, solidity samples,
      CWE references.
   2. Map the SWC ID to a canonical ``attack_vector`` and default ``severity``
-     (see ``rmi_rag.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
+     (see ``rugbrain.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
   3. Build a structured weakness document and embed with bge-m3 (1024-dim,
      Infinity /embeddings).
   4. Upsert into ``threat_intel`` with ``source=swc_registry`` and canonical
@@ -52,9 +52,9 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.bge_embedders import InfinityBGEEmbedder
-from rmi_rag.crypto_schema import SWC_SEVERITY, SWC_VECTORS
-from rmi_rag.qdrant_store import QdrantVectorStore
+from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.crypto_schema import SWC_SEVERITY, SWC_VECTORS
+from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_swc")

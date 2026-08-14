@@ -52,14 +52,14 @@ def _unrated_doc(doc_id, score):
 
 
 def test_rating_multiplier_empty_rating_is_neutral():
-    from rmi_rag.ratings import rating_multiplier
+    from rugbrain.ratings import rating_multiplier
 
     assert rating_multiplier({}) == 1.0
     assert rating_multiplier({"market_impact": "medium"}) == 1.0
 
 
 def test_rating_multiplier_verified_stacked():
-    from rmi_rag.ratings import rating_multiplier
+    from rugbrain.ratings import rating_multiplier
 
     rating = {
         "factuality": "verified",  # 1.2
@@ -73,7 +73,7 @@ def test_rating_multiplier_verified_stacked():
 
 
 def test_rating_multiplier_rumor_penalty():
-    from rmi_rag.ratings import rating_multiplier
+    from rugbrain.ratings import rating_multiplier
 
     rating = {
         "factuality": "rumor",  # 0.5
@@ -88,7 +88,7 @@ def test_rating_multiplier_rumor_penalty():
 
 
 def test_apply_rating_boosts_boosts_verified():
-    from rmi_rag.ratings import apply_rating_boosts
+    from rugbrain.ratings import apply_rating_boosts
 
     docs = [_verified_doc("1", 0.5)]
     boosted = apply_rating_boosts(docs)
@@ -98,7 +98,7 @@ def test_apply_rating_boosts_boosts_verified():
 
 
 def test_apply_rating_boosts_penalizes_rumor():
-    from rmi_rag.ratings import apply_rating_boosts
+    from rugbrain.ratings import apply_rating_boosts
 
     docs = [_rumor_doc("2", 0.8)]
     boosted = apply_rating_boosts(docs)
@@ -107,7 +107,7 @@ def test_apply_rating_boosts_penalizes_rumor():
 
 
 def test_apply_rating_boosts_skips_unrated():
-    from rmi_rag.ratings import apply_rating_boosts
+    from rugbrain.ratings import apply_rating_boosts
 
     docs = [_unrated_doc("3", 0.6)]
     boosted = apply_rating_boosts(docs)
@@ -117,7 +117,7 @@ def test_apply_rating_boosts_skips_unrated():
 
 def test_apply_rating_boosts_handles_rerank_score_fields():
     """Boosts the first present score field — combined_score for reranked docs."""
-    from rmi_rag.ratings import apply_rating_boosts
+    from rugbrain.ratings import apply_rating_boosts
 
     doc = _verified_doc("4", 0.5)
     doc["cross_score"] = 0.4
@@ -133,7 +133,7 @@ def test_apply_rating_boosts_handles_rerank_score_fields():
 
 
 def test_filter_factuality_verified():
-    from rmi_rag.ratings import filter_docs_by_ratings
+    from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8), _unrated_doc("3", 0.7)]
     filtered = filter_docs_by_ratings(docs, factuality_filter="verified")
@@ -144,7 +144,7 @@ def test_filter_factuality_verified():
 
 
 def test_filter_min_source_tier():
-    from rmi_rag.ratings import filter_docs_by_ratings
+    from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8)]
     filtered = filter_docs_by_ratings(docs, min_source_tier="established")
@@ -152,7 +152,7 @@ def test_filter_min_source_tier():
 
 
 def test_filter_require_corroboration():
-    from rmi_rag.ratings import filter_docs_by_ratings
+    from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8), _unrated_doc("3", 0.7)]
     filtered = filter_docs_by_ratings(docs, require_corroboration=True)
@@ -163,7 +163,7 @@ def test_filter_require_corroboration():
 
 
 def test_filter_no_criteria_returns_all():
-    from rmi_rag.ratings import filter_docs_by_ratings
+    from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8)]
     assert len(filter_docs_by_ratings(docs)) == 2
@@ -175,7 +175,7 @@ def test_filter_no_criteria_returns_all():
 
 
 def test_source_badge_verified_with_corroboration():
-    from rmi_rag.ratings import source_badge
+    from rugbrain.ratings import source_badge
 
     source = {
         "source": "CoinDesk",
@@ -192,7 +192,7 @@ def test_source_badge_verified_with_corroboration():
 
 
 def test_format_rag_answer_with_ratings_badges_and_disclaimer():
-    from rmi_rag.ratings import format_rag_answer_with_ratings
+    from rugbrain.ratings import format_rag_answer_with_ratings
 
     sources = [
         {
@@ -212,7 +212,7 @@ def test_format_rag_answer_with_ratings_badges_and_disclaimer():
 
 
 def test_format_rag_answer_with_ratings_no_sources():
-    from rmi_rag.ratings import format_rag_answer_with_ratings
+    from rugbrain.ratings import format_rag_answer_with_ratings
 
     assert format_rag_answer_with_ratings("plain answer", []) == "plain answer"
 
@@ -223,7 +223,7 @@ def test_format_rag_answer_with_ratings_no_sources():
 
 
 def test_prioritize_verified_sources():
-    from rmi_rag.ratings import prioritize_verified_sources
+    from rugbrain.ratings import prioritize_verified_sources
 
     sources = [
         _rumor_doc("rumor", 0.9),
@@ -237,7 +237,7 @@ def test_prioritize_verified_sources():
 
 
 def test_synthesize_answer_shape():
-    from rmi_rag.ratings import synthesize_answer
+    from rugbrain.ratings import synthesize_answer
 
     result = synthesize_answer(
         "The protocol was exploited.",
@@ -259,7 +259,7 @@ def test_synthesize_answer_shape():
 
 def test_graph_rag_synthesize_answer_node():
     """graph_rag.synthesize_answer delegates to the shared rating node."""
-    from rmi_rag.graph_rag import synthesize_answer
+    from rugbrain.graph_rag import synthesize_answer
 
     result = synthesize_answer("answer", [_verified_doc("1", 0.9)])
     assert result["rating_summary"]["verified_count"] == 1
@@ -268,7 +268,7 @@ def test_graph_rag_synthesize_answer_node():
 
 def test_reranker_applies_rating_boosts_on_top_of_cross_encoder():
     """rerank() re-sorts so a verified doc outranks a raw semantic match."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
     reranker._st_loaded = True
@@ -299,7 +299,7 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder():
 
 def test_reranker_skip_ratings_flag():
     """apply_ratings=False leaves pure cross-encoder ordering."""
-    from rmi_rag.reranker import Reranker
+    from rugbrain.reranker import Reranker
 
     reranker = Reranker(use_infinity=False)
     reranker._st_loaded = True
@@ -326,7 +326,7 @@ def test_search_endpoint_has_rating_filter_params():
     """GET /api/v1/search accepts the new rating filter query params."""
     import inspect
 
-    from rmi_rag.endpoints import search_threat_intel
+    from rugbrain.endpoints import search_threat_intel
 
     sig = inspect.signature(search_threat_intel)
     assert "factuality_filter" in sig.parameters
@@ -338,7 +338,7 @@ def test_three_pillar_search_has_rating_boost_param():
     """three_pillar_search accepts use_rating_boosts."""
     import inspect
 
-    from rmi_rag.search.engine import three_pillar_search
+    from rugbrain.search.engine import three_pillar_search
 
     sig = inspect.signature(three_pillar_search)
     assert "use_rating_boosts" in sig.parameters

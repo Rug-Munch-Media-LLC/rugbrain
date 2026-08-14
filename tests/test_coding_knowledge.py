@@ -23,13 +23,13 @@ from coding_ingest_common import (  # noqa: E402
     rst_to_text,
 )
 
-from rmi_rag.search.engine import (  # noqa: E402
+from rugbrain.search.engine import (  # noqa: E402
     CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     detect_coding_query,
     resolve_search_collections,
 )
-from rmi_rag.search_service import search_coding_knowledge  # noqa: E402
+from rugbrain.search_service import search_coding_knowledge  # noqa: E402
 
 # ── Code-intent detection ─────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ def test_resolve_collections_scam_still_routes():
 
 
 def test_resolve_collections_default():
-    from rmi_rag.search.engine import COLLECTIONS
+    from rugbrain.search.engine import COLLECTIONS
 
     routed = resolve_search_collections(None, "general market question")
     assert routed == list(COLLECTIONS)
@@ -107,7 +107,7 @@ def test_search_coding_knowledge_flags_code():
         {"content": "just an explanation without code", "similarity": 0.8},
     ]
     # Patch the underlying search so no live Qdrant is required.
-    import rmi_rag.search.engine as engine_mod
+    import rugbrain.search.engine as engine_mod
 
     async def fake_search(query, collections, limit=10, min_similarity=0.4):
         return list(results)

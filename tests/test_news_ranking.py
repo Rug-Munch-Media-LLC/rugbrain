@@ -1,4 +1,4 @@
-"""Tests for news story ranking (rmi_rag.news_ranking)."""
+"""Tests for news story ranking (rugbrain.news_ranking)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from rmi_rag import news_ranking as nk
-from rmi_rag.news_clustering import Story, StorySource
+from rugbrain import news_ranking as nk
+from rugbrain.news_clustering import Story, StorySource
 
 
 def _story(**overrides) -> Story:

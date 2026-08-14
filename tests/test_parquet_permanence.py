@@ -258,7 +258,7 @@ def test_collection_from_legacy_key():
 
 
 def test_validate_read_only_sql_accepts():
-    from rmi_rag.parquet_analytics import validate_read_only_sql
+    from rugbrain.parquet_analytics import validate_read_only_sql
 
     validate_read_only_sql("SELECT count(*) FROM snapshots")
     validate_read_only_sql("WITH x AS (SELECT * FROM snapshots) SELECT * FROM x LIMIT 5;")
@@ -267,7 +267,7 @@ def test_validate_read_only_sql_accepts():
 
 
 def test_validate_read_only_sql_rejects():
-    from rmi_rag.parquet_analytics import validate_read_only_sql
+    from rugbrain.parquet_analytics import validate_read_only_sql
 
     for bad in (
         "INSERT INTO snapshots VALUES (1)",
@@ -290,7 +290,7 @@ def test_validate_read_only_sql_rejects():
 
 
 def test_json_safe_row():
-    from rmi_rag.parquet_analytics import json_safe_row
+    from rugbrain.parquet_analytics import json_safe_row
 
     assert json_safe_row((1, "a", 2.5, None, True)) == [1, "a", 2.5, None, True]
     row = json_safe_row((float("nan"), [1.0, float("nan")], {"k": 1}, b"bytes"))
@@ -304,7 +304,7 @@ def test_json_safe_row():
 
 
 def test_run_snapshot_query_local_glob(tmp_path):
-    from rmi_rag.parquet_analytics import run_snapshot_query
+    from rugbrain.parquet_analytics import run_snapshot_query
 
     rows = [
         {

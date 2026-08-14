@@ -2,7 +2,7 @@
 """Enrich Qdrant points with canonical crypto-security metadata.
 
 Scrolls every point in the target collections and fills the canonical schema
-(see ``rmi_rag.crypto_schema``): ``attack_vector``, ``severity``, ``chain``,
+(see ``rugbrain.crypto_schema``): ``attack_vector``, ``severity``, ``chain``,
 ``amount_lost_usd``, ``date``, ``protocol``, ``source_type`` — at the top
 level of the payload and mirrored inside ``metadata``.
 
@@ -39,7 +39,7 @@ from typing import Any
 
 import httpx
 
-from rmi_rag.crypto_schema import CANONICAL_FIELDS, enrich_payload
+from rugbrain.crypto_schema import CANONICAL_FIELDS, enrich_payload
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("enrich_metadata")

@@ -20,13 +20,13 @@ class TestScannerSubscriber:
 
     def test_is_subscriber_running_initially_false(self):
         """is_subscriber_running should return False by default."""
-        from rmi_rag.scanner_subscriber import is_subscriber_running
+        from rugbrain.scanner_subscriber import is_subscriber_running
 
         assert is_subscriber_running() is False
 
     def test_subscriber_stats_shape(self):
         """subscriber_stats should return expected fields."""
-        from rmi_rag.scanner_subscriber import subscriber_stats
+        from rugbrain.scanner_subscriber import subscriber_stats
 
         stats = subscriber_stats()
         assert "running" in stats
@@ -40,8 +40,8 @@ class TestScannerSubscriber:
     async def test_start_subscriber_twice_no_duplicate(self):
         """Starting subscriber twice should not create duplicate tasks."""
         # Reset state
-        import rmi_rag.scanner_subscriber as ss
-        from rmi_rag.scanner_subscriber import (
+        import rugbrain.scanner_subscriber as ss
+        from rugbrain.scanner_subscriber import (
             is_subscriber_running,
             start_subscriber,
             stop_subscriber,
@@ -62,8 +62,8 @@ class TestScannerSubscriber:
     @pytest.mark.asyncio
     async def test_stop_subscriber_cleans_up(self):
         """Stop subscriber should reset running state."""
-        import rmi_rag.scanner_subscriber as ss
-        from rmi_rag.scanner_subscriber import (
+        import rugbrain.scanner_subscriber as ss
+        from rugbrain.scanner_subscriber import (
             is_subscriber_running,
             start_subscriber,
             stop_subscriber,
@@ -80,7 +80,7 @@ class TestScannerSubscriber:
     @pytest.mark.asyncio
     async def test_process_finding_logs_errors(self):
         """_process_finding should handle errors without crashing."""
-        from rmi_rag.scanner_subscriber import _process_finding
+        from rugbrain.scanner_subscriber import _process_finding
 
         # Empty data should not crash
         result = await _process_finding({})
@@ -102,14 +102,14 @@ class TestRAGAuthMiddleware:
         import importlib
 
         # Reload to pick up new env
-        import rmi_rag.main
+        import rugbrain.main
 
-        importlib.reload(rmi_rag.main)
+        importlib.reload(rugbrain.main)
 
         # Patch app instantiation
         from fastapi import FastAPI
 
-        from rmi_rag.main import RAGAuthMiddleware, lifespan
+        from rugbrain.main import RAGAuthMiddleware, lifespan
 
         app = FastAPI(lifespan=lifespan)
 
@@ -137,13 +137,13 @@ class TestRAGAuthMiddleware:
 
         import importlib
 
-        import rmi_rag.main
+        import rugbrain.main
 
-        importlib.reload(rmi_rag.main)
+        importlib.reload(rugbrain.main)
 
         from fastapi import FastAPI
 
-        from rmi_rag.main import RAGAuthMiddleware, lifespan
+        from rugbrain.main import RAGAuthMiddleware, lifespan
 
         app = FastAPI(lifespan=lifespan)
 
@@ -217,13 +217,13 @@ class TestRAGAuthMiddleware:
         os.environ.pop("RMI_RAG_API_KEY", None)
         os.environ.pop("DEV_MODE", None)
 
-        import rmi_rag.main
+        import rugbrain.main
 
-        importlib.reload(rmi_rag.main)
+        importlib.reload(rugbrain.main)
 
         from fastapi import FastAPI
 
-        from rmi_rag.main import RAGAuthMiddleware, lifespan
+        from rugbrain.main import RAGAuthMiddleware, lifespan
 
         app = FastAPI(lifespan=lifespan)
 
@@ -259,7 +259,7 @@ class TestHealthEndpoints:
     @pytest.mark.asyncio
     async def test_health_endpoint_shape(self):
         """GET /health should return status dict."""
-        from rmi_rag.main import app
+        from rugbrain.main import app
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -274,7 +274,7 @@ class TestHealthEndpoints:
     @pytest.mark.asyncio
     async def test_ready_endpoint(self):
         """GET /ready should return ready status."""
-        from rmi_rag.main import app
+        from rugbrain.main import app
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:

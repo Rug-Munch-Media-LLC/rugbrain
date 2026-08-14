@@ -24,15 +24,15 @@ _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import rmi_rag.search.engine as engine_mod  # noqa: E402
-from rmi_rag.search.engine import (  # noqa: E402
+import rugbrain.search.engine as engine_mod  # noqa: E402
+from rugbrain.search.engine import (  # noqa: E402
     CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     detect_coding_query,
     detect_scam_query,
     resolve_search_collections,
 )
-from rmi_rag.search_service import search_coding_knowledge, search_scam_knowledge  # noqa: E402
+from rugbrain.search_service import search_coding_knowledge, search_scam_knowledge  # noqa: E402
 
 # Acceptance queries from the spec.
 REENTRANCY_QUERY = "how to implement reentrancy guard in Solidity"
@@ -191,7 +191,7 @@ def test_flash_loan_answer_explains_attack_pattern():
 def test_mcp_bridge_imports_and_functions_exist():
     import inspect
 
-    from rmi_rag.mcp_bridge import (
+    from rugbrain.mcp_bridge import (
         get_security_context,
         search_codebase,
         trace_codebase,
@@ -208,7 +208,7 @@ def test_mcp_bridge_imports_and_functions_exist():
 def test_mcp_bridge_fallback_shapes():
 
     # Without touching a live MCP, confirm the fallback result shape keys.
-    from rmi_rag.mcp_bridge import _fallback_search, _fallback_security, _fallback_trace
+    from rugbrain.mcp_bridge import _fallback_search, _fallback_security, _fallback_trace
 
     out = asyncio.run(_fallback_search(REENTRANCY_QUERY, limit=3))
     assert out["bridge"] == "rag_fallback"

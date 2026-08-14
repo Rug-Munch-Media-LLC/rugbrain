@@ -1,4 +1,4 @@
-// Minimal commitlint config for rmi-rag
+// Minimal commitlint config for rugbrain
 module.exports = {
 	rules: {
 		"type-enum": [
