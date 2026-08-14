@@ -49,15 +49,23 @@ include = ["rugbrain*"]
 rugbrain = ["config/*.json", "examples/data/*.md"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120  # port parity: extracted verbatim from a 120-col codebase
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]
+# Line length is formatter-enforced (fleet ruff-base standard); E501 is
+# disabled so verbatim-ported modules from the 120-col private codebase pass.
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.ruff.lint.per-file-ignores]
+# evaluation.py keeps its RAG_EVAL_* gate imports after the docstring block
+# (mirrors the private source layout).
+"src/rugbrain/core/evaluation.py" = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

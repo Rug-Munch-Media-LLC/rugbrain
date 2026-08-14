@@ -24,9 +24,16 @@ class Settings(BaseSettings):
     # Embedding + rerank backend (Infinity-compatible HTTP)
     infinity_url: str = "http://127.0.0.1:8001"
     embedder_primary: str = "infinity"  # infinity | bge-m3 | openrouter
+    embedder_primary_model: str = "BAAI/bge-m3"
+    # Deprecated legacy bge-m3 container HTTP service (nothing listens by default).
+    bge_m3_url: str = ""
 
-    # Cache (optional; in-memory fallback)
-    cache_redis_url: str = "redis://127.0.0.1:6379/0"
+    # Embed cache
+    embedder_cache_ttl: int = 86400
+    embedder_cache_maxsize: int = 10000
+
+    # Cache (optional; in-memory fallback). Enables Redis when set.
+    redis_url: str = ""
 
     # Retrieval knobs (verbatim from app/rag/config.py)
     context_max_tokens: int = 4096
