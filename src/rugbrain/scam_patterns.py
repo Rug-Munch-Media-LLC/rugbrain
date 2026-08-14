@@ -304,7 +304,7 @@ async def get_scam_patterns(force_refresh: bool = False) -> list[dict[str, Any]]
 
     if not force_refresh:
         try:
-            r = await _get_redis()  # type: ignore[no-untyped-call]
+            r = await _get_redis()
             cached = await r.get(PATTERN_CACHE_KEY)
             if cached:
                 return cast("list[dict[str, Any]]", json.loads(cached))
@@ -314,7 +314,7 @@ async def get_scam_patterns(force_refresh: bool = False) -> list[dict[str, Any]]
     patterns = await extract_scam_patterns_from_intel()
 
     try:
-        r = await _get_redis()  # type: ignore[no-untyped-call]
+        r = await _get_redis()
         await r.setex(PATTERN_CACHE_KEY, PATTERN_CACHE_TTL, json.dumps(patterns))
     except Exception as e:
         logger.debug("scam_patterns cache write failed: %s", e)

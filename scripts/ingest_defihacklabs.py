@@ -49,7 +49,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_defihacklabs")
 
 REPO_URL = "https://github.com/SunWeb3Sec/DeFiHackLabs.git"
-REPO_DIR = os.getenv("DEFI_HACKLABS_DIR", "/tmp/defihacklabs")  # noqa: S108
+REPO_DIR = os.getenv("DEFI_HACKLABS_DIR", "/tmp/defihacklabs")  # noqa: S108  # nosec B108
 COLLECTION = "threat_intel"
 EMBEDDING_DIM = 1024
 SOURCE = "defihacklabs"

@@ -85,8 +85,8 @@ def _embed_deployer_fingerprint(wallet_profile: dict[str, Any]) -> list[float]:
         "linea",
         "zksync",
     ]
-    for i, ch in enumerate(chain_list):
-        if ch in chain:
+    for i, chain_name in enumerate(chain_list):
+        if chain_name in chain:
             vec[36 + i] = 1.0
 
     # ── Funding address hash (dims 52-67) ──

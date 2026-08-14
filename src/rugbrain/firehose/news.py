@@ -5,13 +5,16 @@ Extracted from firehose.py FeedSources class.
 """
 
 import logging
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger("rag.firehose")
 
 
-async def pull_news_rss(client) -> list[dict]:
+async def pull_news_rss(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     """Pull latest news from DataBus news provider (200+ RSS feeds)."""
-    docs = []
+    docs: list[dict[str, Any]] = []
     try:
         resp = await client.get(
             "http://localhost:8000/api/v1/databus/fetch/news", params={"limit": 30}, timeout=30
@@ -46,9 +49,9 @@ async def pull_news_rss(client) -> list[dict]:
     return docs
 
 
-async def pull_prediction_markets(client) -> list[dict]:
+async def pull_prediction_markets(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     """Pull Polymarket prediction data for market intel."""
-    docs = []
+    docs: list[dict[str, Any]] = []
     try:
         resp = await client.get(
             "http://localhost:8000/api/v1/databus/fetch/prediction_markets", timeout=20

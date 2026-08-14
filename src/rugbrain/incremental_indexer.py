@@ -11,6 +11,7 @@ import json
 import logging
 import time
 from enum import StrEnum
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class DeltaAction(StrEnum):
     DELETE = "delete"
 
 
-def _redis():
+def _redis() -> Any | None:
     from app.core.redis import get_redis
 
     return get_redis()

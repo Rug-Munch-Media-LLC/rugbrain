@@ -486,7 +486,7 @@ class CriticalAlertLogger:
             attempts = [CLICKHOUSE_PORT]
             if CLICKHOUSE_PORT != 8123:
                 attempts.append(8123)
-            client = None
+            client: Any = None
             last_err: Exception | None = None
             for port in attempts:
                 try:
@@ -807,9 +807,11 @@ async def _send_telegram(alert: CriticalAlert) -> bool:
             return False
     # Fallback: enqueue for the existing bot (drained by rmi-backend).
     try:
-        r = await _get_redis()
-        if r is not None:
-            await r.lpush("rag:telegram_queue", json.dumps({"text": text[:4000], "global": True}))
+        redis_client = await _get_redis()
+        if redis_client is not None:
+            await redis_client.lpush(
+                "rag:telegram_queue", json.dumps({"text": text[:4000], "global": True})
+            )
             return True
     except Exception as e:
         log.debug("telegram_queue_failed: %s", e)
@@ -1351,7 +1353,9 @@ class WatchlistManager:
     """Manage user watchlists and match new scam patterns."""
 
     @staticmethod
-    async def add_watch(address: str, user_id: str, channels: list[str] | None = None) -> dict:
+    async def add_watch(
+        address: str, user_id: str, channels: list[str] | None = None
+    ) -> dict[str, Any]:
         channels = channels or ["websocket"]
         key = f"rag:watch:{user_id}:{address}"
         watch = {
@@ -1385,7 +1389,7 @@ class WatchlistManager:
         return False
 
     @staticmethod
-    async def get_watches(user_id: str) -> list[dict]:
+    async def get_watches(user_id: str) -> list[dict[str, Any]]:
         watches = []
         pattern = f"rag:watch:{user_id}:*"
         try:
@@ -1403,7 +1407,7 @@ class WatchlistManager:
         return watches
 
     @staticmethod
-    async def match_alert(scam_doc: dict) -> list[dict]:
+    async def match_alert(scam_doc: dict[str, Any]) -> list[tuple[Any, dict[str, Any]]]:
         """Check new scam against all active watches. Returns [(watch, alert)]."""
         matches = []
         scam_addresses = set()
@@ -1441,7 +1445,7 @@ class WatchlistManager:
 
 class AlertDispatcher:
     @staticmethod
-    async def dispatch(watch: dict, alert: dict) -> None:
+    async def dispatch(watch: dict[str, Any], alert: dict[str, Any]) -> None:
         channels = watch.get("channels", ["websocket"])
         for channel in channels:
             try:
@@ -1453,7 +1457,7 @@ class AlertDispatcher:
                 log.warning("dispatch %s failed: %s", channel, e)
 
     @staticmethod
-    async def _dispatch_websocket(user_id: str, alert: dict) -> None:
+    async def _dispatch_websocket(user_id: str, alert: dict[str, Any]) -> None:
         try:
             from app.core.redis import get_redis_async
 
@@ -1466,7 +1470,7 @@ class AlertDispatcher:
             log.warning("websocket dispatch failed: %s", e)
 
     @staticmethod
-    async def _dispatch_telegram(user_id: str, alert: dict) -> None:
+    async def _dispatch_telegram(user_id: str, alert: dict[str, Any]) -> None:
         try:
             from app.core.redis import get_redis_async
 
@@ -1485,7 +1489,7 @@ class AlertDispatcher:
             log.warning("telegram dispatch failed: %s", e)
 
 
-async def start_alert_listener():
+async def start_alert_listener() -> None:
     """Background task: listen for new scams, check against watchlists, dispatch."""
     log.info("rag_alert_listener: starting")
     while True:

@@ -448,16 +448,6 @@ HYPE_WORDS: tuple[str, ...] = (
     "number go up",
     "fomo",
 )
-CLICKBAIT_PHRASES: tuple[str, ...] = (
-    "you won't believe",
-    "this changes everything",
-    "insiders reveal",
-    "don't miss out",
-    "secret revealed",
-    "shocking truth",
-    "to the moon",
-    "buy now",
-)
 BALANCED_MARKERS: tuple[str, ...] = (
     "however",
     "according to",

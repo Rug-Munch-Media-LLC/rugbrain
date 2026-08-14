@@ -64,7 +64,7 @@ INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
 INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
-DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108
+DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108  # nosec B108
 EMBEDDING_DIM = 1024
 
 # Throughput calibration: short texts batch 20 (~3.5s/doc), long texts batch 8
@@ -702,7 +702,9 @@ def load_research_from_arxiv(limit: int = 60) -> list[dict[str, Any]]:
 
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     try:
-        root = ET.fromstring(xml_data)  # noqa: S314  (arXiv feed is trusted public data)
+        # arXiv feed is trusted public data fetched over HTTPS (or cached
+        # from a prior fetch) — B314 XML-bomb risk does not apply.
+        root = ET.fromstring(xml_data)  # noqa: S314  # nosec B314
         entries = root.findall("atom:entry", ns)
         for entry in entries[:limit]:
             title = "".join((entry.findtext("atom:title", "", ns) or "").split())

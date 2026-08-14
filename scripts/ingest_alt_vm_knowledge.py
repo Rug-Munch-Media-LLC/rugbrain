@@ -56,7 +56,7 @@ from coding_ingest_common import (  # noqa: E402
     sparse_clone,
 )
 
-REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108
+REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108  # nosec B108
 
 REPOS: list[dict[str, Any]] = [
     {

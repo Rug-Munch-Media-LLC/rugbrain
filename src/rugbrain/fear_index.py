@@ -506,7 +506,7 @@ class FearIndexStorage:
             # Table/db come from trusted env config (never user input); the
             # only dynamic predicate value is bound via parameters.
             rows = client.query(
-                f"SELECT ts, value, classification FROM {self._db}.{CLICKHOUSE_TABLE} "  # noqa: S608
+                f"SELECT ts, value, classification FROM {self._db}.{CLICKHOUSE_TABLE} "  # noqa: S608  # nosec B608
                 "WHERE ts >= now() - INTERVAL {days:UInt16} DAY ORDER BY ts ASC",
                 parameters={"days": max(1, int(days))},
             )
@@ -594,7 +594,7 @@ async def _redis_get() -> str | None:
             value = await r.get(CACHE_KEY)
             return str(value) if value is not None else None
         finally:
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]
     except Exception:
         return None
 
@@ -623,7 +623,7 @@ async def _cache_set(snapshot: dict[str, Any]) -> None:
         try:
             await r.set(CACHE_KEY, json.dumps(snapshot), ex=CACHE_TTL)
         finally:
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]
     except Exception as e:
         log.debug("fear_index_cache_write_failed: %s", e)
 

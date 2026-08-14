@@ -55,9 +55,9 @@ if sys_path_scripts not in sys.path:
 from ingest_common import content_hash, embed_many  # noqa: E402
 
 CHRONICLE_URL = "https://github.com/DeFiHackLabs/DeFi-Hack-Chronicle.git"
-CHRONICLE_DIR = os.getenv("WEB3HACK_CHRONICLE_DIR", "/tmp/rag-web3hack-chronicle")  # noqa: S108
+CHRONICLE_DIR = os.getenv("WEB3HACK_CHRONICLE_DIR", "/tmp/rag-web3hack-chronicle")  # noqa: S108  # nosec B108
 TIMELINE_URL = "https://github.com/hubingliang/Web3HackTimeline.git"
-TIMELINE_DIR = os.getenv("WEB3HACK_TIMELINE_DIR", "/tmp/rag-web3hack-timeline")  # noqa: S108
+TIMELINE_DIR = os.getenv("WEB3HACK_TIMELINE_DIR", "/tmp/rag-web3hack-timeline")  # noqa: S108  # nosec B108
 
 COLLECTION = "defi_exploits"
 SOURCE = "web3hack_archive"
@@ -215,9 +215,7 @@ def _date_to_ts(date_iso: str) -> int:
     if not date_iso:
         return 0
     try:
-        return int(
-            _dt.datetime.fromisoformat(date_iso).replace(tzinfo=_dt.UTC).timestamp()
-        )
+        return int(_dt.datetime.fromisoformat(date_iso).replace(tzinfo=_dt.UTC).timestamp())
     except ValueError:
         return 0
 

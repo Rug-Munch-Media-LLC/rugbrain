@@ -68,7 +68,7 @@ from solidity_knowledge_data import ALL_SOLIDITY_DOCS  # noqa: E402
 
 DOCS_BASE = "https://docs.soliditylang.org/en/latest/_sources"
 OZ_BASE = "https://docs.openzeppelin.com/contracts/5.x/api"
-REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108
+REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108  # nosec B108
 
 # (rst page, topic, title) — official Solidity docs pages.
 SOLIDITY_DOC_PAGES: list[tuple[str, str, str]] = [

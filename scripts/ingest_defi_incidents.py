@@ -51,7 +51,7 @@ from ingest_common import content_hash  # noqa: E402
 from ingest_common2 import write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/kismp123/DeFi-Security-Incident.git"
-REPO_DIR = os.getenv("DEFI_INCIDENTS_DIR", "/tmp/rag-defi-incidents")  # noqa: S108
+REPO_DIR = os.getenv("DEFI_INCIDENTS_DIR", "/tmp/rag-defi-incidents")  # noqa: S108  # nosec B108
 COLLECTION = "defi_exploits"
 SOURCE = "defi_incidents"
 

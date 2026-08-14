@@ -349,7 +349,7 @@ GOLDEN_TESTS = [
 ]
 
 
-async def evaluate_single(test: dict, skip_answers: bool = False) -> dict:
+async def evaluate_single(test: dict[str, Any], skip_answers: bool = False) -> dict[str, Any]:
     """Run a single test query and score it.
 
     The search call is bounded by ``EVAL_TIMEOUT_S`` via ``asyncio.wait_for``:
@@ -429,7 +429,7 @@ async def evaluate_single(test: dict, skip_answers: bool = False) -> dict:
         return {"query": query[:60], "error": str(e)[:200], "score": 0}
 
 
-async def run_evaluation(limit: int | None = None, skip_answers: bool = False) -> dict:
+async def run_evaluation(limit: int | None = None, skip_answers: bool = False) -> dict[str, Any]:
     """Run full evaluation against golden test set.
 
     Queries run concurrently (``EVAL_MAX_CONCURRENCY`` at a time); each is

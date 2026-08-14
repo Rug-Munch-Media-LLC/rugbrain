@@ -15,7 +15,7 @@ All cross-module deps resolved via search._state / inline imports.
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from rugbrain.crypto_embeddings import COLLECTIONS, get_embedder
 from rugbrain.rrf_fusion import _rrf_fuse
@@ -250,7 +250,7 @@ async def search_similar(
                 trace_retrieval((time.time() - t0) * 1000, collection, len(cached), cache_hit=True)
             except Exception:
                 logger.warning("swallowed exception", exc_info=True)
-            return cached
+            return cast(list[dict[str, Any]], cached)
     except Exception as e:
         logger.debug("Semantic cache check skipped: %s", e)
 
@@ -593,7 +593,8 @@ async def three_pillar_search(
 
     for r in fused:
         did = r.get("id") or r.get("doc_id")
-        r["pillars"] = pillar_map.get(did, ["dense"])
+        did_key = did if isinstance(did, str) else ""
+        r["pillars"] = pillar_map.get(did_key, ["dense"])
         r["match_type"] = "+".join(r["pillars"])
 
     # ── MMR deduplication ──

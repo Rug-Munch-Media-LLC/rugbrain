@@ -170,7 +170,7 @@ def cmd_security(args: argparse.Namespace) -> None:
             max_contracts=args.max_contracts or DEFAULT_MAX_CONTRACTS,
             max_chunks=args.max_chunks or DEFAULT_MAX_CHUNKS,
             no_clone=args.no_clone,
-            repo_dir=args.repo_dir or os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"),  # noqa: S108
+            repo_dir=args.repo_dir or os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"),  # noqa: S108  # nosec B108
         )
         all_stats = asyncio.run(main_async(ns))
         print("=" * 60)

@@ -17,7 +17,7 @@ Designed to work with existing RAG pipeline: images → descriptions → embed �
 import hashlib
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ def compare_image_hashes(hash1: str, hash2: str) -> float:
 class TokenLogoDB:
     """In-memory database of known token logos for stolen artwork detection."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._logos: dict[str, dict[str, Any]] = {}
 
     def add_logo(
@@ -249,7 +249,7 @@ async def describe_image(
         }
 
         prompt = TASK_PROMPTS.get(task, TASK_PROMPTS["describe"])
-        payload = {
+        payload: dict[str, Any] = {
             "model": os.getenv("LLM_MODEL", "deepseek-v4-flash"),
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 300,
@@ -284,7 +284,7 @@ async def describe_image(
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                return cast(str, data["choices"][0]["message"]["content"])
             else:
                 logger.warning("Image description failed: HTTP %s", resp.status_code)
                 return f"Image analysis error: HTTP {resp.status_code}"
@@ -316,7 +316,7 @@ def extract_text_from_image_hints(image_bytes: bytes) -> dict[str, list[str]]:
     except Exception:
         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 
-    results = {
+    results: dict[str, Any] = {
         "eth_addresses": [],
         "sol_addresses": [],
         "urls": [],

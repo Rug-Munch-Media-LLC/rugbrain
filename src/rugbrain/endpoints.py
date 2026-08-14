@@ -352,10 +352,10 @@ async def rag_chain_catalog(request: Request) -> dict[str, Any]:
 
 
 @router.post("/rag/confidence")
-async def rag_confidence_score(request: Request, data: dict):
+async def rag_confidence_score(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from app.confidence import score_confidence  # external dependency
 
-    return score_confidence(
+    return score_confidence(  # type: ignore[no-any-return]  # app.confidence is an untyped external module
         data.get("results", []),
         query=data.get("query", ""),
         entity_matches=data.get("entity_matches", []),
@@ -363,7 +363,7 @@ async def rag_confidence_score(request: Request, data: dict):
 
 
 @router.post("/rag/chunk-solidity")
-async def rag_chunk_solidity(request: Request, data: dict):
+async def rag_chunk_solidity(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     source = data.get("source", "")
     if not source:
         return {"error": "source is required"}
@@ -374,10 +374,10 @@ async def rag_chunk_solidity(request: Request, data: dict):
 
 
 @router.post("/scanner/deployer-risk")
-async def scanner_deployer_risk(request: Request, data: dict):
+async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from app.deployer_reputation import score_deployer_risk  # external dependency
 
-    return score_deployer_risk(
+    return score_deployer_risk(  # type: ignore[no-any-return]  # app.deployer_reputation is an untyped external module
         address=data.get("address", ""),
         deployment_count=data.get("deployment_count", 0),
         mixer_funded=data.get("mixer_funded", False),
@@ -389,10 +389,10 @@ async def scanner_deployer_risk(request: Request, data: dict):
 
 
 @router.post("/rag/cross-chain")
-async def rag_cross_chain(request: Request, data: dict):
+async def rag_cross_chain(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from app.cross_chain import resolve_cross_chain_identity  # external dependency
 
-    return resolve_cross_chain_identity(
+    return resolve_cross_chain_identity(  # type: ignore[no-any-return]  # app.cross_chain is an untyped external module
         address=data.get("address", ""),
         chain=data.get("chain", "ethereum"),
         funding_sources=data.get("funding_sources", []),
@@ -401,7 +401,7 @@ async def rag_cross_chain(request: Request, data: dict):
 
 
 @router.post("/rag/image-analysis")
-async def rag_image_analysis(request: Request, data: dict):
+async def rag_image_analysis(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.multimodal import describe_image
 
     return {
@@ -413,7 +413,7 @@ async def rag_image_analysis(request: Request, data: dict):
 
 
 @router.post("/rag/logo-check")
-async def rag_logo_check(request: Request, data: dict):
+async def rag_logo_check(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     url = data.get("image_url", "")
     if not url:
         return {"error": "image_url is required"}
@@ -425,27 +425,27 @@ async def rag_logo_check(request: Request, data: dict):
 
 
 @router.post("/rag/investigate")
-async def rag_investigate_endpoint(request: Request, data: dict):
+async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     # Accept either ``query`` (natural language) or ``address`` (token/wallet).
     q = data.get("query", "") or data.get("address", "")
     if not q:
         return {"error": "query is required"}
     from app.investigation_narratives import investigate  # external dependency
 
-    return await investigate(
+    return await investigate(  # type: ignore[no-any-return]  # app.investigation_narratives is an untyped external module
         query=q, investigation_type=data.get("type", "auto"), max_hops=data.get("max_hops", 5)
     )
 
 
 @router.get("/rag/graph-communities")
-async def rag_graph_communities(request: Request):
+async def rag_graph_communities(request: Request) -> dict[str, Any]:
     from rugbrain.graph_rag import graph_rag_search
 
     return await graph_rag_search(query="")
 
 
 @router.post("/rag/watch")
-async def rag_create_watch(request: Request, data: dict):
+async def rag_create_watch(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.streaming import create_watch
 
     return await create_watch(
@@ -454,7 +454,7 @@ async def rag_create_watch(request: Request, data: dict):
 
 
 @router.get("/rag/watches")
-async def rag_list_watches(request: Request):
+async def rag_list_watches(request: Request) -> list[dict[str, Any]]:
     from rugbrain.streaming import list_active_watches
 
     return await list_active_watches()
@@ -467,7 +467,7 @@ async def journalism_research(
         default="", description="Research topic — e.g. 'cross-chain bridge hacks 2024'"
     ),
     limit: int = Query(default=15, ge=1, le=50, description="Max docs per collection"),
-) -> dict:
+) -> dict[str, Any]:
     """
     Deep-dive research for crypto journalism.
 
@@ -524,7 +524,7 @@ async def eval_run(
     request: Request,
     limit: int = 0,
     skip_answers: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Run the RAGAS-style golden-set evaluation against the live search endpoint.
 
     Executes ``run_evaluation()`` from ``rugbrain.evaluation``: every query in
@@ -557,7 +557,7 @@ async def eval_run(
 
 
 @router.get("/email/accounts")
-async def email_accounts(request: Request):
+async def email_accounts(request: Request) -> dict[str, Any]:
     """List configured mail accounts.
 
     The account list comes from the ``RMI_EMAIL_ACCOUNTS`` env var — a
@@ -664,7 +664,7 @@ async def search_threat_intel(
             "Results are tagged with source=chain-data-parquet."
         ),
     ),
-) -> dict:
+) -> dict[str, Any]:
     """
     Semantic search across scanner findings ingested into Qdrant.
 
@@ -899,7 +899,7 @@ async def scam_check(
     chain: str = "ethereum",
     limit: int = Query(default=10, ge=1, le=100),
     tier: str = Query(default="free", pattern="^(free|pro)$"),
-) -> dict:
+) -> dict[str, Any]:
     now = datetime.now(UTC)
     hour_key = now.strftime("%Y%m%d%H")
     # IP-based identifier only: X-Device-Id is client-controlled and spoofable,

@@ -14,7 +14,7 @@ Produces structured community reports that answer:
 import json
 import logging
 from collections import defaultdict
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -90,14 +90,14 @@ async def detect_communities(
                 continue
 
             # Most common label among neighbors
-            label_counts = defaultdict(int)
+            label_counts: dict[int, int] = defaultdict(int)
             for neighbor in neighbors:
                 n_label = labels.get(neighbor)
                 if n_label is not None:
                     label_counts[n_label] += 1
 
             if label_counts:
-                new_labels[nid] = max(label_counts, key=label_counts.get)
+                new_labels[nid] = max(label_counts, key=lambda k: label_counts[k])
             else:
                 new_labels[nid] = labels.get(nid, 0)
         labels = new_labels
@@ -120,7 +120,7 @@ async def detect_communities(
             break
 
         # Get node types for community characterization
-        node_types = defaultdict(int)
+        node_types: dict[str, int] = defaultdict(int)
         for nid in members:
             try:
                 node_data = await r.get(f"kg:node:{nid}")
@@ -150,7 +150,9 @@ async def detect_communities(
                 "density": round(
                     (internal_edges // 2) / max(len(members) * (len(members) - 1) / 2, 1), 4
                 ),
-                "dominant_type": max(node_types, key=node_types.get) if node_types else "unknown",
+                "dominant_type": max(node_types, key=lambda k: node_types[k])
+                if node_types
+                else "unknown",
             }
         )
 
@@ -215,7 +217,7 @@ What is the risk profile? Limit to 3 sentences."""
                 },
             )
             if resp.status_code == 200:
-                return resp.json()["choices"][0]["message"]["content"]
+                return cast(str, resp.json()["choices"][0]["message"]["content"])
     except Exception:
         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 

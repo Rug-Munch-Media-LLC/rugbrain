@@ -21,16 +21,17 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger("rag_ingestion")
 
 
-async def nightly_rag_index(**kw) -> dict:
+async def nightly_rag_index(**kw: Any) -> dict[str, Any]:
     """Nightly RAG indexing - embeds all new content from all sources.
 
     Called by cron at 3AM UTC. Idempotent - only indexes new content.
     """
-    indexed = {"collections": {}, "total_docs": 0, "errors": []}
+    indexed: dict[str, Any] = {"collections": {}, "total_docs": 0, "errors": []}
 
     try:
         # ── 1. Index recent news articles ──
@@ -147,7 +148,7 @@ async def nightly_rag_index(**kw) -> dict:
     return indexed
 
 
-async def _embed_batch(docs: list[dict], collection: str) -> int:
+async def _embed_batch(docs: list[dict[str, Any]], collection: str) -> int:
     """Embed a batch of documents and store in Redis RAG store."""
     if not docs:
         return 0
@@ -183,7 +184,7 @@ async def _embed_batch(docs: list[dict], collection: str) -> int:
                 logger.warning("embed_failed doc_id=%s collection=%s err=%s", doc_id, collection, e)
 
             # Store document metadata (+ vector when available)
-            mapping = {
+            mapping: dict[str | bytes, Any] = {
                 "text": doc["text"][:2000],
                 "metadata": json.dumps(doc.get("metadata", {}), default=str),
                 "indexed_at": datetime.now(UTC).isoformat(),
@@ -228,7 +229,7 @@ async def _embed_batch(docs: list[dict], collection: str) -> int:
         return 0
 
 
-async def rag_health_check(**kw) -> dict:
+async def rag_health_check(**kw: Any) -> dict[str, Any]:
     """Check RAG system health - collections, doc counts, storage."""
     try:
         import redis

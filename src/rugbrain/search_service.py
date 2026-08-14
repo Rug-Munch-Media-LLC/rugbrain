@@ -9,6 +9,7 @@ New code should import directly from ``search.engine``, ``search.filters``,
 
 import logging
 import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 
-_redis_pool = None
+_redis_pool: Any = None
 
 
-async def _get_redis():
+async def _get_redis() -> Any:
     """Get or create a shared Redis connection (singleton pattern to prevent leaks)."""
     global _redis_pool
     import redis.asyncio as redis
@@ -47,7 +48,7 @@ async def _get_redis():
 
 
 _seeded = False
-_pattern_cache: dict = {}
+_pattern_cache: dict[str, Any] = {}
 _pattern_cache_loaded = False
 
 # ═══════════════════════════════════════════════════════════════

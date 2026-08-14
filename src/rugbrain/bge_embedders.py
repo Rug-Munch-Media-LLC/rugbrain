@@ -7,6 +7,7 @@ specialized contract-code embedder.
 import asyncio
 import logging
 import os
+from typing import Any, cast
 
 import numpy as np
 
@@ -32,7 +33,7 @@ class LocalBGEEmbedder:
     _model = None
 
     @classmethod
-    def _get_model(cls):
+    def _get_model(cls) -> Any:
         if cls._model is None:
             from sentence_transformers import SentenceTransformer
 
@@ -45,7 +46,7 @@ class LocalBGEEmbedder:
         embeddings = await asyncio.to_thread(
             lambda: model.encode(texts, normalize_embeddings=True).tolist()
         )
-        return embeddings
+        return cast(list[list[float]], embeddings)
 
     async def embed_one(self, text: str) -> list[float]:
         results = await self.embed([text])
@@ -140,6 +141,7 @@ class HuggingFaceEmbedder:
 
     BASE = "https://api-inference.huggingface.co/models"
     MODEL = "BAAI/bge-m3"
+    DIMS = int(os.getenv("HF_EMBED_DIMS", "1024"))
 
     def __init__(self, token: str | None = None):
         self.token = token or HF_TOKEN
@@ -193,7 +195,7 @@ class ContractCodeEmbedder:
     """
 
     @staticmethod
-    async def embed(code: str, semantic_embedder=None) -> np.ndarray:
+    async def embed(code: str, semantic_embedder: Any = None) -> np.ndarray:
         """
         Generate a combined 320-dim contract embedding:
         - 128 dims: structural features (local)

@@ -25,7 +25,7 @@ import asyncio
 import logging
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -319,14 +319,25 @@ async def build_token_market_context(address: str, chain: str = "ethereum") -> d
             social,
             freshness,
             similar,
-        ) = await asyncio.gather(
-            _fetch_fear_index(client),
-            _fetch_chain_activity(client, chain),
-            _fetch_new_deploys(client, chain),
-            _fetch_recent_exploits(client, chain),
-            _fetch_social_signals(address, chain),
-            _fetch_deployer_freshness(address, chain),
-            _fetch_similar_tokens(address, chain),
+        ) = cast(
+            tuple[
+                dict[str, Any],
+                dict[str, Any],
+                int,
+                list[dict[str, Any]],
+                dict[str, Any],
+                str,
+                list[dict[str, Any]],
+            ],
+            await asyncio.gather(
+                _fetch_fear_index(client),
+                _fetch_chain_activity(client, chain),
+                _fetch_new_deploys(client, chain),
+                _fetch_recent_exploits(client, chain),
+                _fetch_social_signals(address, chain),
+                _fetch_deployer_freshness(address, chain),
+                _fetch_similar_tokens(address, chain),
+            ),
         )
 
     return {

@@ -38,7 +38,7 @@ POLL_TIMEOUT = 30  # Kept for backward compatibility; LPOP uses 1s sleep between
 
 # ── Poller state ───────────────────────────────────────────────────────────
 _poller_running = False
-_poller_task: asyncio.Task | None = None
+_poller_task: asyncio.Task[Any] | None = None
 _poller_ingested_count: int = 0
 _poller_last_ingested_at: str = ""
 
@@ -105,7 +105,7 @@ async def _poll_forever() -> None:
     import redis.asyncio as aioredis
 
     while True:
-        r: aioredis.Redis | None = None
+        r: aioredis.Redis[str] | None = None
         try:
             r = aioredis.Redis(
                 host=REDIS_HOST,

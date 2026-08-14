@@ -17,6 +17,7 @@ import logging
 import re
 import shutil
 import subprocess
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ TARGET_CHUNK_SIZE = 2000
 MAX_CHUNK_SIZE = 3500
 
 
-def parse_solidity_ast(source: str) -> dict | None:
+def parse_solidity_ast(source: str) -> dict[str, Any] | None:
     """Parse Solidity source into AST using solc.
 
     Returns the AST JSON or None if parsing fails.
@@ -61,7 +62,7 @@ def parse_solidity_ast(source: str) -> dict | None:
 
         # solc output structure: {"sources": {"<stdin>": {"AST": {...}}}}
         for _source_name, source_data in output.get("sources", {}).items():
-            return source_data.get("AST")
+            return cast(dict[str, Any] | None, source_data.get("AST"))
 
         return None
     except FileNotFoundError:
@@ -76,7 +77,7 @@ def parse_solidity_ast(source: str) -> dict | None:
 
 
 def extract_boundaries(
-    ast: dict,
+    ast: dict[str, Any],
     source: str,
 ) -> list[tuple[int, int, str]]:
     """
@@ -89,7 +90,7 @@ def extract_boundaries(
     source.split("\n")
     _compute_line_offsets(source)
 
-    def _walk(node, depth=0):
+    def _walk(node: Any, depth: int = 0) -> None:
         if not isinstance(node, dict):
             return
 

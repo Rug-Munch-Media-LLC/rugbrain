@@ -70,9 +70,11 @@ _named_cache: dict[str, bool] = {}
 # ── URL resolution (docker names first, loopback fallback) ─────────────
 def _resolve_base(name: str, primary: str, loopback: str) -> list[str]:
     candidates = [primary]
-    # If the primary host is a docker service name, probe loopback too
+    # If the primary host is a docker service name, probe loopback too.
+    # "0.0.0.0" here is a string comparison against candidate hostnames,
+    # not a socket bind — B104 is a false positive.
     host = primary.split("//")[-1].split(":")[0]
-    if host not in ("127.0.0.1", "localhost", "0.0.0.0"):  # noqa: S104
+    if host not in ("127.0.0.1", "localhost", "0.0.0.0"):  # noqa: S104  # nosec B104
         candidates.append(loopback)
     return candidates
 
@@ -442,8 +444,10 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
     try:
         # Pick up rows that were never embedded OR carry the old fake marker
         # (rag_embedding_id == news_id was the pre-pipeline placeholder).
+        # SQL is static: only _ORDER_CLAUSES ("asc"/"desc" fixed strings) is
+        # interpolated; the limit is bound via the $1 parameter.
         query = (
-            "SELECT news_id, url, title, summary, body_markdown, source, "
+            "SELECT news_id, url, title, summary, body_markdown, source, "  # nosec B608
             "published_at, chains_mentioned, tokens_mentioned, sentiment_score "
             "FROM news_items "
             "WHERE rag_embedding_id IS NULL OR rag_embedding_id = news_id "

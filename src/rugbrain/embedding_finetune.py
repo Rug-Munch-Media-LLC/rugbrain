@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("rag.fine_tuning")
 
@@ -25,19 +26,18 @@ class EmbeddingTrainingData:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    async def collect_scam_documents(self, min_confidence: int = 70) -> list[dict]:
+    async def collect_scam_documents(self, min_confidence: int = 70) -> list[dict[str, Any]]:
         """Collect all confirmed scam documents from Qdrant."""
         from rugbrain.qdrant_store import get_qdrant_store
 
         store = await get_qdrant_store()
-        docs = []
+        docs: list[dict[str, Any]] = []
         for col in ["known_scams", "scam_patterns", "crime_reports", "defi_hacks"]:
             try:
                 results = await store.search(
                     collection=col,
-                    query_vector=[0.0] * 1024,
+                    query_embedding=[0.0] * 1024,
                     limit=1000,
-                    with_payload=True,
                 )
                 for r in results:
                     metadata = r.get("payload", {}).get("metadata", {})
@@ -56,19 +56,18 @@ class EmbeddingTrainingData:
                 logger.warning("collect_scam_documents: %s failed: %s", col, e)
         return docs
 
-    async def collect_legitimate_documents(self, limit: int = 1000) -> list[dict]:
+    async def collect_legitimate_documents(self, limit: int = 1000) -> list[dict[str, Any]]:
         """Collect legitimate token/protocol documents as negatives."""
         from rugbrain.qdrant_store import get_qdrant_store
 
         store = await get_qdrant_store()
-        docs = []
+        docs: list[dict[str, Any]] = []
         for col in ["token_analysis", "wallet_profiles", "market_intel"]:
             try:
                 results = await store.search(
                     collection=col,
-                    query_vector=[0.0] * 1024,
+                    query_embedding=[0.0] * 1024,
                     limit=limit,
-                    with_payload=True,
                 )
                 for r in results:
                     docs.append(
@@ -82,12 +81,12 @@ class EmbeddingTrainingData:
                 logger.warning("collect_legitimate: %s failed: %s", col, e)
         return docs[:limit]
 
-    async def build_training_pairs(self) -> dict:
+    async def build_training_pairs(self) -> dict[str, Any]:
         """Build positive + hard-negative training pairs."""
         scams = await self.collect_scam_documents()
         legit = await self.collect_legitimate_documents()
 
-        pairs = {"positive_pairs": [], "triplets": []}
+        pairs: dict[str, Any] = {"positive_pairs": [], "triplets": []}
 
         for i, scam_a in enumerate(scams):
             for j, scam_b in enumerate(scams):

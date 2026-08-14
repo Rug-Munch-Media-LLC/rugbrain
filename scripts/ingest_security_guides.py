@@ -61,7 +61,7 @@ from coding_ingest_common import (  # noqa: E402
 )
 from security_guides_data import ALL_SECURITY_GUIDE_DOCS  # noqa: E402
 
-REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108
+REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108  # nosec B108
 
 # Solcurity + Consensys best practices repos.
 REPOS: list[dict[str, Any]] = [

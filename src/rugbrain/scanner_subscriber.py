@@ -35,7 +35,7 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 # ── Subscriber state ───────────────────────────────────────────────────────
 _subscriber_running = False
 _subscriber_connected = False  # set when Redis subscription actually succeeds
-_subscriber_task: asyncio.Task | None = None
+_subscriber_task: asyncio.Task[Any] | None = None
 _ingested_count: int = 0
 _last_ingested_at: str = ""
 
@@ -100,7 +100,7 @@ async def _listen_forever() -> None:
     import redis.asyncio as aioredis
 
     while True:
-        r: aioredis.Redis | None = None
+        r: aioredis.Redis[str] | None = None
         try:
             r = aioredis.Redis(
                 host=REDIS_HOST,
@@ -113,7 +113,7 @@ async def _listen_forever() -> None:
 
             # Verify subscription actually worked
             channels = await r.pubsub_channels()
-            if b"rmi:rag:ingest" in channels or "rmi:rag:ingest" in channels:
+            if any(ch in ("rmi:rag:ingest", b"rmi:rag:ingest") for ch in channels):
                 global _subscriber_connected
                 _subscriber_connected = True
 

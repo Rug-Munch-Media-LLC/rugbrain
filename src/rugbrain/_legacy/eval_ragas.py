@@ -22,6 +22,7 @@ import math
 import re
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -465,7 +466,7 @@ async def faithfulness(answer: str, context_chunks: list[str]) -> float:
         guard = await HallucinationGuard.get_guard()
         combined_context = "\n\n".join(context_chunks[:5])
         result = await guard.check_answer(answer, combined_context)
-        return result.confidence if result.is_faithful else 1.0 - result.confidence
+        return float(result.confidence if result.is_faithful else 1.0 - result.confidence)
     except Exception as e:
         logger.debug("NLI faithfulness failed, using keyword overlap: %s", e)
         return _keyword_faithfulness(answer, context_chunks)
@@ -706,7 +707,7 @@ async def run_evaluation(
     # Bound the concurrency so embedding/search backends are not hammered.
     semaphore = asyncio.Semaphore(EVAL_MAX_CONCURRENCY)
 
-    async def _run_one(tc: dict) -> QueryMetrics:
+    async def _run_one(tc: dict[str, Any]) -> QueryMetrics:
         q = tc["query"]
         rel_ids = tc.get("relevant_doc_ids", [])
         expected = tc.get("expected_answer", "")
@@ -774,7 +775,7 @@ async def run_evaluation(
                 latency_ms=round(latency, 2),
             )
 
-    async def _run_with_semaphore(tc: dict) -> QueryMetrics:
+    async def _run_with_semaphore(tc: dict[str, Any]) -> QueryMetrics:
         async with semaphore:
             return await _run_one(tc)
 

@@ -260,7 +260,7 @@ class WebCrawler:
             return self._crawl4ai_module
         self._crawl4ai_probed = True
         try:
-            import crawl4ai  # type: ignore[import-not-found]
+            import crawl4ai
 
             self._crawl4ai_module = crawl4ai
             log.info(

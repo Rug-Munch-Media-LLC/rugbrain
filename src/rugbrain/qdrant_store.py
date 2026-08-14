@@ -62,8 +62,9 @@ async def _resolve_qdrant_url() -> str:
         return _resolved_url
 
     async with _resolved_lock:
-        if _resolved_url is not None:
-            return _resolved_url  # double-check after acquiring lock
+        cached = _resolved_url
+        if cached is not None:
+            return cached  # type: ignore[unreachable]  # double-checked locking across coroutines
 
         for url in QDRANT_FALLBACK_URLS:
             try:
@@ -542,7 +543,7 @@ class QdrantVectorStore:
                 r["match_type"] = "hybrid" if kw_hits > 0 else "vector"
             results.sort(
                 key=lambda x: x.get("rrf_score", 0),
-                reverse=True,  # type: ignore[arg-type,return-value]
+                reverse=True,
             )
         else:
             for r in results:
@@ -678,7 +679,7 @@ class QdrantVectorStore:
         collection: str,
         embedding: list[float],
         content: str = "",
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
         source: str = "",
         severity: str = "medium",
         chain: str = "",

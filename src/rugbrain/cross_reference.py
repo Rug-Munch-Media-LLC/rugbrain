@@ -52,7 +52,7 @@ def _import_lance_store() -> Any | None:
     any failure so callers degrade to the Qdrant fallback.
     """
     try:
-        from lite_indexer.vectors.lance_store import (  # type: ignore[import-not-found]
+        from lite_indexer.vectors.lance_store import (
             LanceVectorStore,
         )
 

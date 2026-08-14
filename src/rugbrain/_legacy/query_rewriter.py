@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import cast
 
 logger = logging.getLogger("rag.query_rewriter")
 
@@ -70,7 +71,8 @@ async def rewrite_query(query: str, n_variants: int = 3, use_llm: bool = False) 
         return _rule_based_variants(query, n_variants)
 
     try:
-        from app import ai_router  # pyright: ignore[reportAttributeAccessIssue]
+        # pyright: ignore[reportAttributeAccessIssue] — private monorepo dependency
+        from app import ai_router  # type: ignore[attr-defined]
 
         prompt = REWRITE_PROMPT.format(query=query, n=n_variants)
         result = await ai_router.chat_completion(
@@ -81,7 +83,7 @@ async def rewrite_query(query: str, n_variants: int = 3, use_llm: bool = False) 
         )
         content = result.get("content", "[]")
         variants = json.loads(content)
-        return variants[:n_variants]
+        return cast(list[str], variants)[:n_variants]
     except Exception:
         logger.debug("Query rewrite via LLM failed, using rule-based fallback")
         return _rule_based_variants(query, n_variants)

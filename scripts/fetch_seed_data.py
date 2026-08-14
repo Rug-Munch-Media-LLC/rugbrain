@@ -30,7 +30,7 @@ logger = logging.getLogger("fetch_seed_data")
 
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
-DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108
+DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108  # nosec B108
 CONTAINER = os.getenv("RMI_BACKEND_CONTAINER", "rmi-backend")
 
 PY_SNIPPETS = {

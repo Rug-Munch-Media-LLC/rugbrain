@@ -49,7 +49,7 @@ from ingest_common import content_hash  # noqa: E402
 from ingest_common2 import build_doc, write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/peckshield/publications.git"
-REPO_DIR = os.getenv("PECKSHEILD_DIR", "/tmp/rag-peckshield")  # noqa: S108
+REPO_DIR = os.getenv("PECKSHEILD_DIR", "/tmp/rag-peckshield")  # noqa: S108  # nosec B108
 COLLECTION = "contract_audits"
 SOURCE = "peckshield"
 

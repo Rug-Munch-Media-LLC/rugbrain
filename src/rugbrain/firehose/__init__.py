@@ -136,7 +136,7 @@ class FirehoseStats:
     total_ingested: int = 0
     total_skipped: int = 0
     total_errors: int = 0
-    sources: dict[str, dict] = field(default_factory=dict)
+    sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     last_activity: float = 0
 
 
@@ -151,7 +151,7 @@ class IngestionPipeline:
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
         self._rate_trackers: dict[str, list[float]] = {}
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     def _check_rate(self, collection: str) -> bool:
         """Return True if we're under the rate limit for this collection."""
@@ -161,7 +161,7 @@ class IngestionPipeline:
         times[:] = [t for t in times if now - t < 60]
         return len(times) < limit
 
-    def _record_ingest(self, collection: str):
+    def _record_ingest(self, collection: str) -> None:
         """Record an ingestion for rate limiting."""
         self._rate_trackers.setdefault(collection, []).append(time.monotonic())
 
@@ -178,12 +178,12 @@ class IngestionPipeline:
                 timeout=5,
             )
             if resp.status_code == 200:
-                return resp.json().get("exists", False)
+                return bool(resp.json().get("exists", False))
         except Exception:
             logger.warning("swallowed exception", exc_info=True)
         return False
 
-    def score_quality(self, content: str, metadata: dict) -> int:
+    def score_quality(self, content: str, metadata: dict[str, Any]) -> int:
         """Score document quality 0-100. Skip low-signal content."""
         score = 50
 
@@ -219,11 +219,11 @@ class IngestionPipeline:
 
         return max(0, min(100, score))
 
-    def extract_entities(self, content: str) -> dict:
+    def extract_entities(self, content: str) -> dict[str, Any]:
         """Extract addresses, chains, tokens from content."""
         import re
 
-        entities = {"addresses": [], "chains": [], "tokens": [], "protocols": []}
+        entities: dict[str, Any] = {"addresses": [], "chains": [], "tokens": [], "protocols": []}
 
         evm_addrs = re.findall(r"0x[a-fA-F0-9]{40}", content)
         entities["addresses"].extend(evm_addrs[:10])
@@ -285,7 +285,7 @@ class IngestionPipeline:
         return entities
 
     async def ingest(
-        self, collection: str, content: str, metadata: dict, doc_id: str | None = None
+        self, collection: str, content: str, metadata: dict[str, Any], doc_id: str | None = None
     ) -> dict[str, Any]:
         """Run the full pipeline: dedup → quality → extract → classify → store."""
 
@@ -338,7 +338,7 @@ class IngestionPipeline:
         except Exception as e:
             return {"status": "error", "detail": str(e)[:200]}
 
-    async def _mark_ingested(self, content_hash: str, collection: str):
+    async def _mark_ingested(self, content_hash: str, collection: str) -> None:
         """Mark content hash in Redis dedup set."""
         try:
             ttl = HASH_TTL.get(collection, HASH_TTL["default"])
@@ -350,7 +350,7 @@ class IngestionPipeline:
         except Exception:
             logger.warning("swallowed exception", exc_info=True)
 
-    async def ingest_batch(self, docs: list[dict]) -> dict[str, int]:
+    async def ingest_batch(self, docs: list[dict[str, Any]]) -> dict[str, int]:
         """Ingest multiple documents with rate limiting."""
         stats = {"ingested": 0, "duplicate": 0, "skipped": 0, "errors": 0}
 
@@ -394,23 +394,23 @@ class FeedSources:
 
     # ── Hourly: News (delegated) ──
 
-    async def pull_news_rss(self) -> list[dict]:
+    async def pull_news_rss(self) -> list[dict[str, Any]]:
         return await _pull_news_rss(self.client)
 
-    async def pull_ct_rundown(self) -> list[dict]:
+    async def pull_ct_rundown(self) -> list[dict[str, Any]]:
         return await _pull_ct_rundown(self.client)
 
-    async def pull_social_sentiment(self) -> list[dict]:
+    async def pull_social_sentiment(self) -> list[dict[str, Any]]:
         return await _pull_social_sentiment(self.client)
 
-    async def pull_prediction_markets(self) -> list[dict]:
+    async def pull_prediction_markets(self) -> list[dict[str, Any]]:
         return await _pull_prediction_markets(self.client)
 
     # ── Daily: Scam Databases (inline) ──
 
-    async def pull_etherscan_labels(self) -> list[dict]:
+    async def pull_etherscan_labels(self) -> list[dict[str, Any]]:
         """Pull etherscan labeled addresses (via existing CSV)."""
-        docs = []
+        docs: list[dict[str, Any]] = []
         # __file__ is rugbrain/firehose/__init__.py -> go up 2 levels to rugbrain/../data/
         csv_rel = os.path.join(
             os.path.dirname(__file__), "..", "..", "data", "etherscan_phish_hack.csv"
@@ -433,7 +433,11 @@ class FeedSources:
         try:
             async with aiofiles.open(csv_path, newline="", encoding="utf-8") as f:
                 rows = list(
-                    await asyncio.get_running_loop().run_in_executor(None, csv.DictReader, f)
+                    await asyncio.get_running_loop().run_in_executor(
+                        None,
+                        csv.DictReader,  # type: ignore[arg-type]  # csv.DictReader accepts any file-like
+                        f,
+                    )
                 )
 
             for row in rows:
@@ -464,9 +468,9 @@ class FeedSources:
 
         return docs
 
-    async def pull_solana_scams(self) -> list[dict]:
+    async def pull_solana_scams(self) -> list[dict[str, Any]]:
         """Pull Solana token registry flagged tokens."""
-        docs = []
+        docs: list[dict[str, Any]] = []
         try:
             resp = await self.client.get(
                 "https://raw.githubusercontent.com/solana-labs/token-list/main/src/tokens/solana.tokenlist.json",
@@ -501,9 +505,9 @@ class FeedSources:
 
     # ── Weekly: Pattern Extraction ──
 
-    async def extract_scam_patterns(self) -> list[dict]:
+    async def extract_scam_patterns(self) -> list[dict[str, Any]]:
         """Extract common patterns from confirmed scam documents."""
-        docs = []
+        docs: list[dict[str, Any]] = []
         try:
             resp = await self.client.get(
                 f"{RAG_API}/search",
@@ -550,9 +554,9 @@ class FeedSources:
 class FirehoseEngine:
     """The central continuous ingestion engine."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[Any] | None = None
         self._client: httpx.AsyncClient | None = None
         self._pipeline: IngestionPipeline | None = None
         self._feeds: FeedSources | None = None
@@ -561,7 +565,7 @@ class FirehoseEngine:
         self.stats = FirehoseStats()
         self._lock = asyncio.Lock()
 
-    async def start(self):
+    async def start(self) -> None:
         """Start the firehose engine."""
         if self._running:
             logger.info("Firehose already running")
@@ -636,7 +640,7 @@ class FirehoseEngine:
         self._task = asyncio.create_task(self._run_loop())
         logger.info("Firehose started with %s sources", len(self._sources))
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the firehose engine."""
         self._running = False
         if self._task:
@@ -647,7 +651,7 @@ class FirehoseEngine:
             await self._client.aclose()
         logger.info("Firehose stopped")
 
-    async def _run_loop(self):
+    async def _run_loop(self) -> None:
         """Main firehose loop - checks sources and runs those due."""
         logger.info("Firehose loop started")
 
@@ -669,6 +673,7 @@ class FirehoseEngine:
                     docs = await source.fetch_fn()
 
                     if docs:
+                        assert self._pipeline is not None  # set in start()
                         stats = await self._pipeline.ingest_batch(docs)
                         source.docs_ingested += stats["ingested"]
                         source.docs_skipped += stats["duplicate"] + stats["skipped"]
@@ -708,12 +713,13 @@ class FirehoseEngine:
 
             await asyncio.sleep(30)
 
-    async def feed_now(self, source_name: str) -> dict:
+    async def feed_now(self, source_name: str) -> dict[str, Any]:
         """Manually trigger a specific feed source immediately."""
         for source in self._sources:
             if source.name == source_name:
                 try:
                     docs = await source.fetch_fn()
+                    assert self._pipeline is not None  # set in start()
                     stats = await self._pipeline.ingest_batch(docs)
                     source.runs += 1
                     source.docs_ingested += stats["ingested"]
@@ -724,7 +730,7 @@ class FirehoseEngine:
                     return {"source": source_name, "error": str(e)}
         return {"error": f"Source '{source_name}' not found"}
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """Get current firehose status."""
         return {
             "running": self._running,

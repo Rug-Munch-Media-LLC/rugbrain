@@ -173,16 +173,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         import redis.asyncio as aioredis
 
-        r = aioredis.Redis(
+        redis_client = aioredis.Redis(
             host=_health_state["redis_host"],
             port=int(os.getenv("REDIS_PORT", "6379")),
             password=os.getenv("REDIS_PASSWORD", ""),
             decode_responses=True,
         )
-        await r.ping()
+        await redis_client.ping()
         _health_state["redis"] = True
         logger.info("redis_probe status=ok")
-        await r.close()
+        await redis_client.close()
     except Exception as exc:
         logger.warning("redis_probe failed: %s", exc)
         _health_state["redis"] = False
@@ -407,20 +407,20 @@ async def health() -> dict[str, Any]:
     try:
         import redis.asyncio as aioredis
 
-        r = aioredis.Redis(
+        redis_client = aioredis.Redis(
             host=_health_state["redis_host"],
             port=int(os.getenv("REDIS_PORT", "6379")),
             password=os.getenv("REDIS_PASSWORD", ""),
             decode_responses=True,
         )
-        await r.ping()
+        await redis_client.ping()
         redis_ok = True
         # Scanner→RAG ingest queue backlog (LPUSH'd by rmi-backend, LPOP'd by poller)
         try:
-            queue_depth = int(await r.llen("rmi:rag:findings_queue") or 0)
+            queue_depth = int(await redis_client.llen("rmi:rag:findings_queue") or 0)
         except Exception:
             queue_depth = -1
-        await r.close()
+        await redis_client.close()
     except Exception:
         redis_ok = False
 

@@ -82,7 +82,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
 INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
 INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
 EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
-KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108
+KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108
 CHECKPOINT_PATH = Path(
     os.getenv("RAG_KNOWLEDGE_CHECKPOINT", str(KNOWLEDGE_DIR / "checkpoint.json"))
 )

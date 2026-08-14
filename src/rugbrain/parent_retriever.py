@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any, cast
 
 log = logging.getLogger(__name__)
 
@@ -19,11 +20,11 @@ log = logging.getLogger(__name__)
 class ParentRetriever:
     """Stores and retrieves parent documents in Redis for context expansion."""
 
-    def __init__(self, redis=None):
+    def __init__(self, redis: Any | None = None) -> None:
         """Args: redis: optional async Redis client for DI/testing."""
         self._redis = redis
 
-    async def store_parent(self, doc_id: str, content: str, metadata: dict) -> None:
+    async def store_parent(self, doc_id: str, content: str, metadata: dict[str, Any]) -> None:
         """Store the full parent document in Redis.
 
         Args:
@@ -51,7 +52,7 @@ class ParentRetriever:
         except Exception as e:
             log.debug("parent_retriever: store_parent failed for %s: %s", doc_id, e)
 
-    async def get_parent(self, doc_id: str) -> dict | None:
+    async def get_parent(self, doc_id: str) -> dict[str, Any] | None:
         """Retrieve a parent document from Redis.
 
         Args:
@@ -69,12 +70,14 @@ class ParentRetriever:
             key = f"rag:parent:{doc_id}"
             data = await r.get(key)
             if data:
-                return json.loads(data)
+                return cast(dict[str, Any], json.loads(data))
         except Exception as e:
             log.debug("parent_retriever: get_parent failed for %s: %s", doc_id, e)
         return None
 
-    async def expand_context(self, chunks: list[dict], window_size: int = 1) -> list[dict]:
+    async def expand_context(
+        self, chunks: list[dict[str, Any]], window_size: int = 1
+    ) -> list[dict[str, Any]]:
         """Enrich a list of matched chunks with parent document context.
 
         For each chunk that has a doc_id, fetches the parent document and
@@ -98,7 +101,9 @@ class ParentRetriever:
             enriched.append(chunk)
         return enriched
 
-    async def expand_context_around_chunk(self, chunk: dict, context_chars: int = 2000) -> str:
+    async def expand_context_around_chunk(
+        self, chunk: dict[str, Any], context_chars: int = 2000
+    ) -> str:
         """For a single chunk, return surrounding text from the parent document.
 
         Finds where the chunk content appears in the parent document and
@@ -112,7 +117,7 @@ class ParentRetriever:
             A string slice of the parent document centered on the chunk.
         """
         doc_id = chunk.get("doc_id") or chunk.get("id")
-        chunk_text = chunk.get("content", "")
+        chunk_text: str = chunk.get("content", "")
         if not doc_id or not chunk_text:
             return chunk_text
 
@@ -120,7 +125,7 @@ class ParentRetriever:
         if not parent:
             return chunk_text
 
-        parent_content = parent.get("content", "")
+        parent_content: str = parent.get("content", "")
         if not parent_content:
             return chunk_text
 

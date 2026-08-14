@@ -22,6 +22,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 
@@ -128,7 +129,7 @@ SOURCES = {
 # ── Scraper Functions ──
 
 
-async def scrape_rekt_db() -> list[dict]:
+async def scrape_rekt_db() -> list[dict[str, Any]]:
     """
     Scrape Rekt DB for historical DeFi hacks.
     de.fi/rekt-database lists 3,000+ exploits with:
@@ -169,7 +170,7 @@ async def scrape_rekt_db() -> list[dict]:
     return docs
 
 
-async def scrape_chainabuse() -> list[dict]:
+async def scrape_chainabuse() -> list[dict[str, Any]]:
     """
     Scrape Chainabuse for scam reports with addresses.
     chainabuse.com has community-reported scams with:
@@ -213,7 +214,7 @@ async def scrape_chainabuse() -> list[dict]:
     return docs
 
 
-async def scrape_slowmist() -> list[dict]:
+async def scrape_slowmist() -> list[dict[str, Any]]:
     """Scrape SlowMist Hacked Archive for detailed exploit analysis."""
     docs = []
     try:
@@ -249,7 +250,7 @@ async def scrape_slowmist() -> list[dict]:
     return docs
 
 
-async def scrape_rekt_news() -> list[dict]:
+async def scrape_rekt_news() -> list[dict[str, Any]]:
     """Scrape Rekt News for in-depth exploit post-mortems."""
     docs = []
     try:
@@ -287,7 +288,7 @@ async def scrape_rekt_news() -> list[dict]:
     return docs
 
 
-async def ingest_trm_report() -> list[dict]:
+async def ingest_trm_report() -> list[dict[str, Any]]:
     """
     Ingest TRM Labs 2026 Crypto Crime Report.
     Key findings: $158B illicit volume, $2.87B stolen in 150 hacks,
@@ -333,7 +334,7 @@ async def ingest_trm_report() -> list[dict]:
     return docs
 
 
-async def ingest_honeypotdb() -> list[dict]:
+async def ingest_honeypotdb() -> list[dict[str, Any]]:
     """Ingest HoneypotDB top honeypots list."""
     docs = []
     try:
@@ -372,7 +373,7 @@ async def ingest_honeypotdb() -> list[dict]:
     return docs
 
 
-async def ingest_scamsniffer() -> list[dict]:
+async def ingest_scamsniffer() -> list[dict[str, Any]]:
     """Ingest ScamSniffer real-time phishing and scam reports."""
     docs = []
     try:
@@ -408,7 +409,7 @@ async def ingest_scamsniffer() -> list[dict]:
     return docs
 
 
-async def ingest_tokensniffer() -> list[dict]:
+async def ingest_tokensniffer() -> list[dict[str, Any]]:
     """Ingest TokenSniffer automated token scam detection."""
     docs = []
     try:
@@ -453,7 +454,7 @@ async def ingest_tokensniffer() -> list[dict]:
 # ── Master Ingestion Orchestrator ──
 
 
-async def ingest_historical_source(source_id: str) -> dict:
+async def ingest_historical_source(source_id: str) -> dict[str, Any]:
     """Ingest a single historical source into RAG."""
     source = SOURCES.get(source_id)
     if not source:
@@ -527,7 +528,7 @@ async def ingest_historical_source(source_id: str) -> dict:
     }
 
 
-async def ingest_all_historical() -> dict:
+async def ingest_all_historical() -> dict[str, Any]:
     """Run full historical ingestion across all sources."""
     results = {}
     total_ingested = 0

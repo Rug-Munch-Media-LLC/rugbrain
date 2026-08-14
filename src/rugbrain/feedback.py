@@ -40,7 +40,7 @@ async def record_scanner_result(
     chain: str,
     verdict: str,  # "scam", "honeypot", "rug", "safe", "unknown"
     confidence: float,  # 0.0 - 1.0
-    flags: list | None = None,
+    flags: list[str] | None = None,
     token_name: str = "",
 ) -> dict[str, Any]:
     """
@@ -71,7 +71,7 @@ async def record_scanner_result(
         )
 
         if adjustment == 0:
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]
             return {"status": "no_action", "verdict": verdict}
 
         # Find RAG documents matching this address
@@ -155,7 +155,7 @@ async def record_scanner_result(
             f"-{adjustments['penalized']} penalized"
         )
 
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]
         return {
             "status": "ok",
             "verdict": verdict,
@@ -169,7 +169,7 @@ async def record_scanner_result(
     except Exception as e:
         logger.error("RAG feedback error: %s", e)
         with contextlib.suppress(Exception):
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]
         return {"status": "error", "detail": str(e)}
 
 
@@ -190,7 +190,7 @@ async def get_document_weight(doc_id: str) -> float:
             decode_responses=True,
         )
         weight = await r.get(f"rag:weight:{doc_id}")
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]
         return float(weight) if weight else 1.0
     except Exception:
         return 1.0
@@ -233,7 +233,7 @@ async def get_feedback_stats() -> dict[str, Any]:
         avg_weight = total_weight / weight_keys if weight_keys > 0 else 1.0
         faiss_dirty = await r.get("rag:faiss:dirty") == "1"
 
-        await r.aclose()
+        await r.aclose()  # type: ignore[attr-defined]
         return {
             "documents_with_weights": weight_keys,
             "average_weight": round(avg_weight, 3),

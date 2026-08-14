@@ -24,7 +24,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -154,17 +154,17 @@ class CryptoEmbedder:
         results = await embedder.search("honeypot tokens with ownership renounce pattern")
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._local: LocalBGEEmbedder | None = None
         self._infinity: InfinityBGEEmbedder | None = None
         self._openrouter: OpenRouterEmbedder | None = None
         self._huggingface: HuggingFaceEmbedder | None = None
-        self._redis = None
+        self._redis: Any = None
         self._initialized = False
         self._cache_hits = 0
         self._cache_misses = 0
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize embedding providers."""
         or_key = os.environ.get("OPENROUTER_API_KEY", "") or OPENROUTER_KEY
         hf_token = os.environ.get("HUGGINGFACE_TOKEN", "") or HF_TOKEN
@@ -187,7 +187,7 @@ class CryptoEmbedder:
         self._initialized = True
         logger.info("CryptoEmbedder initialized")
 
-    async def _get_redis(self):
+    async def _get_redis(self) -> Any:
         import redis.asyncio as redis
 
         if self._redis is None:
@@ -279,13 +279,13 @@ class CryptoEmbedder:
             data = await r.get(key)
             if data:
                 self._cache_hits += 1
-                return json.loads(data)
+                return cast(list[float], json.loads(data))
             self._cache_misses += 1
         except Exception:
             logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
         return None
 
-    async def _cache_set(self, key: str, vector: list[float], ttl: int = 86400):
+    async def _cache_set(self, key: str, vector: list[float], ttl: int = 86400) -> None:
         try:
             r = await self._get_redis()
             await r.setex(key, ttl, json.dumps(vector))
@@ -302,7 +302,7 @@ class CryptoEmbedder:
         contract_code: str = "",
         creator_address: str = "",
         chain: str = "solana",
-        metadata: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> EmbeddingResult:
         """
         Generate a comprehensive token scam embedding.
@@ -357,7 +357,7 @@ Metadata: {json.dumps(metadata or {})[:1000]}"""
     async def embed_wallet(
         self,
         address: str,
-        transactions: list[dict] | None = None,
+        transactions: list[dict[str, Any]] | None = None,
         labels: list[str] | None = None,
         chain: str = "solana",
         balance_usd: float = 0,
@@ -438,7 +438,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         code: str,
         chain: str = "ethereum",
         verified: bool = False,
-    ) -> EmbeddingResult:
+    ) -> np.ndarray:
         """Full contract audit embedding."""
         return await ContractCodeEmbedder.embed(
             code,
@@ -656,7 +656,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
 # SEED DATA: Known scam pattern templates
 # ══════════════════════════════════════════════════════════════════════
 
-KNOWN_SCAM_PATTERNS = [
+KNOWN_SCAM_PATTERNS: list[dict[str, Any]] = [
     {
         "name": "Honeypot - Sell Disabled",
         "description": "Token where only the creator can sell. Buyers are trapped. Implemented via maxSellAmount=0, tradingEnabled=false, or blacklist of all non-owner addresses.",

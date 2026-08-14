@@ -36,7 +36,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ async def _call_direct(tool: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         sys.path.insert(0, str(MCP_DIR))
 
     if tool in _ASYNC_TOOLS:
-        import codebase_server as cs  # type: ignore[import-untyped]
+        import codebase_server as cs
 
         fn = {
             "search": cs.rmi_search,
@@ -87,16 +87,16 @@ async def _call_direct(tool: str, kwargs: dict[str, Any]) -> dict[str, Any]:
             "refresh": cs.rmi_refresh,
             "status": cs.rmi_status,
         }[tool]
-        async with cs.lifespan(None):  # type: ignore[arg-type]
-            return await fn(**kwargs)
+        async with cs.lifespan(None):
+            return cast(dict[str, Any], await fn(**kwargs))
     if tool == "security":
-        import server as srv  # type: ignore[import-untyped]
+        import server as srv
 
-        return srv.query_security_context(**kwargs)
+        return cast(dict[str, Any], srv.query_security_context(**kwargs))
     if tool == "patterns":
-        import server as srv  # type: ignore[import-untyped]
+        import server as srv
 
-        return srv.list_patterns(**kwargs)
+        return cast(dict[str, Any], srv.list_patterns(**kwargs))
     raise BridgeUnavailableError(f"unknown tool: {tool}")
 
 

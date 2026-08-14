@@ -52,7 +52,7 @@ if sys_path_scripts not in sys.path:
 from ingest_common2 import write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/cryptosafetyfirst/csf-crypto-incident-database.git"
-REPO_DIR = os.getenv("CSF_INCIDENTS_DIR", "/tmp/rag-csf-incidents")  # noqa: S108
+REPO_DIR = os.getenv("CSF_INCIDENTS_DIR", "/tmp/rag-csf-incidents")  # noqa: S108  # nosec B108
 COLLECTION = "crime_reports"
 SOURCE = "csf_incidents"
 

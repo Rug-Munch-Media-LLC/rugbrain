@@ -162,7 +162,7 @@ def _empty_brief(topic: str, error: str = "") -> dict[str, Any]:
     }
 
 
-def _extract_timeline(results: list[dict]) -> list[dict[str, Any]]:
+def _extract_timeline(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract chronological events from threat intel results.
 
     Looks for hack names, years, and amounts in the document content
@@ -205,7 +205,7 @@ def _extract_timeline(results: list[dict]) -> list[dict[str, Any]]:
     return timeline
 
 
-def _extract_entities(results: list[dict]) -> list[dict[str, Any]]:
+def _extract_entities(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract named entities (threat actors, protocols, patterns) from agent memory."""
     entities = []
     for r in results:
@@ -249,7 +249,7 @@ def _extract_entities(results: list[dict]) -> list[dict[str, Any]]:
     return entities
 
 
-def _classify_related_scams(results: list[dict], topic: str) -> list[dict[str, Any]]:
+def _classify_related_scams(results: list[dict[str, Any]], topic: str) -> list[dict[str, Any]]:
     """Filter and classify results that are specifically scam/hack related."""
     scams = []
     seen = set()
@@ -294,7 +294,7 @@ def _classify_related_scams(results: list[dict], topic: str) -> list[dict[str, A
     return scams
 
 
-def _extract_insights(results: list[dict]) -> list[dict[str, Any]]:
+def _extract_insights(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Extract community security insights and best practices."""
     insights = []
     for r in results:
@@ -328,9 +328,9 @@ def _extract_insights(results: list[dict]) -> list[dict[str, Any]]:
 
 
 def _build_connections(
-    threat_results: list[dict],
-    entity_results: list[dict],
-    community_results: list[dict],
+    threat_results: list[dict[str, Any]],
+    entity_results: list[dict[str, Any]],
+    community_results: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Find cross-collection connections — entities mentioned in both
     threat intel and agent memory, or community guidance related to
@@ -363,7 +363,7 @@ def _build_connections(
     return connections
 
 
-def _top_n(results: list[dict], n: int = 10) -> list[dict[str, Any]]:
+def _top_n(results: list[dict[str, Any]], n: int = 10) -> list[dict[str, Any]]:
     """Return top-N results by similarity, with trimmed content."""
     sorted_results = sorted(results, key=lambda x: x.get("similarity", 0), reverse=True)[:n]
 
@@ -387,11 +387,11 @@ def _top_n(results: list[dict], n: int = 10) -> list[dict[str, Any]]:
 
 def _synthesise(
     topic: str,
-    timeline: list[dict],
-    entities: list[dict],
-    scams: list[dict],
-    insights: list[dict],
-    connections: list[dict],
+    timeline: list[dict[str, Any]],
+    entities: list[dict[str, Any]],
+    scams: list[dict[str, Any]],
+    insights: list[dict[str, Any]],
+    connections: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Build a text synthesis from all research components.
 

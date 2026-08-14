@@ -9,6 +9,7 @@ import hashlib
 import logging
 import time
 from datetime import datetime
+from typing import Any
 
 import numpy as np
 
@@ -130,7 +131,7 @@ def extract_contract_features(code: str) -> np.ndarray:
     return vec
 
 
-def extract_transaction_features(tx_data: dict) -> np.ndarray:
+def extract_transaction_features(tx_data: dict[str, Any]) -> np.ndarray:
     """
     Extract behavioral features from transaction history.
     Returns a 64-dim vector capturing:
@@ -229,7 +230,7 @@ def extract_transaction_features(tx_data: dict) -> np.ndarray:
     return vec
 
 
-def extract_wallet_features(wallet_data: dict) -> np.ndarray:
+def extract_wallet_features(wallet_data: dict[str, Any]) -> np.ndarray:
     """
     Extract wallet entity features for clustering/scam detection.
     Returns a 64-dim vector.
@@ -302,8 +303,8 @@ def extract_wallet_features(wallet_data: dict) -> np.ndarray:
         "fantom",
         "tron",
     ]
-    for i, ch in enumerate(chain_list):
-        if ch in [c.lower() for c in chains]:
+    for i, chain_name in enumerate(chain_list):
+        if chain_name in [c.lower() for c in chains]:
             vec[40 + i] = 1.0
 
     # ── Hash of associated addresses (dims 50-63) ──

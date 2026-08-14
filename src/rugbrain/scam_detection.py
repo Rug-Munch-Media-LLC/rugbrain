@@ -5,15 +5,15 @@ from typing import Any
 from rugbrain import search_service as _ss
 from rugbrain.crypto_embeddings import (
     KNOWN_SCAM_PATTERNS,
-    extract_contract_features,
     get_embedder,
 )
+from rugbrain.feature_extractors import extract_contract_features
 
 logger = logging.getLogger(__name__)
 
 
 async def detect_scam_patterns(
-    token_data: dict,
+    token_data: dict[str, Any],
     threshold: float = 0.65,
 ) -> dict[str, Any]:
     """
@@ -34,7 +34,7 @@ async def detect_scam_patterns(
 
     # Quick pre-filter: check code for exact keyword matches (fast, no API)
     code_lower = code.lower() if code else ""
-    quick_matches = []
+    quick_matches: list[dict[str, Any]] = []
     for pattern in KNOWN_SCAM_PATTERNS:
         if not pattern["code_snippets"]:
             continue
@@ -83,7 +83,7 @@ async def detect_scam_patterns(
         token_sem = token_result.vector
         token_code = [0.0] * 128
 
-    deep_matches = []
+    deep_matches: list[dict[str, Any]] = []
     for pattern in KNOWN_SCAM_PATTERNS:
         # Use pre-embedded cache if available, otherwise embed on-demand and cache
         pattern_name = pattern["name"]

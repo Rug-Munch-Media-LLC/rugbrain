@@ -8,8 +8,10 @@ import json
 import logging
 import os
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("rag.observability")
 
@@ -49,7 +51,7 @@ class RAGMetrics:
 _metrics = RAGMetrics()
 
 
-async def _save_local_metrics():
+async def _save_local_metrics() -> None:
     """Persist metrics to Redis for dashboard."""
     try:
         import redis.asyncio as aioredis
@@ -83,19 +85,21 @@ async def _save_local_metrics():
         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 
 
-def trace_embedding(duration_ms: float, dims: int = 1024, model: str = "bge-m3"):
+def trace_embedding(duration_ms: float, dims: int = 1024, model: str = "bge-m3") -> None:
     """Record an embedding operation."""
     _metrics.embedding_calls += 1
     _metrics.embedding_total_ms += duration_ms
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]
                 name="rag.embedding",
                 metadata={"duration_ms": duration_ms, "dims": dims, "model": model},
             )
 
 
-def trace_retrieval(duration_ms: float, collection: str, results: int, cache_hit: bool = False):
+def trace_retrieval(
+    duration_ms: float, collection: str, results: int, cache_hit: bool = False
+) -> None:
     """Record a retrieval operation."""
     _metrics.retrieval_calls += 1
     _metrics.retrieval_total_ms += duration_ms
@@ -105,7 +109,7 @@ def trace_retrieval(duration_ms: float, collection: str, results: int, cache_hit
         _metrics.cache_misses += 1
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]
                 name="rag.retrieval",
                 metadata={
                     "duration_ms": duration_ms,
@@ -116,11 +120,11 @@ def trace_retrieval(duration_ms: float, collection: str, results: int, cache_hit
             )
 
 
-def trace_reranker(duration_ms: float, doc_count: int, top_k: int, model: str = "bge-m3"):
+def trace_reranker(duration_ms: float, doc_count: int, top_k: int, model: str = "bge-m3") -> None:
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]
                 name="rag.reranker",
                 metadata={
                     "duration_ms": duration_ms,
@@ -131,25 +135,25 @@ def trace_reranker(duration_ms: float, doc_count: int, top_k: int, model: str = 
             )
 
 
-def trace_ingest(docs: int, collection: str):
+def trace_ingest(docs: int, collection: str) -> None:
     """Record an ingestion operation."""
     _metrics.ingest_docs += docs
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]
                 name="rag.ingest",
                 metadata={"docs": docs, "collection": collection},
             )
 
 
-def trace_error(error_type: str, detail: str = ""):
+def trace_error(error_type: str, detail: str = "") -> None:
     """Record an error."""
     _metrics.errors += 1
     logger.warning("RAG error [%s]: %s", error_type, detail[:200])
 
 
 @asynccontextmanager
-async def timed_embedding(dims: int = 1024, model: str = "bge-m3"):
+async def timed_embedding(dims: int = 1024, model: str = "bge-m3") -> AsyncIterator[None]:
     """Context manager for timing embedding operations."""
     t0 = time.time()
     try:
@@ -159,7 +163,7 @@ async def timed_embedding(dims: int = 1024, model: str = "bge-m3"):
 
 
 @asynccontextmanager
-async def timed_retrieval(collection: str, cache_hit: bool = False):
+async def timed_retrieval(collection: str, cache_hit: bool = False) -> AsyncIterator[None]:
     """Context manager for timing retrieval operations."""
     t0 = time.time()
     result_count = 0
@@ -169,7 +173,7 @@ async def timed_retrieval(collection: str, cache_hit: bool = False):
         trace_retrieval((time.time() - t0) * 1000, collection, result_count, cache_hit)
 
 
-def get_metrics() -> dict:
+def get_metrics() -> dict[str, Any]:
     """Return current metrics snapshot."""
     return {
         "embedding": {

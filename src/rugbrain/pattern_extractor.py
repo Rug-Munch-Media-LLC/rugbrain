@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any, cast
 
 import httpx
 
@@ -36,9 +37,9 @@ Incident report:
 {article_text}"""
 
 
-async def extract_pattern_from_url(url: str) -> dict:
+async def extract_pattern_from_url(url: str) -> dict[str, Any]:
     """Fetch an article, extract scam pattern via LLM, ingest into Qdrant."""
-    result = {"url": url, "status": "error", "pattern": None}
+    result: dict[str, Any] = {"url": url, "status": "error", "pattern": None}
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -72,7 +73,7 @@ async def extract_pattern_from_url(url: str) -> dict:
     return result
 
 
-async def _call_llm(article_text: str) -> dict | None:
+async def _call_llm(article_text: str) -> dict[str, Any] | None:
     prompt = EXTRACT_PROMPT.format(article_text=article_text)
     try:
         from app.llm_config import generate_content
@@ -81,7 +82,7 @@ async def _call_llm(article_text: str) -> dict | None:
         raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
-        return json.loads(raw)
+        return cast(dict[str, Any], json.loads(raw))
     except Exception as e:
         logger.warning("pattern_extractor: LLM call failed: %s", e)
         return None

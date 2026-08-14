@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ LOCAL_CACHE.mkdir(parents=True, exist_ok=True)
 _b2_api = None
 
 
-def _get_b2_api():
+def _get_b2_api() -> Any:
     """Authorize a b2sdk client from B2_APPLICATION_KEY_ID/B2_APPLICATION_KEY."""
     global _b2_api
     if _b2_api is None:
@@ -57,7 +58,7 @@ def _get_b2_api():
     return _b2_api
 
 
-def _b2_bucket():
+def _b2_bucket() -> Any:
     """Return the B2 bucket handle for *B2_BUCKET* (sync helper)."""
     return _get_b2_api().get_bucket_by_name(B2_BUCKET)
 
@@ -105,11 +106,11 @@ async def _b2_get(key: str) -> bytes | None:
     return await asyncio.get_running_loop().run_in_executor(None, _b2_get_sync, key)
 
 
-def _b2_list_sync(prefix: str = "") -> list:
+def _b2_list_sync(prefix: str = "") -> list[dict[str, Any]]:
     """List objects in the B2 bucket under *prefix*."""
     try:
         bucket = _b2_bucket()
-        out = []
+        out: list[dict[str, Any]] = []
         for version, _folder in bucket.ls(prefix, recursive=True):
             out.append({"file_name": version.file_name, "size": version.size})
         return out
@@ -118,7 +119,7 @@ def _b2_list_sync(prefix: str = "") -> list:
         return []
 
 
-async def _b2_list(prefix: str = "") -> list:
+async def _b2_list(prefix: str = "") -> list[dict[str, Any]]:
     """List objects in the B2 bucket."""
     if not B2_KEY_ID or not B2_APP_KEY:
         return []
@@ -200,9 +201,9 @@ def _hf_put(key: str, data: bytes) -> bool:
 # ═══════════════════════════════════════════════════════════════
 # RAG PERSISTENCE OPERATIONS
 # ═══════════════════════════════════════════════════════════════
-async def snapshot_all():
+async def snapshot_all() -> dict[str, Any]:
     """Snapshot all RAG collections to B2. Returns per-collection status."""
-    results = {}
+    results: dict[str, Any] = {}
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
     # Get collections from rag_service (Redis-backed)
@@ -248,7 +249,7 @@ async def snapshot_all():
 
             while all_items:
                 # Build chunk - add items until we exceed size limit
-                chunk_items = []
+                chunk_items: list[Any] = []
                 chunk_size = 0
                 while all_items and chunk_size < MAX_CHUNK_SIZE:
                     item = all_items.pop(0)
@@ -358,7 +359,7 @@ async def snapshot_all():
     return results
 
 
-async def restore_all():
+async def restore_all() -> dict[str, Any]:
     """Restore all RAG collections from latest B2 snapshots."""
     # Get collections and Redis connection
     try:
@@ -368,7 +369,7 @@ async def restore_all():
     except Exception:
         return {"error": "Cannot connect to RAG service"}
 
-    results = {}
+    results: dict[str, Any] = {}
 
     for name in COLLECTIONS:
         try:
@@ -428,7 +429,7 @@ async def restore_all():
     return results
 
 
-async def nightly_cycle():
+async def nightly_cycle() -> dict[str, Any]:
     """Full nightly cycle: snapshot to B2, clean local cache."""
     snap = await snapshot_all()
     ok = sum(1 for v in snap.values() if v.get("status") in ("uploaded", "empty"))
@@ -457,7 +458,7 @@ async def nightly_cycle():
     }
 
 
-async def b2_stats():
+async def b2_stats() -> dict[str, Any]:
     """Get B2 usage + local cache stats."""
     # Get collections and Redis connection
     try:
@@ -482,14 +483,10 @@ async def b2_stats():
     local_files = await asyncio.get_running_loop().run_in_executor(
         None, lambda: list(LOCAL_CACHE.glob("*.json"))
     )
-    local_size = (
-        sum(
-            (await asyncio.get_running_loop().run_in_executor(None, f.stat)).st_size
-            for f in local_files
-        )
-        if local_files
-        else 0
-    )
+    local_size = 0
+    for f in local_files:
+        stat = await asyncio.get_running_loop().run_in_executor(None, f.stat)
+        local_size += stat.st_size
 
     # Collection stats (from Redis)
     coll_info = {}

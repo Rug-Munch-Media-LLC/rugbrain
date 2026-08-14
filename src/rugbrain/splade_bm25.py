@@ -24,7 +24,7 @@ import logging
 import math
 import re
 from collections import Counter
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -291,11 +291,13 @@ class BM25Index:
         self.doc_count = 0
         self.avg_dl = 0.0
         self.doc_lengths: dict[str, int] = {}  # doc_id -> length
-        self.doc_tokens: dict[str, Counter] = {}  # doc_id -> token counts
-        self.df: Counter = Counter()  # token -> document frequency
+        self.doc_tokens: dict[str, Counter[str]] = {}  # doc_id -> token counts
+        self.df: Counter[str] = Counter()  # token -> document frequency
         self._built = False
 
-    def add_document(self, doc_id: str, content: str, metadata: dict | None = None):
+    def add_document(
+        self, doc_id: str, content: str, metadata: dict[str, Any] | None = None
+    ) -> None:
         """Add a document to the index."""
         tokens = tokenize(content, remove_stopwords=True, stem=True)
         tf = Counter(tokens)
@@ -321,7 +323,7 @@ class BM25Index:
         # Store a truncated version to limit memory usage
         self._raw_content[doc_id] = content[:2000].lower()
 
-    def build(self):
+    def build(self) -> None:
         """Finalize the index (compute avg doc length, IDF values)."""
         if self.doc_count == 0:
             self.avg_dl = 1.0
@@ -330,7 +332,7 @@ class BM25Index:
             self.avg_dl = total_len / self.doc_count if self.doc_count else 1.0
         self._built = True
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
         """Persist BM25 index to disk via pickle."""
         import os
         import pickle
@@ -414,7 +416,7 @@ class BM25Index:
 
         return score
 
-    def search(self, query: str, limit: int = 20, min_score: float = 0.01) -> list[dict]:
+    def search(self, query: str, limit: int = 20, min_score: float = 0.01) -> list[dict[str, Any]]:
         """
         Search the BM25 index.
 
@@ -432,7 +434,7 @@ class BM25Index:
                 expanded_tokens.extend(tokenize(" ".join(CRYPTO_EXPANSIONS[token])))
 
         # Score all documents
-        scored = []
+        scored: list[dict[str, Any]] = []
         for doc_id in self.doc_tokens:
             score = self.score_document(doc_id, expanded_tokens)
             if score >= min_score:
@@ -448,7 +450,7 @@ class BM25Index:
         scored.sort(key=lambda x: x["bm25_score"], reverse=True)
         return scored[:limit]
 
-    def search_with_expansion(self, query: str, limit: int = 20) -> list[dict]:
+    def search_with_expansion(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """
         SPLADE-inspired search: expand query terms, weight by importance.
 
@@ -465,17 +467,17 @@ class BM25Index:
         original_tokens = tokenize(query, remove_stopwords=True, stem=True)
 
         # Build weighted query: original tokens weight=1.0, expansion weight=0.5
-        weighted_tokens: Counter = Counter()
+        weighted_tokens: dict[str, float] = {}
         for token in original_tokens:
-            weighted_tokens[token] += 1.0
+            weighted_tokens[token] = weighted_tokens.get(token, 0.0) + 1.0
 
         for token in original_tokens:
             if token in CRYPTO_EXPANSIONS:
                 for exp_token in tokenize(" ".join(CRYPTO_EXPANSIONS[token])):
-                    weighted_tokens[exp_token] += 0.5
+                    weighted_tokens[exp_token] = weighted_tokens.get(exp_token, 0.0) + 0.5
 
         # Score documents using weighted query
-        scored = []
+        scored: list[dict[str, Any]] = []
         for doc_id in self.doc_tokens:
             doc_tf = self.doc_tokens[doc_id]
             dl = self.doc_lengths[doc_id]
@@ -613,7 +615,7 @@ async def build_bm25_from_redis(
             logger.warning("BM25 indexing for %s failed: %s", coll, e)
 
     index.build()
-    await r.aclose()
+    await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub omits aclose; present at runtime
 
     logger.info(
         f"BM25 index built: {total_indexed} docs, {len(index.df)} unique terms, avg doc length {index.avg_dl:.1f}"
@@ -626,7 +628,7 @@ _bm25_index: BM25Index | None = None
 _bm25_built_at: float = 0.0
 _BM25_TTL = 3600  # Rebuild every hour
 _bm25_lock = asyncio.Lock()
-_background_tasks: set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task[Any]] = set()
 
 
 async def get_bm25_index(force_rebuild: bool = False) -> BM25Index:
@@ -674,11 +676,14 @@ async def get_bm25_index(force_rebuild: bool = False) -> BM25Index:
         return _bm25_index
 
 
-async def _save_bm25_async(path: str):
+async def _save_bm25_async(path: str) -> None:
     """Save BM25 index to disk in executor thread."""
+    index = _bm25_index
+    if index is None:
+        return
     try:
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _bm25_index.save, path)
+        await loop.run_in_executor(None, index.save, path)
     except Exception as e:
         logger.debug("BM25 disk save failed (non-critical): %s", e)
 
@@ -688,7 +693,7 @@ async def bm25_search(
     collections: list[str] | None = None,
     limit: int = 20,
     min_score: float = 0.01,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Search using BM25 with crypto-domain query expansion.
     Drop-in enhancement for _sparse_text_search.
@@ -702,7 +707,7 @@ async def splade_search(
     query: str,
     collections: list[str] | None = None,
     limit: int = 20,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     SPLADE-inspired sparse search with term expansion and importance weighting.
     Uses BM25 as backbone + crypto-domain expansion for SPLADE-like sparse vectors.

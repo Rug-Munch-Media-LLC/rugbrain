@@ -312,7 +312,7 @@ def _create_snapshots_view(con: Any, glob_path: str) -> None:
     # glob_path is derived from env bucket/date or the caller (glob_override),
     # never from the user query; SQL-quoted via _sql_quote.
     sql = (
-        "CREATE OR REPLACE VIEW snapshots AS SELECT * FROM read_parquet("  # noqa: S608
+        "CREATE OR REPLACE VIEW snapshots AS SELECT * FROM read_parquet("  # noqa: S608  # nosec B608
         + _sql_quote(glob_path)
         + ")"
     )

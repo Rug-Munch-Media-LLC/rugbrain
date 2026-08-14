@@ -57,7 +57,7 @@ from coding_ingest_common import (  # noqa: E402
 )
 from rust_solana_knowledge_data import ALL_RUST_SOLANA_DOCS  # noqa: E402
 
-REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108
+REPO_DIR = Path(os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"))  # noqa: S108  # nosec B108
 
 REPOS: list[dict[str, Any]] = [
     {

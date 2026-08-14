@@ -477,7 +477,7 @@ class ClickHouseAlertLogger:
             attempts = [CLICKHOUSE_PORT]
             if CLICKHOUSE_PORT != 8123:
                 attempts.append(8123)  # fleet convention: HTTP interface on 8123
-            client = None
+            client: Any = None
             last_err: Exception | None = None
             for port in attempts:
                 try:

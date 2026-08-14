@@ -261,7 +261,7 @@ class MarketSnapshotStore:
         try:
             rows = client.query(
                 # db/table are env-config constants (never user input); limit is an int.
-                f"SELECT snapshot_at, fear_greed_value, fear_greed_class, top_gainers "  # noqa: S608
+                f"SELECT snapshot_at, fear_greed_value, fear_greed_class, top_gainers "  # noqa: S608  # nosec B608
                 f"FROM {self._db}.{CLICKHOUSE_TABLE} ORDER BY snapshot_at DESC LIMIT {limit}"
             )
             return [dict(zip(rows.column_names, row, strict=True)) for row in rows.result_rows]

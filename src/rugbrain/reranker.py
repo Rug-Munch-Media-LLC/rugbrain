@@ -51,8 +51,8 @@ RERANK_MAX_LENGTH = int(os.getenv("RERANK_MAX_LENGTH", "512"))
 try:  # Metrics are optional — never let observability break search
     from rugbrain.metrics import rerank_latency, rerank_requests
 except Exception:  # pragma: no cover - metrics module may not be installed
-    rerank_latency = None
-    rerank_requests = None
+    rerank_latency = None  # type: ignore[assignment]
+    rerank_requests = None  # type: ignore[assignment]
 
 
 def _rss_mb() -> float:

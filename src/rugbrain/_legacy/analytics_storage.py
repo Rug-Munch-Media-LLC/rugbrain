@@ -208,7 +208,7 @@ class RedisStorage:
             logger.error("Failed to get alert: %s", e)
             return None
 
-    def save_entity_relation(self, from_entity: str, to_entity: str, relation: str):
+    def save_entity_relation(self, from_entity: str, to_entity: str, relation: str) -> None:
         """Save an entity relationship."""
         try:
             key = self.key_prefix("entity_relation", from_entity)
@@ -226,7 +226,7 @@ class RedisStorage:
             logger.error("Failed to get entity relations: %s", e)
             return []
 
-    def save_wallet_cluster(self, cluster_id: str, members: list[str], labels: list[str]):
+    def save_wallet_cluster(self, cluster_id: str, members: list[str], labels: list[str]) -> None:
         """Save a wallet cluster."""
         try:
             key = self.key_prefix("cluster", cluster_id)
@@ -259,7 +259,7 @@ class RedisStorage:
             history = WalletHistory(wallet_address=wallet_address, chain=chain)
         return history
 
-    def _update_wallet_history(self, wallet_address: str, tx: TransactionRecord):
+    def _update_wallet_history(self, wallet_address: str, tx: TransactionRecord) -> None:
         """Update wallet history metadata."""
         history = self.get_or_create_wallet_history(wallet_address, tx.chain)
 
@@ -294,11 +294,11 @@ class AnalyticsDatabase:
         """Store an entity alert."""
         return self.redis.save_alert(alert)
 
-    def store_entity_relation(self, from_entity: str, to_entity: str, relation: str):
+    def store_entity_relation(self, from_entity: str, to_entity: str, relation: str) -> None:
         """Store an entity relationship."""
         self.redis.save_entity_relation(from_entity, to_entity, relation)
 
-    def store_wallet_cluster(self, cluster_id: str, members: list[str], labels: list[str]):
+    def store_wallet_cluster(self, cluster_id: str, members: list[str], labels: list[str]) -> None:
         """Store a wallet cluster."""
         self.redis.save_wallet_cluster(cluster_id, members, labels)
 
@@ -383,7 +383,11 @@ class AnalyticsDatabase:
         """Get entity's network of connected entities."""
         relations = self.redis.get_entity_relations(entity_id)
 
-        network = {"entity_id": entity_id, "direct_relations": relations, "depth": depth}
+        network: dict[str, Any] = {
+            "entity_id": entity_id,
+            "direct_relations": relations,
+            "depth": depth,
+        }
 
         # If depth > 0, get relations of related entities
         if depth > 0:
@@ -423,7 +427,7 @@ def get_analytics_database(
 # ─── INITIAL DATA IMPORT ──────────────────────────────────────────────
 
 
-def initialize_analytics():
+def initialize_analytics() -> None:
     """Initialize analytics storage with default data."""
     get_analytics_database()
 

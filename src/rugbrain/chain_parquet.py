@@ -261,13 +261,13 @@ def _create_chain_views(con: Any, files: list[Path]) -> list[str]:
     created: list[str] = []
     if events:
         con.execute(
-            "CREATE OR REPLACE VIEW chain_events AS "  # noqa: S608
+            "CREATE OR REPLACE VIEW chain_events AS "  # noqa: S608  # nosec B608
             "SELECT * FROM read_parquet(" + _sql_list(events) + ")"
         )
         created.append("chain_events")
     if dex:
         con.execute(
-            "CREATE OR REPLACE VIEW chain_dex AS SELECT * FROM read_parquet(" + _sql_list(dex) + ")"  # noqa: S608
+            "CREATE OR REPLACE VIEW chain_dex AS SELECT * FROM read_parquet(" + _sql_list(dex) + ")"  # noqa: S608  # nosec B608
         )
         created.append("chain_dex")
     return created
@@ -438,7 +438,7 @@ def build_intent_sql(query: str, chain: str | None, date: str | None, limit: int
 
     if any(w in low for w in ("swap", "swaps", "swapped", "dex", "whale", "liquidity")):
         cols = "type, chain, block_timestamp, tx_hash, dex, version, token0, token1, whale"
-        return f"SELECT {cols} FROM chain_dex {clause} ORDER BY block_timestamp DESC LIMIT {limit}"  # noqa: S608
+        return f"SELECT {cols} FROM chain_dex {clause} ORDER BY block_timestamp DESC LIMIT {limit}"  # noqa: S608  # nosec B608
 
     if any(w in low for w in ("deploy", "deployed", "deployment", "created", "launch")):
         cols = (
@@ -458,4 +458,4 @@ def build_intent_sql(query: str, chain: str | None, date: str | None, limit: int
         "chain, block_timestamp, tx_hash, from_address, to_address, "
         "token_address, token_symbol, value"
     )
-    return f"SELECT {cols} FROM chain_events {clause} ORDER BY block_timestamp DESC LIMIT {limit}"  # noqa: S608
+    return f"SELECT {cols} FROM chain_events {clause} ORDER BY block_timestamp DESC LIMIT {limit}"  # noqa: S608  # nosec B608

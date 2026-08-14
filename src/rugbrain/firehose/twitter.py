@@ -5,13 +5,16 @@ Extracted from firehose.py FeedSources class.
 """
 
 import logging
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger("rag.firehose")
 
 
-async def pull_ct_rundown(client) -> list[dict]:
+async def pull_ct_rundown(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     """Pull CT Rundown stories (crypto Twitter)."""
-    docs = []
+    docs: list[dict[str, Any]] = []
     try:
         resp = await client.get(
             "http://localhost:8000/api/v1/databus/fetch/ct_rundown",
@@ -43,9 +46,9 @@ async def pull_ct_rundown(client) -> list[dict]:
     return docs
 
 
-async def pull_social_sentiment(client) -> list[dict]:
+async def pull_social_sentiment(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     """Pull social sentiment and scam alerts from Twitter/social sources."""
-    docs = []
+    docs: list[dict[str, Any]] = []
     try:
         # Scam monitor
         resp = await client.get(

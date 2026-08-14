@@ -66,7 +66,7 @@ if sys_path_scripts not in sys.path:
 from codebase_protocols_data import PROTOCOLS  # noqa: E402
 from ingest_common import content_hash, embed_many  # noqa: E402
 
-REPO_DIR = os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases")  # noqa: S108
+REPO_DIR = os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases")  # noqa: S108  # nosec B108
 
 DEFAULT_MAX_CONTRACTS = 80  # contracts/programs per protocol
 DEFAULT_MAX_CHUNKS = 6000  # global chunk cap (embedding is cheap but bounded)

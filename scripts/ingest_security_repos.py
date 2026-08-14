@@ -61,7 +61,7 @@ if sys_path_scripts not in sys.path:
 
 from ingest_common import chunk_text, content_hash, embed_many  # noqa: E402
 
-REPO_BASE = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108
+REPO_BASE = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108
 CHUNK_SIZE = 2000
 CHUNK_OVERLAP = 100
 MAX_FILES = 400  # safety cap per source

@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from rugbrain.crypto_embeddings import (
     KNOWN_SCAM_PATTERNS,
@@ -19,12 +19,17 @@ from rugbrain.crypto_embeddings import (
     get_embedder,
 )
 
-from ._state import _get_redis, _pattern_cache, _seeded
+from ._state import (  # noqa: F401  (_pattern_cache_loaded bound here, written via global)
+    _get_redis,
+    _pattern_cache,
+    _pattern_cache_loaded,
+    _seeded,
+)
 
 logger = logging.getLogger(__name__)
 
 
-async def _preembed_scam_patterns():
+async def _preembed_scam_patterns() -> None:
     """
     Pre-embed all KNOWN_SCAM_PATTERNS and cache results.
     Loads from Redis first (persistent cache), then embeds any missing ones.
@@ -98,7 +103,7 @@ async def _embed_by_collection(
     embedder: CryptoEmbedder,
     collection: str,
     content: str,
-    metadata: dict,
+    metadata: dict[str, Any],
 ) -> EmbeddingResult:
     """Route to the right embedding head based on collection type."""
     if collection in ("scam_patterns", "known_scams"):
@@ -151,9 +156,9 @@ async def _embed_by_collection(
 async def ingest_document(
     collection: str,
     content: str,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
     doc_id: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Ingest a document with real semantic embedding.
     """
@@ -258,8 +263,8 @@ async def ingest_document(
 async def ingest_forensic_report(
     report_text: str,
     report_name: str = "forensic_report",
-    metadata: dict | None = None,
-) -> dict:
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Ingest a forensic report into the RAG knowledge base.
     Forensic reports are stored permanently (TTL=0) in the forensic_reports collection.
@@ -367,4 +372,4 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
     except Exception as e:
         logger.warning("Failed to ingest GoPlus result for %s: %s", token_address, e)
 
-    return result
+    return cast(dict[str, Any], result)

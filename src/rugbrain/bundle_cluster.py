@@ -125,8 +125,8 @@ def embed_bundle_profile(bundle: dict[str, Any]) -> list[float]:
         "sei",
         "blast",
     ]
-    for i, ch in enumerate(chain_list):
-        if ch in chain:
+    for i, chain_name in enumerate(chain_list):
+        if chain_name in chain:
             vec[48 + i] = 1.0
 
     # ── Risk classification hash (dims 64-79) ──
@@ -284,8 +284,8 @@ def embed_cluster_profile(cluster: dict[str, Any]) -> list[float]:
         "fantom",
         "tron",
     ]
-    for i, ch in enumerate(chain_list):
-        if ch in [c.lower() for c in chains]:
+    for i, chain_name in enumerate(chain_list):
+        if chain_name in [c.lower() for c in chains]:
             vec[50 + i] = 1.0
 
     # ── Entity fingerprint (dims 60-79) ──
@@ -315,7 +315,7 @@ def embed_cluster_profile(cluster: dict[str, Any]) -> list[float]:
 # SEMANTIC LABELING
 # ══════════════════════════════════════════════════════════════════════
 
-CLUSTER_LABEL_TEMPLATES = [
+CLUSTER_LABEL_TEMPLATES: list[dict[str, Any]] = [
     {
         "label": "insider_trading_ring",
         "description": "Cluster of wallets consistently buying before major announcements or listings, then selling into the pump.",
@@ -434,7 +434,7 @@ Common tokens: {", ".join(cluster.get("common_tokens", [])[:5])}."""
         cluster_semantic = embedder._hash_embed(cluster_desc)
 
     # Compare to each label template
-    matches = []
+    matches: list[dict[str, Any]] = []
     for template in CLUSTER_LABEL_TEMPLATES:
         # Template description embedding
         template_text = (
@@ -687,7 +687,7 @@ All labels: {json.dumps(labels["all_labels"])}"""
 # ══════════════════════════════════════════════════════════════════════
 
 
-async def backfill_label_templates():
+async def backfill_label_templates() -> int:
     """Index all cluster label templates into pgvector for auto-labeling."""
     from rugbrain.crypto_embeddings import get_embedder
     from rugbrain.qdrant_store import get_qdrant_store  # external dependency

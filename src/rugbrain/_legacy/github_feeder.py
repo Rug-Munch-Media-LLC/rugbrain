@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import subprocess
+from typing import Any
 
 import httpx
 
@@ -33,7 +34,7 @@ INGEST_URL = f"{BACKEND}/api/v1/rag/ingest"
 # ═══════════════════════════════════════════════════
 # DECLARATIVE SOURCE CONFIG - add repos here
 # ═══════════════════════════════════════════════════
-SOURCES = [
+SOURCES: list[dict[str, Any]] = [
     {
         "repo": "SunWeb3Sec/DeFiHackLabs",
         "collection": "defi_hacks",
@@ -112,7 +113,7 @@ def ensure_cloned(repo: str) -> str | None:
         return None
 
 
-def extract_from_repo(source: dict) -> list[dict]:
+def extract_from_repo(source: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract documents from a cloned GitHub repo."""
     path = ensure_cloned(source["repo"])
     if not path:
@@ -182,7 +183,7 @@ def extract_from_repo(source: dict) -> list[dict]:
     return docs
 
 
-async def ingest_repo(source: dict):
+async def ingest_repo(source: dict[str, Any]) -> int:
     """Clone, extract, and ingest a single repo."""
     docs = extract_from_repo(source)
     if not docs:
@@ -210,7 +211,7 @@ async def ingest_repo(source: dict):
     return total
 
 
-async def ingest_all():
+async def ingest_all() -> dict[str, int]:
     """Run all enabled sources."""
     print("=== RAG GitHub Feeder v2 ===\n")
     results = {}

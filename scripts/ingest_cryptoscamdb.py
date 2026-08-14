@@ -55,7 +55,7 @@ from ingest_common import content_hash  # noqa: E402
 from ingest_common2 import build_doc, write_docs  # noqa: E402
 
 REPO_URL = "https://github.com/CryptoScamDB/blacklist.git"
-REPO_DIR = os.getenv("CRYPTOSCAMDB_DIR", "/tmp/rag-knowledge/blacklist")  # noqa: S108
+REPO_DIR = os.getenv("CRYPTOSCAMDB_DIR", "/tmp/rag-knowledge/blacklist")  # noqa: S108  # nosec B108
 COLLECTION = "known_scams"
 SOURCE = "cryptoscamdb"
 

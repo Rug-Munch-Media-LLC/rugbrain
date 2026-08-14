@@ -23,6 +23,7 @@ Standards (2026 consensus):
 import hashlib
 import logging
 import re
+from typing import Any
 
 logger = logging.getLogger("rag.chunking")
 
@@ -41,7 +42,7 @@ RECURSIVE_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 CODE_SEPARATORS = ["\n\nclass ", "\n\ndef ", "\n\n", "\n", " ", ""]
 
 
-def get_strategy(content_type: str) -> dict:
+def get_strategy(content_type: str) -> dict[str, Any]:
     """Get chunking strategy preset for a content type."""
     return STRATEGY_PRESETS.get(content_type, STRATEGY_PRESETS["default"])
 
@@ -187,7 +188,7 @@ def fixed_chunk(
 def chunk_document(
     text: str,
     content_type: str = "default",
-    custom_strategy: dict | None = None,
+    custom_strategy: dict[str, Any] | None = None,
 ) -> list[str]:
     """
     Chunk a document using the appropriate strategy for its content type.
@@ -234,7 +235,7 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
-async def is_duplicate(collection: str, text: str, redis_client=None) -> bool:
+async def is_duplicate(collection: str, text: str, redis_client: Any | None = None) -> bool:
     """Check if content already exists in the collection via hash dedup."""
     if redis_client is None:
         from rugbrain.search_service import _get_redis
@@ -251,7 +252,7 @@ async def mark_ingested(
     collection: str,
     text: str,
     ttl: int = 604800,  # 7 days default
-    redis_client=None,
+    redis_client: Any | None = None,
 ) -> None:
     """Mark content as ingested in dedup registry."""
     if redis_client is None:
@@ -330,10 +331,10 @@ def quality_score(text: str, content_type: str = "default") -> int:
 
 
 def chunk_batch(
-    documents: list[dict],
+    documents: list[dict[str, Any]],
     content_type: str = "default",
     min_quality: int = 30,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Process a batch of documents: chunk, score quality, filter.
 
