@@ -11,14 +11,32 @@ Strategies:
   - code: class/function boundary aware
   - fixed: simple token/character count
 
-Standards (2026 consensus):
-  - Default: recursive, 512 tokens, 15% overlap
-  - News: recursive, 512 tokens, 15% overlap
-  - Scam reports: semantic, 400 tokens, 10% overlap
-  - Contract code: code-aware, 256 tokens, 20% overlap
-  - Wallet profiles: fixed, 128 tokens, 0% overlap
-  - Annual reports: recursive, 800 tokens, 15% overlap
+Crypto-aware behavior (added 2026-08):
+  - EVM contract addresses / tx hashes (``0x…``), Solana pubkeys + tx
+    signatures, Bitcoin addresses, IPFS CIDs and URLs are kept intact —
+    a chunk boundary never splits an address or hash in half.
+  - Code units (Solidity contract/function/event/error/struct, Rust
+    ``fn``/``impl``, JS ``function``/``class``) and ABI JSON arrays are
+    atomic: a split happens between units, never mid-function.
+  - Markdown ``#``, reST underlined and AsciiDoc headings become section
+    boundaries; each chunk carries the active section heading as context
+    and metadata.
+
+Standards (2026 consensus, token-targeted for embedding models):
+  - Default: recursive, 512 tokens (~2048 chars), 15% overlap
+  - News: recursive, 512 tokens (~2048 chars), 15% overlap
+  - Scam reports: recursive fallback, 400 tokens (~1600 chars), 10% overlap
+  - Contract code: code-aware, 256 tokens (~1024 chars), 20% overlap
+  - Wallet profiles: fixed, 128 tokens (~512 chars), 0% overlap
+  - Annual reports: recursive, 800 tokens (~3200 chars), 15% overlap
+
+``chunk_size`` values are character targets (roughly 4 chars/token);
+``max_chars`` is a per-strategy hard cap so no chunk exceeds the embedding
+model's token window. Addresses/code units that individually exceed the cap
+are kept whole (atomicity wins over size).
 """
+
+from __future__ import annotations
 
 import hashlib
 import logging
@@ -27,19 +45,374 @@ from typing import Any
 
 logger = logging.getLogger("rag.chunking")
 
+# ── Token budget ──
+CHARS_PER_TOKEN = 4  # conservative proxy (~4 chars/token)
+DEFAULT_TOKEN_TARGET = 512  # embedding-model sweet spot (tokens)
+ABSOLUTE_MAX_CHARS = 8000  # embedder truncation guard (see embed paths)
+
 # ── Strategy presets per content type ──
+# chunk_size is a character target (~4 chars/token); max_chars is the hard
+# cap for that strategy (never exceeded except for indivisible atoms).
 STRATEGY_PRESETS = {
-    "news": {"strategy": "recursive", "chunk_size": 512, "overlap": 0.15},
-    "scam_report": {"strategy": "semantic", "chunk_size": 400, "overlap": 0.10},
-    "contract_code": {"strategy": "code", "chunk_size": 256, "overlap": 0.20},
-    "wallet_profile": {"strategy": "fixed", "chunk_size": 128, "overlap": 0.0},
-    "annual_report": {"strategy": "recursive", "chunk_size": 800, "overlap": 0.15},
-    "default": {"strategy": "recursive", "chunk_size": 512, "overlap": 0.15},
+    "news": {"strategy": "recursive", "chunk_size": 2048, "overlap": 0.15, "max_chars": 2560},
+    "scam_report": {"strategy": "semantic", "chunk_size": 1600, "overlap": 0.10, "max_chars": 2000},
+    "contract_code": {"strategy": "code", "chunk_size": 1024, "overlap": 0.20, "max_chars": 1536},
+    "wallet_profile": {"strategy": "fixed", "chunk_size": 512, "overlap": 0.0, "max_chars": 768},
+    "annual_report": {
+        "strategy": "recursive",
+        "chunk_size": 3200,
+        "overlap": 0.15,
+        "max_chars": 4000,
+    },
+    "social_post": {"strategy": "fixed", "chunk_size": 1024, "overlap": 0.05, "max_chars": 1280},
+    "market_data": {"strategy": "semantic", "chunk_size": 1200, "overlap": 0.10, "max_chars": 1600},
+    "default": {"strategy": "recursive", "chunk_size": 2048, "overlap": 0.15, "max_chars": 2560},
 }
 
 # ── Separator hierarchy for recursive splitting ──
 RECURSIVE_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 CODE_SEPARATORS = ["\n\nclass ", "\n\ndef ", "\n\n", "\n", " ", ""]
+
+
+# ── Crypto atom protection ──
+# Spans matching these patterns are swapped out for tiny placeholders before
+# splitting and restored afterwards, so a boundary never lands mid-address.
+_PH_RE = re.compile(r"\x00K\d+\x00")
+
+_ATOM_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # URLs first: they can contain 0x/base58 runs in query strings.
+    re.compile(r"https?://[^\s<>()\"']{12,}"),
+    # EVM addresses (0x + 40) and hashes (0x + 64); greedy covers longer hex runs.
+    re.compile(r"\b0x[a-fA-F0-9]{40,}"),
+    # Solana transaction signatures (87-88 base58 chars).
+    re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{87,88}\b"),
+    # Bitcoin addresses (bech32 / legacy P2PKH-P2SH).
+    re.compile(r"\b(?:bc1[ac-hj-np-z02-9]{8,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b"),
+    # IPFS CIDs (v0 Qm…, v1 bafy…).
+    re.compile(r"\b(?:Qm[1-9A-HJ-NP-Za-km-z]{44}|bafy[a-zA-Z0-9]{46,59})\b"),
+    # Solana pubkeys / program IDs (32-44 base58 chars).
+    re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{32,44}\b"),
+)
+
+
+def _protect_atoms(text: str) -> tuple[str, dict[str, str]]:
+    """Replace crypto atoms (addresses/hashes/URLs) with placeholders.
+
+    Returns ``(protected_text, atoms)`` where ``atoms`` maps each placeholder
+    back to the original span. Call :func:`_restore_atoms` after splitting.
+    """
+    spans: list[tuple[int, int]] = []
+    for pat in _ATOM_PATTERNS:
+        for m in pat.finditer(text):
+            s, e = m.span()
+            if any(s < e2 and e > s2 for s2, e2 in spans):
+                continue  # already covered by an earlier, longer pattern
+            spans.append((s, e))
+    return _protect_spans(text, spans)
+
+
+def _protect_spans(text: str, spans: list[tuple[int, int]]) -> tuple[str, dict[str, str]]:
+    """Replace *spans* (non-overlapping) with ``\\x00K<idx>\\x00`` placeholders."""
+    out: list[str] = []
+    atoms: dict[str, str] = {}
+    prev = 0
+    for i, (s, e) in enumerate(sorted(spans)):
+        s = max(s, prev)  # defensive: never overlap already-protected region
+        if s >= e or s >= len(text):
+            continue
+        out.append(text[prev:s])
+        ph = f"\x00K{i}\x00"
+        atoms[ph] = text[s:e]
+        out.append(ph)
+        prev = e
+    out.append(text[prev:])
+    return "".join(out), atoms
+
+
+def _restore_atoms(text: str, atoms: dict[str, str]) -> str:
+    """Put protected spans back into *text* after splitting."""
+    if not atoms:
+        return text
+    for ph, orig in atoms.items():
+        text = text.replace(ph, orig)
+    return text
+
+
+def _snap_pos(text: str, pos: int) -> int:
+    """Move *pos* right so it never sits inside a protected placeholder.
+
+    A chunk boundary that would cut an address/hash/code-unit in half is
+    pushed just past the end of that placeholder instead.
+    """
+    pos = max(0, pos)
+    lo = max(0, pos - 16)  # placeholder is ≤ ~9 chars; any one
+    hi = min(len(text), pos + 8)  # containing *pos* must start in this window
+    for m in _PH_RE.finditer(text, lo, hi):
+        s, e = m.span()
+        if s < pos < e:
+            return e
+    return pos
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough token estimate (``~4 chars/token``) for observability."""
+    return max(1, len(text or "") // CHARS_PER_TOKEN)
+
+
+# ── Code-unit / ABI / fence protection ──
+
+
+_CODE_UNIT_RE = re.compile(
+    r"^\s*(?:(?:public|private|internal|external|pure|view|payable|virtual|override|"
+    r"abstract|sealed|static|async|mut|pub|const|let|unsafe|extern)\s+)*"
+    r"(?:contract|interface|library|function|constructor|modifier|receive|fallback|"
+    r"event|error|struct|enum|class|trait|impl|def|fn)\b",
+    re.MULTILINE,
+)
+_FENCE_RE = re.compile(r"^([`~]{3,})\s*(\S*)\s*$", re.MULTILINE)
+_ABI_KEY_RE = re.compile(r'"(?:type|name|inputs|outputs|stateMutability)"')
+
+
+def _match_code_brace(text: str, open_pos: int) -> int:
+    """Return index of the brace closing the one opened at *open_pos*.
+
+    Skips string literals (``"`` ``'`` backtick) and ``//`` / ``/* */``
+    comments so a ``}`` inside a string never closes the unit early.
+    """
+    depth = 0
+    in_str: str | None = None
+    esc = False
+    i = open_pos
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == in_str:
+                in_str = None
+        elif ch in {'"', "'", "`"}:
+            in_str = ch
+        elif ch == "/" and nxt == "/":  # line comment
+            nl = text.find("\n", i)
+            if nl == -1:
+                return -1
+            i = nl
+        elif ch == "/" and nxt == "*":  # block comment
+            end = text.find("*/", i + 2)
+            if end == -1:
+                return -1
+            i = end + 1
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def _match_balanced(text: str, open_pos: int, open_ch: str, close_ch: str) -> int:
+    """Return index of the *close_ch* matching the *open_ch* at *open_pos*."""
+    depth = 0
+    in_str = False
+    esc = False
+    i = open_pos
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == open_ch:
+                depth += 1
+            elif ch == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return i
+        i += 1
+    return -1
+
+
+def _innermost_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Keep spans that contain no other span (leaf units win over containers).
+
+    A Solidity ``contract`` containing functions is dropped so the individual
+    functions become the atomic units; a bare contract stays atomic.
+    """
+    result: list[tuple[int, int]] = []
+    for s, e in spans:
+        if any(s < s2 and e2 < e for s2, e2 in spans if (s2, e2) != (s, e)):
+            continue
+        result.append((s, e))
+    return sorted(result)
+
+
+def _code_unit_spans(code: str) -> list[tuple[int, int]]:
+    """Find spans of code units (function/contract/struct/… blocks).
+
+    Multi-line units are located with a balanced-brace scan; single-line
+    declarations (``event Transfer(...);``, interface signatures) span their
+    line only. Nested units are reduced to the innermost (leaf) spans.
+    """
+    spans: list[tuple[int, int]] = []
+    for m in _CODE_UNIT_RE.finditer(code):
+        line_end = code.find("\n", m.start())
+        line_end = len(code) if line_end == -1 else line_end
+        open_brace = code.find("{", m.start(), line_end + 1)
+        if open_brace != -1:
+            end = _match_code_brace(code, open_brace)
+            if end != -1:
+                spans.append((m.start(), end + 1))
+                continue
+        spans.append((m.start(), line_end))
+    return _innermost_spans(spans)
+
+
+def _fence_spans(text: str) -> list[tuple[int, int]]:
+    """Find markdown fenced code blocks (````` ``` ```` … ```````, tildes too)."""
+    spans: list[tuple[int, int]] = []
+    matches = list(_FENCE_RE.finditer(text))
+    i = 0
+    while i < len(matches):
+        m = matches[i]
+        marker = m.group(1)
+        j = i + 1
+        while j < len(matches):
+            cand = matches[j]
+            if cand.group(1)[0] == marker[0] and len(cand.group(1)) >= len(marker):
+                break
+            j += 1
+        if j < len(matches):
+            spans.append((m.start(), matches[j].end()))
+            i = j + 1
+        else:
+            i += 1
+    return spans
+
+
+def _abi_spans(text: str) -> list[tuple[int, int]]:
+    """Find JSON arrays that look like an ABI (contain ``type``/``name``/…)."""
+    spans: list[tuple[int, int]] = []
+    for m in re.finditer(r"\[", text):
+        probe = text[m.start() : m.start() + 200]
+        if not _ABI_KEY_RE.search(probe):
+            continue
+        end = _match_balanced(text, m.start(), "[", "]")
+        if end != -1:
+            spans.append((m.start(), end + 1))
+    return spans
+
+
+def _code_atom_spans(text: str, max_atom: int) -> list[tuple[int, int]]:
+    """Combine fences, code units and ABI arrays into one atom span list.
+
+    Small fenced blocks are atomic wholesale; oversized ones fall back to
+    protecting their inner code units so a huge block is still split at
+    function boundaries rather than mid-function.
+    """
+    spans: list[tuple[int, int]] = []
+    for fs, fe in _fence_spans(text):
+        if fe - fs <= max_atom:
+            spans.append((fs, fe))
+    protected_fences = list(spans)
+    units = [
+        u
+        for u in _code_unit_spans(text)
+        if not any(fs <= u[0] and u[1] <= fe for fs, fe in protected_fences)
+    ]
+    spans.extend(units)
+    spans.extend(a for a in _abi_spans(text) if not any(s <= a[0] and a[1] <= e for s, e in spans))
+    return _innermost_spans(spans)
+
+
+# ── Heading detection ──
+
+
+_MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
+_RST_HEADING_RE = re.compile(r"^([^\n]{2,60})\n[=\-~^+*]{3,}\s*$", re.MULTILINE)
+_ADOC_HEADING_RE = re.compile(r"^([=]{1,5}|[-]{1,5})\s+(.*?)\s*$", re.MULTILINE)
+
+
+def _heading_body_start(text: str, heading_start: int, kind: str) -> int:
+    """Position just after the heading syntax (its line, + underline for reST)."""
+    nl = text.find("\n", heading_start)
+    if nl == -1:
+        return len(text)
+    if kind == "rst":
+        nl2 = text.find("\n", nl + 1)
+        return len(text) if nl2 == -1 else nl2 + 1
+    return nl + 1
+
+
+def _detect_headings(text: str) -> list[tuple[int, str, str, int]]:
+    """Return ``(pos, label, marker, body_start)`` for headings.
+
+    ``label`` is the plain heading text; ``marker`` is the original syntax
+    (``##``, ``=`` …) used to rebuild the heading line as chunk context;
+    ``body_start`` is where the section body begins (past the heading line).
+    """
+    out: list[tuple[int, str, str, int]] = []
+    for m in _MD_HEADING_RE.finditer(text):
+        label = m.group(2).strip()
+        if label:
+            out.append((m.start(), label, m.group(1), _heading_body_start(text, m.start(), "md")))
+    for m in _RST_HEADING_RE.finditer(text):
+        if any(abs(m.start() - pos) < 2 for pos, _, _, _ in out):
+            continue
+        # reST headings carry no inline marker; the text is the heading line.
+        out.append((m.start(), m.group(1).strip(), "", _heading_body_start(text, m.start(), "rst")))
+    for m in _ADOC_HEADING_RE.finditer(text):
+        label = m.group(2).strip()
+        if label and not any(abs(m.start() - pos) < 2 for pos, _, _, _ in out):
+            out.append(
+                (m.start(), label, m.group(1)[0], _heading_body_start(text, m.start(), "adoc"))
+            )
+    out.sort(key=lambda t: t[0])
+    deduped: list[tuple[int, str, str, int]] = []
+    for pos, label, marker, body_start in out:
+        if deduped and abs(pos - deduped[-1][0]) < 2:
+            continue
+        deduped.append((pos, label, marker, body_start))
+    return deduped
+
+
+def _sectionize(text: str, title: str = "") -> list[tuple[str, str, str]]:
+    """Split *text* into ``(section_body, heading_context, heading_label)``.
+
+    When the document has headings, each section is chunked independently so
+    content from different sections is never mixed in one chunk. The section
+    body starts *after* the heading line; ``heading_context`` (the rebuilt
+    heading line, e.g. ``# Audit``) is prepended to every chunk so each one
+    carries its section context. Documents without headings are a single
+    section whose context is the title.
+    """
+    headings = _detect_headings(text)
+    if not headings:
+        return [(text, title, title)]
+    sections: list[tuple[str, str, str]] = []
+    for i, (_pos, label, marker, body_start) in enumerate(headings):
+        end = headings[i + 1][0] if i + 1 < len(headings) else len(text)
+        sec = text[body_start:end]
+        if sec.strip():
+            sections.append((sec, f"{marker} {label}".strip(), label))
+    if headings[0][0] > 0 and text[: headings[0][0]].strip():
+        sections.insert(0, (text[: headings[0][0]], title, title))
+    return sections
+
+
+# ── Strategy implementations ──
 
 
 def get_strategy(content_type: str) -> dict[str, Any]:
@@ -52,16 +425,22 @@ def recursive_chunk(
     chunk_size: int = 512,
     overlap: float = 0.15,
     separators: list[str] | None = None,
+    max_chars: int | None = None,
 ) -> list[str]:
     """
     Recursive character splitting - tries to split at natural boundaries.
     Separator hierarchy: paragraph → line → sentence → word → character.
+
+    Crypto-aware: EVM/Solana addresses, hashes and URLs are never split in
+    half (a boundary that would cut one is pushed past it).
 
     Args:
         text: Document text to chunk
         chunk_size: Target chunk size in characters (~4 chars per token)
         overlap: Fraction of chunk_size to overlap (0.0-0.25)
         separators: Custom separator hierarchy (defaults to RECURSIVE_SEPARATORS)
+        max_chars: Hard cap on chunk length; defaults to the natural cap for
+                   the separator set when not given (behavior-preserving).
 
     Returns:
         List of text chunks
@@ -72,21 +451,25 @@ def recursive_chunk(
     if separators is None:
         separators = RECURSIVE_SEPARATORS
 
+    max_sep = max((len(s) for s in separators), default=0)
+    effective_max = max_chars if max_chars is not None else chunk_size + max_sep
+
+    protected, atoms = _protect_atoms(text)
     overlap_chars = int(chunk_size * overlap)
-    chunks = []
+    chunks: list[str] = []
     start = 0
 
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
+    while start < len(protected):
+        end = min(start + chunk_size, len(protected))
 
         # If this is the last chunk, just take the remainder
-        if end >= len(text):
-            chunks.append(text[start:])
+        if end >= len(protected):
+            chunks.append(protected[start:])
             break
 
         # Try to find a natural split point within the chunk
-        chunk_text = text[start:end]
-        split_pos = None
+        chunk_text = protected[start:end]
+        split_pos: int | None = None
 
         for sep in separators:
             if not sep:
@@ -104,44 +487,64 @@ def recursive_chunk(
         if split_pos is None:
             split_pos = end
 
-        chunks.append(text[start:split_pos].strip())
+        # Hard cap, then snap past any atom the boundary would cut.
+        split_pos = min(split_pos, start + effective_max)
+        split_pos = _snap_pos(protected, split_pos)
 
-        # Next chunk starts with overlap
-        start = split_pos - overlap_chars
-        if start <= 0 or start >= len(text):
+        chunks.append(protected[start:split_pos].strip())
+
+        # Next chunk starts with overlap, never mid-atom.
+        start = _snap_pos(protected, split_pos - overlap_chars)
+        if start <= 0 or start >= len(protected):
             break
 
-    # Remove empty chunks
-    return [c for c in chunks if len(c) > 20]
+    # Restore addresses/hashes/URLs, then drop empties.
+    restored = [_restore_atoms(c, atoms) for c in chunks]
+    return [c for c in restored if len(c) > 20]
 
 
 def code_chunk(
     code: str,
     chunk_size: int = 256,
     overlap: float = 0.20,
+    max_chars: int | None = None,
 ) -> list[str]:
-    """Structure-aware chunking for smart contract code."""
-    return recursive_chunk(code, chunk_size, overlap, CODE_SEPARATORS)
+    """Structure-aware chunking for smart contract code.
+
+    Functions/contracts/events/structs (and ABI JSON arrays / fenced code
+    blocks) are kept atomic: splits happen between logical units, never
+    mid-function. Falls back to plain recursive splitting on prose.
+    """
+    if not code or len(code) < 50:
+        return [code] if code else []
+    max_chars = max_chars or chunk_size
+    protected, atoms = _protect_spans(code, _code_atom_spans(code, max_atom=max_chars))
+    chunks = recursive_chunk(protected, chunk_size, overlap, CODE_SEPARATORS, max_chars)
+    return [_restore_atoms(c, atoms) for c in chunks]
 
 
 def sentence_chunk(
     text: str,
     chunk_size: int = 512,
     overlap: float = 0.15,
+    max_chars: int | None = None,
 ) -> list[str]:
     """
     Sentence-aware chunking - never splits mid-sentence.
-    Groups sentences to hit target chunk size.
+    Groups sentences to hit target chunk size. Crypto atoms are protected.
     """
+    del max_chars  # sentences are indivisible; cap is documented in module header
     if not text:
         return []
 
-    # Split into sentences (handles abbreviations like "Dr.", "3.14", "0x...")
-    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
-    if len(sentences) <= 1:
-        return recursive_chunk(text, chunk_size, overlap)
+    protected, atoms = _protect_atoms(text)
 
-    chunks = []
+    # Split into sentences (handles abbreviations like "Dr.", "3.14", "0x...")
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", protected)
+    if len(sentences) <= 1:
+        return [_restore_atoms(c, atoms) for c in recursive_chunk(text, chunk_size, overlap)]
+
+    chunks: list[str] = []
     current = ""
     for sent in sentences:
         if len(current) + len(sent) <= chunk_size:
@@ -159,30 +562,37 @@ def sentence_chunk(
         overlap_chars = int(chunk_size * overlap)
         overlapped = [chunks[0]]
         for i in range(1, len(chunks)):
-            prev_tail = (
-                chunks[i - 1][-overlap_chars:]
-                if len(chunks[i - 1]) > overlap_chars
-                else chunks[i - 1]
-            )
+            prev = chunks[i - 1]
+            tail_start = _snap_pos(prev, max(0, len(prev) - overlap_chars))
+            prev_tail = prev[tail_start:] if tail_start < len(prev) else prev
             overlapped.append(prev_tail + " " + chunks[i])
-        return overlapped
+        chunks = overlapped
 
-    return chunks
+    return [_restore_atoms(c, atoms) for c in chunks]
 
 
 def fixed_chunk(
     text: str,
     chunk_size: int = 128,
     overlap: float = 0.0,
+    max_chars: int | None = None,
 ) -> list[str]:
-    """Simple fixed-size chunking by character count."""
+    """Simple fixed-size chunking by character count; crypto atoms intact."""
     if not text:
         return []
+    max_chars = max_chars or chunk_size
+    protected, atoms = _protect_atoms(text)
     overlap_chars = int(chunk_size * overlap)
-    chunks = []
-    for i in range(0, len(text), chunk_size - overlap_chars):
-        chunks.append(text[i : i + chunk_size].strip())
-    return [c for c in chunks if len(c) > 10]
+    step = max(chunk_size - overlap_chars, 1)
+    chunks: list[str] = []
+    for i in range(0, len(protected), step):
+        end = min(i + chunk_size, len(protected))
+        end = min(_snap_pos(protected, end), i + max_chars)
+        if end <= i:
+            continue
+        chunks.append(protected[i:end].strip())
+    restored = [_restore_atoms(c, atoms) for c in chunks]
+    return [c for c in restored if len(c) > 10]
 
 
 def chunk_document(
@@ -202,26 +612,81 @@ def chunk_document(
     Returns:
         List of text chunks
     """
-    strategy = custom_strategy or get_strategy(content_type)
-    strat_name = strategy["strategy"]
-    size = strategy["chunk_size"]
-    overlap = strategy["overlap"]
+    return [c["text"] for c in split_doc_into_chunks(text, content_type, custom_strategy)]
 
-    if strat_name == "recursive":
-        return recursive_chunk(text, size, overlap)
-    elif strat_name == "code":
-        return code_chunk(text, size, overlap)
-    elif strat_name == "sentence":
-        return sentence_chunk(text, size, overlap)
-    elif strat_name == "fixed":
-        return fixed_chunk(text, size, overlap)
-    elif strat_name == "semantic":
-        # Semantic chunking requires embedding every sentence - expensive.
-        # Fall back to recursive for now; semantic can be added later.
-        logger.info("Semantic chunking requested, falling back to recursive")
-        return recursive_chunk(text, size, overlap)
-    else:
-        return recursive_chunk(text, size, overlap)
+
+def split_doc_into_chunks(
+    text: str,
+    content_type: str = "default",
+    custom_strategy: dict[str, Any] | None = None,
+    *,
+    doc_meta: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Crypto-aware, metadata-carrying chunking entry point.
+
+    Same strategy selection as :func:`chunk_document`, plus:
+      - section headings (markdown/reST/AsciiDoc) become boundaries and are
+        prepended to each chunk as context;
+      - each chunk dict carries ``section``, ``doc_type``, ``chunk_index``,
+        ``total_chunks``, ``estimated_tokens`` and any ``doc_meta`` fields.
+
+    Returns:
+        List of chunk dicts: ``{"text", "section", "doc_type", "chunk_index",
+        "total_chunks", "estimated_tokens", "source", "url", "title", ...}``
+    """
+    strategy = custom_strategy or get_strategy(content_type)
+    size = int(strategy["chunk_size"])
+    overlap = float(strategy["overlap"])
+    max_chars = int(strategy.get("max_chars", size))
+    strat_name = str(strategy["strategy"])
+
+    meta = dict(doc_meta or {})
+    title = meta.get("title", "")
+    source = meta.get("source", "")
+    url = meta.get("url", "")
+
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    sections = _sectionize(text, title)
+    chunks: list[dict[str, Any]] = []
+
+    for sec_text, heading, label in sections:
+        if strat_name == "code":
+            parts = code_chunk(sec_text, size, overlap, max_chars)
+        elif strat_name == "sentence":
+            parts = sentence_chunk(sec_text, size, overlap, max_chars)
+        elif strat_name == "fixed":
+            parts = fixed_chunk(sec_text, size, overlap, max_chars)
+        elif strat_name == "semantic":
+            # Semantic chunking requires embedding every sentence - expensive.
+            # Fall back to recursive for now; semantic can be added later.
+            logger.info("Semantic chunking requested, falling back to recursive")
+            parts = recursive_chunk(sec_text, size, overlap, max_chars=max_chars)
+        else:
+            parts = recursive_chunk(sec_text, size, overlap, max_chars=max_chars)
+
+        for part in parts:
+            content = f"{heading}\n{part}" if heading else part
+            chunks.append(
+                {
+                    "text": content,
+                    "section": label,
+                    "doc_type": content_type,
+                    "chunk_index": len(chunks),
+                    "total_chunks": 0,  # backfilled below
+                    "estimated_tokens": estimate_tokens(content),
+                    "source": source,
+                    "url": url,
+                    "title": title,
+                }
+            )
+
+    for c in chunks:
+        c["total_chunks"] = len(chunks)
+    return chunks
 
 
 # ── Content Hash Dedup ──
@@ -339,9 +804,10 @@ def chunk_batch(
     Process a batch of documents: chunk, score quality, filter.
 
     Each document should have: {'text': str, 'source': str, 'url': str, ...}
-    Returns list of chunk dicts with metadata preserved.
+    Returns list of chunk dicts with metadata preserved, plus per-chunk
+    ``section`` / ``doc_type`` / ``estimated_tokens`` fields.
     """
-    chunks = []
+    chunks: list[dict[str, Any]] = []
     skipped = 0
 
     for doc in documents:
@@ -356,16 +822,20 @@ def chunk_batch(
             skipped += 1
             continue
 
-        # Chunk
-        doc_chunks = chunk_document(text, content_type)
+        # Chunk (crypto-aware, metadata-carrying)
+        doc_meta = {k: v for k, v in doc.items() if k not in ("text", "title")}
+        doc_chunks = split_doc_into_chunks(text, content_type, doc_meta=doc_meta)
         for i, chunk in enumerate(doc_chunks):
             chunks.append(
                 {
-                    "text": chunk,
+                    "text": chunk["text"],
                     "chunk_index": i,
                     "total_chunks": len(doc_chunks),
                     "quality_score": score,
-                    "content_hash": content_hash(chunk),
+                    "content_hash": content_hash(chunk["text"]),
+                    "section": chunk.get("section", ""),
+                    "doc_type": content_type,
+                    "estimated_tokens": chunk.get("estimated_tokens", 0),
                     "source": doc.get("source", "unknown"),
                     "url": doc.get("url", ""),
                     "category": doc.get("category", content_type),

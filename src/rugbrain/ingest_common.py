@@ -23,6 +23,9 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+# Crypto-atom helpers: address/hash/URL preservation inside chunk windows.
+from rugbrain.app_chunking import _protect_atoms, _restore_atoms, _snap_pos
+
 log = logging.getLogger(__name__)
 
 
@@ -79,23 +82,28 @@ def content_hash(text: str) -> str:
 def chunk_text(text: str, size: int = 1500, overlap: int = 100) -> list[str]:
     """Split *text* into overlapping windows of at most *size* chars.
 
+    Crypto-aware: EVM/Solana addresses, hashes and URLs are never split in
+    half — a window boundary that would cut one is pushed just past it.
     Mirrors the chunking used by ``scripts/ingest_rekt_news.py`` so all
     RugBrain pipelines produce consistently-sized embedded chunks.
     """
     text = (text or "").strip()
     if len(text) <= size:
         return [text] if text else []
+    protected, atoms = _protect_atoms(text)
     chunks: list[str] = []
     start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        chunk = text[start:end]
+    while start < len(protected):
+        end = min(start + size, len(protected))
+        end = _snap_pos(protected, end)
+        chunk = protected[start:end]
         if chunk.strip():
             chunks.append(chunk)
-        if end == len(text):
+        if end == len(protected):
             break
         start = max(end - overlap, start + 1)
-    return chunks
+        start = _snap_pos(protected, start)
+    return [_restore_atoms(c, atoms) for c in chunks]
 
 
 async def store_documents(

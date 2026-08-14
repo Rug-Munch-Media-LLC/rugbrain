@@ -1,33 +1,41 @@
 rag_chunking:
   news:
     strategy: recursive
-    chunk_size: 512
+    chunk_size: 2048      # ~512 tokens @4 chars/token
     overlap: 0.15
+    max_chars: 2560       # hard cap for embedding models
   scam_report:
-    strategy: semantic
-    chunk_size: 400
+    strategy: semantic    # falls back to recursive (crypto-aware)
+    chunk_size: 1600      # ~400 tokens
     overlap: 0.10
+    max_chars: 2000
   contract_code:
-    strategy: code
-    chunk_size: 256
+    strategy: code        # code-unit/ABI/fence atomic
+    chunk_size: 1024      # ~256 tokens
     overlap: 0.20
+    max_chars: 1536
   wallet_profile:
     strategy: fixed
-    chunk_size: 128
+    chunk_size: 512       # ~128 tokens
     overlap: 0.0
+    max_chars: 768
   annual_report:
     strategy: recursive
-    chunk_size: 800
+    chunk_size: 3200      # ~800 tokens
     overlap: 0.15
+    max_chars: 4000
   social_post:
     strategy: fixed
-    chunk_size: 256
+    chunk_size: 1024
     overlap: 0.05
+    max_chars: 1280
   market_data:
-    strategy: semantic
-    chunk_size: 300
+    strategy: semantic    # falls back to recursive
+    chunk_size: 1200
     overlap: 0.10
+    max_chars: 1600
   default:
     strategy: recursive
-    chunk_size: 512
+    chunk_size: 2048      # ~512 tokens
     overlap: 0.15
+    max_chars: 2560
