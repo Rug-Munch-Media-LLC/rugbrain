@@ -1,0 +1,22 @@
+{
+	"version": 1,
+	"description": "Example crawl sources — PUBLIC feeds only. The private monorepo keeps additional source groups behind RAG_CRAWL_SOURCES_EXTRA env JSON; those never ship here.",
+	"groups": {
+		"news": [
+			{
+				"name": "example_news",
+				"type": "rss",
+				"url": "https://example.com/rss",
+				"enabled": true
+			}
+		],
+		"security": [
+			{
+				"name": "example_sec",
+				"type": "rss",
+				"url": "https://security.example.org/feed",
+				"enabled": true
+			}
+		]
+	}
+}
