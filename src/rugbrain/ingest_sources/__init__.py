@@ -17,6 +17,7 @@ Each source implements the ``Source.fetch() -> list[IngestDoc]`` interface
   * ``mev_boost`` / ``mev_boost_relay`` — PBS/relay docs     (mev_architecture)
   * ``safe_contracts``         — Safe multisig Solidity      (contract_code)
   * ``tornado_cash``           — zk-mixer reference code     (privacy_protocol)
+  * ``blacklists``             — Web3 phishing blacklists    (scam_entity)
 
 Fetching is deliberately scaffolding-grade: sources do one tree-listing call
 plus per-file raw fetches (bounded by ``limit``), never multi-GB clones.
@@ -35,6 +36,7 @@ import asyncio
 import logging
 
 from rugbrain.ingest_sources.base import IngestDoc, Source, to_crawl_document
+from rugbrain.ingest_sources.blacklists import BlacklistsSource
 from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroSource
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
@@ -72,6 +74,7 @@ SOURCES: tuple[Source, ...] = (
     MEVBoostRelaySource(),
     SafeSource(),
     TornadoSource(),
+    BlacklistsSource(),
 )
 
 # Semantic doc_type → source names (for quick lookup / filtering).
