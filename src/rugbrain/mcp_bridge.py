@@ -8,6 +8,8 @@ Bridge functions:
     search_codebase(query)            → MCP ``rmi_search()``
     trace_codebase(function)          → MCP ``rmi_trace()``
     get_security_context(query)       → MCP ``query_security_context()``
+    resolve_library(query)            → MCP ``resolve_library()`` (Context7-style)
+    query_codebase(library_id, query) → MCP ``query_codebase()`` (Context7-style)
     sync_security_patterns(limit)     → pull MCP ChromaDB patterns into RAG
     augment_code_query(query)         → search + security context in one call
 
@@ -122,6 +124,8 @@ _RUNNER = _SCRIPTS_DIR / "mcp_tool_runner.py"
 _ASYNC_TOOLS = {"search", "trace", "refresh", "status"}
 # MCP tools that are sync in server.py.
 _SYNC_TOOLS = {"security", "patterns"}
+# MCP tools that are sync in codebase_server.py (Context7-style reference tools).
+_SYNC_CODEBASE_TOOLS = {"resolve_library", "query_codebase"}
 
 
 class BridgeUnavailableError(RuntimeError):
@@ -158,6 +162,15 @@ async def _call_direct(tool: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         }[tool]
         async with cs.lifespan(None):
             return cast(dict[str, Any], await fn(**kwargs))
+    if tool in _SYNC_CODEBASE_TOOLS:
+        import codebase_server as cs
+
+        fn = {
+            "resolve_library": cs.resolve_library,
+            "query_codebase": cs.query_codebase,
+        }[tool]
+        # Sync tools in codebase_server.py — no lifespan needed (Qdrant only).
+        return cast(dict[str, Any], fn(**kwargs))
     if tool == "security":
         import server as srv
 
@@ -327,12 +340,29 @@ async def trace_codebase(
         }
 
     Falls back to RugBrain's own coding knowledge when the MCP is unreachable.
+
+    Guarded: the function symbol is sanitized for prompt injection before
+    dispatch (``guard`` metadata on the response; refusal when nothing
+    remains). Trace payload is redacted for secret patterns before returning.
     """
+    safe_function, guard = _guard_query(function)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "trace_codebase",
+            "function": function,
+            "trace": None,
+            "security_flags": [],
+            "backend": "unknown",
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
     try:
         raw = await _call_mcp(
             "trace",
             {
-                "function_name": function,
+                "function_name": safe_function,
                 "project": project,
                 "direction": direction,
                 "depth": depth,
@@ -342,14 +372,24 @@ async def trace_codebase(
         logger.info("trace_codebase MCP unavailable → RAG fallback (%s)", str(exc)[:120])
         return await _fallback_trace(function, depth=depth)
 
+    trace = raw.get("trace")
+    if isinstance(trace, dict):
+        trace = _redact_result(trace, ("name", "file", "qualified_name", "signature"))
+    elif isinstance(trace, str):
+        trace = _redact_text(trace)
+    security_flags = [
+        _redact_result(f, ("warning", "name", "pattern_id"))
+        for f in raw.get("security_flags", []) or []
+    ]
     return {
         "ok": True,
         "bridge": "mcp",
         "tool": "trace_codebase",
         "function": function,
-        "trace": raw.get("trace"),
-        "security_flags": raw.get("security_flags", []),
+        "trace": trace,
+        "security_flags": security_flags,
         "backend": raw.get("trace_backend", "unknown"),
+        "guard": guard,
     }
 
 
@@ -406,13 +446,122 @@ async def get_security_context(
         return await _fallback_security(query, top_k=top_k)
 
     results = raw.get("results", []) or []
-    results = [_redact_result(r, ("description", "code_block", "title", "content")) for r in results]
+    results = [
+        _redact_result(r, ("description", "code_block", "title", "content")) for r in results
+    ]
     return {
         "ok": bool(raw.get("success", True)),
         "bridge": "mcp",
         "tool": "get_security_context",
         "query": query,
         "results": results[:top_k],
+        "count": len(results),
+        "guard": guard,
+    }
+
+
+async def resolve_library(query: str) -> dict[str, Any]:
+    """Resolve a crypto library name to known library_ids (MCP ``resolve_library``).
+
+    Returns:
+        {
+          "ok", "bridge" ("mcp" | "rag_fallback"), "tool": "resolve_library",
+          "query", "matches": [{library_id, library_name, language,
+                                ecosystem, verdict, count}], "count", "guard",
+        }
+
+    Falls back to RugBrain's own coding knowledge when the MCP is unreachable.
+    Guarded: the query is sanitized for prompt injection before dispatch.
+    """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "resolve_library",
+            "query": query,
+            "matches": [],
+            "count": 0,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
+    try:
+        raw = await _call_mcp("resolve_library", {"query": safe_query})
+    except BridgeUnavailableError as exc:
+        logger.info("resolve_library MCP unavailable → RAG fallback (%s)", str(exc)[:120])
+        return await _fallback_resolve(query, guard=guard)
+
+    matches = raw.get("matches", []) or []
+    matches = [_redact_result(m, ("library_name",)) for m in matches]
+    return {
+        "ok": bool(raw.get("success", True)),
+        "bridge": "mcp",
+        "tool": "resolve_library",
+        "query": query,
+        "matches": matches,
+        "count": len(matches),
+        "guard": guard,
+    }
+
+
+async def query_codebase(
+    library_id: str,
+    query: str,
+    *,
+    filter_verdict: str | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Search code snippets inside a specific crypto library (MCP ``query_codebase``).
+
+    Returns:
+        {
+          "ok", "bridge" ("mcp" | "rag_fallback"), "tool": "query_codebase",
+          "library_id", "query", "results": [{id, library_id, title,
+            code_block, verdict, snippet_type, relevance_score}], "count",
+          "guard",
+        }
+
+    Falls back to RugBrain's own coding knowledge when the MCP is unreachable.
+    Guarded: the query is sanitized for prompt injection before dispatch.
+    Result content (``code_block`` / ``title``) is redacted for secret
+    patterns before returning.
+    """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "query_codebase",
+            "library_id": library_id,
+            "query": query,
+            "results": [],
+            "count": 0,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
+    try:
+        raw = await _call_mcp(
+            "query_codebase",
+            {
+                "library_id": library_id,
+                "query": safe_query,
+                "filter_verdict": filter_verdict,
+                "limit": min(limit, 100),
+            },
+        )
+    except BridgeUnavailableError as exc:
+        logger.info("query_codebase MCP unavailable → RAG fallback (%s)", str(exc)[:120])
+        return await _fallback_codebase(query, library_id=library_id, limit=limit, guard=guard)
+
+    results = raw.get("results", []) or []
+    results = [_redact_result(r, ("code_block", "title")) for r in results]
+    return {
+        "ok": bool(raw.get("success", True)),
+        "bridge": "mcp",
+        "tool": "query_codebase",
+        "library_id": library_id,
+        "query": query,
+        "results": results[:limit],
         "count": len(results),
         "guard": guard,
     }
@@ -636,6 +785,115 @@ async def _fallback_security(query: str, *, top_k: int) -> dict[str, Any]:
         }
 
 
+async def _fallback_resolve(query: str, *, guard: dict[str, Any]) -> dict[str, Any]:
+    """Resolve a library name from RugBrain's own coding KB when MCP is down.
+
+    Shapes results like the MCP ``resolve_library`` response (``matches`` with
+    ``library_id``/``library_name``), sourced from coding-knowledge hits.
+    Guarded: content redacted before returning.
+    """
+    try:
+        from rugbrain.search_service import search_coding_knowledge  # lazy import
+
+        res = await search_coding_knowledge(query, limit=10)
+        matches = []
+        for r in res.get("results", []) or []:
+            lib_name = r.get("source") or r.get("metadata", {}).get("library_name") or ""
+            matches.append(
+                _redact_result(
+                    {
+                        "library_id": f"rag:{_slugify(lib_name or r.get('id', ''))}",
+                        "library_name": lib_name,
+                        "language": r.get("metadata", {}).get("language", ""),
+                        "ecosystem": r.get("metadata", {}).get("ecosystem", ""),
+                        "verdict": "unknown",
+                        "count": 1,
+                        "source": r.get("source", ""),
+                    },
+                    ("library_name", "source"),
+                )
+            )
+        return {
+            "ok": True,
+            "bridge": "rag_fallback",
+            "tool": "resolve_library",
+            "query": query,
+            "matches": matches,
+            "count": len(matches),
+            "guard": guard,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("rag_fallback_resolve failed err=%s", str(exc)[:160])
+        return {
+            "ok": False,
+            "bridge": "rag_fallback",
+            "tool": "resolve_library",
+            "query": query,
+            "matches": [],
+            "count": 0,
+            "guard": guard,
+            "error": str(exc)[:200],
+        }
+
+
+async def _fallback_codebase(
+    query: str,
+    *,
+    library_id: str,
+    limit: int,
+    guard: dict[str, Any],
+) -> dict[str, Any]:
+    """Search RugBrain's coding KB for library snippets when MCP is down.
+
+    Shapes results like the MCP ``query_codebase`` response (``results`` with
+    ``code_block``/``title``/``verdict``/``snippet_type``), sourced from
+    coding-knowledge hits. Guarded: content redacted before returning.
+    """
+    try:
+        from rugbrain.search_service import search_coding_knowledge  # lazy import
+
+        res = await search_coding_knowledge(query, limit=limit)
+        results = []
+        for r in res.get("results", []) or []:
+            results.append(
+                _redact_result(
+                    {
+                        "id": r.get("id"),
+                        "library_id": library_id,
+                        "title": r.get("source", "rag"),
+                        "code_block": r.get("code_answer") or r.get("content", ""),
+                        "verdict": "unknown",
+                        "snippet_type": "knowledge",
+                        "relevance_score": r.get("similarity", 0.0),
+                    },
+                    ("code_block", "title"),
+                )
+            )
+        return {
+            "ok": True,
+            "bridge": "rag_fallback",
+            "tool": "query_codebase",
+            "library_id": library_id,
+            "query": query,
+            "results": results[:limit],
+            "count": len(results),
+            "guard": guard,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("rag_fallback_codebase failed err=%s", str(exc)[:160])
+        return {
+            "ok": False,
+            "bridge": "rag_fallback",
+            "tool": "query_codebase",
+            "library_id": library_id,
+            "query": query,
+            "results": [],
+            "count": 0,
+            "guard": guard,
+            "error": str(exc)[:200],
+        }
+
+
 # ── Helpers / sync ──────────────────────────────────────────────────────
 
 
@@ -772,7 +1030,7 @@ async def _cli_main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(
             "usage: python -m rugbrain.mcp_bridge "
-            "{status|search|trace|security|sync} [query-or-json]"
+            "{status|search|trace|security|resolve|codebase|sync} [query-or-json]"
         )
         return 2
     tool = argv[1]
@@ -783,11 +1041,24 @@ async def _cli_main(argv: list[str]) -> int:
     elif tool == "sync":
         limit = int(arg) if arg and arg.isdigit() else 100
         result = await sync_security_patterns(limit=limit)
-    elif tool in {"search", "security"}:
+    elif tool in {"search", "security", "resolve"}:
         if not arg:
             print(f"{tool} requires a query")
             return 2
-        result = await search_codebase(arg) if tool == "search" else await get_security_context(arg)
+        if tool == "search":
+            result = await search_codebase(arg)
+        elif tool == "security":
+            result = await get_security_context(arg)
+        else:
+            result = await resolve_library(arg)
+    elif tool == "codebase":
+        if not arg:
+            print("codebase requires 'library_id query'")
+            return 2
+        parts = arg.split(None, 1)
+        library_id = parts[0]
+        query = parts[1] if len(parts) > 1 else ""
+        result = await query_codebase(library_id, query)
     elif tool == "trace":
         if not arg:
             print("trace requires a function name")

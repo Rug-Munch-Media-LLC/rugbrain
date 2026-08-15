@@ -11,12 +11,14 @@ Usage:
     python mcp_tool_runner.py <tool> '<json-kwargs>'
 
 Supported tools:
-    search      — codebase_server.rmi_search (async)
-    trace       — codebase_server.rmi_trace (async)
-    refresh     — codebase_server.rmi_refresh (async)
-    status      — codebase_server.rmi_status (async)
-    security    — server.query_security_context (sync)
-    patterns    — server.list_patterns (sync)
+    search            — codebase_server.rmi_search (async)
+    trace             — codebase_server.rmi_trace (async)
+    refresh           — codebase_server.rmi_refresh (async)
+    status            — codebase_server.rmi_status (async)
+    resolve_library   — codebase_server.resolve_library (sync)
+    query_codebase    — codebase_server.query_codebase (sync)
+    security          — server.query_security_context (sync)
+    patterns          — server.list_patterns (sync)
 
 No secrets: tool kwargs come from the caller; results are printed only to
 stdout and never logged.
@@ -73,6 +75,15 @@ def main() -> int:
                 "status": cs.rmi_status,
             }[tool]
             result = asyncio.run(_call_async(fn, kwargs))
+        elif tool in {"resolve_library", "query_codebase"}:
+            import codebase_server as cs
+
+            # Sync Context7-style reference tools — no lifespan needed.
+            fn = {
+                "resolve_library": cs.resolve_library,
+                "query_codebase": cs.query_codebase,
+            }[tool]
+            result = fn(**kwargs)
         elif tool == "security":
             import server as srv
 
