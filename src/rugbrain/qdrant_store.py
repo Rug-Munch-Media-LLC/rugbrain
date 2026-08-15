@@ -308,6 +308,13 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "contract_audits",
         "crypto_vulnerabilities",
         "hacks_v2",
+        "news_v2",
+        "research_v2",
+        "wallet_v2",
+        "scanner_v2",
+        "security_feeds",
+        "security_alerts",
+        "regulation_enforcement",
         # RAG-owned auxiliary / graph collections.
         "rag_threats",
         "rag_docs",

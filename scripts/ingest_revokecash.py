@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest Revoke.cash exploit knowledge into the ``threat_intel`` collection.
+"""Ingest Revoke.cash exploit knowledge into the ``threat_intel_v2`` collection.
 
 Source: Revoke.cash (https://revoke.cash) — a token-approval management
 service that also maintains a well-known list of approval-based exploits
@@ -40,7 +40,7 @@ if sys_path_scripts not in sys.path:
 
 from ingest_common2 import build_doc, write_docs  # noqa: E402
 
-COLLECTION = "threat_intel"
+COLLECTION = "threat_intel_v2"
 SOURCE = "revokecash"
 
 # ── Curated Revoke.cash exploit knowledge ───────────────────────────────
@@ -253,7 +253,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest Revoke.cash approval-exploit knowledge into threat_intel"
+        description="Ingest Revoke.cash approval-exploit knowledge into threat_intel_v2"
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max entries to ingest")

@@ -594,7 +594,7 @@ async def search_threat_intel(
         default="", description="Search query — token address, name, or scam description"
     ),
     limit: int = Query(default=10, ge=1, le=100),
-    collection: str = Query(default="threat_intel", description="Qdrant collection to search"),
+    collection: str = Query(default="threat_intel_v2", description="Qdrant collection to search"),
     rerank: bool = Query(
         default=False,
         description="Rerank top-20 candidates with the bge-reranker-v2-m3 cross-encoder",
@@ -668,7 +668,7 @@ async def search_threat_intel(
     """
     Semantic search across scanner findings ingested into Qdrant.
 
-    Queries the ``threat_intel`` collection (populated in real-time by the
+    Queries the ``threat_intel_v2`` collection (populated in real-time by the
     scanner subscriber) for tokens that match the query by semantic similarity.
 
     When ``rerank=true``, the top-20 candidates from vector search are scored
@@ -693,7 +693,7 @@ async def search_threat_intel(
 
     Example::
 
-        curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5&factuality_filter=verified&require_corroboration=1"
+        curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel_v2&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5&factuality_filter=verified&require_corroboration=1"
     """
     from rugbrain.embeddings import get_embedding
     from rugbrain.qdrant_store import QdrantVectorStore, build_search_filters
@@ -927,9 +927,9 @@ async def scam_check(
     results_data = await three_pillar_search(
         query=query,
         # Search the collections where known-scam / scam-pattern data is
-        # actually stored (known_scams + scam_patterns), plus the legacy
-        # threat_intel alias and community reports.
-        collections=["known_scams", "scam_patterns", "threat_intel", "rmi_community"],
+        # actually stored (known_scams + scam_patterns), plus the migrated
+        # threat_intel_v2 collection and community reports.
+        collections=["known_scams", "scam_patterns", "threat_intel_v2", "rmi_community"],
         limit=limit,
         min_similarity=0.4,
         entity_boost=2.0,
@@ -1075,7 +1075,7 @@ async def news_top_articles(
     ),
     limit: int = Query(default=20, ge=1, le=100, description="Max articles to return"),
 ) -> dict[str, Any]:
-    """Return the best-rated articles from the Qdrant `news` collection.
+    """Return the best-rated articles from the Qdrant `news_v2` collection.
 
     Scrolls the collection (payload has no vector score), keeps only points
     whose stored rating composite is >= ``min_quality`` (optionally filtered
@@ -1092,7 +1092,7 @@ async def news_top_articles(
         offset: str | None = None
         page = 0
         while page < NEWS_TOP_MAX_SCROLL_PAGES and len(collected) < limit * 4:
-            results, offset = await store.scroll("news", limit=100, offset=offset)
+            results, offset = await store.scroll("news_v2", limit=100, offset=offset)
             if not results:
                 break
             collected.extend(results)
@@ -1106,7 +1106,7 @@ async def news_top_articles(
             "total": 0,
             "category": category,
             "min_quality": min_quality,
-            "collection": "news",
+            "collection": "news_v2",
             "error": str(exc)[:200],
         }
 
@@ -1144,7 +1144,7 @@ async def news_top_articles(
         "total": len(articles),
         "category": category,
         "min_quality": min_quality,
-        "collection": "news",
+        "collection": "news_v2",
     }
 
 
@@ -1418,9 +1418,9 @@ async def analyze_token_full(
 
         store = QdrantVectorStore()
         try:
-            scam_filter = build_search_filters(chain=chain, collection="threat_intel")
+            scam_filter = build_search_filters(chain=chain, collection="threat_intel_v2")
             results, _ = await store.scroll(
-                "threat_intel",
+                "threat_intel_v2",
                 limit=10,
                 filters=scam_filter,
             )

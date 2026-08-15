@@ -1,7 +1,7 @@
 """Scam pattern extraction from ingested threat intel.
 
 Turns raw ingested exploit/hack data (defihacklabs PoCs, SWC registry,
-rekt-news reports — all already in the ``threat_intel`` Qdrant collection)
+rekt-news reports — all already in the ``threat_intel_v2`` Qdrant collection)
 into structured, queryable scam patterns::
 
     {
@@ -35,7 +35,7 @@ from rugbrain.qdrant_store import QdrantVectorStore
 logger = logging.getLogger(__name__)
 
 # ── Collection names ──────────────────────────────────────────────
-THREAT_INTEL_COLLECTION = "threat_intel"
+THREAT_INTEL_COLLECTION = "threat_intel_v2"
 SCAM_PATTERNS_COLLECTION = "scam_patterns"
 
 # Redis cache key for the aggregated pattern list (JSON).
