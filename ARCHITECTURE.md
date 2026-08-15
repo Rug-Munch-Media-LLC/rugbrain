@@ -100,7 +100,7 @@ in `src/app/` (currently being restored — see §7).
         │  Scanner → Redis queue → subscriber/poller → embed → Qdrant│
         │  News/social → nightly rag_ingestion → Redis          │
         │  Scam DBs → seed scripts (seed_all, seed_threat_intel)│
-        │  Code patterns → rmi-codebase-mcp (ChromaDB, external)│
+        │  Code patterns → rmi-codebase-mcp (Qdrant, external)│
         └──────────────────────────────────────────────────────┘
 ```
 
@@ -150,7 +150,7 @@ in `src/app/` (currently being restored — see §7).
         │  Scam DBs → scripts/seed_threat_intel.py         │
         │          → scripts/seed_all.py                   │
         │  Wallet labels → embed_wallet → Redis/Qdrant     │
-        │  Code patterns → rmi-codebase-mcp ChromaDB (ext) │
+        │  Code patterns → rmi-codebase-mcp Qdrant (ext) │
         └──────────────────────────────────────────────────┘
 ```
 
@@ -163,7 +163,7 @@ in `src/app/` (currently being restored — see §7).
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
 | Infinity | `infinity-rag` | 8001 | Embedding/reranking inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
-| rmi-codebase-mcp | external | — | Code-pattern embeddings (ChromaDB) |
+| rmi-codebase-mcp | external | — | Code-pattern embeddings (Qdrant) |
 
 **Qdrant connection fallback:** `QDRANT_URL` env (default `http://rmi-qdrant:6333`)
 → `http://127.0.0.1:6333` → `http://localhost:6333`. First responsive URL is
@@ -507,8 +507,9 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    first-write dimension.
 7. **Stale references** — `seed_all.py` still defaults to qwen3-embed:4b
    (2560-dim); `README-RAG-API.md` still documents nomic-embed-text as primary.
-8. **Code patterns not in Qdrant** — contract-code embeddings live in
-   rmi-codebase-mcp ChromaDB (nomic 768-dim, not yet aligned to bge-m3).
+8. **Code patterns in Qdrant (migration)** — contract-code embeddings now
+   migrate from the legacy ChromaDB store into rmi-codebase-mcp Qdrant
+   (bge-m3 1024-dim via Infinity, `security_patterns` collection).
 9. **Test/quality debt** — 1 failing test (`test_qdrant_store.py`), coverage
    ~10% (60% threshold unenforced), 42 ruff errors, `make lint`/`make test`
    not green.
