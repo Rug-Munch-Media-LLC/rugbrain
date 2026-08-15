@@ -1,7 +1,7 @@
 #!/bin/bash
 # RugMunch Methodology Leak Detection — Pre-Commit Hook (SANITIZED for OSS)
 # Canonical source: standards/scripts/pre-commit-methodology-check.sh
-# 
+#
 # This is a sanitized version for public/open-source repos.
 # It checks for COMMON patterns that should never be committed.
 # The full version with infrastructure-specific patterns lives in
@@ -14,29 +14,29 @@ set -euo pipefail
 FORBIDDEN_PATTERNS=(
   # Generic API keys and secrets (any service)
   'api[_-]?key\s*=\s*['"'"'"]\w{20,}'
-  'sk-[a-zA-Z0-9]{20,}'     # OpenAI-style keys
-  'AKIA[0-9A-Z]{16}'         # AWS access keys
-  'xox[baprs]-[0-9a-zA-Z]{10,}'  # Slack tokens
-  'ghp_[a-zA-Z0-9]{36}'      # GitHub PATs
-  'gho_[a-zA-Z0-9]{36}'      # GitHub OAuth tokens
-  
+  'sk-[a-zA-Z0-9]{20,}'         # OpenAI-style keys
+  'AKIA[0-9A-Z]{16}'            # AWS access keys
+  'xox[baprs]-[0-9a-zA-Z]{10,}' # Slack tokens
+  'ghp_[a-zA-Z0-9]{36}'         # GitHub PATs
+  'gho_[a-zA-Z0-9]{36}'         # GitHub OAuth tokens
+
   # Generic internal hostname patterns (not our specific ones)
   '\.internal\.'
   '\.int\.'
   '\.corp\.'
-  
+
   # Generic filesystem paths that shouldn't be hardcoded
   '/home/[^/]+/\..*/(secrets|keys|certs|credentials)'
-  
+
   # Comments and documentation markers
   'FIXME'
-  'HACK'
+  '\bHACK\b' # word-boundary: catch // HACK / # HACK markers, not DEFI_HACKLABS/HACKS_URL
   'XXX'
   '@nocommit'
 )
 
 FOUND=0
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -v '^scripts/pre-commit-methodology-check.sh$' || true)
 
 if [ -z "$STAGED_FILES" ]; then
   echo "✅ Methodology check: clean (no staged files)"
@@ -49,7 +49,7 @@ for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
     echo "⚠️  POTENTIAL ISSUE: $pattern"
     while IFS= read -r f; do
       echo "     $f"
-    done <<< "$matches"
+    done <<<"$matches"
     FOUND=1
   fi
 done
