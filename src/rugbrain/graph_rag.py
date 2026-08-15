@@ -1,6 +1,18 @@
 """
 Graph RAG - Community detection + narrative summaries from Knowledge Graph.
 
+DEPRECATED — legacy Redis/Neo4j knowledge-graph code path, retired in favor of
+the Qdrant-native GraphRAG (see docs/graphrag-architecture.md and
+ARCHITECTURE-V2.md §3.1 "DELETE"). This module is the *ancestor* of the
+GraphRAG design's Phase 2 and is NOT extended anymore.
+
+It is kept importable for the transitional period because
+``endpoints.py``'s ``GET /api/v1/rag/graph-communities`` route and
+``tests/test_ratings.py`` still reference it. Do not add new graph work
+here — new graph retrieval lives in rmi-backend's Neo4j readers /
+Qdrant-native lane. ``synthesize_answer`` is a pure delegation shim to
+``rugbrain.ratings.synthesize_answer`` and can move there before removal.
+
 Extends the existing Redis-backed Knowledge Graph (5,614 nodes) with:
   1. Label propagation community detection - find scammer rings, exchange clusters
   2. Community narrative synthesis - LLM-generated summaries per cluster
@@ -17,6 +29,17 @@ from collections import defaultdict
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
+
+# Legacy Redis/Neo4j graph path — retired in favor of the Qdrant-native
+# GraphRAG (docs/graphrag-architecture.md). Kept importable while
+# `endpoints.py`'s /api/v1/rag/graph-communities route and its tests still
+# reference it (a move to _legacy/ would break that import, and endpoints.py
+# is owned by another lane).
+# TODO(remove): delete this module once the route in endpoints.py and the
+# `synthesize_answer` shim consumers (tests/test_ratings.py) are retired in a
+# coordinated follow-up. Until then it MUST stay importable as
+# `rugbrain.graph_rag`.
+DEPRECATED = True
 
 
 async def detect_communities(

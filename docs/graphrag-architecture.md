@@ -20,6 +20,11 @@ happens in later phases and is subject to the acceptance gates in §7.
    `bolt://rmi-neo4j:7687`). No second graph database, no Redis-as-graph, no new service. The
    Redis-backed `graph_rag.py` community code in rugbrain (`src/rugbrain/graph_rag.py`) is the
    **ancestor** of this design's Phase 2 — it is re-implemented over Neo4j, not extended.
+   **Current status (2026-08-16):** `graph_rag.py` is **deprecated** (module-level
+   `DEPRECATED = True` + `# TODO(remove)`). It is *not* yet deleted because
+   `endpoints.py`'s `GET /api/v1/rag/graph-communities` route and
+   `tests/test_ratings.py::test_graph_rag_synthesize_answer_node` still import it; removal
+   happens in a coordinated follow-up that retires the route and the shim consumers together.
 2. **ONE vector store:** Qdrant (`rmi-qdrant:6333`), dense 1024-d BGE-M3 + BM25 sparse. GraphRAG
    adds a **graph lane** to retrieval; it does not add a second vector store.
 3. **Graph read path lives in rmi-backend** (it already owns the Neo4j driver, entity resolution,
@@ -382,5 +387,7 @@ ORDER BY overlap DESC LIMIT 50
 
 *End of design. This document is the authoritative spec for GraphRAG in rugbrain. Conflicts with
 ARCHITECTURE-V2.md's "graph_rag.py DELETE" disposition are resolved as follows: the legacy
-Redis-based module is still deleted; its *capabilities* are re-implemented over Neo4j per this
-design.*
+Redis-based module is **deprecated, not yet deleted** (module-level `DEPRECATED = True` +
+`# TODO(remove)` in `src/rugbrain/graph_rag.py`; kept importable while the
+`/api/v1/rag/graph-communities` route and its tests still reference it); its *capabilities* are
+re-implemented over Neo4j per this design.*

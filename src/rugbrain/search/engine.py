@@ -1089,22 +1089,34 @@ async def three_pillar_search(
                     logger.debug("Entity lookup for %s failed: %s", entity["value"], e)
 
             if use_kg:
+                # Legacy Redis/Neo4j knowledge-graph lane (graph_rag.py /
+                # app.knowledge_graph) is retired in favor of the Qdrant-native
+                # GraphRAG (docs/graphrag-architecture.md). Guard the import so a
+                # removed module degrades to ``kg = None`` instead of raising.
+                kg = None
                 try:
                     from app.knowledge_graph import get_knowledge_graph  # external dependency
 
                     kg = await get_knowledge_graph()
-                    kg_results = await kg.expand_query_entities(
-                        entity_extraction.all_entities(), max_depth=2
-                    )
-                    if kg_results:
-                        for r in kg_results:
-                            r["pillar"] = "entity+kg"
-                        pillar3_results.extend(kg_results)
-                        logger.info("KG expansion: %s related entities", len(kg_results))
                 except ImportError:
                     logger.debug("Knowledge Graph module not available, skipping KG expansion")
+                    kg = None
                 except Exception as e:
-                    logger.debug("KG expansion failed (non-critical): %s", e)
+                    logger.debug("KG access failed (non-critical): %s", e)
+                    kg = None
+
+                if kg is not None:
+                    try:
+                        kg_results = await kg.expand_query_entities(
+                            entity_extraction.all_entities(), max_depth=2
+                        )
+                        if kg_results:
+                            for r in kg_results:
+                                r["pillar"] = "entity+kg"
+                            pillar3_results.extend(kg_results)
+                            logger.info("KG expansion: %s related entities", len(kg_results))
+                    except Exception as e:
+                        logger.debug("KG expansion failed (non-critical): %s", e)
     except Exception as e:
         logger.warning("Pillar 3 (entity) failed: %s", e)
 
