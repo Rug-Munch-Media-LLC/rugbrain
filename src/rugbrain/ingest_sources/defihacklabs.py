@@ -30,7 +30,10 @@ log = logging.getLogger(__name__)
 
 REPO = "SunWeb3Sec/DeFiHackLabs"
 REF = "main"
-DEFAULT_COLLECTION = "threat_intel"
+# Real hybrid collection in Qdrant (11.9k pts). The legacy "threat_intel"
+# name was migrated to threat_intel_v2 (see scripts/migrate_to_sparse.py);
+# no alias exists, so writing to the old name creates an empty fragment.
+DEFAULT_COLLECTION = "threat_intel_v2"
 DOC_TYPE = "exploit_poc"
 DOC_TYPE_MD = "exploit_poc"
 

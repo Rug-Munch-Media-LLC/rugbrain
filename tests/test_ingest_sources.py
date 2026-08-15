@@ -11,6 +11,7 @@ from rugbrain.ingest_sources import (
     defihacklabs,
     defillama,
     eips,
+    incidents,
     l2beat,
     mev,
     privacy,
@@ -41,6 +42,10 @@ REQUIRED = {
     "mev_boost_relay": "mev_architecture",
     "safe_contracts": "contract_code",
     "tornado_cash": "privacy_protocol",
+    "guttedefi": "post_mortem",
+    "immunefi_hack_analyses": "post_mortem",
+    "blocksecteam_defi_poc": "exploit_poc",
+    "slowmist_open_reports": "audit_finding",
 }
 
 
@@ -621,3 +626,127 @@ async def test_tornado_fetch_graceful_on_rate_limit():
     )
     docs = await tc.fetch(limit=1)
     assert docs == []
+
+
+# ── Incident / post-mortem sources (incidents.py) ────────────────────────
+
+
+def test_parse_guttedefi_table():
+    md = """
+# All the Gutted DeFi Projects
+
+| Date | Targeted Protocol | Exploited/Lost | Post-Mortem | Analysis | Audited? |
+| ---- | ----------------- | -------------- | ----------- | -------- | -------- |
+| ——   | **[Aug 2021]**    | ——             | ——          | ——       |         |
+| 30th | Cream Finance     | $18.8 mln      | [Official](https://medium.com/cream) | [Halborn](https://halborn.com/cream) | No |
+| 12th | DAO Maker         | 2261 ETH ($7 mln) | [Official](https://medium.com/daomaker) | | No |
+|      | TOTAL LOSS       | ~ $720 mln     | | | |
+"""
+    rows = incidents.parse_guttedefi_table(md)
+    assert len(rows) == 2
+    assert rows[0].protocol == "Cream Finance"
+    assert rows[0].month_year == "Aug 2021"
+    assert rows[0].day == "30th"
+    assert rows[0].loss_usd == 18_800_000
+    assert rows[0].post_mortem_links == ("https://medium.com/cream",)
+    assert rows[1].protocol == "DAO Maker"
+
+
+def test_guttedefi_to_doc():
+    inc = incidents.GutteDeFiIncident(
+        day="30th",
+        month_year="Aug 2021",
+        protocol="Cream Finance",
+        loss_raw="$18.8 mln",
+        loss_usd=18_800_000,
+        post_mortem_links=("https://medium.com/cream",),
+        analysis_links=(),
+        analysis_text="Flash Loan",
+        audited="No",
+        row_index=0,
+    )
+    doc = incidents.guttedefi_to_doc(inc)
+    assert doc.doc_type == "post_mortem"
+    assert doc.metadata["protocol"] == "Cream Finance"
+    assert doc.metadata["date"] == "30th Aug 2021"
+    assert doc.metadata["loss_usd"] == 18_800_000
+    assert doc.metadata["severity"] == "critical"
+    assert doc.metadata["vulnerability_class"] == "flash-loan"
+    assert doc.url == "https://medium.com/cream"
+
+
+def test_parse_immunefi_hack_analyses():
+    md = """
+# Hack Analyses
+
+## [Hack Analysis: BonqDAO, February 2023](https://medium.com/immunefi/bonq)
+
+BonqDAO protocol was hacked resulting in a loss of approximately $120 million
+due to a price oracle manipulation attack.
+
+ - Vulnerability type: Price oracle manipulation
+
+## [Hack Analysis: Saddle Finance, April 2022](https://medium.com/immunefi/saddle)
+
+Saddle Finance ... price miscalculation when swapping a token for an LP token.
+
+- Vulnerability type: Logic, price calculation.
+"""
+    entries = incidents.parse_immunefi_hack_analyses(md)
+    assert len(entries) == 2
+    assert entries[0].title == "BonqDAO"
+    assert entries[0].month_year == "February 2023"
+    assert entries[0].url == "https://medium.com/immunefi/bonq"
+    assert "oracle" in entries[0].vulnerability_type.lower()
+    assert entries[1].vulnerability_type.startswith("Logic")
+
+
+def test_immunefi_to_doc():
+    a = incidents.ImmunefiHackAnalysis(
+        title="BonqDAO",
+        month_year="February 2023",
+        url="https://medium.com/immunefi/bonq",
+        description="Price oracle manipulation caused $120m loss.",
+        vulnerability_type="Price oracle manipulation",
+    )
+    doc = incidents.immunefi_to_doc(a)
+    assert doc.doc_type == "post_mortem"
+    assert doc.metadata["protocol"] == "BonqDAO"
+    assert doc.metadata["vulnerability_class"] == "oracle-manipulation"
+    assert doc.metadata["vulnerability_type"] == "Price oracle manipulation"
+    assert "Root cause" in doc.content
+
+
+def test_blocksecteam_poc_to_doc():
+    doc = incidents.blocksecteam_poc_to_doc(
+        "CREAM/README.md",
+        "# CREAM PoC\n\nFlash loan exploit using DEX to repay the flash swap.\n",
+    )
+    assert doc is not None
+    assert doc.doc_type == "exploit_poc"
+    assert doc.metadata["protocol"] == "CREAM"
+    assert "flash-loan" in doc.metadata["vulnerability_class"]
+    assert "https://github.com/blocksecteam/defi_poc/tree/main/CREAM" in doc.url
+    assert incidents.blocksecteam_poc_to_doc("README.md", "x") is None
+
+
+def test_slowmist_report_to_doc():
+    md = """# IoTeX-voting-contracts Smart Contract Security Audit Report
+
+## Summary
+
+* Audit Date: February 28, 2019
+* Audit Result: Passed
+* Audit Team: SlowMist Security Team
+
+## Report
+
+Details...
+"""
+    doc = incidents.slowmist_report_to_doc("open-report/IoTeX.md", md)
+    assert doc is not None
+    assert doc.doc_type == "audit_finding"
+    assert doc.metadata["audit_result"] == "Passed"
+    assert doc.metadata["audit_date"] == "February 28, 2019"
+    assert "IoTeX" in doc.title
+    assert incidents.slowmist_report_to_doc("open-report/empty.md", "   ") is None

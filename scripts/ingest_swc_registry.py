@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Ingest the SWC Registry (Smart Contract Weakness Classification) into the
-RAG ``threat_intel`` collection.
+RAG ``crypto_vulnerabilities`` collection.
 
 Source: https://github.com/SmartContractSecurity/SWC-registry (37 SWC entries)
 
@@ -22,7 +22,7 @@ For each entry we:
      (see ``rugbrain.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
   3. Build a structured weakness document and embed with bge-m3 (1024-dim,
      Infinity /embeddings).
-  4. Upsert into ``threat_intel`` with ``source=swc_registry`` and canonical
+  4. Upsert into ``crypto_vulnerabilities`` with ``source=swc_registry`` and canonical
      metadata (attack_vector, severity, chain=ethereum, protocol=SWC ID,
      source_type=swc_registry).
 
@@ -65,7 +65,7 @@ SWC_ENTRIES_URL = (
 SWC_RAW_BASE = (
     "https://raw.githubusercontent.com/SmartContractSecurity/SWC-registry/master/entries/docs"
 )
-COLLECTION = "threat_intel"
+COLLECTION = "crypto_vulnerabilities"
 EMBEDDING_DIM = 1024
 SOURCE = "swc_registry"
 REQUEST_TIMEOUT = 30
@@ -205,7 +205,7 @@ def swc_to_doc(swc_id: str, markdown: str) -> dict[str, Any] | None:
 
 
 async def ingest_docs(docs: list[dict[str, Any]], dry_run: bool) -> int:
-    """Embed + upsert SWC weakness docs into ``threat_intel``."""
+    """Embed + upsert SWC weakness docs into ``crypto_vulnerabilities``."""
     if dry_run:
         logger.info("[DRY RUN] would ingest %d SWC entries into %s", len(docs), COLLECTION)
         return len(docs)
@@ -289,7 +289,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest SWC Registry weakness definitions into threat_intel"
+        description="Ingest SWC Registry weakness definitions into crypto_vulnerabilities"
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max SWC entries to ingest")

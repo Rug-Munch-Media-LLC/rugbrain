@@ -197,7 +197,13 @@ async def fetch_hacks(client: httpx.AsyncClient, limit: int | None = None) -> li
 
 
 def hacks_to_docs(hacks: list[Any], limit: int | None = None) -> list[IngestDoc]:
-    """Normalize DeFiLlama hack incidents into market_data/incident docs."""
+    """Normalize DeFiLlama hack incidents into threat-intel incident docs.
+
+    Metadata routes to ``threat_intel_v2`` (the real hybrid collection; the
+    legacy ``threat_intel`` name does not exist in Qdrant and writing to it
+    would create an empty fragment). Deterministic ``doc_id`` seeds keep
+    re-ingestion idempotent (the store layer converts to UUIDv5).
+    """
     docs: list[IngestDoc] = []
     for hack in hacks:
         if not isinstance(hack, dict):
@@ -228,7 +234,7 @@ def hacks_to_docs(hacks: list[Any], limit: int | None = None) -> list[IngestDoc]
                 title=f"DeFi hack: {name}",
                 url="https://defillama.com/hacks",
                 metadata={
-                    "collection": "threat_intel",
+                    "collection": "threat_intel_v2",
                     "protocol": name,
                     "date": date_iso,
                     "date_ts": float(hack.get("date") or 0) or None,

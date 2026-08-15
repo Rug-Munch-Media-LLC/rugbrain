@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest DeFiHackLabs Solidity attack PoCs into the RAG ``threat_intel`` collection.
+"""Ingest DeFiHackLabs Solidity attack PoCs into the RAG ``threat_intel_v2`` collection.
 
 Source: https://github.com/SunWeb3Sec/DeFiHackLabs (843+ DeFi hack reproduction PoCs)
 
@@ -11,7 +11,7 @@ that reproduces a real DeFi exploit. For every ``.sol`` file we:
      (leading comments), and the raw code snippet.
   2. Chunk large files into 500-char windows with 50-char overlap.
   3. Embed each chunk with bge-m3 (1024-dim, Infinity /embeddings).
-  4. Upsert into the ``threat_intel`` collection with metadata:
+  4. Upsert into the ``threat_intel_v2`` collection with metadata:
      category, severity, ecosystem=EVM, source=defihacklabs, source_url.
 
 Idempotent: point IDs are deterministic UUIDv5 derived from the content hash,
@@ -50,7 +50,7 @@ logger = logging.getLogger("ingest_defihacklabs")
 
 REPO_URL = "https://github.com/SunWeb3Sec/DeFiHackLabs.git"
 REPO_DIR = os.getenv("DEFI_HACKLABS_DIR", "/tmp/defihacklabs")  # noqa: S108  # nosec B108
-COLLECTION = "threat_intel"
+COLLECTION = "threat_intel_v2"
 EMBEDDING_DIM = 1024
 SOURCE = "defihacklabs"
 
@@ -444,7 +444,7 @@ def clone_repo() -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ingest DeFiHackLabs PoCs into threat_intel")
+    parser = argparse.ArgumentParser(description="Ingest DeFiHackLabs PoCs into threat_intel_v2")
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max .sol files to ingest")
     parser.add_argument("--no-clone", action="store_true", help="Skip cloning (use existing dir)")

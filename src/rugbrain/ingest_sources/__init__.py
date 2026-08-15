@@ -41,6 +41,12 @@ from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroS
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
 from rugbrain.ingest_sources.eips import BIPsSource, EIPsSource
+from rugbrain.ingest_sources.incidents import (
+    BlockSecDefiPocSource,
+    GutteDeFiSource,
+    ImmunefiHackAnalysesSource,
+    SlowMistOpenReportsSource,
+)
 from rugbrain.ingest_sources.l2beat import L2BeatSource
 from rugbrain.ingest_sources.mev import MEVBoostRelaySource, MEVBoostSource
 from rugbrain.ingest_sources.openzeppelin import OpenZeppelinSource
@@ -75,6 +81,10 @@ SOURCES: tuple[Source, ...] = (
     SafeSource(),
     TornadoSource(),
     BlacklistsSource(),
+    GutteDeFiSource(),
+    ImmunefiHackAnalysesSource(),
+    BlockSecDefiPocSource(),
+    SlowMistOpenReportsSource(),
 )
 
 # Semantic doc_type → source names (for quick lookup / filtering).

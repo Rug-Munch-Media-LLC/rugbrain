@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
-"""Ingest the DeFiLlama hacks database into the RAG ``threat_intel`` collection.
+"""Ingest the DeFiLlama hacks database into the RAG ``threat_intel_v2`` collection.
 
 Source: https://api.llama.fi/hacks (maintained by the DeFiLlama team) —
 600+ structured exploit incidents with date, USD amount lost, chain(s),
 technique, classification, target type and returned-funds flag. This is
 the fresh replacement for the dead Rekt News RSS feed (https://rekt.news/feed/
-returns HTTP 500 and the leaderboard page no longer embeds ``__NEXT_DATA__``,
-so ``ingest_scam_knowledge.py``'s ``rekt_news`` source is currently
-unavailable). DeFiLlama covers the same incident universe with a maintained,
-structured API.
+returns HTTP 500 and the RSS paths are gone, so RSS-based consumers like
+``historical.scrape_rekt_news`` are unavailable; the leaderboard
+``__NEXT_DATA__`` path in ``ingest_scam_knowledge.py`` still works).
+DeFiLlama covers the same incident universe with a maintained, structured
+API.
 
 Each hack is embedded (1024-dim bge-m3 via Infinity) and upserted into
-``threat_intel`` (alias of ``threat_intel_v2``, dense + BM25 sparse hybrid)
-with canonical filterable metadata: date, date_ts, amount_lost_usd, chain,
-attack_vector, technique, classification, source_type=defillama_hacks.
+``threat_intel_v2`` (dense + BM25 sparse hybrid — the REAL collection;
+the legacy ``threat_intel`` name was migrated away and no alias exists, so
+writing to it would create an empty fragment) with canonical filterable
+metadata: date, date_ts, amount_lost_usd, chain, attack_vector, technique,
+classification, source_type=defillama_hacks.
 
-Idempotent: point IDs are deterministic UUIDv5 (``defillama_hacks:{name}:{date_ts}``),
-so re-running overwrites the same points instead of duplicating.
+Idempotent: point IDs are deterministic seeds (``defillama_hacks:{name}:{date_ts}``)
+which the store converts to UUIDv5 point IDs, so re-running overwrites the
+same points instead of duplicating.
 
 Cron usage (fresh-only increment, matches the every-6h intel cadence):
 
@@ -55,7 +59,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_defillama_hacks")
 
 DEFILLAMA_HACKS_API = "https://api.llama.fi/hacks"
-COLLECTION = "threat_intel"  # alias → threat_intel_v2 (dense + BM25 sparse)
+COLLECTION = "threat_intel_v2"  # real hybrid collection (dense + BM25 sparse)
 SOURCE = "defillama_hacks"
 SOURCE_URL = "https://defillama.com/hacks"
 EMBEDDING_DIM = 1024
@@ -158,7 +162,7 @@ def build_docs(hacks: list[dict[str, Any]], days: int | None) -> list[dict[str, 
             f"Chain: {chain}\n"
             f"Language: {language or 'unknown'}"
         )
-        doc_id = f"defillama_hacks:{name.lower()}:{date_iso or ts}"
+        doc_id = f"defillama_hacks:{name.lower()}:{date_iso or (ts if ts > 0 else 'unknown')}"
         docs.append(
             {
                 "doc_id": doc_id,

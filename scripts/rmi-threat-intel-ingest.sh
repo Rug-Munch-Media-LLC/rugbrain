@@ -4,15 +4,16 @@
 # rag-knowledge-refresh.sh).
 #
 # 1. scripts/ingest_defillama_hacks.py --days 90
-#      Fresh DeFi exploit reports (DeFiLlama hacks API) → threat_intel
-#      (alias of threat_intel_v2). Replaces the dead Rekt News RSS feed.
+#      Fresh DeFi exploit reports (DeFiLlama hacks API) → threat_intel_v2
+#      (the real hybrid collection; the legacy "threat_intel" name was
+#      migrated away — no alias exists). Replaces the dead Rekt News RSS feed.
 # 2. scripts/ingest_regulation_enforcement.py --days 90
 #      SEC litigation/press release RSS (crypto-filtered) + landmark seed
 #      → regulation_enforcement (new hybrid collection).
 #
 # Scheduled via crontab (see below) or a systemd timer:
 #
-#  30 */6 * * * /bin/bash /srv/work/repos/rugbrain/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
+#  30 */6 * * * /bin/bash /srv/work/repos/rmi-rag/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
 #
 # No secrets: reads QDRANT_URL / INFINITY_URL from env or defaults.
 set -euo pipefail
@@ -26,7 +27,7 @@ if ! flock -n 200; then
 fi
 trap 'flock -u 200 2>/dev/null || true' EXIT
 
-RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rugbrain}"
+RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
 PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }

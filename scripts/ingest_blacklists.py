@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest consolidated Web3 phishing/blacklist threat intel into ``known_scams``.
+"""Ingest consolidated Web3 phishing/blacklist threat intel into ``scam_intel_v2``.
 
 Source: the ``blacklists`` ingest source (``rugbrain.ingest_sources.blacklists``)
 which aggregates free, no-auth GitHub raw feeds into labeled address/domain
@@ -11,9 +11,13 @@ entities:
   * PhishFort phishfort-lists       — counter-phishing domain lists
   * Phishing.Database               — generic phishing domains (capped)
 
-Each entity is embedded (1024-dim bge-m3) and upserted into ``known_scams``
-with canonical metadata (entity_type, entity, labels, source, source_url),
-so the bot's ``scam_patterns`` / entity data reflects real-time blacklists.
+Each entity is embedded (1024-dim bge-m3) and upserted into ``scam_intel_v2``
+(the live curated scam-intelligence collection) with canonical metadata
+(entity_type, entity, labels, source, source_url), so the bot's scam/entity
+data reflects real-time blacklists. We deliberately do NOT write to
+``known_scams`` — that collection is the frozen 2022-06-28 CryptoScamDB
+snapshot (historical-only per docs/COLLECTION_REGISTRY.md); fresh blacklist
+entities belong in the live collection.
 
 Usage:
     python scripts/ingest_blacklists.py --dry-run --limit 20
@@ -55,7 +59,7 @@ if sys_path_scripts not in sys.path:
 
 from ingest_common2 import build_doc, write_docs  # noqa: E402
 
-COLLECTION = "known_scams"
+COLLECTION = "scam_intel_v2"
 SOURCE = "blacklists"
 
 
@@ -141,7 +145,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest consolidated Web3 phishing blacklists into known_scams"
+        description="Ingest consolidated Web3 phishing blacklists into scam_intel_v2"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview counts + entity sample only"

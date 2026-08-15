@@ -3,7 +3,14 @@
 Aggregates free, no-auth Web3 phishing blacklists into labeled
 address/domain entities (labels: ``phishing``, ``scam``, plus
 ``drainer`` / ``rugpull`` when the upstream comment text supports it) so
-the ``scam_patterns`` / entity data reflects real-time blocklists.
+the ``scam_intel_v2`` / entity data reflects real-time blocklists.
+
+Targets ``scam_intel_v2`` (the live curated scam-intelligence collection).
+It deliberately does NOT write to ``known_scams`` — that collection is the
+frozen 2022-06-28 CryptoScamDB snapshot and is historical-only per
+``docs/COLLECTION_REGISTRY.md``; fresh blacklist entities belong in the
+live collection so consumers do not misread them as current-activity
+evidence.
 
 Feeds (all fetched from ``raw.githubusercontent.com`` — not subject to the
 unauthenticated GitHub API rate limit):
@@ -30,7 +37,8 @@ Design rules (consistent with ``base.py`` / ``github.py``):
   * Fetch → normalize → emit one ``IngestDoc`` per address/domain entity.
   * Per-feed failure is fail-open: log a warning, continue the other feeds.
   * Deterministic ``doc_id`` (``<source>:<feed>:<entity_type>:<hash>``)
-    keeps re-ingestion idempotent.
+    keeps re-ingestion idempotent (the store layer converts the seed to a
+    UUIDv5 point ID).
   * No hardcoded credentials — optional ``GITHUB_TOKEN`` / ``PROXY_URL``
     are read from the environment only.
 """
@@ -273,7 +281,7 @@ class BlacklistsSource(Source):
 
     name = "blacklists"
     doc_type = "scam_entity"
-    default_collection = "known_scams"
+    default_collection = "scam_intel_v2"
     description = "Consolidated Web3 phishing blacklists (ScamSniffer, MetaMask, MEW, PhishFort, Phishing.Database)"
 
     def _enabled(self, feed: Feed) -> bool:
@@ -436,6 +444,7 @@ class BlacklistsSource(Source):
             content_parts.append(f"Reported: {date}")
 
         metadata: dict[str, Any] = {
+            "collection": self.default_collection,
             "entity_type": feed.entity_type,
             "entity": entity,
             "labels": labels,

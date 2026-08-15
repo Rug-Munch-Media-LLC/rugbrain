@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest Rekt News historical hacks into a new Qdrant ``hacks`` collection.
+"""Ingest Rekt News historical hacks into the Qdrant ``hacks_v2`` collection.
 
 Source: Rekt News public leaderboard (https://rekt.news/leaderboard)
 
@@ -11,16 +11,17 @@ For each hack we:
   1. Build a structured description: protocol, date, amount, attack vector,
      chain, excerpt.
   2. Embed with bge-m3 (1024-dim dense) via Infinity (OpenAI-compatible /embeddings).
-  3. Upsert into the ``hacks`` collection using the store ``insert`` method
-     (dense-only collection; sparse vectors are auto-computed when the
-     collection is configured with a ``bm25`` sparse vector).
+  3. Upsert into the ``hacks_v2`` collection (the migrated hybrid
+     collection; the legacy ``hacks`` name was migrated away and no alias
+     exists, so writing to it would create an empty fragment).
 
 Fallback: if the Rekt leaderboard cannot be fetched, the script falls back
 to the DeFiHackLabs data (which covers most major exploits) stored in
 ``threat_intel`` — it synthesizes hack entries from those points.
 
-Idempotent: point IDs are deterministic UUIDv5 derived from the hack slug +
-content hash, so re-running overwrites the same points.
+Idempotent: point IDs are deterministic seeds derived from the hack slug +
+content hash which the store converts to UUIDv5, so re-running overwrites
+the same points.
 
 Usage:
     python scripts/ingest_rekt_news.py --limit 20
@@ -53,7 +54,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_rekt")
 
 REKT_LEADERBOARD_URL = "https://rekt.news/leaderboard"
-COLLECTION = "hacks"
+COLLECTION = "hacks_v2"
 EMBEDDING_DIM = 1024
 SOURCE = "rekt_news"
 REQUEST_TIMEOUT = 30
@@ -234,7 +235,7 @@ def leaderboard_to_docs(entries: list[dict[str, Any]], limit: int | None) -> lis
 
 
 async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
-    """Embed + upsert hack docs into the ``hacks`` collection."""
+    """Embed + upsert hack docs into the ``hacks_v2`` collection."""
     if dry_run:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
@@ -312,7 +313,7 @@ async def fallback_from_defihacklabs(limit: int | None) -> list[dict[str, Any]]:
                     "filter": {
                         "must": [
                             {"key": "source", "match": {"value": "defihacklabs"}},
-                            {"key": "collection", "match": {"value": "threat_intel"}},
+                            {"key": "collection", "match": {"value": "threat_intel_v2"}},
                         ]
                     },
                 }
@@ -333,7 +334,9 @@ async def fallback_from_defihacklabs(limit: int | None) -> list[dict[str, Any]]:
                     payload = point.get("payload") or {}
                     metadata = payload.get("metadata") or {}
                     content = payload.get("content", "") or ""
-                    if metadata.get("source") != "defihacklabs" or not content:
+                    # `source` is written at payload top-level by the store
+                    # (not inside metadata), so check it there.
+                    if payload.get("source") != "defihacklabs" or not content:
                         continue
                     protocol = (
                         metadata.get("protocol") or metadata.get("contract_name") or "unknown"
@@ -413,7 +416,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest Rekt News historical hacks into the hacks collection"
+        description="Ingest Rekt News historical hacks into the hacks_v2 collection"
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max hacks to ingest")

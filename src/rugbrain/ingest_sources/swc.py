@@ -26,7 +26,10 @@ log = logging.getLogger(__name__)
 
 REPO = "SmartContractSecurity/SWC-registry"
 REF = "master"
-DEFAULT_COLLECTION = "threat_intel"
+# Weakness-registry prose belongs in crypto_vulnerabilities (the registry
+# documents "SlowMist KB, SWC Registry" as its feeds), not threat_intel_v2
+# (incident data). ingest_scam_knowledge.py routes swc_registry the same way.
+DEFAULT_COLLECTION = "crypto_vulnerabilities"
 DOC_TYPE = "vulnerability_pattern"
 
 # Fallback IDs when the GitHub API is rate-limited.

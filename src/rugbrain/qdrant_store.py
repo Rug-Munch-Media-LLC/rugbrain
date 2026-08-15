@@ -286,9 +286,29 @@ def normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any] | None:
 
 # Collections owned by rugbrain (write-allowed when mode=readonly).
 # rmi-backend owns rmi_documents — rugbrain must never write there.
+#
+# NOTE (2026-08-16): the migration to hybrid `*_v2` collections
+# (scripts/migrate_to_sparse.py) renamed the RAG collections
+# (threat_intel → threat_intel_v2, hacks → hacks_v2, …) and NO Qdrant
+# aliases exist, so the old names must NOT be used — writing to them
+# auto-creates an empty fragment. The list below reflects the real
+# collections the RAG ingest pipelines write to (per
+# docs/COLLECTION_REGISTRY.md). "threat_intel" is kept for the scanner
+# subscriber legacy path; new writers use threat_intel_v2.
 _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
     {
+        # Legacy scanner-subscriber path (deprecated; new writers use v2).
         "threat_intel",
+        # Hybrid-migrated RAG collections (real names — no aliases exist).
+        "threat_intel_v2",
+        "defi_exploits",
+        "known_scams",
+        "scam_intel_v2",
+        "crime_reports",
+        "contract_audits",
+        "crypto_vulnerabilities",
+        "hacks_v2",
+        # RAG-owned auxiliary / graph collections.
         "rag_threats",
         "rag_docs",
         "wallet_clusters",
