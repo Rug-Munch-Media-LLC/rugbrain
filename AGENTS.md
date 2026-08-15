@@ -31,6 +31,8 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 - Embedding service (configurable)
 - Backend service for query endpoints
 
+> **Data placement (canonical):** knowledge → RAG, code → `rmi-codebase-mcp` — see `docs/DATA-PLACEMENT.md` before ingesting any new source.
+
 ## 🚨 GIT POLICY — NON-NEGOTIABLE
 
 1. **NEVER commit .env files, credentials, API keys, or tokens**
