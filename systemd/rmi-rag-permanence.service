@@ -10,6 +10,12 @@
 # B2 SSE-B2 (AES256) — no client-side encryption. Pass --format ndjson
 # for the legacy compressed-only NDJSON format.
 #
+# RETENTION PRUNE: every run passes --prune to b2_permanence.py (keeps
+# 30 daily / 4 weekly / 12 monthly dated snapshots). The prune pass is a
+# DRY-RUN unless B2_PRUNE_LIVE=1 is set in the EnvironmentFile — operator
+# opt-in for live deletion. Add `B2_PRUNE_LIVE=1` to b2-permanence.env to
+# enable live pruning (see scripts/b2-permanence-run.sh).
+#
 # Requires duckdb + pyarrow on the host python (verified present) and
 # /path/to/b2-permanence.env for B2 credentials.
 #
@@ -47,7 +53,9 @@ User=root
 Group=root
 WorkingDirectory=/path/to/rugbrain
 EnvironmentFile=/path/to/b2-permanence.env
-ExecStart=/usr/bin/python3 /path/to/rugbrain/scripts/b2_permanence.py
+# Wrapper adds --prune (dry-run by default; --prune-live only when
+# B2_PRUNE_LIVE=1 is set in the EnvironmentFile).
+ExecStart=/path/to/rugbrain/scripts/b2-permanence-run.sh
 StandardOutput=append:/var/log/rmi-rag-permanence.log
 StandardError=append:/var/log/rmi-rag-permanence.log
 TimeoutStartSec=3600

@@ -31,6 +31,8 @@ Usage:
     python scripts/b2_permanence.py --collection threat_intel --limit 10
     python scripts/b2_permanence.py --format ndjson --limit 50
     python scripts/b2_permanence.py --env-file /path/to/b2-permanence.env
+    python scripts/b2_permanence.py --prune              # retention dry-run
+    python scripts/b2_permanence.py --prune --prune-live # actually prune
 
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
@@ -50,6 +52,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 from collections.abc import Iterable
@@ -348,6 +351,236 @@ def upload_manifest(
     logger.info("manifest_uploaded date=%s collections=%d", date_str, len(entries))
 
 
+# ── Retention / prune ──────────────────────────────────────────────
+#
+# Policy (BACKUP-POLICY.md, RAG Permanence):
+#   keep 30 daily / 4 weekly / 12 monthly snapshots.
+#   A snapshot is a dated directory: snapshots/YYYY-MM-DD/{...}.
+#   Daily   = newest 30 dated snapshot dirs
+#   Weekly  = newest snapshot dir in each of the last 4 ISO weeks
+#   Monthly = newest snapshot dir in each of the last 12 calendar months
+# Deletion is DATED-DIR-GRANULAR and scoped to the snapshots/ prefix.
+# latest.json / manifest.json pointers are never deleted.
+
+SNAPSHOT_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+# Retention counts — sane equivalent of the documented 30/4/12
+RETAIN_DAILY = 30
+RETAIN_WEEKLY = 4
+RETAIN_MONTHLY = 12
+# Safety floor: never prune below this many retained snapshots.
+# Prevents a misconfig from deleting everything (e.g. empty bucket edge).
+MIN_RETAIN_FLOOR = 1
+
+
+def parse_snapshot_date(key: str) -> str | None:
+    """Extract the ``YYYY-MM-DD`` snapshot dir from an object key.
+
+    Only keys under ``snapshots/YYYY-MM-DD/`` (with a REAL calendar date)
+    qualify; everything else (latest.json, manifest.json at the prefix
+    root, stray objects, malformed dates) returns None so the prune pass
+    can never touch it.
+    """
+    parts = key.split("/")
+    if len(parts) >= 2 and parts[0] == SNAPSHOT_PREFIX:
+        candidate = parts[1]
+        if SNAPSHOT_DATE_RE.match(candidate):
+            # Reject syntactically-shaped but invalid dates (e.g. 2026-13-99)
+            try:
+                datetime.strptime(candidate, "%Y-%m-%d")
+            except ValueError:
+                return None
+            return candidate
+    return None
+
+
+def snapshot_dates_on_remote(b2_api: B2Api, bucket_name: str) -> list[str]:
+    """Return the sorted list of dated snapshot dirs present on B2."""
+    bucket = ensure_bucket(b2_api, bucket_name)
+    dates: set[str] = set()
+    # b2sdk ls with recursive=True returns (version_info, folder_name) tuples.
+    for version, _folder in bucket.ls(f"{SNAPSHOT_PREFIX}/", recursive=True):
+        date = parse_snapshot_date(version.file_name)
+        if date:
+            dates.add(date)
+    return sorted(dates)
+
+
+def retention_keep_set(
+    dates: list[str],
+    keep_daily: int = RETAIN_DAILY,
+    keep_weekly: int = RETAIN_WEEKLY,
+    keep_monthly: int = RETAIN_MONTHLY,
+) -> set[str]:
+    """Compute the set of snapshot dates to KEEP under the 30/4/12 policy.
+
+    ``dates`` must be sorted ascending. Returns the union of:
+      - the newest ``keep_daily`` dates (daily cadence)
+      - the newest snapshot date within each of the last ``keep_weekly``
+        ISO weeks (weekly cadence)
+      - the newest snapshot date within each of the last ``keep_monthly``
+        calendar months (monthly cadence)
+    """
+    keep: set[str] = set()
+    if not dates:
+        return keep
+
+    # Daily — newest N dates
+    keep.update(dates[-keep_daily:])
+
+    # Weekly — newest date per ISO (year, week)
+    by_week: dict[tuple[int, int], str] = {}
+    for d in dates:
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        iso = dt.isocalendar()
+        by_week[(iso[0], iso[1])] = d  # ascending iter => last wins = newest
+    for _week, date in list(sorted(by_week.items()))[-keep_weekly:]:
+        keep.add(date)
+
+    # Monthly — newest date per (year, month)
+    by_month: dict[tuple[int, int], str] = {}
+    for d in dates:
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        by_month[(dt.year, dt.month)] = d  # ascending iter => last wins = newest
+    for _month, date in list(sorted(by_month.items()))[-keep_monthly:]:
+        keep.add(date)
+
+    return keep
+
+
+def prune_snapshots(
+    b2_api: B2Api,
+    bucket_name: str,
+    dry_run: bool = True,
+    keep_daily: int = RETAIN_DAILY,
+    keep_weekly: int = RETAIN_WEEKLY,
+    keep_monthly: int = RETAIN_MONTHLY,
+) -> dict[str, Any]:
+    """Enforce snapshot retention on the remote (30 daily / 4 weekly / 12 monthly).
+
+    Deletes whole dated snapshot dirs that are NOT in the keep set. Deletion
+    is scoped strictly to ``snapshots/YYYY-MM-DD/`` — pointers and stray
+    objects are never touched.
+
+    SAFETY GUARDS:
+      * ``dry_run=True`` (default) only logs what would be deleted.
+      * Refuses the permanent/object-lock bucket (``rugmunch-permanent``).
+      * Refuses to prune when the candidate set would leave fewer than
+        ``MIN_RETAIN_FLOOR`` snapshots (protects against wiping everything).
+      * Never deletes the newest snapshot date.
+      * No-op when there is nothing to prune.
+
+    Returns a summary dict.
+    """
+    result: dict[str, Any] = {"bucket": bucket_name, "dry_run": dry_run}
+
+    # SAFETY: never prune the object-lock/permanent bucket
+    if "permanent" in bucket_name.lower() or bucket_name in {
+        "rugmunch-permanent",
+        "rmi-backup-encrypted",
+    }:
+        logger.error(
+            "prune_refused bucket=%s permanent/object-lock bucket — refusing to prune",
+            bucket_name,
+        )
+        result["refused"] = "permanent-bucket"
+        return result
+
+    dates = snapshot_dates_on_remote(b2_api, bucket_name)
+    result["snapshot_dates"] = len(dates)
+    if not dates:
+        logger.info("prune: no dated snapshots found on %s — nothing to do", bucket_name)
+        return result
+
+    keep = retention_keep_set(dates, keep_daily, keep_weekly, keep_monthly)
+
+    # SAFETY: floor guard — if the raw retention policy would retain
+    # NOTHING (empty keep set), refuse before any deletion. This is the
+    # "would delete everything" protection: a misconfigured/zeroed policy
+    # must never translate into wiping the remote.
+    if len(keep) == 0:
+        logger.error(
+            "prune_refused: retention policy retained 0 of %d snapshots on %s — aborting",
+            len(dates),
+            bucket_name,
+        )
+        result["refused"] = "floor-guard"
+        return result
+
+    # SAFETY: never delete the newest snapshot (belt & braces — it is in keep)
+    keep.add(dates[-1])
+
+    to_delete = [d for d in dates if d not in keep]
+    result["keep"] = len(keep)
+    result["would_delete"] = len(to_delete)
+
+    if not to_delete:
+        logger.info(
+            "prune: nothing to prune (snapshots=%d kept=%d)",
+            len(dates),
+            len(keep),
+        )
+        return result
+
+    # SAFETY: floor guard — never leave fewer than MIN_RETAIN_FLOOR snapshots.
+    # Defensive: len(to_delete) >= len(dates) is impossible after the
+    # newest-date keep above, but is checked anyway as belt-and-braces.
+    if len(to_delete) >= len(dates):
+        logger.error(
+            "prune_refused: would delete %d/%d snapshots on %s — aborting",
+            len(to_delete),
+            len(dates),
+            bucket_name,
+        )
+        result["refused"] = "floor-guard"
+        return result
+    retained_after = len(dates) - len(to_delete)
+    if retained_after < MIN_RETAIN_FLOOR:
+        logger.error(
+            "prune_refused: would leave %d snapshots (floor %d) on %s — aborting",
+            retained_after,
+            MIN_RETAIN_FLOOR,
+            bucket_name,
+        )
+        result["refused"] = "floor-guard"
+        return result
+
+    logger.info(
+        "prune: snapshots=%d keep=%d delete=%d (dry_run=%s)",
+        len(dates),
+        len(keep),
+        len(to_delete),
+        dry_run,
+    )
+
+    bucket = ensure_bucket(b2_api, bucket_name)
+    deleted_dirs: list[str] = []
+    deleted_objects = 0
+    for date in to_delete:
+        prefix = f"{SNAPSHOT_PREFIX}/{date}/"
+        version_infos = [
+            version
+            for version, _folder in bucket.ls(prefix, recursive=True)
+            if parse_snapshot_date(version.file_name)
+        ]
+        if dry_run:
+            logger.info(
+                "prune_dry_run: would delete snapshots/%s/ (%d objects)",
+                date,
+                len(version_infos),
+            )
+            continue
+        # Live delete — file_id + file_name required by b2sdk v2
+        for version in version_infos:
+            bucket.delete_file_version(version.id_, version.file_name)
+            deleted_objects += 1
+        deleted_dirs.append(date)
+        logger.info("prune_deleted date=%s objects=%d", date, len(version_infos))
+
+    result["deleted_dirs"] = deleted_dirs
+    result["deleted_objects"] = deleted_objects
+    return result
+
+
 # ── CLI ───────────────────────────────────────────────────────────────
 
 
@@ -385,6 +618,37 @@ def build_parser() -> argparse.ArgumentParser:
         "--env-file",
         default=None,
         help="Load KEY=value env file (e.g. /path/to/b2-permanence.env)",
+    )
+    p.add_argument(
+        "--prune",
+        action="store_true",
+        help="Enable remote retention pruning (keep 30 daily / 4 weekly / 12 "
+        "monthly). Dry-run by default — pass --prune-live (and NOT --dry-run) "
+        "to actually delete.",
+    )
+    p.add_argument(
+        "--prune-live",
+        action="store_true",
+        help="With --prune: actually delete expired snapshot dirs instead of "
+        "dry-run. Ignored if --dry-run is set. Requires --prune.",
+    )
+    p.add_argument(
+        "--keep-daily",
+        type=int,
+        default=RETAIN_DAILY,
+        help=f"Daily snapshots to keep (default {RETAIN_DAILY})",
+    )
+    p.add_argument(
+        "--keep-weekly",
+        type=int,
+        default=RETAIN_WEEKLY,
+        help=f"Weekly snapshots to keep (default {RETAIN_WEEKLY})",
+    )
+    p.add_argument(
+        "--keep-monthly",
+        type=int,
+        default=RETAIN_MONTHLY,
+        help=f"Monthly snapshots to keep (default {RETAIN_MONTHLY})",
     )
     p.add_argument("--verbose", "-v", action="store_true", help="Debug logging")
     return p
@@ -469,7 +733,22 @@ def main() -> int:
                 fmt,
                 info.get("vector_size"),
             )
-        logger.info("=== dry-run complete (no uploads) ===")
+        # If retention pruning was requested, show what WOULD be pruned.
+        # Best-effort: B2 creds may be absent in pure dry-run; never delete.
+        if args.prune:
+            try:
+                b2_api = get_b2_api()
+                prune_snapshots(
+                    b2_api,
+                    bucket_name,
+                    dry_run=True,
+                    keep_daily=args.keep_daily,
+                    keep_weekly=args.keep_weekly,
+                    keep_monthly=args.keep_monthly,
+                )
+            except Exception as exc:
+                logger.warning("prune_dry_run_skipped: %s", exc)
+        logger.info("=== dry-run complete (no uploads, no deletes) ===")
         return 0
 
     # Authorize B2 + ensure bucket (after dry-run so no creds needed to list)
@@ -510,6 +789,22 @@ def main() -> int:
     except Exception as exc:
         failures += 1
         logger.error("manifest_failed: %s", exc)
+
+    # Retention pruning — gated: only runs with --prune; dry-run unless
+    # --prune-live AND NOT --dry-run (--dry-run already returned above).
+    if args.prune:
+        try:
+            prune_snapshots(
+                b2_api,
+                bucket_name,
+                dry_run=not args.prune_live,
+                keep_daily=args.keep_daily,
+                keep_weekly=args.keep_weekly,
+                keep_monthly=args.keep_monthly,
+            )
+        except Exception as exc:
+            failures += 1
+            logger.error("prune_failed: %s", exc)
 
     total_points = sum(int(e.get("point_count", 0)) for e in entries)
     logger.info(
