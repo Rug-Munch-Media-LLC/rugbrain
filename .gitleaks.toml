@@ -96,6 +96,9 @@ paths = [
   '''vendor/''',
   '''scripts/''',
   '''AGENTS\.md''',
+  # Redaction tests intentionally embed fake private IPs / BIP39 word lists
+  # as INPUT to verify redact_output() — not real secrets.
+  '''tests/test_guardrails\.py''',
 ]
 
 # Stopwords (false-positive patterns to ignore)
