@@ -19,7 +19,7 @@ Uses Redis for fast-access cache and optional PostgreSQL for long-term storage.
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import redis
 from pydantic import BaseModel, Field
@@ -135,7 +135,12 @@ class RedisStorage:
             if not self.client.exists(key):
                 return None
 
-            tx_hashes = self.client.zrange(key, 0, -1, withscores=True)
+            # decode_responses=True → members are str, scores are float at runtime;
+            # redis types zrange as a union of overloads, so narrow explicitly.
+            tx_hashes = cast(
+                "list[tuple[str, float]]",
+                self.client.zrange(key, 0, -1, withscores=True),
+            )
 
             transactions = []
             for tx_hash, score in tx_hashes:
@@ -185,7 +190,9 @@ class RedisStorage:
             if not self.client.exists(key):
                 return []
 
-            alert_ids = self.client.zrange(key, 0, limit - 1)
+            # decode_responses=True → alert ids are str at runtime; narrow the
+            # zrange union so get_alert(str) type-checks.
+            alert_ids = cast("list[str]", self.client.zrange(key, 0, limit - 1))
 
             alerts = []
             for alert_id in alert_ids:

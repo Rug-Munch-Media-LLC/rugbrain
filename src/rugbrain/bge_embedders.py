@@ -195,7 +195,9 @@ class ContractCodeEmbedder:
     """
 
     @staticmethod
-    async def embed(code: str, semantic_embedder: Any = None) -> np.ndarray:
+    async def embed(
+        code: str, semantic_embedder: Any = None
+    ) -> np.ndarray[Any, np.dtype[np.float32]]:
         """
         Generate a combined 320-dim contract embedding:
         - 128 dims: structural features (local)

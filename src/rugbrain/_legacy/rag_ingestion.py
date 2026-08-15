@@ -184,7 +184,7 @@ async def _embed_batch(docs: list[dict[str, Any]], collection: str) -> int:
                 logger.warning("embed_failed doc_id=%s collection=%s err=%s", doc_id, collection, e)
 
             # Store document metadata (+ vector when available)
-            mapping: dict[str | bytes, Any] = {
+            mapping: dict[str, Any] = {
                 "text": doc["text"][:2000],
                 "metadata": json.dumps(doc.get("metadata", {}), default=str),
                 "indexed_at": datetime.now(UTC).isoformat(),
@@ -193,7 +193,7 @@ async def _embed_batch(docs: list[dict[str, Any]], collection: str) -> int:
                 mapping["embedding"] = json.dumps(embedding)
             r.hset(
                 f"rag:doc:{collection}:{doc_id}",
-                mapping=mapping,
+                mapping=mapping,  # type: ignore[arg-type]  # mypy quirk: dict[str, Any] rejected against redis Mapping[union-key, ...] (only dict[Any, Any] passes)
             )
             # Set TTL: 30 days
             r.expire(f"rag:doc:{collection}:{doc_id}", 2592000)

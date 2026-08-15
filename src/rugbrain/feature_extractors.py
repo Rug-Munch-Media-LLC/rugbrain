@@ -16,7 +16,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def extract_contract_features(code: str) -> np.ndarray:
+def extract_contract_features(code: str) -> np.ndarray[Any, np.dtype[np.float32]]:
     """
     Extract structural features from smart contract code.
     Returns a 128-dim vector encoding:
@@ -131,7 +131,7 @@ def extract_contract_features(code: str) -> np.ndarray:
     return vec
 
 
-def extract_transaction_features(tx_data: dict[str, Any]) -> np.ndarray:
+def extract_transaction_features(tx_data: dict[str, Any]) -> np.ndarray[Any, np.dtype[np.float32]]:
     """
     Extract behavioral features from transaction history.
     Returns a 64-dim vector capturing:
@@ -230,7 +230,7 @@ def extract_transaction_features(tx_data: dict[str, Any]) -> np.ndarray:
     return vec
 
 
-def extract_wallet_features(wallet_data: dict[str, Any]) -> np.ndarray:
+def extract_wallet_features(wallet_data: dict[str, Any]) -> np.ndarray[Any, np.dtype[np.float32]]:
     """
     Extract wallet entity features for clustering/scam detection.
     Returns a 64-dim vector.

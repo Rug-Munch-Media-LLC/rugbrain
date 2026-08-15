@@ -267,7 +267,7 @@ class CryptoEmbedder:
             for i in range(min(8, dims)):
                 vec[(h + i) % dims] += 0.01
         norm = np.linalg.norm(vec)
-        return (vec / norm).tolist() if norm > 0 else vec.tolist()
+        return (vec / norm).tolist() if norm > 0 else vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
 
     async def _cache_key(self, prefix: str, text: str) -> str:
         h = hashlib.sha256(text.encode()).hexdigest()[:32]
@@ -438,7 +438,7 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         code: str,
         chain: str = "ethereum",
         verified: bool = False,
-    ) -> np.ndarray:
+    ) -> np.ndarray[Any, np.dtype[np.float32]]:
         """Full contract audit embedding."""
         return await ContractCodeEmbedder.embed(
             code,

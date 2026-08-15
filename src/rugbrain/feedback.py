@@ -71,7 +71,7 @@ async def record_scanner_result(
         )
 
         if adjustment == 0:
-            await r.aclose()  # type: ignore[attr-defined]
+            await r.aclose()
             return {"status": "no_action", "verdict": verdict}
 
         # Find RAG documents matching this address
@@ -89,7 +89,7 @@ async def record_scanner_result(
                     try:
                         doc = await r.get(key)
                         if doc and address.lower() in doc.lower():
-                            doc_id = key.split(":")[-1]
+                            doc_id = key.split(":")[-1]  # type: ignore[arg-type]  # redis types scan keys as bytes|str; decode_responses=True makes them str at runtime
                             doc_ids.add(doc_id)
                     except Exception:
                         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
@@ -109,7 +109,7 @@ async def record_scanner_result(
                             doc_lower = doc.lower()
                             matching_flags = sum(1 for f in flags if f.lower() in doc_lower)
                             if matching_flags >= 2:  # At least 2 flags match
-                                doc_id = key.split(":")[-1]
+                                doc_id = key.split(":")[-1]  # type: ignore[arg-type]  # redis types scan keys as bytes|str; decode_responses=True makes them str at runtime
                                 doc_ids.add(doc_id)
                     except Exception:
                         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
@@ -120,7 +120,7 @@ async def record_scanner_result(
         for doc_id in doc_ids:
             try:
                 # Read current weight
-                weight_key = f"rag:weight:{doc_id}"
+                weight_key = f"rag:weight:{doc_id}"  # type: ignore[str-bytes-safe]  # doc_id is str at runtime (decode_responses=True); redis types smembers as bytes|str
                 current_weight = await r.get(weight_key)
                 current = float(current_weight) if current_weight else 1.0
 
@@ -155,7 +155,7 @@ async def record_scanner_result(
             f"-{adjustments['penalized']} penalized"
         )
 
-        await r.aclose()  # type: ignore[attr-defined]
+        await r.aclose()
         return {
             "status": "ok",
             "verdict": verdict,
@@ -169,7 +169,7 @@ async def record_scanner_result(
     except Exception as e:
         logger.error("RAG feedback error: %s", e)
         with contextlib.suppress(Exception):
-            await r.aclose()  # type: ignore[attr-defined]
+            await r.aclose()
         return {"status": "error", "detail": str(e)}
 
 
@@ -190,7 +190,7 @@ async def get_document_weight(doc_id: str) -> float:
             decode_responses=True,
         )
         weight = await r.get(f"rag:weight:{doc_id}")
-        await r.aclose()  # type: ignore[attr-defined]
+        await r.aclose()
         return float(weight) if weight else 1.0
     except Exception:
         return 1.0
@@ -233,7 +233,7 @@ async def get_feedback_stats() -> dict[str, Any]:
         avg_weight = total_weight / weight_keys if weight_keys > 0 else 1.0
         faiss_dirty = await r.get("rag:faiss:dirty") == "1"
 
-        await r.aclose()  # type: ignore[attr-defined]
+        await r.aclose()
         return {
             "documents_with_weights": weight_keys,
             "average_weight": round(avg_weight, 3),

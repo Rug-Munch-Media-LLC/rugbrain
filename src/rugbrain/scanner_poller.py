@@ -105,7 +105,7 @@ async def _poll_forever() -> None:
     import redis.asyncio as aioredis
 
     while True:
-        r: aioredis.Redis[str] | None = None
+        r: aioredis.Redis | None = None  # redis.Redis is not generic
         try:
             r = aioredis.Redis(
                 host=REDIS_HOST,
@@ -134,7 +134,7 @@ async def _poll_forever() -> None:
                         continue
 
                     try:
-                        data = json.loads(value)
+                        data = json.loads(value)  # type: ignore[arg-type]  # lpop returns str at runtime (decode_responses=True); redis types it bytes|str|list
                     except json.JSONDecodeError:
                         logger.warning("poller_invalid_json data=%s", str(value)[:200])
                         continue

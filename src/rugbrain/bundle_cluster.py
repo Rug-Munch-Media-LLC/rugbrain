@@ -172,7 +172,7 @@ def embed_bundle_profile(bundle: dict[str, Any]) -> list[float]:
     for i in range(42):
         vec[86 + i] = full_hash[i % 32] / 255.0
 
-    return vec.tolist()
+    return vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -308,7 +308,7 @@ def embed_cluster_profile(cluster: dict[str, Any]) -> list[float]:
     for i in range(102):
         vec[90 + i] = ch[i % 32] / 255.0
 
-    return vec.tolist()
+    return vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
 
 
 # ══════════════════════════════════════════════════════════════════════

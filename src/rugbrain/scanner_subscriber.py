@@ -100,7 +100,7 @@ async def _listen_forever() -> None:
     import redis.asyncio as aioredis
 
     while True:
-        r: aioredis.Redis[str] | None = None
+        r: aioredis.Redis | None = None  # redis.Redis is not generic
         try:
             r = aioredis.Redis(
                 host=REDIS_HOST,
