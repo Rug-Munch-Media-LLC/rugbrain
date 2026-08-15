@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 # Allow importing the script as a module (repo scripts rely on the
 # installed package; this makes the scheduler testable in-process).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -98,6 +100,7 @@ async def test_run_job_force_runs_regardless(monkeypatch):
     assert calls == 1
 
 
+@pytest.mark.integration
 async def test_run_due_filters_by_names(monkeypatch):
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
