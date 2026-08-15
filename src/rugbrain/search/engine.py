@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import Callable
 from typing import Any, cast
 
 from rugbrain.crypto_embeddings import COLLECTIONS, get_embedder
@@ -648,6 +649,62 @@ def _hybrid_fuse(
     return _rrf_fuse(ranked_lists, k=60)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# QUERY EXPANSION HELPERS (HyDE + multi-query)
+# ═══════════════════════════════════════════════════════════════════
+# Additive retrieval-quality techniques (both default OFF): build the list
+# of retrieval variants for a query — the original query plus, when enabled,
+# a HyDE hypothetical document and/or multi-query rewrites. The LLM fn is
+# optional/pluggable; without a live model the expansion degrades to a no-op
+# (variants == [query]) so existing behavior is preserved.
+
+
+async def _build_search_variants(
+    query: str,
+    hyde: bool,
+    multi_query: bool,
+    embedder: Any,
+    llm_fn: Callable[..., Any] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Build the retrieval variants for *query* (original first).
+
+    Returns ``(variants, meta)`` where ``meta`` describes the expansion:
+    ``{"hyde", "multi_query", "hyde_used_llm", "hyde_embedding", "variants"}``.
+    With both flags OFF (the default) this returns ``([query], {"variants": 1})``
+    so callers take the existing single-query path unchanged.
+
+    ``meta["hyde_embedding"]`` carries the HyDE hypothetical-doc embedding
+    (when HyDE produced a distinct document) so dense search can reuse it
+    instead of re-embedding.
+    """
+    from .query_transform import hyde_expand, multi_query_expand
+
+    variants = [query]
+    meta: dict[str, Any] = {
+        "hyde": False,
+        "multi_query": False,
+        "hyde_used_llm": False,
+        "hyde_doc": None,
+        "hyde_embedding": None,
+    }
+    if hyde:
+        hyde_out = await hyde_expand(query, embed_fn=embedder.embed_query, llm_fn=llm_fn)
+        hypo = hyde_out.get("hypothetical_doc") or query
+        if hypo not in variants:
+            variants.append(hypo)
+            meta["hyde_doc"] = hypo
+            meta["hyde_embedding"] = hyde_out.get("embedding")
+        meta["hyde"] = True
+        meta["hyde_used_llm"] = bool(hyde_out.get("used_llm"))
+    if multi_query:
+        for v in await multi_query_expand(query, llm_fn=llm_fn):
+            if v not in variants:
+                variants.append(v)
+        meta["multi_query"] = True
+    meta["variants"] = len(variants)
+    return variants, meta
+
+
 async def search_multi_collection(
     query: str,
     collections: list[str] | None = None,
@@ -658,6 +715,12 @@ async def search_multi_collection(
     rerank: bool = False,
     rerank_top_k: int = 20,
     rerank_keep: int | None = None,
+    hyde: bool = False,
+    multi_query: bool = False,
+    llm_fn: Callable[..., Any] | None = None,
+    use_recency_decay: bool = False,
+    recency_half_life_days: float = 30.0,
+    recency_date_field: str = "published",
 ) -> list[dict[str, Any]]:
     """Search across multiple collections and merge results.
 
@@ -679,24 +742,74 @@ async def search_multi_collection(
       re-ranked with a cross-encoder (BGE reranker; graceful no-op when the
       model is not installed) and the best ``rerank_keep`` (defaults to
       *limit*) are kept before truncation.
+    * ``hyde`` — when True, a HyDE hypothetical document is embedded and
+      searched as an extra retrieval vector (see
+      ``rugbrain.search.query_transform.hyde_expand``).
+    * ``multi_query`` — when True, the query is rewritten into 3-4 technical
+      variations and each is searched; per-collection variant results are
+      RRF-fused (see ``rugbrain.search.query_transform.multi_query_expand``).
+    * ``llm_fn`` — optional LLM callable for the expansion above (sync or
+      async). Absent/failing ⇒ no-op fallback (expansion still works, just
+      without model-generated rewrites).
+    * ``use_recency_decay`` — when True, a half-life decay on the
+      ``published``/date metadata is applied to fused scores so fresher
+      documents rank above equally-relevant stale ones (see
+      ``rugbrain.search.fusion.apply_recency_decay``).
+    * ``recency_half_life_days`` / ``recency_date_field`` — decay half-life
+      and metadata date key (defaults 30 days / ``published``).
     """
     collections = resolve_search_collections(collections, query)
     if detect_coding_query(query):
         content_limit = max(content_limit, _CODE_CONTENT_LIMIT)
 
+    # Query expansion (HyDE + multi-query) — additive, default OFF.
+    if hyde or multi_query:
+        embedder = await get_embedder()
+        variants, _expansion_meta = await _build_search_variants(
+            query, hyde, multi_query, embedder, llm_fn
+        )
+        expanded = len(variants) > 1
+    else:
+        variants = [query]
+        expanded = False
+
     async def _search_one(coll: str) -> list[dict[str, Any]]:
         try:
-            results = await search_similar(
-                query,
-                collection=coll,
-                limit=limit,
-                min_similarity=min_similarity,
-                content_limit=content_limit,
-            )
-            for r in results:
-                if "collection" not in r:
-                    r["collection"] = coll
-            return results
+            if not expanded:
+                results = await search_similar(
+                    query,
+                    collection=coll,
+                    limit=limit,
+                    min_similarity=min_similarity,
+                    content_limit=content_limit,
+                )
+                for r in results:
+                    if "collection" not in r:
+                        r["collection"] = coll
+                return results
+            # Expanded: search every variant, then RRF-fuse per collection so
+            # the best-of across rewrites wins (bounded to limit * 2).
+            variant_lists: list[list[dict[str, Any]]] = []
+            for variant in variants:
+                results = await search_similar(
+                    variant,
+                    collection=coll,
+                    limit=limit,
+                    min_similarity=min_similarity,
+                    content_limit=content_limit,
+                )
+                for r in results:
+                    if "collection" not in r:
+                        r["collection"] = coll
+                if results:
+                    variant_lists.append(results)
+            if not variant_lists:
+                return []
+            ranked = [
+                sorted(vl, key=lambda x: float(x.get("similarity", 0.0) or 0.0), reverse=True)
+                for vl in variant_lists
+            ]
+            return _rrf_fuse(ranked, k=60)[: limit * 2]
         except Exception as e:
             logger.warning("Search failed for %s: %s", coll, e)
             return []
@@ -715,6 +828,15 @@ async def search_multi_collection(
             fused = [r for results in all_per_collection for r in results]
     else:
         fused = [r for results in all_per_collection for r in results]
+
+    if use_recency_decay and fused:
+        from .fusion import apply_recency_decay
+
+        fused = apply_recency_decay(
+            fused,
+            half_life_days=recency_half_life_days,
+            date_field=recency_date_field,
+        )
 
     if rerank and fused:
         from .rerank import rerank_chunks
@@ -744,12 +866,18 @@ async def three_pillar_search(
     mmr_lambda: float = 0.6,
     use_kg: bool = True,
     use_parent_child: bool = True,
-    use_reranker: bool = False,
+    use_reranker: bool = True,
     use_rating_boosts: bool = True,
     hybrid: bool = False,
     rerank: bool = False,
     rerank_top_k: int = 20,
     rerank_keep: int | None = None,
+    hyde: bool = False,
+    multi_query: bool = False,
+    llm_fn: Callable[..., Any] | None = None,
+    use_recency_decay: bool = False,
+    recency_half_life_days: float = 30.0,
+    recency_date_field: str = "published",
 ) -> dict[str, Any]:
     """
     Three-pillar hybrid search with Knowledge Graph expansion, MMR dedup,
@@ -762,9 +890,22 @@ async def three_pillar_search(
       Post-rank - Ground News-style rating boosts (when metadata carries a
                   ``rating`` payload) improve quality for news retrieval
 
-    Additive search-quality parameters (all default OFF — behavior for
-    existing callers is preserved):
+    Additive search-quality parameters (all default OFF except
+    ``use_reranker`` — behavior for existing callers is preserved):
 
+    * ``hyde`` — when True, a HyDE hypothetical document is embedded and
+      searched as an extra dense retrieval vector (see
+      ``rugbrain.search.query_transform.hyde_expand``).
+    * ``multi_query`` — when True, the query is rewritten into 3-4 technical
+      variations and each is searched against the dense pillar; per-collection
+      variant results are RRF-fused (see
+      ``rugbrain.search.query_transform.multi_query_expand``).
+    * ``llm_fn`` — optional LLM callable for the expansion above (sync or
+      async). Absent/failing ⇒ no-op fallback.
+    * ``use_recency_decay`` — when True, a half-life decay on the
+      ``published``/date metadata is folded into the RRF weight so fresher
+      documents rank above equally-relevant stale ones (see
+      ``rugbrain.search.fusion.rrf_fuse_recency``).
     * ``hybrid`` — when True, a lightweight in-memory keyword/BM25 lane runs
       alongside the pillars and is fused into the RRF as an extra signal,
       surfacing keyword-only chunks the dense/sparse/entity lanes missed.
@@ -773,6 +914,11 @@ async def three_pillar_search(
       model is not installed) and the best ``rerank_keep`` (defaults to
       *limit*) are kept before truncation. Independent of ``use_reranker``
       (the news-lane reranker): ``rerank`` uses the search-lane reranker.
+    * ``use_reranker`` — the news-lane cross-encoder reranker (BGE via
+      Infinity / sentence-transformers), applied after fusion. Defaults True
+      with a graceful no-op fallback: environments without a reranker model
+      return results by their original score (``rerank_method="none"``), so
+      search never breaks when the model is missing.
 
     Returns dict with merged results + pillar attribution + MMR metadata.
     """
@@ -788,6 +934,13 @@ async def three_pillar_search(
     embedder = await get_embedder()
     query_vec = await embedder.embed_query(query)
 
+    # Query expansion (HyDE + multi-query) — additive, default OFF. Variants
+    # are built once and pre-embedded so the dense pillar can search each.
+    query_variants, query_expansion_meta = await _build_search_variants(
+        query, hyde, multi_query, embedder, llm_fn
+    )
+    expanded = query_expansion_meta["variants"] > 1
+
     # ── Pillar 1: Dense vector search (ANN) ──
     pillar1_results: list[dict[str, Any]] = []
     try:
@@ -800,23 +953,68 @@ async def three_pillar_search(
             for r in pillar1_results:
                 r["pillar"] = "dense (cached)"
         else:
+            # Pre-embed the variant vectors once (shared across collections).
+            # The original query reuses ``query_vec``; the HyDE document
+            # reuses its expansion embedding when available.
+            if expanded:
+                hyde_doc = query_expansion_meta.get("hyde_doc")
+                hyde_vec = query_expansion_meta.get("hyde_embedding")
+                variant_vecs: list[tuple[str, list[float]]] = [(query, query_vec)]
+                for v in query_variants[1:]:
+                    if hyde_doc is not None and v == hyde_doc and hyde_vec is not None:
+                        variant_vecs.append((v, hyde_vec))
+                    else:
+                        variant_vecs.append((v, await embedder.embed_query(v)))
+            else:
+                variant_vecs = [(query, query_vec)]
+
             for coll in collections:
                 try:
                     from app.ann_index import get_ann_index  # external dependency
 
                     ann = get_ann_index()
-                    ann_hits = await ann.search(
-                        query_embedding=query_vec,
-                        collection=coll,
-                        limit=limit,
-                        min_similarity=min_similarity,
-                    )
-                    enriched = await _enrich_ann_results(
-                        coll, ann_hits, content_limit=content_limit
-                    )
-                    for r in enriched:
-                        r["pillar"] = "dense"
-                    pillar1_results.extend(enriched)
+                    if expanded:
+                        # Search each variant against the collection and
+                        # RRF-fuse the per-variant dense lists.
+                        variant_lists: list[list[dict[str, Any]]] = []
+                        for _v, vec in variant_vecs:
+                            ann_hits = await ann.search(
+                                query_embedding=vec,
+                                collection=coll,
+                                limit=limit,
+                                min_similarity=min_similarity,
+                            )
+                            enriched = await _enrich_ann_results(
+                                coll, ann_hits, content_limit=content_limit
+                            )
+                            if enriched:
+                                variant_lists.append(enriched)
+                        if variant_lists:
+                            ranked = [
+                                sorted(
+                                    vl,
+                                    key=lambda x: float(x.get("similarity", 0.0) or 0.0),
+                                    reverse=True,
+                                )
+                                for vl in variant_lists
+                            ]
+                            fused_coll = _rrf_fuse(ranked, k=60)[: limit * 3]
+                            for r in fused_coll:
+                                r["pillar"] = "dense"
+                            pillar1_results.extend(fused_coll)
+                    else:
+                        ann_hits = await ann.search(
+                            query_embedding=query_vec,
+                            collection=coll,
+                            limit=limit,
+                            min_similarity=min_similarity,
+                        )
+                        enriched = await _enrich_ann_results(
+                            coll, ann_hits, content_limit=content_limit
+                        )
+                        for r in enriched:
+                            r["pillar"] = "dense"
+                        pillar1_results.extend(enriched)
                 except Exception as e:
                     logger.debug("ANN search for %s failed: %s", coll, e)
                     try:
@@ -835,7 +1033,13 @@ async def three_pillar_search(
         logger.warning("Pillar 1 (dense) failed: %s", e)
         try:
             pillar1_results = await search_multi_collection(
-                query, collections, limit=limit * 2, min_similarity=min_similarity
+                query,
+                collections,
+                limit=limit * 2,
+                min_similarity=min_similarity,
+                hyde=hyde,
+                multi_query=multi_query,
+                llm_fn=llm_fn,
             )
             for r in pillar1_results:
                 r["pillar"] = "dense"
@@ -955,13 +1159,34 @@ async def three_pillar_search(
         if did:
             entity_doc_ids.add(did)
 
-    fused = _rrf_fuse(
-        fusion_lists,
-        k=60,
-        entity_boost=entity_boost,
-        entity_doc_ids=entity_doc_ids,
-        pillar_weights=fusion_weights,
-    )
+    recency_applied = False
+    if use_recency_decay:
+        from .fusion import rrf_fuse_recency
+
+        fused = rrf_fuse_recency(
+            fusion_lists,
+            k=60,
+            entity_boost=entity_boost,
+            entity_doc_ids=entity_doc_ids,
+            pillar_weights=fusion_weights,
+            half_life_days=recency_half_life_days,
+            date_field=recency_date_field,
+        )
+        recency_applied = any(r.get("recency_decay") is not None for r in fused)
+        if recency_applied:
+            logger.info(
+                "Recency-aware fusion: half-life %s days (field=%s)",
+                recency_half_life_days,
+                recency_date_field,
+            )
+    else:
+        fused = _rrf_fuse(
+            fusion_lists,
+            k=60,
+            entity_boost=entity_boost,
+            entity_doc_ids=entity_doc_ids,
+            pillar_weights=fusion_weights,
+        )
 
     # Add pillar attribution
     pillar_map: dict[str, list[str]] = {}
@@ -1076,13 +1301,12 @@ async def three_pillar_search(
                 parent_id = metadata.get("parent_id") or r.get("parent_id")
                 if parent_id:
                     try:
-                        pr = await _get_redis()
                         coll = r.get("collection", "wallet_profiles")
-                        parent_data = await pr.get(f"rag:{coll}:{parent_id}")
-                        if parent_data:
-                            pdoc = json.loads(parent_data)
-                            r["parent_content"] = pdoc.get("content", "")[:2000]
+                        pdoc = await _fetch_parent_context(coll, parent_id)
+                        if pdoc:
+                            r["parent_content"] = (pdoc.get("content") or "")[:2000]
                             r["parent_id"] = parent_id
+                            r["parent_metadata"] = pdoc.get("metadata") or {}
                             parent_child_applied = True
                     except Exception:
                         logger.warning("swallowed exception", exc_info=True)
@@ -1203,6 +1427,9 @@ async def three_pillar_search(
             "hybrid_keyword_hits": len(keyword_results),
             "search_reranker_applied": search_reranker_applied,
             "search_reranker_method": search_reranker_method,
+            "query_expansion": query_expansion_meta,
+            "recency_applied": recency_applied,
+            "recency_half_life_days": recency_half_life_days if recency_applied else None,
         },
         "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,
         "query": query,
@@ -1211,6 +1438,32 @@ async def three_pillar_search(
         "collections": collections,
         "confidence": confidence,
     }
+
+
+async def _fetch_parent_context(collection: str, parent_id: str) -> dict[str, Any] | None:
+    """Fetch a parent window's stored doc for *parent_id*.
+
+    Tries the chunk-keyed layout first (``rag:{collection}:{parent_id}`` —
+    written by the parent-child ingest seam in ``search.filters``), then the
+    parent-retriever layout (``rag:parent:{parent_id}``). Returns a dict with
+    ``content`` / ``metadata``, or ``None`` when neither key exists.
+    """
+    r = await _get_redis()
+    try:
+        data = await r.get(f"rag:{collection}:{parent_id}")
+        if data:
+            doc = json.loads(data)
+            return {"content": doc.get("content", ""), "metadata": doc.get("metadata", {})}
+    except Exception:
+        logger.warning("swallowed exception", exc_info=True)
+    try:
+        data = await r.get(f"rag:parent:{parent_id}")
+        if data:
+            doc = json.loads(data)
+            return {"content": doc.get("content", ""), "metadata": doc.get("metadata", {})}
+    except Exception:
+        logger.warning("swallowed exception", exc_info=True)
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════

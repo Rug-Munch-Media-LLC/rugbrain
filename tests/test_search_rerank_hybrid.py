@@ -390,6 +390,7 @@ def test_three_pillar_search_hybrid_fuses_keyword_lane(monkeypatch: pytest.Monke
             hybrid=True,
             use_rating_boosts=False,
             use_parent_child=False,
+            use_reranker=False,
         )
 
     out = asyncio.run(run())
@@ -415,6 +416,7 @@ def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.M
             limit=10,
             use_rating_boosts=False,
             use_parent_child=False,
+            use_reranker=False,
         )
 
     out = asyncio.run(run())
@@ -452,6 +454,7 @@ def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytes
             rerank_top_k=20,
             use_rating_boosts=False,
             use_parent_child=False,
+            use_reranker=False,
         )
 
     out = asyncio.run(run())

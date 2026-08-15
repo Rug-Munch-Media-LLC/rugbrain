@@ -11,6 +11,12 @@ Each source implements the ``Source.fetch() -> list[IngestDoc]`` interface
   * ``rekt_news``              — post-mortem articles        (post_mortem)
   * ``crypto_whitepapers``     — project whitepapers         (whitepaper)
   * ``defillama``              — live TVL/market context     (market_data)
+  * ``layerzero`` / ``axelar`` / ``ccip`` — bridge contracts (bridge_architecture)
+  * ``l2beat``                 — L2/bridge risk framework    (l2_risk)
+  * ``circom`` / ``snarkjs``   — ZK toolchain docs           (zk_circuit)
+  * ``mev_boost`` / ``mev_boost_relay`` — PBS/relay docs     (mev_architecture)
+  * ``safe_contracts``         — Safe multisig Solidity      (contract_code)
+  * ``tornado_cash``           — zk-mixer reference code     (privacy_protocol)
 
 Fetching is deliberately scaffolding-grade: sources do one tree-listing call
 plus per-file raw fetches (bounded by ``limit``), never multi-GB clones.
@@ -29,13 +35,19 @@ import asyncio
 import logging
 
 from rugbrain.ingest_sources.base import IngestDoc, Source, to_crawl_document
+from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroSource
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
 from rugbrain.ingest_sources.eips import BIPsSource, EIPsSource
+from rugbrain.ingest_sources.l2beat import L2BeatSource
+from rugbrain.ingest_sources.mev import MEVBoostRelaySource, MEVBoostSource
 from rugbrain.ingest_sources.openzeppelin import OpenZeppelinSource
+from rugbrain.ingest_sources.privacy import TornadoSource
 from rugbrain.ingest_sources.rekt import RektSource
+from rugbrain.ingest_sources.safe import SafeSource
 from rugbrain.ingest_sources.swc import SWCSource
 from rugbrain.ingest_sources.whitepapers import WhitepapersSource
+from rugbrain.ingest_sources.zk import CircomSource, SnarkJSSource
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +62,16 @@ SOURCES: tuple[Source, ...] = (
     RektSource(),
     WhitepapersSource(),
     DeFiLlamaSource(),
+    LayerZeroSource(),
+    AxelarSource(),
+    CCIPSource(),
+    L2BeatSource(),
+    CircomSource(),
+    SnarkJSSource(),
+    MEVBoostSource(),
+    MEVBoostRelaySource(),
+    SafeSource(),
+    TornadoSource(),
 )
 
 # Semantic doc_type → source names (for quick lookup / filtering).

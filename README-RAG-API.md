@@ -170,3 +170,55 @@ console.log(data.scam_risk);
                        │  └──────────────────────────────┘   │
                        └──────────────────────────────────────┘
 ```
+
+## Security Guardrails
+
+RugBrain applies three additive security guardrails on the RAG answer path
+(`src/rugbrain/guardrails.py`, wired into `mcp_bridge.py`):
+
+1. **Prompt-injection defense** — every user query is passed through
+   `sanitize_query()` before it is embedded or forwarded to the MCP bridge.
+   Instruction-override phrases ("ignore previous instructions"), role
+   switches ("system:", "you are now"), and fenced-code injection are
+   detected, flagged, and neutralized. When a flagged query strips to
+   nothing usable, the bridge refuses it (fail-closed) and returns a
+   `guard: {refused: true, reasons: [...]}` payload instead of touching the
+   MCP.
+
+2. **Secret-leak redaction** — all result content returned by the bridge is
+   run through `redact_output()` to strip EVM private keys (`0x` + 64 hex),
+   labeled 64-hex keys, 12/24-word mnemonic phrases, API-key-looking
+   strings, internal fleet hostnames (`*.rugmunch.io`), and private IPs
+   (RFC1918 + CGNAT).
+
+3. **RAG-poisoning filter** — `trusted_filter()` drops (or ranks down)
+   chunks whose metadata lacks a trusted `source_type`/`source` or carries a
+   `poisoned`/`unverified` flag. `tag_unverified()` marks docs at ingest.
+
+### "Never query user-uploaded partitions" rule (Qdrant)
+
+User-uploaded documents live in dedicated partitions and MUST NOT be
+searched by the shared RAG answer path. Every search on shared collections
+must exclude them at the payload level using
+`build_trusted_partition_filter()`:
+
+```python
+from rugbrain.guardrails import build_trusted_partition_filter
+from rugbrain.qdrant_store import QdrantVectorStore
+
+store = QdrantVectorStore()
+results = await store.search(
+    collection="rag_docs",
+    vector=...,
+    filters=build_trusted_partition_filter(),  # {"must_not": [...]} on partition
+)
+```
+
+The helper returns a Qdrant `must_not` filter excluding
+`user_upload` / `user-uploaded` partitions; combine it with any `must`
+filters the caller already applies. Chunks without source metadata are
+treated as untrusted by `trusted_filter` (default-deny).
+
+Guardrails are additive and fail-open-safe: a guardrail error degrades to
+passthrough so the bridge never breaks. Set `RMI_GUARDRAILS=0` to disable
+input sanitization / output redaction for local debugging.

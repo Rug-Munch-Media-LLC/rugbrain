@@ -5,7 +5,21 @@ from __future__ import annotations
 import respx
 
 from rugbrain import ingest_sources as mod
-from rugbrain.ingest_sources import base, defihacklabs, defillama, eips, rekt, swc, whitepapers
+from rugbrain.ingest_sources import (
+    base,
+    bridges,
+    defihacklabs,
+    defillama,
+    eips,
+    l2beat,
+    mev,
+    privacy,
+    rekt,
+    safe,
+    swc,
+    whitepapers,
+    zk,
+)
 
 # Every requested source must be registered with the right semantic type.
 REQUIRED = {
@@ -17,6 +31,16 @@ REQUIRED = {
     "rekt_news": "post_mortem",
     "crypto_whitepapers": "whitepaper",
     "defillama": "market_data",
+    "layerzero": "bridge_architecture",
+    "axelar": "bridge_architecture",
+    "ccip": "bridge_architecture",
+    "l2beat": "l2_risk",
+    "circom": "zk_circuit",
+    "snarkjs": "zk_circuit",
+    "mev_boost": "mev_architecture",
+    "mev_boost_relay": "mev_architecture",
+    "safe_contracts": "contract_code",
+    "tornado_cash": "privacy_protocol",
 }
 
 
@@ -268,6 +292,225 @@ def test_defillama_hacks_to_docs():
     assert docs[0].metadata["date"] == "2023-11-14"
 
 
+# ── Proxy support (base client) ────────────────────────────────────────
+
+
+def test_proxy_url_env(monkeypatch):
+    monkeypatch.delenv("PROXY_URL", raising=False)
+    assert base.proxy_url() is None
+    monkeypatch.setenv("PROXY_URL", "http://user:pass@residential:8080")
+    assert base.proxy_url() == "http://user:pass@residential:8080"
+    monkeypatch.setenv("PROXY_URL", "   ")
+    assert base.proxy_url() is None
+
+
+# ── Bridge parsers (LayerZero / Axelar / CCIP) ─────────────────────────
+
+
+def test_bridge_contract_to_doc():
+    code = (
+        "// SPDX-License-Identifier: MIT\n"
+        "pragma solidity ^0.8.22;\n"
+        "contract EndpointV2 { function send(uint32 dstEid) external {} }\n"
+    )
+    doc = bridges.bridge_contract_to_doc(
+        protocol="LayerZero",
+        source="layerzero",
+        repo="LayerZero-Labs/LayerZero-v2",
+        ref="main",
+        rel_path="packages/layerzero-v2/evm/protocol/contracts/EndpointV2.sol",
+        code=code,
+    )
+    assert doc is not None
+    assert doc.doc_type == "bridge_architecture"
+    assert doc.source == "layerzero"
+    assert doc.metadata["protocol"] == "LayerZero"
+    assert doc.metadata["contract_name"] == "EndpointV2"
+    assert doc.metadata["archived"] is False
+    assert doc.metadata["ecosystem"] == "Cross-Chain"
+    assert "```solidity" in doc.content
+    assert "0.8.22" in doc.metadata["pragma"]
+
+
+def test_bridge_contract_to_doc_archived():
+    doc = bridges.bridge_contract_to_doc(
+        protocol="Chainlink CCIP",
+        source="ccip",
+        repo="smartcontractkit/ccip",
+        ref="ccip-develop",
+        rel_path="contracts/src/v0.8/ccip/Router.sol",
+        code="pragma solidity ^0.8.0;\ncontract Router {}\n",
+        archived=True,
+    )
+    assert doc is not None
+    assert doc.metadata["archived"] is True
+    assert "archived" in doc.content
+
+
+def test_bridge_contract_empty_rejected():
+    assert (
+        bridges.bridge_contract_to_doc(
+            protocol="X",
+            source="x",
+            repo="r/r",
+            ref="main",
+            rel_path="a.sol",
+            code="   ",
+        )
+        is None
+    )
+
+
+# ── L2BEAT risk framework parsers ──────────────────────────────────────
+
+L2BEAT_TS = """\
+import { ProjectId } from '@l2beat/shared-pure'
+import { Layer2 } from '../../types'
+
+export const arbitrum: Layer2 = {
+  id: ProjectId('arbitrum'),
+  display: {
+    name: 'Arbitrum One',
+    slug: 'arbitrum',
+    description: 'Arbitrum is an optimistic rollup that uses fraud proofs.',
+    links: { websites: ['https://arbitrum.io'] },
+  },
+  config: { escrows: [] },
+  riskView: {
+    stateValidation: {
+      value: 'Fraud proofs',
+      description: 'Fraud proofs allow anyone to challenge a state root.',
+      sentiment: 'bad',
+    },
+    dataAvailability: {
+      value: 'Rollup',
+      layers: ['L1'],
+      description: 'All transaction data is posted to L1.',
+      sentiment: 'good',
+    },
+    exitWindow: {
+      value: '7 days',
+      description: 'Users can exit within a 7-day window.',
+      sentiment: 'bad',
+    },
+  },
+}
+"""
+
+
+def test_l2beat_extract_risk_areas():
+    areas = l2beat.extract_risk_areas(L2BEAT_TS)
+    assert len(areas) == 3
+    names = {n for n, _ in areas}
+    assert names == {"stateValidation", "dataAvailability", "exitWindow"}
+    assert any("challenge a state root" in d for _, d in areas)
+
+
+def test_l2beat_project_to_doc():
+    doc = l2beat.l2beat_project_to_doc(
+        "packages/config/src/projects/arbitrum/arbitrum.ts", L2BEAT_TS
+    )
+    assert doc is not None
+    assert doc.doc_type == "l2_risk"
+    assert doc.source == "l2beat"
+    assert doc.metadata["project"] == "arbitrum"
+    assert "stateValidation" in doc.metadata["risk_areas"]
+    assert doc.metadata["has_risk_view"] is True
+    assert "Fraud proofs allow anyone to challenge" in doc.content
+    assert "Arbitrum is an optimistic rollup" in doc.content
+
+
+def test_l2beat_project_empty_rejected():
+    assert l2beat.l2beat_project_to_doc("projects/x/x.ts", "  ") is None
+
+
+# ── ZK toolchain parsers (Circom / SnarkJS) ────────────────────────────
+
+
+def test_zk_doc_to_doc():
+    md = "# Circom Language\n\n## Basic Operators\n\nCircom supports +, -, *, %.\n"
+    doc = zk.zk_doc_to_doc(
+        source="circom",
+        protocol="Circom",
+        repo="iden3/circom",
+        ref="master",
+        rel_path="mkdocs/docs/circom-language/basic-operators.md",
+        markdown=md,
+    )
+    assert doc is not None
+    assert doc.doc_type == "zk_circuit"
+    assert doc.title == "Circom Language"
+    assert doc.metadata["protocol"] == "Circom"
+    assert doc.metadata["ecosystem"] == "ZK"
+    assert "Basic Operators" in doc.content
+
+
+def test_zk_doc_empty_rejected():
+    assert (
+        zk.zk_doc_to_doc(
+            source="snarkjs",
+            protocol="SnarkJS",
+            repo="iden3/snarkjs",
+            ref="master",
+            rel_path="doc/x.md",
+            markdown="",
+        )
+        is None
+    )
+
+
+# ── MEV architecture parsers (mev-boost / relay) ───────────────────────
+
+
+def test_mev_doc_to_doc():
+    md = "# MEV-Boost Specification\n\nThis document specifies the mev-boost API.\n"
+    doc = mev.mev_doc_to_doc(
+        source="mev_boost",
+        protocol="MEV-Boost",
+        repo="flashbots/mev-boost",
+        ref="develop",
+        rel_path="docs/specification.md",
+        markdown=md,
+    )
+    assert doc is not None
+    assert doc.doc_type == "mev_architecture"
+    assert doc.title == "MEV-Boost Specification"
+    assert doc.metadata["protocol"] == "MEV-Boost"
+    assert doc.metadata["ecosystem"] == "MEV"
+
+
+# ── Safe smart-account parser ──────────────────────────────────────────
+
+
+def test_safe_parse_file():
+    code = (
+        "// SPDX-License-Identifier: LGPL-3.0-only\n"
+        "pragma solidity >=0.7.0 <0.9.0;\n"
+        "contract Safe { function setup(address[] calldata owners, uint256 threshold) external {} }\n"
+    )
+    doc = safe.parse_safe_file("contracts/Safe.sol", code)
+    assert doc is not None
+    assert doc.doc_type == "contract_code"
+    assert doc.source == "safe_contracts"
+    assert doc.metadata["contract_name"] == "Safe"
+    assert doc.metadata["protocol"] == "Safe"
+    assert "threshold" in doc.content
+
+
+# ── Privacy protocol parser (Tornado Cash) ─────────────────────────────
+
+
+def test_tornado_parse_file():
+    code = "pragma solidity ^0.6.12;\ncontract Tornado { function deposit(bytes32 commitment) external payable {} }\n"
+    doc = privacy.parse_tornado_file("contracts/Tornado.sol", code)
+    assert doc is not None
+    assert doc.doc_type == "privacy_protocol"
+    assert doc.source == "tornado_cash"
+    assert doc.metadata["archived"] is True
+    assert doc.metadata["protocol"] == "Tornado Cash"
+    assert doc.metadata["ecosystem"] == "Privacy"
+
+
 # ── Fetch paths (mocked network) ────────────────────────────────────────
 
 
@@ -320,3 +563,61 @@ async def test_defillama_fetch():
     docs = await dll.fetch(limit=1)
     assert len(docs) == 1
     assert docs[0].doc_type == "market_data"
+
+
+@respx.mock
+async def test_layerzero_fetch_end_to_end():
+    lz = mod.get_source("layerzero")
+    assert lz is not None
+    respx.get("https://api.github.com/repos/LayerZero-Labs/LayerZero-v2/git/trees/main").respond(
+        200,
+        json=_tree_payload(
+            "packages/layerzero-v2/evm/protocol/contracts/EndpointV2.sol",
+            "packages/layerzero-v2/evm/oapp/contracts/oapp/OApp.sol",
+        ),
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/LayerZero-Labs/LayerZero-v2/main/packages/layerzero-v2/evm/protocol/contracts/EndpointV2.sol"
+    ).respond(200, text="pragma solidity ^0.8.22;\ncontract EndpointV2 {}\n")
+    respx.get(
+        "https://raw.githubusercontent.com/LayerZero-Labs/LayerZero-v2/main/packages/layerzero-v2/evm/oapp/contracts/oapp/OApp.sol"
+    ).respond(200, text="pragma solidity ^0.8.22;\ncontract OApp {}\n")
+
+    docs = await lz.fetch(limit=2)
+    assert len(docs) == 2
+    assert all(d.doc_type == "bridge_architecture" for d in docs)
+    assert docs[0].metadata["protocol"] == "LayerZero"
+    assert docs[0].metadata["contract_name"] == "EndpointV2"
+
+
+@respx.mock
+async def test_l2beat_fetch_end_to_end():
+    lb = mod.get_source("l2beat")
+    assert lb is not None
+    respx.get("https://api.github.com/repos/l2beat/l2beat/git/trees/main").respond(
+        200,
+        json=_tree_payload(
+            "packages/config/src/projects/arbitrum/arbitrum.ts",
+            "packages/config/src/projects/arbitrum/arbitrum.test.ts",
+        ),
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/l2beat/l2beat/main/packages/config/src/projects/arbitrum/arbitrum.ts"
+    ).respond(200, text=L2BEAT_TS)
+
+    docs = await lb.fetch(limit=5)
+    assert len(docs) == 1  # .test.ts is skipped
+    assert docs[0].doc_type == "l2_risk"
+    assert docs[0].metadata["project"] == "arbitrum"
+    assert "stateValidation" in docs[0].metadata["risk_areas"]
+
+
+@respx.mock
+async def test_tornado_fetch_graceful_on_rate_limit():
+    tc = mod.get_source("tornado_cash")
+    assert tc is not None
+    respx.get("https://api.github.com/repos/tornadocash/tornado-core/git/trees/master").respond(
+        403, json={"message": "rate limit"}
+    )
+    docs = await tc.fetch(limit=1)
+    assert docs == []

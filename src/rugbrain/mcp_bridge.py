@@ -26,6 +26,17 @@ Environment:
 
 No secrets: only tool names + kwargs cross the subprocess boundary and the
 runner never logs request/response bodies.
+
+Security guardrails (additive, see rugbrain.guardrails):
+  * ``sanitize_query`` runs on every user query before it is sent to the
+    MCP (or the RAG fallback). Prompt-injection queries are neutralized
+    (stripped) or refused outright when nothing usable remains — the
+    response carries a ``guard`` metadata dict (``flagged``, ``reasons``,
+    ``sanitized``, ``refused``).
+  * ``redact_output`` strips secret patterns (private keys, mnemonics,
+    API keys, internal hostnames, private IPs) from result content before
+    it is returned to callers. Guardrails never raise — a guardrail
+    failure degrades to passthrough so the bridge keeps working.
 """
 
 from __future__ import annotations
@@ -39,6 +50,64 @@ from pathlib import Path
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
+
+# ── Security guardrails (additive) ─────────────────────────────────────
+try:
+    from rugbrain.guardrails import redact_output, sanitize_query
+
+    _GUARDRAILS_OK = True
+except ImportError:  # pragma: no cover - guardrails ships with the package
+    _GUARDRAILS_OK = False
+
+
+def _guard_query(query: str) -> tuple[str, dict[str, Any]]:
+    """Sanitize *query* for prompt injection.
+
+    Returns ``(safe_query, guard_meta)``. ``guard_meta`` carries
+    ``flagged`` / ``reasons`` / ``sanitized`` / ``refused``; ``refused``
+    is True when the query was flagged AND nothing usable remains after
+    stripping (callers should fail closed and NOT forward). Never raises.
+    """
+    if not _GUARDRAILS_OK:
+        return query, {"flagged": False, "reasons": [], "sanitized": False, "refused": False}
+    try:
+        sq = sanitize_query(query)
+        safe = sq.query
+        # Fail-closed: refuse when the flagged query strips to nothing OR a
+        # trivial stub (<=3 chars) — forwarding a bare "and" would return
+        # garbage while still having touched the MCP.
+        refused = sq.flagged and len(safe.strip()) <= 3
+        return safe, {
+            "flagged": sq.flagged,
+            "reasons": list(sq.reasons),
+            "sanitized": safe != query,
+            "refused": refused,
+        }
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("guardrails sanitize failed: %s", str(exc)[:120])
+        return query, {"flagged": False, "reasons": [], "sanitized": False, "refused": False}
+
+
+def _redact_text(value: Any) -> Any:
+    """Apply ``redact_output`` to a string (passthrough on failure)."""
+    if isinstance(value, str) and _GUARDRAILS_OK:
+        try:
+            return redact_output(value)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("guardrails redact failed: %s", str(exc)[:120])
+    return value
+
+
+def _redact_result(result: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """Return *result* with the given string fields redacted (never mutates)."""
+    if not result:
+        return result
+    out = dict(result)
+    for key in keys:
+        if key in out:
+            out[key] = _redact_text(out[key])
+    return out
+
 
 # ── Config ──────────────────────────────────────────────────────────────
 MCP_DIR = os.getenv("RMI_MCP_DIR", "/srv/work/repos/rmi-codebase-mcp")
@@ -190,12 +259,28 @@ async def search_codebase(
         }
 
     Falls back to RugBrain's own coding knowledge when the MCP is unreachable.
+
+    Guarded: the query is sanitized for prompt injection before dispatch
+    (``guard`` metadata on the response; refusal when nothing remains).
+    Result content is redacted for secret patterns before returning.
     """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "search_codebase",
+            "query": query,
+            "results": [],
+            "total": 0,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
     try:
         raw = await _call_mcp(
             "search",
             {
-                "query": query,
+                "query": safe_query,
                 "project": project,
                 "ecosystem": ecosystem,
                 "chain": chain,
@@ -213,6 +298,7 @@ async def search_codebase(
     for item in raw.get("security_patterns", []) or []:
         results.append(_normalize_code_hit(item, kind="security_pattern"))
 
+    results = [_redact_result(r, ("content", "document", "code_answer", "title")) for r in results]
     return {
         "ok": True,
         "bridge": "mcp",
@@ -221,6 +307,7 @@ async def search_codebase(
         "results": results[:limit],
         "total": len(results),
         "raw": raw,
+        "guard": guard,
     }
 
 
@@ -285,12 +372,28 @@ async def get_security_context(
         }
 
     Falls back to RugBrain's own scam/coding knowledge when the MCP is unreachable.
+
+    Guarded: the query is sanitized for prompt injection before dispatch
+    (``guard`` metadata on the response; refusal when nothing remains).
+    Result content is redacted for secret patterns before returning.
     """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "get_security_context",
+            "query": query,
+            "results": [],
+            "count": 0,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
     try:
         raw = await _call_mcp(
             "security",
             {
-                "query": query,
+                "query": safe_query,
                 "top_k": top_k,
                 "filter_severity": filter_severity,
                 "filter_ecosystem": filter_ecosystem,
@@ -303,6 +406,7 @@ async def get_security_context(
         return await _fallback_security(query, top_k=top_k)
 
     results = raw.get("results", []) or []
+    results = [_redact_result(r, ("description", "code_block", "title", "content")) for r in results]
     return {
         "ok": bool(raw.get("success", True)),
         "bridge": "mcp",
@@ -310,6 +414,7 @@ async def get_security_context(
         "query": query,
         "results": results[:top_k],
         "count": len(results),
+        "guard": guard,
     }
 
 
@@ -325,10 +430,29 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
         {
           "ok", "bridge" ("mcp" | "rag_fallback" | "mixed"),
           "query", "results", "security_patterns", "total", "raw": {...},
+          "guard": {...},
         }
+
+    Guarded: the query is sanitized once here; sub-calls refuse before
+    dispatch when nothing usable remains. Aggregated ``guard`` metadata is
+    attached to the merged response.
     """
-    search = await search_codebase(query, limit=limit)
-    security = await get_security_context(query, top_k=min(limit, 5))
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "augment_code_query",
+            "query": query,
+            "results": [],
+            "security_patterns": [],
+            "total": 0,
+            "raw": None,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
+    search = await search_codebase(safe_query, limit=limit)
+    security = await get_security_context(safe_query, top_k=min(limit, 5))
 
     bridges = {search.get("bridge"), security.get("bridge")}
     if bridges == {"mcp"}:
@@ -340,6 +464,15 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
 
     results = list(search.get("results", []))
     security_results = list(security.get("results", []))
+    agg_guard = {
+        **guard,
+        "flagged": guard["flagged"]
+        or bool(search.get("guard", {}).get("flagged"))
+        or bool(security.get("guard", {}).get("flagged")),
+        "refused": guard["refused"]
+        or bool(search.get("guard", {}).get("refused"))
+        or bool(security.get("guard", {}).get("refused")),
+    }
     return {
         "ok": bool(search.get("ok")) or bool(security.get("ok")),
         "bridge": bridge,
@@ -352,6 +485,7 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
             "search": search.get("raw") if search.get("bridge") == "mcp" else None,
             "security": security.get("results") if security.get("bridge") == "mcp" else None,
         },
+        "guard": agg_guard,
     }
 
 
@@ -359,24 +493,44 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
 
 
 async def _fallback_search(query: str, *, limit: int) -> dict[str, Any]:
-    """Use RugBrain's own coding knowledge when the MCP is unavailable."""
+    """Use RugBrain's own coding knowledge when the MCP is unavailable.
+
+    Guarded: the query is sanitized before the RAG search and result
+    content is redacted for secret patterns before returning.
+    """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "search_codebase",
+            "query": query,
+            "results": [],
+            "total": 0,
+            "raw": None,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
     try:
         from rugbrain.search_service import search_coding_knowledge  # lazy import
 
-        res = await search_coding_knowledge(query, limit=limit)
+        res = await search_coding_knowledge(safe_query, limit=limit)
         results = []
         for r in res.get("results", []) or []:
             results.append(
-                {
-                    "kind": "code" if r.get("has_code_snippet") else "knowledge",
-                    "id": r.get("id"),
-                    "content": r.get("content", ""),
-                    "code_blocks": r.get("code_blocks", []),
-                    "code_answer": r.get("code_answer", ""),
-                    "score": r.get("similarity", 0.0),
-                    "metadata": r.get("metadata", {}),
-                    "source": r.get("source", ""),
-                }
+                _redact_result(
+                    {
+                        "kind": "code" if r.get("has_code_snippet") else "knowledge",
+                        "id": r.get("id"),
+                        "content": r.get("content", ""),
+                        "code_blocks": r.get("code_blocks", []),
+                        "code_answer": r.get("code_answer", ""),
+                        "score": r.get("similarity", 0.0),
+                        "metadata": r.get("metadata", {}),
+                        "source": r.get("source", ""),
+                    },
+                    ("content", "code_answer", "source"),
+                )
             )
         return {
             "ok": True,
@@ -386,6 +540,7 @@ async def _fallback_search(query: str, *, limit: int) -> dict[str, Any]:
             "results": results,
             "total": len(results),
             "raw": None,
+            "guard": guard,
         }
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("rag_fallback_search failed err=%s", str(exc)[:160])
@@ -397,12 +552,17 @@ async def _fallback_search(query: str, *, limit: int) -> dict[str, Any]:
             "results": [],
             "total": 0,
             "raw": None,
+            "guard": guard,
             "error": str(exc)[:200],
         }
 
 
 async def _fallback_trace(function: str, *, depth: int) -> dict[str, Any]:
-    """Return coding knowledge about *function* when the MCP is unavailable."""
+    """Return coding knowledge about *function* when the MCP is unavailable.
+
+    Guarded: the function symbol is sanitized and result content redacted
+    via the search fallback (defense in depth for the answer path).
+    """
     fallback = await _fallback_search(function, limit=depth * 3)
     return {
         "ok": fallback.get("ok", False),
@@ -413,25 +573,45 @@ async def _fallback_trace(function: str, *, depth: int) -> dict[str, Any]:
         "security_flags": [],
         "backend": "rag_fallback",
         "results": fallback.get("results", []),
+        "guard": fallback.get("guard", {}),
     }
 
 
 async def _fallback_security(query: str, *, top_k: int) -> dict[str, Any]:
-    """Search RugBrain's scam/coding KB for security patterns."""
+    """Search RugBrain's scam/coding KB for security patterns.
+
+    Guarded: the query is sanitized before the RAG search and result
+    content is redacted for secret patterns before returning.
+    """
+    safe_query, guard = _guard_query(query)
+    if guard["refused"]:
+        return {
+            "ok": False,
+            "bridge": "guarded",
+            "tool": "get_security_context",
+            "query": query,
+            "results": [],
+            "count": 0,
+            "guard": guard,
+            "error": "query_refused_after_injection_sanitization",
+        }
     try:
         from rugbrain.search_service import search_scam_knowledge  # lazy import
 
-        res = await search_scam_knowledge(query, limit=top_k)
+        res = await search_scam_knowledge(safe_query, limit=top_k)
         results = []
         for r in res.get("results", []) or []:
             results.append(
-                {
-                    "id": r.get("id"),
-                    "title": r.get("source", "pattern"),
-                    "description": r.get("content", "")[:400],
-                    "relevance_score": r.get("similarity", 0.0),
-                    "metadata": r.get("metadata", {}),
-                }
+                _redact_result(
+                    {
+                        "id": r.get("id"),
+                        "title": r.get("source", "pattern"),
+                        "description": r.get("content", "")[:400],
+                        "relevance_score": r.get("similarity", 0.0),
+                        "metadata": r.get("metadata", {}),
+                    },
+                    ("title", "description"),
+                )
             )
         return {
             "ok": True,
@@ -440,6 +620,7 @@ async def _fallback_security(query: str, *, top_k: int) -> dict[str, Any]:
             "query": query,
             "results": results[:top_k],
             "count": len(results),
+            "guard": guard,
         }
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("rag_fallback_security failed err=%s", str(exc)[:160])
@@ -450,6 +631,7 @@ async def _fallback_security(query: str, *, top_k: int) -> dict[str, Any]:
             "query": query,
             "results": [],
             "count": 0,
+            "guard": guard,
             "error": str(exc)[:200],
         }
 

@@ -28,6 +28,21 @@ from ._state import (  # noqa: F401  (_pattern_cache_loaded bound here, written 
 
 logger = logging.getLogger(__name__)
 
+# Per-collection Redis TTLs (seconds). Shared by the single-doc ingest and
+# the parent-child ingest seam (parent windows live as long as their docs).
+_COLLECTION_TTL_MAP = {
+    "scam_patterns": 0,
+    "contract_audits": 0,
+    "transaction_patterns": 0,
+    "forensic_reports": 0,
+    "wallet_profiles": 86400 * 365,
+    "known_scams": 86400 * 365,
+    "market_intel": 86400 * 365,
+    "news_articles": 86400 * 30,
+    "token_analysis": 86400 * 90,
+    "general": 86400 * 30,
+}
+
 
 async def _preembed_scam_patterns() -> None:
     """
@@ -158,10 +173,29 @@ async def ingest_document(
     content: str,
     metadata: dict[str, Any] | None = None,
     doc_id: str | None = None,
+    *,
+    parent_child: bool = False,
+    parent_token_target: int = 3000,
+    parent_max_chars: int = 16000,
 ) -> dict[str, Any]:
     """
     Ingest a document with real semantic embedding.
+
+    Additive ``parent_child`` switch: when True, *content* is split into
+    small search-oriented child chunks that reference larger parent context
+    windows (see ``ingest_document_parent_child``); the standard single-doc
+    behavior is preserved for all other callers (default False).
     """
+    if parent_child:
+        return await ingest_document_parent_child(
+            collection,
+            content,
+            metadata,
+            doc_id,
+            parent_token_target=parent_token_target,
+            parent_max_chars=parent_max_chars,
+        )
+
     embedder = await get_embedder()
     metadata = metadata or {}
 
@@ -183,19 +217,7 @@ async def ingest_document(
         "content": content[:5000],
         "stored_at": datetime.now(UTC).isoformat(),
     }
-    _ttl_map = {
-        "scam_patterns": 0,
-        "contract_audits": 0,
-        "transaction_patterns": 0,
-        "forensic_reports": 0,
-        "wallet_profiles": 86400 * 365,
-        "known_scams": 86400 * 365,
-        "market_intel": 86400 * 365,
-        "news_articles": 86400 * 30,
-        "token_analysis": 86400 * 90,
-        "general": 86400 * 30,
-    }
-    ttl = _ttl_map.get(collection, 86400 * 30)
+    ttl = _COLLECTION_TTL_MAP.get(collection, 86400 * 30)
     key = f"rag:{collection}:{doc_id}"
     if ttl == 0:
         await r.set(key, json.dumps(doc))
@@ -279,6 +301,118 @@ async def ingest_forensic_report(
         content=report_text,
         metadata=meta,
     )
+
+
+async def ingest_document_parent_child(
+    collection: str,
+    content: str,
+    metadata: dict[str, Any] | None = None,
+    doc_id: str | None = None,
+    *,
+    parent_token_target: int = 3000,
+    parent_max_chars: int = 16000,
+) -> dict[str, Any]:
+    """
+    Parent-child ingest: split *content* into child chunks referencing parents.
+
+    Wires ``rugbrain.app_chunking.split_doc_parent_child`` into the ingest
+    seam so children carry ``parent_id`` / ``parent_index`` / ``parent_total``
+    metadata, and parent windows are stored for retrieval-time context
+    expansion. The retrieval side (``search.engine``) already expands a
+    matched child to its parent — this makes the stored parents reachable:
+
+      * ``rag:{collection}:{parent_id}`` — chunk-keyed layout read by the
+        engine's inline parent-child expansion;
+      * ``rag:parent:{parent_id}`` — parent-retriever layout read by
+        ``ParentRetriever.get_parent`` / ``expand_context``.
+
+    Additive: the standard single-doc ``ingest_document`` is unchanged. Each
+    child is ingested through that same path (embed + store + index); parent
+    windows are context-only docs (no embedding, not added to the searchable
+    index) so they never surface as standalone hits.
+
+    Returns a summary dict: ``{id, collection, parent_child, parent_count,
+    child_count, child_ids}``. Falls back to a single-doc ingest when the
+    input cannot be split into parent windows.
+    """
+    metadata = metadata or {}
+    from rugbrain.app_chunking import split_doc_parent_child
+
+    parents = split_doc_parent_child(
+        content,
+        content_type="default",
+        doc_meta=metadata,
+        parent_token_target=parent_token_target,
+        parent_max_chars=parent_max_chars,
+    )
+    if not parents:
+        # Un-splittable input (blank / single short section) — standard path.
+        result = await ingest_document(collection, content, metadata, doc_id)
+        result["parent_child"] = True
+        result["parent_count"] = 0
+        result["child_count"] = 1
+        return result
+
+    if not doc_id:
+        doc_id = hashlib.sha256(
+            f"{collection}:{content[:100]}:{datetime.now(UTC).isoformat()}".encode()
+        ).hexdigest()[:16]
+
+    r = await _get_redis()
+    ttl = _COLLECTION_TTL_MAP.get(collection, 86400 * 30)
+    now_iso = datetime.now(UTC).isoformat()
+
+    child_ids: list[str] = []
+    for parent in parents:
+        pid = parent.metadata["parent_id"]
+        parent_meta = {**metadata, **parent.metadata}
+        parent_doc = {
+            "id": pid,
+            "collection": collection,
+            "content": parent.content,
+            "metadata": {**parent_meta, "is_parent": True},
+            "stored_at": now_iso,
+            "model": "",
+            "dims": 0,
+        }
+        # Layout 1 — chunk-keyed parent (read by engine's inline expansion).
+        key = f"rag:{collection}:{pid}"
+        if ttl == 0:
+            await r.set(key, json.dumps(parent_doc))
+        else:
+            await r.setex(key, ttl, json.dumps(parent_doc))
+        # Layout 2 — parent-retriever store (get_parent / expand_context).
+        try:
+            from rugbrain.parent_retriever import get_parent_retriever
+
+            pr = await get_parent_retriever()
+            await pr.store_parent(doc_id=pid, content=parent.content, metadata=parent_meta)
+        except Exception as e:
+            logger.debug("ParentRetriever.store_parent skipped for %s: %s", pid, e)
+
+        for child in parent.child_chunks:
+            child_text = str(child.get("text", "") or "")
+            if not child_text.strip():
+                continue
+            child_meta = {**metadata, **{k: v for k, v in child.items() if k != "text"}}
+            child_result = await ingest_document(collection, child_text, child_meta)
+            child_ids.append(child_result["id"])
+
+    logger.info(
+        "Ingested %s/%s parent-child: %s parents, %s children",
+        collection,
+        doc_id,
+        len(parents),
+        len(child_ids),
+    )
+    return {
+        "id": doc_id,
+        "collection": collection,
+        "parent_child": True,
+        "parent_count": len(parents),
+        "child_count": len(child_ids),
+        "child_ids": child_ids,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════

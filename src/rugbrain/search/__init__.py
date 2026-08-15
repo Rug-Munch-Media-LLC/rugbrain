@@ -39,8 +39,11 @@ from .filters import (
     get_goplus_analysis,
     get_stats,
     ingest_document,
+    ingest_document_parent_child,
     ingest_forensic_report,
 )
+from .fusion import apply_recency_decay, rrf_fuse_recency
+from .query_transform import hyde_expand, multi_query_expand
 from .ranking import _classify_query
 from .rerank import get_reranker, rerank_chunks
 
@@ -61,6 +64,7 @@ __all__ = [
     "_pattern_cache_loaded",
     "_preembed_scam_patterns",
     "_seeded",
+    "apply_recency_decay",
     "bias_toward_code_chunks",
     "detect_coding_query",
     "detect_scam_patterns",
@@ -70,10 +74,14 @@ __all__ = [
     "get_goplus_analysis",
     "get_reranker",
     "get_stats",
+    "hyde_expand",
     "ingest_document",
+    "ingest_document_parent_child",
     "ingest_forensic_report",
+    "multi_query_expand",
     "rerank_chunks",
     "resolve_search_collections",
+    "rrf_fuse_recency",
     "search_coding_knowledge",
     "search_multi_collection",
     "search_scam_knowledge",

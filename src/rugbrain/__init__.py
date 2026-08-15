@@ -1,6 +1,18 @@
 """RugBrain (formerly RMI RAG) — hybrid search, embeddings, chunking, agentic retrieval.
 
 Public API surface.
+
+Prompt assembly for small context windows follows the pipeline
+retrieve → rerank → compress → invert → prompt::
+
+    results = await search_similar(...)                       # retrieve
+    results = await rerank(query, results)                    # rerank
+    results = compress_context(results, 2048, query=query)    # compress
+    prompt  = pack_context(results, query)                    # invert -> prompt
+
+``compress_context`` reduces retrieved context to a token budget (LLMLingua
+when available, extractive fallback); ``pack_context`` orders the prompt
+top-relevance-first with the user query LAST to mitigate "lost in the middle".
 """
 
 from rugbrain import endpoints
@@ -28,6 +40,7 @@ from rugbrain.ingestion_quality import (
 )
 from rugbrain.parent_retriever import get_parent_retriever
 from rugbrain.pattern_extractor import extract_pattern_from_url
+from rugbrain.prompt_compression import compress_context, layout_context, pack_context
 from rugbrain.qdrant_store import get_qdrant_store
 from rugbrain.realtime_alerts import AlertDispatcher, WatchlistManager
 from rugbrain.reranker import Reranker, get_reranker, rerank
@@ -47,6 +60,7 @@ __all__ = [
     "QualityScore",
     "Reranker",
     "WatchlistManager",
+    "compress_context",
     "current_backend",
     "endpoints",
     "extract_pattern_from_url",
@@ -57,6 +71,8 @@ __all__ = [
     "get_parent_retriever",
     "get_qdrant_store",
     "get_reranker",
+    "layout_context",
+    "pack_context",
     "rank_by_quality",
     "rerank",
     "run_continuous_ingest",

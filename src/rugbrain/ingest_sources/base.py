@@ -23,6 +23,7 @@ Design rules (consistent with ``sources_registry`` / ``market_data``):
 from __future__ import annotations
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,6 +34,19 @@ log = logging.getLogger(__name__)
 
 USER_AGENT = "RMI-RagBrain/0.1 (+https://rugmunch.io; source ingestion)"
 DEFAULT_TIMEOUT = 30.0
+
+
+def proxy_url() -> str | None:
+    """Optional HTTP(S) proxy for fetches, read from ``PROXY_URL`` env.
+
+    The RugMunch fleet has a residential-proxy pool (20 IPs) available for
+    scraping; setting ``PROXY_URL`` (e.g. ``http://user:pass@host:port``)
+    routes every source's GitHub/raw/API traffic through it when GitHub
+    rate-limits the origin IP. Credentials come from the environment only —
+    never hardcoded. Returns ``None`` when unset.
+    """
+    url = os.getenv("PROXY_URL", "").strip()
+    return url or None
 
 
 @dataclass(frozen=True)
@@ -83,6 +97,7 @@ class Source(ABC):
             timeout=self.timeout,
             follow_redirects=True,
             headers={"User-Agent": USER_AGENT},
+            proxy=proxy_url(),
         ) as client:
             try:
                 docs = await self._fetch(client, limit)
@@ -116,4 +131,11 @@ def to_crawl_document(doc: IngestDoc) -> Any:
     )
 
 
-__all__ = ["DEFAULT_TIMEOUT", "USER_AGENT", "IngestDoc", "Source", "to_crawl_document"]
+__all__ = [
+    "DEFAULT_TIMEOUT",
+    "USER_AGENT",
+    "IngestDoc",
+    "Source",
+    "proxy_url",
+    "to_crawl_document",
+]
