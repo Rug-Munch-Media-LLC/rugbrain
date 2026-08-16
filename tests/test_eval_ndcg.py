@@ -12,7 +12,9 @@ import pytest
 from rugbrain.eval.ndcg import (
     hit_rate_at_k,
     mrr,
+    mrr_from_gains,
     ndcg_at_k,
+    ndcg_from_gains,
     precision_at_k,
     recall_at_k,
 )
@@ -130,3 +132,54 @@ class TestMrr:
 
     def test_first_relevant_rank_wins(self):
         assert mrr(["x", "b", "a"], ["a", "b"]) == pytest.approx(0.5)
+
+
+class TestNdcgFromGains:
+    def test_perfect_ranking(self):
+        assert ndcg_from_gains([1.0, 1.0], k=2) == pytest.approx(1.0)
+
+    def test_known_value_matches_id_based(self):
+        # Equivalent to ndcg_at_k(["a","b","c","d"], ["b","d"]): gains at ranks 2 and 4.
+        assert ndcg_from_gains([0, 1, 0, 1], k=4) == pytest.approx(0.650921, abs=1e-6)
+
+    def test_cutoff_truncation(self):
+        # k=2 sees gains [0, 1] — one relevant doc at rank 2.
+        assert ndcg_from_gains([0, 1, 0, 1], k=2) == pytest.approx(0.386853, abs=1e-6)
+
+    def test_no_hits(self):
+        assert ndcg_from_gains([0.0, 0.0, 0.0]) == 0.0
+
+    def test_empty(self):
+        assert ndcg_from_gains([]) == 0.0
+
+    def test_k_zero(self):
+        assert ndcg_from_gains([1.0, 0.0], k=0) == 0.0
+
+    def test_k_larger_than_gains_clamps(self):
+        assert ndcg_from_gains([1.0, 1.0], k=99) == pytest.approx(1.0)
+
+    def test_ordering_matters(self):
+        good = ndcg_from_gains([1.0, 1.0, 0.0], k=3)
+        bad = ndcg_from_gains([0.0, 1.0, 1.0], k=3)
+        assert good > bad
+
+    def test_graded_gains_supported(self):
+        graded = ndcg_from_gains([2.0, 0.0, 1.0], k=3)
+        assert 0.0 < graded <= 1.0
+
+
+class TestMrrFromGains:
+    def test_first_rank(self):
+        assert mrr_from_gains([1.0, 0.0, 0.0]) == pytest.approx(1.0)
+
+    def test_second_rank(self):
+        assert mrr_from_gains([0.0, 1.0, 0.0]) == pytest.approx(0.5)
+
+    def test_none_found(self):
+        assert mrr_from_gains([0.0, 0.0]) == 0.0
+
+    def test_empty(self):
+        assert mrr_from_gains([]) == 0.0
+
+    def test_first_positive_rank_wins(self):
+        assert mrr_from_gains([0.0, 1.0, 1.0]) == pytest.approx(0.5)

@@ -66,6 +66,55 @@ def ndcg_at_k(
     return dcg / idcg
 
 
+def ndcg_from_gains(gains: Sequence[float], k: int | None = None) -> float:
+    """
+    NDCG@k from per-rank relevance gains (binary 0/1 or graded).
+
+    This is the chunk-mode sibling of ``ndcg_at_k``: instead of matching
+    retrieved ids against a labeled relevant-id set, the caller supplies one
+    gain per retrieved rank (e.g. 1.0 when a chunk contains a gold phrase,
+    else 0.0). The ideal DCG is computed from the best possible ordering of
+    the actual gains, so a ranking that puts all relevant chunks first scores
+    1.0.
+
+    Args:
+        gains: relevance gain per retrieved result, most relevant first.
+        k: rank cutoff (default: ``len(gains)``).
+
+    Returns:
+        Float in [0.0, 1.0]. Returns 0.0 for an empty sequence or when no
+        rank carries positive gain.
+    """
+    if not gains:
+        return 0.0
+    k = min(k if k is not None else len(gains), len(gains))
+    if k <= 0:
+        return 0.0
+
+    window = gains[:k]
+    dcg = sum(g / math.log2(i + 2) for i, g in enumerate(window))
+    ideal = sorted((float(g) for g in gains), reverse=True)[:k]
+    idcg = sum(g / math.log2(i + 2) for i, g in enumerate(ideal))
+    if idcg == 0.0:
+        return 0.0
+    return dcg / idcg
+
+
+def mrr_from_gains(gains: Sequence[float]) -> float:
+    """
+    Mean Reciprocal Rank from per-rank binary relevance gains.
+
+    Returns 1/rank of the first positive gain (rank is 1-indexed), 0.0 when
+    no rank carries positive gain, and 0.0 for an empty sequence. Mirrors
+    ``mrr`` but for the chunk/content mode where relevance is judged per
+    retrieved result rather than by doc-id membership.
+    """
+    for i, g in enumerate(gains):
+        if g > 0.0:
+            return 1.0 / (i + 1)
+    return 0.0
+
+
 def recall_at_k(
     retrieved_ids: Sequence[str],
     relevant_ids: Iterable[str],
