@@ -7,8 +7,9 @@ serves them back through semantic, hybrid, and entity-aware search. Powers
 the scanner's **Known Scam Patterns** check, the bot's `/research` and
 `/investigate` commands, and the frontend's AI chat / wallet forensics.
 
-**Status:** live service, collections being seeded (see
-[ARCHITECTURE.md](ARCHITECTURE.md) §7 for honest current gaps).
+**Status:** live service, 40+ Qdrant collections populated (see
+[docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) for the live
+inventory; [TODO.md](TODO.md) for honest current gaps).
 
 ## What it serves
 
@@ -89,8 +90,9 @@ cd rugbrain
 # Install dependencies
 pip install -e .
 
-# Run the threat-intel seeder (requires Qdrant + Redis + Infinity running)
-python scripts/seed_threat_intel.py
+# Run the seeder (requires Qdrant + Redis + Infinity running)
+python scripts/seed_all.py --dry-run   # preview first
+python scripts/seed_all.py              # seed everything
 
 # Run the ingest one-shot (same thing, inside the container)
 docker compose run --rm rag-ingest
@@ -102,6 +104,13 @@ python -m rugbrain
 
 Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
 and Infinity with `BAAI/bge-m3` loaded (`INFINITY_URL`). See `.env.example`.
+
+## Adding a data source
+
+New ingest sources follow the `Source` interface in
+`src/rugbrain/ingest_sources/base.py` — see
+**[docs/ADDING-A-SOURCE.md](docs/ADDING-A-SOURCE.md)** for the full
+step-by-step (interface, `*_v2` collection naming, registration, tests).
 
 ## API docs
 
@@ -116,13 +125,13 @@ Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
 | Area | Status |
 |------|--------|
 | API service (port 8012) | LIVE (`/health`, `/ready`, search, scam-check) |
-| Collections in Qdrant | 3 exist (`threat_intel`, `rmi_agent_memory`, `rmi_community`), 0 points — seeding in progress |
-| Scanner → RAG ingestion | Wired (subscriber + poller), `ingested_count: 0` — backend not publishing yet |
-| `/investigate`, `/confidence` | WIP — 500 until `src/app/` packaging is restored |
+| Collections in Qdrant | 40+ live, `*_v2` names (`threat_intel_v2`, `scam_intel_v2`, `research_v2`, …) — see [docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) |
+| Programmatic sources | 25+ `Source` implementations in `src/rugbrain/ingest_sources/` — see [docs/ADDING-A-SOURCE.md](docs/ADDING-A-SOURCE.md) |
+| `/investigate`, `/confidence` | Routed in `src/rugbrain/endpoints.py` (`/api/v1/rag/…`) |
 | Qdrant nightly backup → B2 | ✅ uploading to `rmi-rag-permanence` (b2sdk) |
-| Tests | 1 failing, coverage ~10% — see TODO.md |
+| Tests | 880+ collected; run `pytest` before pushing — see [TODO.md](TODO.md) |
 
-Source of truth for gaps: [TODO.md](TODO.md) (audited 2026-07-31).
+Source of truth for gaps: [TODO.md](TODO.md).
 
 ## Open-Core Model
 
