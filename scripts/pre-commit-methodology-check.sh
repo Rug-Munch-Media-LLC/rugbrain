@@ -29,9 +29,6 @@ FORBIDDEN_PATTERNS=(
   '/home/[^/]+/\..*/(secrets|keys|certs|credentials)'
 
   # Comments and documentation markers
-  'FIXME'
-  '\bHACK\b' # word-boundary: catch // HACK / # HACK markers, not DEFI_HACKLABS/HACKS_URL
-  'XXX'
   '@nocommit'
 )
 
@@ -50,6 +47,19 @@ for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
     while IFS= read -r f; do
       echo "     $f"
     done <<<"$matches"
+    FOUND=1
+  fi
+done
+
+# Comment markers (FIXME/HACK/XXX) — only flag as an actual code-comment TODO,
+# not when the word appears in content strings (e.g. "HISTORIC HACK:" labels in
+# crypto-intel ingest sources, or "DeFiHackLabs"/"hacks" identifiers).
+COMMENT_MARKERS=('FIXME' 'HACK' 'XXX')
+for marker in "${COMMENT_MARKERS[@]}"; do
+  hits=$(echo "$STAGED_FILES" | xargs grep -En "^[[:space:]]*(#|//|/\*|\*)[[:space:]]*${marker}([[:space:]:]|$)" 2>/dev/null || true)
+  if [ -n "$hits" ]; then
+    echo "⚠️  POTENTIAL ISSUE: comment marker '${marker}'"
+    echo "$hits" | while IFS= read -r line; do echo "     $line"; done
     FOUND=1
   fi
 done
