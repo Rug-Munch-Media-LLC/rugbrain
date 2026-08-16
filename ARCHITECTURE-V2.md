@@ -30,7 +30,7 @@
 - **Backend consolidation never executed**: `app/rag_client.py` (RagApiClient) was **never created**; `app/api/v1/rag/search.py` still imports `app.rag` in-process (not an HTTP proxy); `app/rag/` (17 files, the second implementation) still present; `app/rag_service/` shim still present with **17 live callers**. §3.2 delete table, §5.1, and Phases 1–3 are **NOT DONE**. `[NOT DONE]`
 - **`rugbrain-eval-test` container (:8013)** — REMOVED 2026-08-01 (was built from a dirty local tree; `/eval/run` POST vs HEAD GET; search hung). Image `rugbrain-eval-test:latest` still on disk — prune when convenient. `[RESOLVED]`
 - **Main API container (:8012)**: REBUILT from HEAD 2026-08-01 (created 12:31 UTC). `/api/v1/rag/query` (POST) 200, `/api/v1/eval/run` live, `/metrics` 200. Known: `_b2_native_auth` fallback still uses `httpx.post` with no body → B2 authorize returns 400 (`object should start with brace`); the primary httpfs direct path works, and a GET (or POST with `json={}`) fixes the fallback. `[DONE]`
-- **Module deletions in §3.1 are PARTIAL**: 11 files deleted (search_similar, embed_tiers, embed_utils, embedding_router, query_classifier, metrics_api, agentic, tool, chunking, legacy_supabase, rag_provider, src/app/), but the `search/` package, `search_service.py`, `cross_encoder.py`, `crypto_embeddings.py`, `bge_embedders.py`, `embeddings.py`, `splade_bm25.py`, `sparse_search.py`, `permanence.py`, `rag_ingestion.py`, `query_rewriter.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `graph_rag.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/` still exist. `[PARTIAL]`
+- **Module deletions in §3.1 are PARTIAL**: 11 files deleted (search_similar, embed_tiers, embed_utils, embedding_router, query_classifier, metrics_api, agentic, tool, chunking, legacy_supabase, rag_provider, src/app/), but the `search/` package, `search_service.py`, `cross_encoder.py`, `crypto_embeddings.py`, `bge_embedders.py`, `embeddings.py`, `splade_bm25.py`, `sparse_search.py`, `permanence.py`, `rag_ingestion.py`, `query_rewriter.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/` still exist. `[PARTIAL]` (`graph_rag.py` removed from this list — deleted 2026-08-16, `aadf85f`.)
 - **`endpoints.py` was NOT split** into `api/*` — it remains one file with all routes incl. the new `/rag/query` and `/eval/run`. `[NOT DONE]`
 - **`hacks` collection now seeded** (50 points) — the previously-blocking empty-collection issue is resolved; `hacks_v2` sparse variant still 0 points (verified 2026-08-01). `[DONE, v2 gap]`
 - **Live search is slow when the embedder is cold**: first call after model expiry reloads bge-m3 (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
@@ -269,7 +269,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 | `feature_extractors.py` | DELETE [decision] |
 | `firehose/` | DELETE [decision: no target consumer; news ingestion goes through `ingestion/news.py`] |
 | `github_feeder.py` | DELETE [decision] |
-| `graph_rag.py` | DELETE [decision: graph retrieval is not in the target module map; revisit as separate feature] |
+| `graph_rag.py` | DELETE — **DONE 2026-08-16** (`aadf85f`: module + `/api/v1/rag/graph-communities` route removed; `synthesize_answer` shim kept in `ratings.py`) |
 | `historical.py` | DELETE |
 | `import_guard.py` | KEEP transitional (§4.2) → DELETE in Phase 5 |
 | `incremental_indexer.py` | DELETE [decision: delta tracking is a backend/cache concern; Qdrant upserts are idempotent by point id] |
@@ -444,7 +444,7 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 | `POST /api/v1/rag/image-analysis` | — | DELETE [decision: multimodal out of scope] |
 | `POST /api/v1/rag/logo-check` | — | DELETE [decision] |
 | `POST /api/v1/rag/investigate` | `api/investigate.py` | move |
-| `GET /api/v1/rag/graph-communities` | — | DELETE [decision: graph_rag deleted] |
+| `GET /api/v1/rag/graph-communities` | — | DELETE — **DONE 2026-08-16** (`aadf85f`: route removed with `graph_rag.py`) |
 | `POST /api/v1/rag/watch` / `GET /api/v1/rag/watches` | — | DELETE [decision: realtime_alerts/watchlist deleted; bot alerting is separate] |
 | `GET /api/v1/rag/journalism/research` | `api/investigate.py` (or keep under journalism if retained) | KEEP by default [decision] — final call by agent after verifying bot/frontend usage |
 | `GET /api/v1/email/accounts` | — | DELETE [decision: not RAG; stray endpoint] |

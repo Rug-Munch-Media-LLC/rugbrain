@@ -18,13 +18,12 @@ happens in later phases and is subject to the acceptance gates in §7.
 
 1. **ONE graph store:** the existing rmi-backend Neo4j instance (`rmi-neo4j`, Neo4j 5.x community,
    `bolt://rmi-neo4j:7687`). No second graph database, no Redis-as-graph, no new service. The
-   Redis-backed `graph_rag.py` community code in rugbrain (`src/rugbrain/graph_rag.py`) is the
+   Redis-backed `graph_rag.py` community code in rugbrain (`src/rugbrain/graph_rag.py`) was the
    **ancestor** of this design's Phase 2 — it is re-implemented over Neo4j, not extended.
-   **Current status (2026-08-16):** `graph_rag.py` is **deprecated** (module-level
-   `DEPRECATED = True` + `# TODO(remove)`). It is *not* yet deleted because
-   `endpoints.py`'s `GET /api/v1/rag/graph-communities` route and
-   `tests/test_ratings.py::test_graph_rag_synthesize_answer_node` still import it; removal
-   happens in a coordinated follow-up that retires the route and the shim consumers together.
+   **Current status (2026-08-16):** `graph_rag.py` and the `GET /api/v1/rag/graph-communities`
+   route are **deleted** (`aadf85f`); the `synthesize_answer` shim it exposed lives on in
+   `src/rugbrain/ratings.py` (kept, shared rating node), and its graph tests were renamed
+   (`test_synthesize_answer_node`). No code in rugbrain imports the deleted module.
 2. **ONE vector store:** Qdrant (`rmi-qdrant:6333`), dense 1024-d BGE-M3 + BM25 sparse. GraphRAG
    adds a **graph lane** to retrieval; it does not add a second vector store.
 3. **Graph read path lives in rmi-backend** (it already owns the Neo4j driver, entity resolution,
@@ -356,9 +355,9 @@ ORDER BY overlap DESC LIMIT 50
   unchanged; rerun of identical query hits Redis subgraph cache.
 
 ### Phase 2 — Community summaries / entity-level GraphRAG
-- [ ] Nightly label-propagation community detection over the scam subgraph (port of
-      `graph_rag.py:detect_communities` semantics to Neo4j: community = maximal connected
-      component of wallets sharing `USES_KIT`/`EXECUTED`/`LABELED_AS`(phishing) edges).
+- [ ] Nightly label-propagation community detection over the scam subgraph (port of the
+      deleted `graph_rag.py` community-detection semantics to Neo4j: community = maximal
+      connected component of wallets sharing `USES_KIT`/`EXECUTED`/`LABELED_AS`(phishing) edges).
 - [ ] LLM-generated **community narrative summaries** stored as Qdrant docs in a new
       `graph_communities` collection (or `threat_intel` with `category="community"`) — this is
       where community text becomes *semantically* retrievable.
@@ -373,8 +372,9 @@ ORDER BY overlap DESC LIMIT 50
 
 ## 7. Acceptance Gates (all phases)
 
-1. `grep -rn "graph_rag\|app.rag_graph" src/rugbrain/` → rugbrain has NO graph import except the
-   ingest writer decision documented in §3 (retrieval reads live in rmi-backend only).
+1. `grep -rn "graph_rag\|app.rag_graph" src/rugbrain/` → zero matches (module deleted); rugbrain
+   has NO graph import except the ingest writer decision documented in §3 (retrieval reads live
+   in rmi-backend only).
 2. All new Cypher bounded (`LIMIT` on every traversal) — no unbounded `MATCH (n)` in query paths.
 3. Latency: p95 of `POST /api/v1/rag/v2/search` ≤ 3 s with graph lane on; ≤ 2 s with Neo4j down.
 4. Fail-open proven: `docker stop rmi-neo4j` → search still 200 with zero `source="graph"` hits.
@@ -385,9 +385,8 @@ ORDER BY overlap DESC LIMIT 50
 
 ---
 
-*End of design. This document is the authoritative spec for GraphRAG in rugbrain. Conflicts with
-ARCHITECTURE-V2.md's "graph_rag.py DELETE" disposition are resolved as follows: the legacy
-Redis-based module is **deprecated, not yet deleted** (module-level `DEPRECATED = True` +
-`# TODO(remove)` in `src/rugbrain/graph_rag.py`; kept importable while the
-`/api/v1/rag/graph-communities` route and its tests still reference it); its *capabilities* are
-re-implemented over Neo4j per this design.*
+*End of design. This document is the authoritative spec for GraphRAG in rugbrain. The legacy
+Redis-based module (`src/rugbrain/graph_rag.py`) and its `GET /api/v1/rag/graph-communities`
+route were **deleted** (`aadf85f`, 2026-08-16) — no code imports it, and its `synthesize_answer`
+shim lives on in `src/rugbrain/ratings.py`. Its *capabilities* are re-implemented over Neo4j
+per this design.*

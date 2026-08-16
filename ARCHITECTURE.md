@@ -366,7 +366,7 @@ the API runs open (dev mode — a startup warning is logged).
 | POST | `/api/v1/rag/image-analysis` | LIVE | Multimodal image description |
 | POST | `/api/v1/rag/logo-check` | LIVE | Logo theft detection (perceptual hash) |
 | GET | `/api/v1/rag/journalism/research` | LIVE | Deep-dive research brief across `threat_intel`, `rmi_agent_memory`, `rmi_community` |
-| GET | `/api/v1/rag/graph-communities` | LIVE | Knowledge-graph communities |
+| GET | `/api/v1/rag/graph-communities` | DELETED (2026-08-16) | Route removed with `graph_rag.py`; GraphRAG design contract → `docs/graphrag-architecture.md` (rmi-backend Neo4j) |
 | POST | `/api/v1/rag/watch` / GET `/api/v1/rag/watches` | LIVE | Streaming watch creation/list |
 | GET | `/api/v1/rag/metrics` | ⚠️ defined, not mounted | Prometheus-style RAG metrics (`metrics_api.py`; not yet wired into `main.py`) |
 | GET | `/docs`, `/redoc`, `/openapi.json` | LIVE | OpenAPI 3.1 docs |

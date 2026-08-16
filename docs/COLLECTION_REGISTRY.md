@@ -59,9 +59,9 @@ owned by **rmi-backend**'s Neo4j wallet graph / entity-resolution code
 (`app/domains/wallet/neo4j_client.py`, cross-chain tracking). rmi-rag has
 **no producing code** for them — the legacy Redis-backed graph path
 (`src/rugbrain/graph_rag.py`, `GET /api/v1/rag/graph-communities`) that
-historically fed wallet-graph data is **deprecated** (module-level
-`DEPRECATED = True`, `# TODO(remove)`) and is being retired in favor of the
-Qdrant-native GraphRAG (see `docs/graphrag-architecture.md`). Treat
+historically fed wallet-graph data is **deleted** (2026-08-16, `aadf85f`);
+the Qdrant-native GraphRAG design contract (see `docs/graphrag-architecture.md`)
+keeps wallet-graph retrieval owned by rmi-backend. Treat
 `rgm_*` freshness/ownership as rmi-backend's responsibility, not rmi-rag's.
 
 ## ⚠️ Historical-only flags
