@@ -1089,9 +1089,9 @@ async def three_pillar_search(
                     logger.debug("Entity lookup for %s failed: %s", entity["value"], e)
 
             if use_kg:
-                # Legacy Redis/Neo4j knowledge-graph lane (graph_rag.py /
-                # app.knowledge_graph) is retired in favor of the Qdrant-native
-                # GraphRAG (docs/graphrag-architecture.md). Guard the import so a
+                # Legacy Redis/Neo4j knowledge-graph lane (app.knowledge_graph)
+                # is retired in favor of the Qdrant-native GraphRAG
+                # (docs/graphrag-architecture.md). Guard the import so a
                 # removed module degrades to ``kg = None`` instead of raising.
                 kg = None
                 try:

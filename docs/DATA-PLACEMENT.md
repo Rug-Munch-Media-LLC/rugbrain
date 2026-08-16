@@ -38,7 +38,7 @@ question with facts* (RAG)?"**
 | Blacklists / phishing (CryptoScamDB, scamsniffer, drainer domains) | **RAG** | `known_scams` / `scam_intel_v2` / `crime_reports` | — |
 | Audit **findings-as-text** (Code4rena, Sherlock, OZ audits, solodit) | **RAG** | `contract_audits` / `audit_findings` | — |
 | News / social / market intel | **RAG** | `news_v2` / `social_intel` / `research_v2` | — |
-| Wallet labels / entity graphs / clusters | **RAG** | `wallet_v2` / `rgm_*` (GraphRAG) | — |
+| Wallet labels / entity graphs / clusters | **RAG** | `wallet_v2` — `rgm_*` is owned by **rmi-backend (Neo4j)**, not RAG | — |
 | Regulation / enforcement (SEC/DOJ/CFTC) | **RAG** | `regulation_enforcement` | — |
 | Vulnerability **registries as text** (SWC registry prose, SCVS checklist) | **RAG** | `crypto_vulnerabilities` | — |
 

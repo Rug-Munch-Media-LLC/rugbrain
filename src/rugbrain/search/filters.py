@@ -259,14 +259,24 @@ async def ingest_document(
     except Exception as e:
         logger.debug("Entity indexing skipped: %s", e)
 
+    kg = None
     try:
         from app.knowledge_graph import get_knowledge_graph  # external dependency
 
         kg = await get_knowledge_graph()
-        await kg.ingest_rag_document(collection, doc_id, content, metadata)
-        logger.debug("KG edge creation complete")
+    except ImportError:
+        logger.debug("Knowledge Graph module not available, skipping KG edge creation")
+        kg = None
     except Exception as e:
-        logger.debug("KG edge creation skipped: %s", e)
+        logger.debug("KG access failed (non-critical): %s", e)
+        kg = None
+
+    if kg is not None:
+        try:
+            await kg.ingest_rag_document(collection, doc_id, content, metadata)
+            logger.debug("KG edge creation complete")
+        except Exception as e:
+            logger.debug("KG edge creation failed: %s", e)
 
     logger.debug("pgvector upsert skipped (FAISS primary)")
 

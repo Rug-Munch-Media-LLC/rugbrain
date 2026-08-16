@@ -96,14 +96,6 @@ async def test_rag_watch_create_validation(client):
 
 
 @pytest.mark.asyncio
-async def test_rag_graph_communities(client):
-    """GET /api/v1/rag/graph-communities should return OK."""
-    resp = await client.get("/api/v1/rag/graph-communities")
-    # May 500 if Neo4j is unavailable — that's expected behavior
-    assert resp.status_code in (200, 500)
-
-
-@pytest.mark.asyncio
 async def test_search_empty_query(client):
     """GET /api/v1/search with empty query should return empty results."""
     resp = await client.get("/api/v1/search")

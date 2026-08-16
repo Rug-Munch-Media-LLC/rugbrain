@@ -257,9 +257,9 @@ def test_synthesize_answer_shape():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_graph_rag_synthesize_answer_node():
-    """graph_rag.synthesize_answer delegates to the shared rating node."""
-    from rugbrain.graph_rag import synthesize_answer
+def test_synthesize_answer_node():
+    """synthesize_answer (shared rating node) surfaces verified sources first."""
+    from rugbrain.ratings import synthesize_answer
 
     result = synthesize_answer("answer", [_verified_doc("1", 0.9)])
     assert result["rating_summary"]["verified_count"] == 1

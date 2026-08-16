@@ -437,13 +437,6 @@ async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> di
     )
 
 
-@router.get("/rag/graph-communities")
-async def rag_graph_communities(request: Request) -> dict[str, Any]:
-    from rugbrain.graph_rag import graph_rag_search
-
-    return await graph_rag_search(query="")
-
-
 @router.post("/rag/watch")
 async def rag_create_watch(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.streaming import create_watch
@@ -505,7 +498,7 @@ async def journalism_research(
         brief = await research_topic(topic, max_docs=limit)
         brief["status"] = (
             "ok"
-            if brief.get("total_docs_retrieved", {}).get("threat_intel", 0) > 0
+            if brief.get("total_docs_retrieved", {}).get("threat_intel_v2", 0) > 0
             else "low_relevance"
         )
         return brief
