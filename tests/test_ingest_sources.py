@@ -8,20 +8,36 @@ from rugbrain import ingest_sources as mod
 from rugbrain.ingest_sources import (
     base,
     blacklists,
+    blocksecteam_phishing,
     bridges,
     chainabuse,
+    cisa_kev,
+    coinspect_evm_attacks,
     crypto_rekts,
     defihacklabs,
     defillama,
+    deflabx,
     eips,
+    emperor_cftc,
+    feeds,
+    hf_audit_archive,
     incidents,
     l2beat,
     mev,
+    openphish,
+    opensanctions,
+    ossf_malicious,
+    phishdestroy,
     privacy,
     rekt,
     safe,
+    samczsun,
+    seal911,
     swc,
+    trailofbits_publications,
+    urlhaus,
     whitepapers,
+    yaudit_fork_bugs,
     zk,
 )
 
@@ -51,6 +67,27 @@ REQUIRED = {
     "slowmist_open_reports": "audit_finding",
     "chainabuse": "crime_report",
     "crypto_rekts": "post_mortem",
+    # ── 2026-08 new sources (rag-sources-2026-08.json, top-20 wiring) ──────
+    "phishdestroy_destroylist": "scam_entity",
+    "deflabx_solrpds": "scam_entity",
+    "seal_911": "incident",
+    "trailofbits_publications": "audit_finding",
+    "gcf3711_audit_report_archive_hf": "audit_finding",
+    "emperor_mew_cftc_actions": "enforcement_action",
+    "opensanctions": "sanction_entity",
+    "samczsun_blog": "research",
+    "blocksecteam_phishing_contracts": "scam_entity",
+    "ossf_malicious_packages": "vulnerability_pattern",
+    "trailofbits_blog_rss": "research",
+    "zellic_blog_rss": "research",
+    "immunefi_blog_rss": "research",
+    "neodyme_blog_rss": "research",
+    "cftc_press_releases_rss": "enforcement_action",
+    "cisa_kev": "vulnerability_pattern",
+    "openphish_feed": "scam_entity",
+    "urlhaus_feed": "scam_entity",
+    "yaudit_defi_fork_bugs": "post_mortem",
+    "coinspect_learn_evm_attacks": "exploit_poc",
 }
 
 
@@ -1016,3 +1053,805 @@ def test_blacklists_has_phishing_database_and_metamask_feeds():
     src = mod.get_source("blacklists")
     assert src is not None
     assert src.default_collection == "scam_intel_v2"
+
+
+# ── 2026-08 top-20 sources (rag-sources-2026-08.json) ────────────────────
+
+
+# ── phishdestroy/destroylist ─────────────────────────────────────────────
+
+
+def test_phishdestroy_parse_list_json():
+    domains = phishdestroy.parse_list_json('["0-105.com", "evil.example", " good.example "]')
+    assert domains == ["0-105.com", "evil.example", "good.example"]
+    # dict envelope + plain-lines fallback
+    assert phishdestroy.parse_list_json('{"domains": ["a.com"]}') == ["a.com"]
+    assert phishdestroy.parse_list_json("a.com\n# comment\nb.com\n") == ["a.com", "b.com"]
+    # Plain text falls back to the line parser (fail-open), never raises.
+    assert phishdestroy.parse_list_json("not json") == ["not json"]
+
+
+@respx.mock
+async def test_phishdestroy_fetch_mocked():
+    src = mod.get_source("phishdestroy_destroylist")
+    assert src is not None
+    respx.get(phishdestroy.LIST_URL).respond(200, json=["evil-1.com", "evil-2.com"])
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "scam_entity" for d in docs)
+    assert all(d.metadata["collection"] == "scam_intel_v2" for d in docs)
+    assert docs[0].metadata["entity"] == "evil-1.com"
+    assert docs[0].metadata["labels"] == ["phishing"]
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+@respx.mock
+async def test_phishdestroy_fetch_graceful_on_error():
+    src = mod.get_source("phishdestroy_destroylist")
+    assert src is not None
+    respx.get(phishdestroy.LIST_URL).respond(500)
+    docs = await src.fetch(limit=5)
+    assert docs == []
+
+
+# ── DeFiLabX/SolRPDS ─────────────────────────────────────────────────────
+
+
+def test_deflabx_wallet_to_doc():
+    record = {
+        "MINT": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "LIQUIDITY_POOL_ADDRESS": "821L241gacEqKJiCp9H7E9rqRXB31WoHLBqwhn8NMyWS",
+        "TOTAL_ADDED_LIQUIDITY": "131.42666",
+        "TOTAL_REMOVED_LIQUIDITY": "37.879524",
+        "ADD_TO_REMOVE_RATIO": "3.469596397",
+        "FIRST_POOL_ACTIVITY_TIMESTAMP": "2021-12-30 21:55:04.000",
+        "INACTIVITY_STATUS": "Active",
+    }
+    doc = deflabx.wallet_to_doc(record, 2021)
+    assert doc is not None
+    assert doc.doc_type == "scam_entity"
+    assert doc.metadata["collection"] == "defi_exploits"
+    assert doc.metadata["chain"] == "Solana"
+    assert doc.metadata["token_address"] == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # noqa: S105
+    assert doc.metadata["labels"] == ["rugpull"]
+    assert doc.doc_id == f"deflabx_solrpds:{record['MINT']}:2021"
+    assert deflabx.wallet_to_doc({"LIQUIDITY_POOL_ADDRESS": "x"}, 2021) is None
+
+
+@respx.mock
+async def test_deflabx_fetch_mocked():
+    src = mod.get_source("deflabx_solrpds")
+    assert src is not None
+    respx.get(f"{deflabx.RAW_BASE}/2021.json").respond(200, json=[{"MINT": "mint2021"}])
+    respx.get(f"{deflabx.RAW_BASE}/2022.json").respond(200, json=[{"MINT": "mint2022"}])
+    respx.get(f"{deflabx.RAW_BASE}/2023.json").respond(404)  # missing year fails open
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "defi_exploits" for d in docs)
+    assert docs[0].doc_id == "deflabx_solrpds:mint2021:2021"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── security-alliance/seal-911 ───────────────────────────────────────────
+
+
+def test_seal911_parse_activity_log():
+    md = (
+        "# Log\n\n"
+        "- [RISEx incident resolution](https://x.com/risextrade/status/1)\n"
+        "- [Across incident resolution](https://x.com/acrossprotocol/status/2)\n"
+    )
+    entries = seal911.parse_activity_log(md)
+    assert len(entries) == 2
+    assert entries[0].title == "RISEx incident resolution"
+    assert entries[0].url == "https://x.com/risextrade/status/1"
+
+
+def test_seal911_to_doc():
+    doc = seal911.seal911_to_doc(
+        seal911.Seal911Entry(
+            "Across incident resolution", "https://x.com/acrossprotocol/status/2", 0
+        )
+    )
+    assert doc.doc_type == "incident"
+    assert doc.metadata["collection"] == "threat_intel_v2"
+    assert doc.doc_id.startswith("seal_911:across-incident-resolution:")
+
+
+@respx.mock
+async def test_seal911_fetch_mocked():
+    src = mod.get_source("seal_911")
+    assert src is not None
+    respx.get(seal911.ACTIVITY_URL).respond(
+        200, text="- [Kelp incident resolution](https://x.com/KelpDAO/status/1)\n"
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 1
+    assert docs[0].doc_type == "incident"
+    assert docs[0].metadata["collection"] == "threat_intel_v2"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── trailofbits/publications ─────────────────────────────────────────────
+
+
+def test_tob_csv_row_to_doc():
+    headers = ["Project", "Issue", "Type", "CS Severity", "ToB Severity", "Difficulty"]
+    doc = trailofbits_publications.csv_row_to_doc(
+        "datasets/smart_contract_audit_findings/other_audit_sources/chainsecurity.csv",
+        headers,
+        ["Blockimmo", "logic bug", "logic", "med", "medium", "medium"],
+        0,
+    )
+    assert doc.doc_type == "audit_finding"
+    assert doc.metadata["collection"] == "contract_audits"
+    assert doc.metadata["protocol"] == "Blockimmo"
+    assert doc.metadata["severity"] == "medium"
+    assert doc.doc_id.startswith("trailofbits_publications:")
+
+
+def test_tob_markdown_review_to_doc():
+    doc = trailofbits_publications.markdown_review_to_doc(
+        "reviews/celo_bugfixes.md", "# Celo bug fixes\n\nDetails about reentrancy fix.\n"
+    )
+    assert doc is not None
+    assert doc.metadata["collection"] == "contract_audits"
+    assert "Celo" in doc.title
+    assert trailofbits_publications.markdown_review_to_doc("reviews/x.md", "   ") is None
+
+
+@respx.mock
+async def test_tob_publications_fetch_mocked():
+    src = mod.get_source("trailofbits_publications")
+    assert src is not None
+    tree_url = "https://api.github.com/repos/trailofbits/publications/git/trees/master"
+    respx.get(f"{tree_url}?recursive=1").respond(
+        200,
+        json={
+            "tree": [
+                {
+                    "path": "datasets/smart_contract_audit_findings/other_audit_sources/chainsecurity.csv",
+                    "type": "blob",
+                    "size": 100,
+                },
+                {"path": "reviews/celo_bugfixes.md", "type": "blob", "size": 100},
+            ]
+        },
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/trailofbits/publications/master/datasets/smart_contract_audit_findings/other_audit_sources/chainsecurity.csv"
+    ).respond(200, text="Project,Issue,Type,CS Severity\nBlockimmo,logic bug,logic,med\n")
+    respx.get(
+        "https://raw.githubusercontent.com/trailofbits/publications/master/reviews/celo_bugfixes.md"
+    ).respond(200, text="# Celo bug fixes\n\nReentrancy details.\n")
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "contract_audits" for d in docs)
+    assert all(d.doc_type == "audit_finding" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── gcf3711/audit-report-archive (HF) ────────────────────────────────────
+
+
+def test_gcf3711_row_to_doc():
+    row = {
+        "pdf": {"src": "https://datasets-server.huggingface.co/files/x.pdf", "size_bytes": 2048},
+        "label": "hexens",
+    }
+    doc = hf_audit_archive.row_to_doc(row, 0)
+    assert doc is not None
+    assert doc.doc_type == "audit_finding"
+    assert doc.metadata["collection"] == "contract_audits"
+    assert doc.metadata["audit_team"] == "hexens"
+    assert doc.metadata["pdf_src"].endswith("x.pdf")
+    assert hf_audit_archive.row_to_doc({}, 0) is None
+
+
+@respx.mock
+async def test_gcf3711_fetch_mocked():
+    src = mod.get_source("gcf3711_audit_report_archive_hf")
+    assert src is not None
+    url = f"{hf_audit_archive.ROWS_URL}10"
+    respx.get(url).respond(
+        200,
+        json={
+            "rows": [
+                {"row": {"pdf": {"src": "https://x/a.pdf", "size_bytes": 1}, "label": "cantina"}},
+                {"row": {"pdf": {"src": "https://x/b.pdf", "size_bytes": 2}, "label": None}},
+            ]
+        },
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "contract_audits" for d in docs)
+    assert all(d.doc_type == "audit_finding" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── emperor-mew/cftc-actions ─────────────────────────────────────────────
+
+
+def test_emperor_cftc_release_to_doc():
+    item = {
+        "release_number": "9131-26",
+        "title": "CFTC Staff Issues No-Action Letter",
+        "release_date": "2026-05-13",
+        "url": "https://www.cftc.gov/PressRoom/PressReleases/9131-26",
+        "is_enforcement": 1,
+        "enforcement_type": "other",
+        "type_label": "Other enforcement",
+    }
+    doc = emperor_cftc.release_to_doc(item)
+    assert doc is not None
+    assert doc.doc_type == "enforcement_action"
+    assert doc.metadata["collection"] == "regulation_enforcement"
+    assert doc.metadata["agency"] == "CFTC"
+    assert doc.metadata["is_enforcement"] is True
+    assert doc.metadata["severity"] == "critical"
+    assert doc.doc_id == "emperor_mew_cftc_actions:9131-26"
+    assert emperor_cftc.release_to_doc({}) is None
+
+
+@respx.mock
+async def test_emperor_cftc_fetch_mocked():
+    src = mod.get_source("emperor_mew_cftc_actions")
+    assert src is not None
+    respx.get(emperor_cftc.API_URL).respond(
+        200,
+        json={
+            "items": [
+                {
+                    "release_number": "9131-26",
+                    "title": "No-Action Letter",
+                    "release_date": "2026-05-13",
+                    "url": "https://www.cftc.gov/x",
+                    "is_enforcement": 0,
+                    "enforcement_type": "",
+                    "type_label": "",
+                },
+                {
+                    "release_number": "9120-26",
+                    "title": "Crypto Fraud Enforcement",
+                    "release_date": "2026-05-01",
+                    "url": "https://www.cftc.gov/y",
+                    "is_enforcement": 1,
+                    "enforcement_type": "crypto_fraud",
+                    "type_label": "Crypto fraud",
+                },
+            ]
+        },
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "regulation_enforcement" for d in docs)
+    assert docs[1].metadata["enforcement_type"] == "crypto_fraud"
+    assert docs[1].metadata["severity"] == "critical"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── OpenSanctions bulk ───────────────────────────────────────────────────
+
+
+def test_opensanctions_wallet_to_doc():
+    entity = {
+        "id": "NK-abc123",
+        "caption": "OFAC sanctioned wallet",
+        "schema": "CryptoWallet",
+        "datasets": ["us_ofac"],
+        "target": True,
+        "properties": {
+            "address": ["0x1234567890123456789012345678901234567890"],
+            "asset": ["USDT"],
+            "blockchain": ["ethereum"],
+        },
+    }
+    doc = opensanctions.wallet_entity_to_doc(entity)
+    assert doc is not None
+    assert doc.doc_type == "sanction_entity"
+    assert doc.metadata["collection"] == "regulation_enforcement"
+    assert doc.metadata["address"] == "0x1234567890123456789012345678901234567890"
+    assert doc.metadata["asset"] == "USDT"
+    assert doc.metadata["labels"] == ["sanctioned"]
+    assert doc.doc_id == "opensanctions:NK-abc123"
+    assert opensanctions.wallet_entity_to_doc({"schema": "Person"}) is None
+
+
+@respx.mock
+async def test_opensanctions_fetch_mocked():
+    src = mod.get_source("opensanctions")
+    assert src is not None
+    ftm = (
+        '{"id":"NK-1","caption":"wallet a","schema":"CryptoWallet","datasets":["us_ofac"],"target":true,"properties":{"address":["0x1111111111111111111111111111111111111111"]}}\n'
+        '{"id":"P-1","caption":"some person","schema":"Person","datasets":["us_ofac"]}\n'
+        '{"id":"NK-2","caption":"wallet b","schema":"CryptoWallet","datasets":["gb_sanctions"],"target":false,"properties":{"address":["0x2222222222222222222222222222222222222222"],"asset":["ETH"],"blockchain":["ethereum"]}}\n'
+    )
+    respx.get(opensanctions.ENTITIES_URL).respond(200, text=ftm)
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2  # Person entity skipped
+    assert all(d.doc_type == "sanction_entity" for d in docs)
+    assert all(d.metadata["collection"] == "regulation_enforcement" for d in docs)
+    assert docs[0].metadata["labels"] == ["sanctioned"]
+    assert docs[1].metadata["asset"] == "ETH"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── samczsun.com ─────────────────────────────────────────────────────────
+
+
+def test_samczsun_extract_article_links():
+    html = '<a href="/escaping-the-dark-forest/">a</a><a href="/#about">x</a><a href="/icon.png">i</a><a href="/hiding-in-plain-sight/">b</a>'
+    links = samczsun.extract_article_links(html)
+    assert links == ["escaping-the-dark-forest", "hiding-in-plain-sight"]
+
+
+def test_samczsun_extract_article_text():
+    html = "<html><head><title>Escaping the Dark Forest - samczsun</title></head><body><nav>menu</nav><article><h1>Escaping</h1><p>Research body text.</p></article></body></html>"
+    title, body = samczsun.extract_article_text(html)
+    assert title == "Escaping the Dark Forest"
+    assert "Research body text." in body
+
+
+@respx.mock
+async def test_samczsun_fetch_mocked():
+    src = mod.get_source("samczsun_blog")
+    assert src is not None
+    home = '<html><a href="/escaping-the-dark-forest/">a</a><a href="/booby-trapping-the-ethereum-blockchain/">b</a></html>'
+    respx.get("https://samczsun.com/").respond(200, text=home)
+    respx.get("https://samczsun.com/escaping-the-dark-forest/").respond(
+        200,
+        text="<html><title>Escaping the Dark Forest - samczsun</title><article><p>First post body.</p></article></html>",
+    )
+    respx.get("https://samczsun.com/booby-trapping-the-ethereum-blockchain/").respond(
+        200,
+        text="<html><title>Booby Trapping - samczsun</title><article><p>Second post body.</p></article></html>",
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "research" for d in docs)
+    assert all(d.metadata["collection"] == "research_v2" for d in docs)
+    assert docs[0].doc_id == "samczsun_blog:escaping-the-dark-forest"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── blocksecteam/phishing_contract_sigmetrics25 ──────────────────────────
+
+
+def test_blocksecteam_phishing_parse():
+    log_text = "0x000000000000232e765d898b5f1b189b5c993f05\n0x0000000000958ec6667eb97e2f64f6909073e6b7\nnot-an-address\n"
+    addrs = blocksecteam_phishing.parse_address_log(log_text)
+    assert len(addrs) == 2
+    assert addrs[0] == "0x000000000000232e765d898b5f1b189b5c993f05"
+
+
+@respx.mock
+async def test_blocksecteam_phishing_fetch_mocked():
+    src = mod.get_source("blocksecteam_phishing_contracts")
+    assert src is not None
+    respx.get(blocksecteam_phishing.LOG_URL).respond(
+        200,
+        text="0x000000000000232e765d898b5f1b189b5c993f05\n0x0000000000958ec6667eb97e2f64f6909073e6b7\n",
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "scam_entity" for d in docs)
+    assert all(d.metadata["collection"] == "scam_intel_v2" for d in docs)
+    assert docs[0].metadata["labels"] == ["drainer", "phishing"]
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── ossf/malicious-packages ──────────────────────────────────────────────
+
+
+def test_ossf_osv_to_doc():
+    advisory = {
+        "id": "MAL-2023-8429",
+        "summary": "Malicious code in littest (crates.io)",
+        "details": "The package communicates with a malicious domain.",
+        "affected": [{"package": {"ecosystem": "crates.io", "name": "littest"}}],
+        "aliases": ["GHSA-abc"],
+    }
+    doc = ossf_malicious.osv_to_doc("osv/malicious/crates.io/littest/MAL-2023-8429.json", advisory)
+    assert doc is not None
+    assert doc.doc_type == "vulnerability_pattern"
+    assert doc.metadata["collection"] == "crypto_vulnerabilities"
+    assert doc.metadata["advisory_id"] == "MAL-2023-8429"
+    assert doc.metadata["ecosystem"] == "crates.io"
+    assert doc.metadata["package"] == "littest"
+    assert doc.doc_id == "ossf_malicious_packages:MAL-2023-8429"
+    assert ossf_malicious.osv_to_doc("x.json", {}) is None
+
+
+@respx.mock
+async def test_ossf_malicious_fetch_mocked():
+    src = mod.get_source("ossf_malicious_packages")
+    assert src is not None
+    tree_url = "https://api.github.com/repos/ossf/malicious-packages/git/trees/main"
+    respx.get(f"{tree_url}?recursive=1").respond(
+        200,
+        json={
+            "tree": [
+                {
+                    "path": "osv/malicious/crates.io/littest/MAL-2023-8429.json",
+                    "type": "blob",
+                    "size": 100,
+                },
+                {
+                    "path": "osv/malicious/git/github.com/x/MAL-2025-1.json",
+                    "type": "blob",
+                    "size": 100,
+                },
+            ]
+        },
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/ossf/malicious-packages/main/osv/malicious/crates.io/littest/MAL-2023-8429.json"
+    ).respond(
+        200,
+        json={
+            "id": "MAL-2023-8429",
+            "summary": "Malicious code in littest",
+            "affected": [{"package": {"ecosystem": "crates.io", "name": "littest"}}],
+        },
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/ossf/malicious-packages/main/osv/malicious/git/github.com/x/MAL-2025-1.json"
+    ).respond(
+        200,
+        json={
+            "id": "MAL-2025-1",
+            "summary": "Key theft in solana package",
+            "affected": [{"package": {"ecosystem": "npm", "name": "solana-crypto-validator"}}],
+        },
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "vulnerability_pattern" for d in docs)
+    assert all(d.metadata["collection"] == "crypto_vulnerabilities" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── RSS feeds (feeds.py) ─────────────────────────────────────────────────
+
+
+_RSS_FIXTURE = """<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Feed</title>
+<item><title>Post One</title><link>https://example.com/one</link><pubDate>Mon, 01 Aug 2026 12:00:00 +0000</pubDate><description>First summary.</description></item>
+<item><title>Post Two</title><link>https://example.com/two</link><pubDate>Tue, 02 Aug 2026 12:00:00 +0000</pubDate><description>Second summary.</description></item>
+</channel></rss>"""
+
+
+def test_rss_item_to_doc():
+    doc = feeds.rss_item_to_doc(
+        "trailofbits_blog_rss",
+        {
+            "title": "Post One",
+            "url": "https://example.com/one",
+            "published": "2026-08-01T12:00:00+00:00",
+            "summary": "First summary.",
+        },
+        "research",
+        "research_v2",
+    )
+    assert doc.doc_type == "research"
+    assert doc.metadata["collection"] == "research_v2"
+    assert doc.metadata["published"] == "2026-08-01T12:00:00+00:00"
+    assert doc.doc_id.startswith("trailofbits_blog_rss:post-one:")
+
+
+@respx.mock
+async def test_trailofbits_blog_rss_fetch_mocked():
+    src = mod.get_source("trailofbits_blog_rss")
+    assert src is not None
+    respx.get("https://blog.trailofbits.com/feed/").respond(200, text=_RSS_FIXTURE)
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "research" for d in docs)
+    assert all(d.metadata["collection"] == "research_v2" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+@respx.mock
+async def test_zellic_blog_rss_fetch_mocked():
+    src = mod.get_source("zellic_blog_rss")
+    assert src is not None
+    respx.get("https://www.zellic.io/blog/rss.xml").respond(200, text=_RSS_FIXTURE)
+    docs = await src.fetch(limit=5)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "research_v2" for d in docs)
+
+
+@respx.mock
+async def test_immunefi_blog_rss_fetch_mocked():
+    src = mod.get_source("immunefi_blog_rss")
+    assert src is not None
+    respx.get("https://immunefi.com/blog/rss/").respond(200, text=_RSS_FIXTURE)
+    docs = await src.fetch(limit=5)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "research_v2" for d in docs)
+
+
+@respx.mock
+async def test_neodyme_blog_rss_fetch_mocked():
+    src = mod.get_source("neodyme_blog_rss")
+    assert src is not None
+    respx.get("https://neodyme.io/rss.xml").respond(200, text=_RSS_FIXTURE)
+    docs = await src.fetch(limit=5)
+    assert len(docs) == 2
+    assert all(d.metadata["collection"] == "research_v2" for d in docs)
+
+
+@respx.mock
+async def test_cftc_press_releases_rss_fetch_mocked():
+    src = mod.get_source("cftc_press_releases_rss")
+    assert src is not None
+    respx.get("https://www.cftc.gov/PressRoom/PressReleases/PressReleasesRSS").respond(
+        200, text=_RSS_FIXTURE
+    )
+    docs = await src.fetch(limit=5)
+    assert len(docs) == 2
+    assert all(d.doc_type == "enforcement_action" for d in docs)
+    assert all(d.metadata["collection"] == "regulation_enforcement" for d in docs)
+
+
+@respx.mock
+async def test_rss_fetch_graceful_on_error():
+    src = mod.get_source("trailofbits_blog_rss")
+    assert src is not None
+    respx.get("https://blog.trailofbits.com/feed/").respond(500)
+    docs = await src.fetch(limit=5)
+    assert docs == []
+
+
+# ── CISA KEV ─────────────────────────────────────────────────────────────
+
+
+def test_cisa_kev_to_doc():
+    vuln = {
+        "cveID": "CVE-2026-20349",
+        "vendorProject": "Cisco",
+        "product": "Firewall",
+        "vulnerabilityName": "Heap Inspection",
+        "shortDescription": "RCE in firewall.",
+        "dateAdded": "2026-08-01",
+        "dueDate": "2026-08-22",
+        "knownRansomwareCampaignUse": "Known",
+        "requiredAction": "Apply mitigations.",
+    }
+    doc = cisa_kev.kev_to_doc(vuln)
+    assert doc is not None
+    assert doc.doc_type == "vulnerability_pattern"
+    assert doc.metadata["collection"] == "crypto_vulnerabilities"
+    assert doc.metadata["cve_id"] == "CVE-2026-20349"
+    assert doc.metadata["known_ransomware_campaign"] is True
+    assert doc.doc_id == "cisa_kev:CVE-2026-20349"
+    assert cisa_kev.kev_to_doc({"product": "x"}) is None
+
+
+@respx.mock
+async def test_cisa_kev_fetch_mocked():
+    src = mod.get_source("cisa_kev")
+    assert src is not None
+    respx.get(cisa_kev.KEV_URL).respond(
+        200,
+        json={
+            "vulnerabilities": [
+                {
+                    "cveID": "CVE-2026-1",
+                    "vendorProject": "V",
+                    "product": "P",
+                    "vulnerabilityName": "N1",
+                    "dateAdded": "2026-08-01",
+                },
+                {
+                    "cveID": "CVE-2026-2",
+                    "vendorProject": "V",
+                    "product": "P",
+                    "vulnerabilityName": "N2",
+                    "dateAdded": "2026-08-02",
+                },
+            ]
+        },
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "vulnerability_pattern" for d in docs)
+    assert all(d.metadata["collection"] == "crypto_vulnerabilities" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── openphish feed ───────────────────────────────────────────────────────
+
+
+def test_openphish_parse_lines():
+    urls = openphish.parse_feed_lines("https://a.com/\n# comment\nhttps://b.com/x\n<html>\n")
+    assert urls == ["https://a.com/", "https://b.com/x"]
+
+
+@respx.mock
+async def test_openphish_fetch_mocked():
+    src = mod.get_source("openphish_feed")
+    assert src is not None
+    respx.get("https://openphish.com/feed.txt").respond(
+        200, text="https://m.lose-dafa.com/\nhttps://n3b9c37.com:8989/register.html\n"
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "scam_entity" for d in docs)
+    assert all(d.metadata["collection"] == "scam_intel_v2" for d in docs)
+    assert docs[0].metadata["entity"] == "m.lose-dafa.com"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── URLhaus CSV feed ─────────────────────────────────────────────────────
+
+
+def test_urlhaus_row_to_doc_filters_threats():
+    keep = [
+        "1",
+        "2026-08-16 05:07:07",
+        "http://phish.example/x",
+        "online",
+        "",
+        "phishing",
+        "crypto",
+        "https://urlhaus.abuse.ch/url/1/",
+    ]
+    drop = [
+        "2",
+        "2026-08-16 05:07:07",
+        "http://mal.example/x",
+        "online",
+        "",
+        "malware_download",
+        "",
+        "https://urlhaus.abuse.ch/url/2/",
+    ]
+    doc = urlhaus.urlhaus_row_to_doc(keep)
+    assert doc is not None
+    assert doc.metadata["collection"] == "scam_intel_v2"
+    assert doc.metadata["labels"] == ["phishing"]
+    assert urlhaus.urlhaus_row_to_doc(drop) is None
+    assert urlhaus.urlhaus_row_to_doc([]) is None
+
+
+def test_urlhaus_parse_csv_rows():
+    text = (
+        "################################################################\n"
+        "# abuse.ch URLhaus Database Dump\n"
+        '"1","2026-08-16 05:07:07","http://phish.example/x","online","","phishing","crypto","https://urlhaus.abuse.ch/url/1/"\n'
+    )
+    rows = urlhaus.parse_csv_rows(text)
+    assert len(rows) == 1
+    assert rows[0][0] == "1"
+
+
+@respx.mock
+async def test_urlhaus_fetch_mocked():
+    src = mod.get_source("urlhaus_feed")
+    assert src is not None
+    csv_text = (
+        "################################################################\n"
+        '"1","2026-08-16 05:07:07","http://phish.example/x","online","","phishing","crypto","https://urlhaus.abuse.ch/url/1/"\n'
+        '"2","2026-08-16 05:07:07","http://miner.example/y","online","","crypto_mining","cryptominer","https://urlhaus.abuse.ch/url/2/"\n'
+        '"3","2026-08-16 05:07:07","http://mal.example/z","online","","malware_download","","https://urlhaus.abuse.ch/url/3/"\n'
+    )
+    respx.get(urlhaus.FEED_URL).respond(200, text=csv_text)
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2  # malware_download filtered out
+    assert all(d.doc_type == "scam_entity" for d in docs)
+    assert all(d.metadata["collection"] == "scam_intel_v2" for d in docs)
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── yAudit/defi-fork-bugs ────────────────────────────────────────────────
+
+
+def test_yaudit_parse_fork_bugs():
+    md = (
+        "# Common fork bugs\n\n"
+        "## Compound\n\n"
+        "- CREAM: flashloan attack & reentrancy [Postmortem](https://medium.com/x) [POC](https://github.com/y)\n"
+        "- Lendf.me: Flashloan and reentrancy [Postmortem](https://medium.com/z)\n\n"
+        "## Uniswap\n\n"
+        "- Foo: price manipulation [Thread](https://twitter.com/t)\n"
+    )
+    bugs = yaudit_fork_bugs.parse_fork_bugs(md)
+    assert len(bugs) == 3
+    assert bugs[0].protocol == "Compound"
+    assert "flashloan" in bugs[0].description.lower()
+    assert bugs[0].links[0] == ("Postmortem", "https://medium.com/x")
+    assert bugs[2].protocol == "Uniswap"
+
+
+def test_yaudit_fork_bug_to_doc():
+    doc = yaudit_fork_bugs.fork_bug_to_doc(
+        yaudit_fork_bugs.ForkBug(
+            "Compound", "flashloan & reentrancy", (("Postmortem", "https://medium.com/x"),)
+        ),
+        0,
+    )
+    assert doc.doc_type == "post_mortem"
+    assert doc.metadata["collection"] == "defi_exploits"
+    assert doc.metadata["protocol"] == "Compound"
+    assert doc.doc_id.startswith("yaudit_defi_fork_bugs:compound:")
+
+
+@respx.mock
+async def test_yaudit_fetch_mocked():
+    src = mod.get_source("yaudit_defi_fork_bugs")
+    assert src is not None
+    respx.get(yaudit_fork_bugs.README_URL).respond(
+        200,
+        text="## Compound\n- CREAM: flashloan [Postmortem](https://medium.com/x)\n## Aave\n- Foo: oracle issue [Postmortem](https://medium.com/y)\n",
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "post_mortem" for d in docs)
+    assert all(d.metadata["collection"] == "defi_exploits" for d in docs)
+    assert docs[0].metadata["protocol"] == "Compound"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+# ── coinspect/learn-evm-attacks ──────────────────────────────────────────
+
+
+def test_coinspect_readme_to_doc():
+    doc = coinspect_evm_attacks.readme_to_doc(
+        "test/Access_Control/DAOMaker/README.md",
+        "# DAOMaker\n\nVulnerability description and PoC details.\n",
+    )
+    assert doc is not None
+    assert doc.doc_type == "exploit_poc"
+    assert doc.metadata["collection"] == "defi_exploits"
+    assert doc.metadata["protocol"] == "DAOMaker"
+    assert doc.metadata["vulnerability_class"] == "access-control"
+    assert doc.doc_id == "coinspect_learn_evm_attacks:test/Access_Control/DAOMaker/README.md"
+    assert coinspect_evm_attacks.readme_to_doc("README.md", "x") is None
+    assert (
+        coinspect_evm_attacks.readme_to_doc("test/Access_Control/DAOMaker/README.md", "   ") is None
+    )
+
+
+@respx.mock
+async def test_coinspect_fetch_mocked():
+    src = mod.get_source("coinspect_learn_evm_attacks")
+    assert src is not None
+    tree_url = "https://api.github.com/repos/coinspect/learn-evm-attacks/git/trees/master"
+    respx.get(f"{tree_url}?recursive=1").respond(
+        200,
+        json={
+            "tree": [
+                {"path": "test/Access_Control/DAOMaker/README.md", "type": "blob", "size": 100},
+                {"path": "test/Bad_Data_Validation/1inch/README.md", "type": "blob", "size": 100},
+            ]
+        },
+    )
+    respx.get(
+        "https://raw.githubusercontent.com/coinspect/learn-evm-attacks/master/test/Access_Control/DAOMaker/README.md"
+    ).respond(200, text="# DAOMaker\n\nAccess control bug details.\n")
+    respx.get(
+        "https://raw.githubusercontent.com/coinspect/learn-evm-attacks/master/test/Bad_Data_Validation/1inch/README.md"
+    ).respond(200, text="# 1inch\n\nBad data validation details.\n")
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "exploit_poc" for d in docs)
+    assert all(d.metadata["collection"] == "defi_exploits" for d in docs)
+    assert docs[0].metadata["vulnerability_class"] == "access-control"
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]

@@ -20,6 +20,19 @@ Each source implements the ``Source.fetch() -> list[IngestDoc]`` interface
   * ``blacklists``             — Web3 phishing blacklists    (scam_entity)
   * ``chainabuse``             — live crowdsourced scam reports (crime_report)
   * ``crypto_rekts``           — rekt.news incident mirror   (post_mortem)
+  * ``phishdestroy_destroylist`` / ``openphish_feed`` / ``urlhaus_feed`` /
+    ``blocksecteam_phishing_contracts`` — real-time phishing/drainer intel (scam_entity)
+  * ``deflabx_solrpds`` / ``yaudit_defi_fork_bugs`` /
+    ``coinspect_learn_evm_attacks`` — Solana rug-pull + fork-bug + EVM exploit corpora
+  * ``seal_911``               — SEAL 911 whitehat response log (incident)
+  * ``trailofbits_publications`` / ``gcf3711_audit_report_archive_hf`` —
+    audit-findings corpora (audit_finding)
+  * ``emperor_mew_cftc_actions`` / ``cftc_press_releases_rss`` /
+    ``opensanctions`` — regulation/enforcement + sanctions wallets
+  * ``samczsun_blog`` + ``trailofbits_blog_rss`` / ``zellic_blog_rss`` /
+    ``immunefi_blog_rss`` / ``neodyme_blog_rss`` — research corpora (research)
+  * ``ossf_malicious_packages`` / ``cisa_kev`` — vulnerability registries
+    (vulnerability_pattern)
 
 Fetching is deliberately scaffolding-grade: sources do one tree-listing call
 plus per-file raw fetches (bounded by ``limit``), never multi-GB clones.
@@ -39,12 +52,25 @@ import logging
 
 from rugbrain.ingest_sources.base import IngestDoc, Source, to_crawl_document
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
+from rugbrain.ingest_sources.blocksecteam_phishing import BlockSecPhishingContractsSource
 from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroSource
 from rugbrain.ingest_sources.chainabuse import ChainabuseSource
+from rugbrain.ingest_sources.cisa_kev import CISAKevSource
+from rugbrain.ingest_sources.coinspect_evm_attacks import CoinspectEVMAttacksSource
 from rugbrain.ingest_sources.crypto_rekts import CryptoRektsSource
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
+from rugbrain.ingest_sources.deflabx import DeFiLabXSolRPDSource
 from rugbrain.ingest_sources.eips import BIPsSource, EIPsSource
+from rugbrain.ingest_sources.emperor_cftc import EmperorMewCFTCSource
+from rugbrain.ingest_sources.feeds import (
+    CFTCPressReleasesSource,
+    ImmunefiBlogSource,
+    NeodymeBlogSource,
+    TrailOfBitsBlogSource,
+    ZellicBlogSource,
+)
+from rugbrain.ingest_sources.hf_audit_archive import GCF3711AuditArchiveSource
 from rugbrain.ingest_sources.incidents import (
     BlockSecDefiPocSource,
     GutteDeFiSource,
@@ -53,12 +79,21 @@ from rugbrain.ingest_sources.incidents import (
 )
 from rugbrain.ingest_sources.l2beat import L2BeatSource
 from rugbrain.ingest_sources.mev import MEVBoostRelaySource, MEVBoostSource
+from rugbrain.ingest_sources.openphish import OpenPhishSource
+from rugbrain.ingest_sources.opensanctions import OpenSanctionsSource
 from rugbrain.ingest_sources.openzeppelin import OpenZeppelinSource
+from rugbrain.ingest_sources.ossf_malicious import OSSFMaliciousPackagesSource
+from rugbrain.ingest_sources.phishdestroy import PhishDestroySource
 from rugbrain.ingest_sources.privacy import TornadoSource
 from rugbrain.ingest_sources.rekt import RektSource
 from rugbrain.ingest_sources.safe import SafeSource
+from rugbrain.ingest_sources.samczsun import SamczsunSource
+from rugbrain.ingest_sources.seal911 import Seal911Source
 from rugbrain.ingest_sources.swc import SWCSource
+from rugbrain.ingest_sources.trailofbits_publications import TrailOfBitsPublicationsSource
+from rugbrain.ingest_sources.urlhaus import URLHausSource
 from rugbrain.ingest_sources.whitepapers import WhitepapersSource
+from rugbrain.ingest_sources.yaudit_fork_bugs import YAuditForkBugsSource
 from rugbrain.ingest_sources.zk import CircomSource, SnarkJSSource
 
 log = logging.getLogger(__name__)
@@ -91,6 +126,26 @@ SOURCES: tuple[Source, ...] = (
     SlowMistOpenReportsSource(),
     ChainabuseSource(),
     CryptoRektsSource(),
+    PhishDestroySource(),
+    DeFiLabXSolRPDSource(),
+    Seal911Source(),
+    TrailOfBitsPublicationsSource(),
+    GCF3711AuditArchiveSource(),
+    EmperorMewCFTCSource(),
+    OpenSanctionsSource(),
+    SamczsunSource(),
+    BlockSecPhishingContractsSource(),
+    OSSFMaliciousPackagesSource(),
+    TrailOfBitsBlogSource(),
+    ZellicBlogSource(),
+    ImmunefiBlogSource(),
+    NeodymeBlogSource(),
+    CFTCPressReleasesSource(),
+    CISAKevSource(),
+    OpenPhishSource(),
+    URLHausSource(),
+    YAuditForkBugsSource(),
+    CoinspectEVMAttacksSource(),
 )
 
 # Semantic doc_type → source names (for quick lookup / filtering).
