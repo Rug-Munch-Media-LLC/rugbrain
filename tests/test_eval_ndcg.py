@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from rugbrain.eval.ndcg import hit_rate_at_k, mrr, ndcg_at_k, recall_at_k
+from rugbrain.eval.ndcg import (
+    hit_rate_at_k,
+    mrr,
+    ndcg_at_k,
+    precision_at_k,
+    recall_at_k,
+)
 
 
 class TestNdcgAtK:
@@ -77,6 +83,36 @@ class TestHitRateAtK:
 
     def test_empty_relevant_set(self):
         assert hit_rate_at_k(["a", "b"], []) == 1.0
+
+
+class TestPrecisionAtK:
+    def test_all_relevant(self):
+        assert precision_at_k(["a", "b", "c"], ["a", "b", "c"]) == pytest.approx(1.0)
+
+    def test_partial(self):
+        assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=4) == pytest.approx(0.5)
+
+    def test_cutoff(self):
+        # Only "a" is within k=2; the relevant "b" at rank 4 is excluded.
+        assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=2) == pytest.approx(0.5)
+        assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=1) == pytest.approx(1.0)
+
+    def test_no_hits(self):
+        assert precision_at_k(["x", "y"], ["a"]) == 0.0
+
+    def test_empty_relevant_set(self):
+        # Precision is undefined with no labeled relevant docs -> 0.0
+        # (differs from recall/hit-rate which pass on empty sets).
+        assert precision_at_k(["a", "b"], []) == 0.0
+
+    def test_empty_retrieved(self):
+        assert precision_at_k([], ["a"]) == 0.0
+
+    def test_k_zero(self):
+        assert precision_at_k(["a", "b"], ["a"], k=0) == 0.0
+
+    def test_k_larger_than_retrieved_clamps(self):
+        assert precision_at_k(["a", "b"], ["a"], k=99) == pytest.approx(0.5)
 
 
 class TestMrr:

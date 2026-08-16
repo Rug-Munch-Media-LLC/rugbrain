@@ -101,6 +101,32 @@ def hit_rate_at_k(
     return 1.0 if any(rid in rel_set for rid in retrieved_ids[:k]) else 0.0
 
 
+def precision_at_k(
+    retrieved_ids: Sequence[str],
+    relevant_ids: Iterable[str],
+    k: int | None = None,
+) -> float:
+    """
+    Precision@k — fraction of the top-k retrieved ids that are relevant.
+
+    Unlike ``recall_at_k`` / ``hit_rate_at_k`` (which treat an empty relevant
+    set as a pass), precision is undefined when there is nothing labeled
+    relevant, so it returns 0.0 for an empty relevant set. Also returns 0.0
+    when ``k`` is 0 or no ids were retrieved.
+    """
+    rel_set = set(relevant_ids)
+    if not rel_set:
+        return 0.0
+    k = k if k is not None else len(retrieved_ids)
+    if k <= 0:
+        return 0.0
+    window = retrieved_ids[:k]
+    if not window:
+        return 0.0
+    hits = sum(1 for rid in window if rid in rel_set)
+    return hits / len(window)
+
+
 def mrr(retrieved_ids: Sequence[str], relevant_ids: Iterable[str]) -> float:
     """
     Mean Reciprocal Rank — 1/rank of the first relevant id (rank is 1-indexed).
