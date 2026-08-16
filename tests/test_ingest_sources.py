@@ -7,7 +7,10 @@ import respx
 from rugbrain import ingest_sources as mod
 from rugbrain.ingest_sources import (
     base,
+    blacklists,
     bridges,
+    chainabuse,
+    crypto_rekts,
     defihacklabs,
     defillama,
     eips,
@@ -46,6 +49,8 @@ REQUIRED = {
     "immunefi_hack_analyses": "post_mortem",
     "blocksecteam_defi_poc": "exploit_poc",
     "slowmist_open_reports": "audit_finding",
+    "chainabuse": "crime_report",
+    "crypto_rekts": "post_mortem",
 }
 
 
@@ -750,3 +755,264 @@ Details...
     assert doc.metadata["audit_date"] == "February 28, 2019"
     assert "IoTeX" in doc.title
     assert incidents.slowmist_report_to_doc("open-report/empty.md", "   ") is None
+
+
+# ── Chainabuse scam-report source (chainabuse.py) ───────────────────────
+
+
+def test_chainabuse_report_to_doc():
+    report = {
+        "id": 12345,
+        "scam_type": {"id": 14, "type": "Phishing"},
+        "description": "Fake exchange site stealing deposits.",
+        "reported_address": "0xAbC1234567890AbC1234567890AbC1234567890",
+        "scam_url": "https://fake-exchange.example",
+        "chain": "ethereum",
+        "date": "2026-08-01",
+    }
+    doc = chainabuse.report_to_doc(report)
+    assert doc is not None
+    assert doc.doc_type == "crime_report"
+    assert doc.metadata["collection"] == "crime_reports"
+    assert doc.metadata["category"] == "Phishing"
+    assert doc.metadata["severity"] == "critical"
+    assert doc.metadata["address"] == "0xAbC1234567890AbC1234567890AbC1234567890"
+    assert doc.metadata["entity_type"] == "address"
+    assert "Fake exchange site" in doc.content
+    assert doc.doc_id.startswith("chainabuse:12345:")
+
+
+def test_chainabuse_report_to_doc_string_scam_type_and_domain():
+    report = {
+        "id": 99,
+        "category": "Investment Scam",
+        "domain": "bad-platform.example",
+        "description": "Fake yield platform.",
+    }
+    doc = chainabuse.report_to_doc(report)
+    assert doc is not None
+    assert doc.metadata["entity_type"] == "domain"
+    assert doc.metadata["entity"] == "bad-platform.example"
+    assert doc.metadata["category"] == "Investment Scam"
+    assert doc.metadata["severity"] == "critical"
+    assert doc.metadata["collection"] == "crime_reports"
+
+
+def test_chainabuse_report_empty_rejected():
+    assert chainabuse.report_to_doc({}) is None
+    assert chainabuse.report_to_doc({"id": 1}) is None  # no entity, no description
+
+
+def test_chainabuse_extract_reports_envelopes():
+    bare = [{"id": 1}, {"id": 2}]
+    assert len(chainabuse._extract_reports(bare)) == 2
+    assert len(chainabuse._extract_reports({"reports": bare})) == 2
+    assert len(chainabuse._extract_reports({"items": bare})) == 2
+    assert chainabuse._extract_reports({"count": 0}) == []
+    assert chainabuse._extract_reports("junk") == []
+
+
+@respx.mock
+async def test_chainabuse_fetch_mocked(monkeypatch):
+    monkeypatch.setenv("CHAINABUSE_API_KEY", "test-key")
+    monkeypatch.setattr(chainabuse, "BASE_URL", "https://api.chainabuse.com")
+    src = mod.get_source("chainabuse")
+    assert src is not None
+    respx.get("https://api.chainabuse.com/v0/reports").respond(
+        200,
+        json={
+            "reports": [
+                {
+                    "id": 1,
+                    "scam_type": {"id": 14, "type": "Phishing"},
+                    "description": "Fake airdrop page.",
+                    "reported_address": "0x" + "1" * 40,
+                    "scam_url": "https://airdrop.example",
+                    "date": "2026-08-01",
+                },
+                {
+                    "id": 2,
+                    "category": "Wallet Drainer",
+                    "description": "Approval drainer dapp.",
+                    "reported_address": "0x" + "2" * 40,
+                    "date": "2026-08-02",
+                },
+            ]
+        },
+    )
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "crime_report" for d in docs)
+    assert all(d.metadata["collection"] == "crime_reports" for d in docs)
+    assert docs[0].metadata["severity"] == "critical"
+    # Id stability: re-fetching yields identical doc_ids (idempotent seeds).
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+@respx.mock
+async def test_chainabuse_fetch_no_key(monkeypatch):
+    monkeypatch.delenv("CHAINABUSE_API_KEY", raising=False)
+    src = mod.get_source("chainabuse")
+    assert src is not None
+    docs = await src.fetch(limit=5)
+    assert docs == []
+
+
+@respx.mock
+async def test_chainabuse_fetch_graceful_on_error(monkeypatch):
+    monkeypatch.setenv("CHAINABUSE_API_KEY", "test-key")
+    monkeypatch.setattr(chainabuse, "BASE_URL", "https://api.chainabuse.com")
+    src = mod.get_source("chainabuse")
+    assert src is not None
+    respx.get("https://api.chainabuse.com/v0/reports").respond(500)
+    docs = await src.fetch(limit=5)
+    assert docs == []
+
+
+# ── crypto-rekts incident knowledgebase (crypto_rekts.py) ───────────────
+
+
+def test_crypto_rekt_to_doc():
+    item = {
+        "id": 3058,
+        "title": "Beanstalk",
+        "project_name": "Beanstalk",
+        "date": "2022-4-18",
+        "funds_lost": 181000000,
+        "funds_returned": 0,
+        "scam_type": {"id": 15, "type": "Flash Loan Attack"},
+        "description": "<p><strong>Quick Summary</strong></p><p>A flash loan "
+        "attack occurred on Beanstalk Governance resulting in a theft of $77M.</p>",
+        "scamNetworks": [
+            {"networks": {"id": 1003, "name": "Ethereum"}},
+        ],
+        "proof_link": "https://rekt.news/beanstalk-rekt/",
+        "auditedBy": [{"partner": {"name": "CertiK"}}],
+    }
+    doc = crypto_rekts.crypto_rekt_to_doc(item)
+    assert doc is not None
+    assert doc.doc_type == "post_mortem"
+    assert doc.metadata["collection"] == "defi_exploits"
+    assert doc.metadata["protocol"] == "Beanstalk"
+    assert doc.metadata["date"] == "2022-4-18"
+    assert doc.metadata["loss_usd"] == 181_000_000
+    assert doc.metadata["category"] == "Flash Loan Attack"
+    assert doc.metadata["vulnerability_class"] == "flash-loan"
+    assert doc.metadata["severity"] == "critical"
+    assert doc.metadata["chain"] == "Ethereum"
+    assert doc.metadata["audited_by"] == ["CertiK"]
+    assert doc.url == "https://rekt.news/beanstalk-rekt/"
+    assert "A flash loan attack occurred" in doc.content
+    assert doc.doc_id.startswith("crypto_rekts:3058:")
+
+
+def test_crypto_rekt_to_doc_governance_keyword_detection():
+    item = {
+        "id": 42,
+        "title": "AnubisDAO",
+        "date": "2021-10-28",
+        "funds_lost": 5860000,
+        "scam_type": {"id": 18, "type": "Other"},
+        "description": "Governance proposal drained the treasury.",
+    }
+    doc = crypto_rekts.crypto_rekt_to_doc(item)
+    assert doc is not None
+    assert doc.metadata["vulnerability_class"] == "governance-attack"
+    assert doc.metadata["severity"] == "high"
+
+
+def test_crypto_rekt_empty_rejected():
+    assert crypto_rekts.crypto_rekt_to_doc({}) is None
+    assert crypto_rekts.crypto_rekt_to_doc({"title": "X"}) is None  # no id
+
+
+def test_parse_rektdb_tolerates_envelope_and_list():
+    envelope = '{"items": [{"id": 1, "title": "A"}], "currentPage": 1, "lastPage": 1, "count": 1}'
+    items = crypto_rekts.parse_rektdb(envelope)
+    assert len(items) == 1
+    assert items[0]["title"] == "A"
+    assert crypto_rekts.parse_rektdb('[{"id": 2}]') == [{"id": 2}]
+    assert crypto_rekts.parse_rektdb("not json") == []
+    assert crypto_rekts.parse_rektdb("") == []
+
+
+@respx.mock
+async def test_crypto_rekts_fetch_mocked():
+    src = mod.get_source("crypto_rekts")
+    assert src is not None
+    payload = {
+        "items": [
+            {
+                "id": 1,
+                "title": "Beanstalk",
+                "date": "2022-4-18",
+                "funds_lost": 181000000,
+                "scam_type": {"id": 15, "type": "Flash Loan Attack"},
+                "description": "Governance flash loan exploit.",
+            },
+            {
+                "id": 2,
+                "title": "BonkDAO",
+                "date": "2026-7-6",
+                "funds_lost": 19300000,
+                "scam_type": {"id": 18, "type": "Other"},
+                "description": "Governance treasury transfer via bought voting power.",
+            },
+        ],
+        "count": 2,
+    }
+    respx.get("https://raw.githubusercontent.com/liqtags/crypto-rekts/main/rektdb.json").respond(
+        200, json=payload
+    )
+
+    docs = await src.fetch(limit=10)
+    assert len(docs) == 2
+    assert all(d.doc_type == "post_mortem" for d in docs)
+    assert all(d.metadata["collection"] == "defi_exploits" for d in docs)
+    assert docs[1].metadata["protocol"] == "BonkDAO"
+    assert docs[1].metadata["vulnerability_class"] == "governance-attack"
+    # Id stability: deterministic doc_id seeds across re-fetches.
+    docs2 = await src.fetch(limit=10)
+    assert [d.doc_id for d in docs] == [d.doc_id for d in docs2]
+
+
+@respx.mock
+async def test_crypto_rekts_fetch_limit():
+    src = mod.get_source("crypto_rekts")
+    assert src is not None
+    payload = {
+        "items": [
+            {"id": i, "title": f"Incident {i}", "date": "2022-1-1", "funds_lost": 1000}
+            for i in range(1, 21)
+        ]
+    }
+    respx.get("https://raw.githubusercontent.com/liqtags/crypto-rekts/main/rektdb.json").respond(
+        200, json=payload
+    )
+    docs = await src.fetch(limit=3)
+    assert len(docs) == 3
+    assert docs[0].doc_id.startswith("crypto_rekts:1:")
+
+
+@respx.mock
+async def test_crypto_rekts_fetch_graceful_on_error():
+    src = mod.get_source("crypto_rekts")
+    assert src is not None
+    respx.get("https://raw.githubusercontent.com/liqtags/crypto-rekts/main/rektdb.json").respond(
+        500
+    )
+    docs = await src.fetch(limit=5)
+    assert docs == []
+
+
+# ── Existing blacklist coverage (candidate #4: Phishing.Database + MetaMask) ─
+
+
+def test_blacklists_has_phishing_database_and_metamask_feeds():
+    feed_keys = {f.key for f in blacklists.FEEDS}
+    assert "phishing_database" in feed_keys
+    assert "metamask_blocklist" in feed_keys
+    src = mod.get_source("blacklists")
+    assert src is not None
+    assert src.default_collection == "scam_intel_v2"
