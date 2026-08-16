@@ -8,7 +8,7 @@ free sources and, when an exploit is detected, pushes it through a
   Detection sources (all optional, all fail-open):
     * SearXNG RSS  — @CertiKAlert, @PeckShieldAlert, @BeosinAlert,
       @BlockSecAlert, @SpreekAway, @zachxbt via the self-hosted SearXNG
-      instance (``SEARXNG_URL``, default Talos http://127.0.0.1:8089).
+      instance (``SEARXNG_URL``, default http://127.0.0.1:8089).
       Polled every ``REALTIME_TWITTER_POLL_SECONDS`` (default 30s).
     * ClickHouse   — on-chain anomalies from the LiteChainIndexer hot
       store: whale DEX swaps, large transfers to fresh addresses, and

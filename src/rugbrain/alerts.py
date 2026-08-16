@@ -16,7 +16,7 @@ Sources (free tier, max one poll per source per interval):
   - DeFiLlama hacks API (https://api.llama.fi/hacks) — major exploits
   - Rekt News leaderboard — major exploits as they happen
   - Crypto security Twitter/X accounts (CertiK, PeckShield, Beosin,
-    SpreekAway) via Nitter RSS, falling back to SearXNG (Talos:8089)
+    SpreekAway) via Nitter RSS, falling back to SearXNG (local, port 8089)
 
 Rate limiting: each source keeps a ``last_poll`` timestamp in Redis
 (``rag:alerts:last_poll:<source>``) and is only polled when the minimum
@@ -810,7 +810,7 @@ def _tag_text(block: str, tag: str) -> str:
 
 
 async def _searxng_fallback(client: httpx.AsyncClient, now: float) -> list[SecurityAlert]:
-    """Fallback: query SearXNG (Talos:8089) for fresh crypto security alerts."""
+    """Fallback: query SearXNG (local, port 8089) for fresh crypto security alerts."""
     alerts: list[SecurityAlert] = []
     try:
         r = await client.get(

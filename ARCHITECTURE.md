@@ -3,7 +3,7 @@
 **Status:** canonical
 **Last updated:** 2026-07-31
 **Owner:** crmuncher
-**Repo:** [RugMunchMedia/rugbrain](https://git.rugmunch.io/RugMunchMedia/rugbrain)
+**Repo:** [RugMunchMedia/rugbrain](https://github.com/RugMunchMedia/rugbrain)
 
 > This document describes the RAG system **as it exists today** — what is live,
 > what is wired but idle, and what is explicitly work-in-progress. It does not

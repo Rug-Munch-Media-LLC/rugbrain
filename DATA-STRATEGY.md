@@ -47,7 +47,7 @@
 3. ONE search path: dense + keyword + RRF (`retrieval.py` per v2). The fake `splade_bm25.py` and fake `cross_encoder.py` must NOT be extended; they are slated for deletion by v2.
 4. Idempotent by construction: deterministic UUIDv5 doc IDs + `content_hash`; reruns insert nothing new.
 5. Fail-soft: a dead source never fails the run — staged cache fallback (existing `SEED_DATA_DIR` pattern), zero points ingested from that source, run exits 0 with a warning.
-6. No secrets in git. All credentials via env / gopass (fleet standard).
+6. No secrets in git. All credentials via env / the secrets manager (fleet standard).
 
 ---
 
@@ -310,7 +310,7 @@ rmi-rag-permanence/
 - **NDJSON lines** (one doc per line): `{"doc_id","content","metadata","severity","chain","source","dense":[...],"sparse":{"indices":[...],"values":[...]},"content_hash","ingested_at","schema_version"}`
 - **Compression:** zstd level 19 (`zstandard`).
 - **Encryption:** AES-256-GCM, **key derivation identical to walletpress** `[verified 2026-08-01]`: Argon2id `time_cost=3, memory_cost=65536, parallelism=4, salt=16B` → AESGCM 256, `nonce=12B`; file format `base64(salt ‖ nonce ‖ ciphertext)`. Salt + nonce random per file.
-- **Key:** `RAG_PERMANENCE_KEY` via env (gopass on the host; never in git, never in `.env` in the repo).
+- **Key:** `RAG_PERMANENCE_KEY` via env (from the secrets manager on the host; never in git, never in `.env` in the repo).
 - **Manifest:** per-file `sha256`, doc counts, `schema_version`, snapshot time, collection list. `manifest.json` is written last and is the restore source of truth.
 
 ### 10.2 Retention
@@ -320,7 +320,7 @@ Daily × 7 · weekly (last of each week) × 4 · monthly × forever. Enforced by
 - `scripts/permanence.py --restore --date 2026-08-01` → download → verify sha256 → decrypt → decompress → upsert to Qdrant (idempotent via UUIDv5). A `--verify-only` mode downloads + decrypts + checksums without touching Qdrant.
 - Weekly restore test to scratch collection `hacks_restore_test` → count match → drop (fleet standard: `backup-restore-test.sh`).
 - **Nightly 03:30 UTC** timer (after the 03:00 Qdrant backup), `flock`ed.
-- Depends on fixing the known blocker: `backup_qdrant.py` currently fails nightly ("Credential access key has length 0" — TODO MEDIUM). B2/S3 creds must be wired via rclone/gopass before the permanence timer is enabled.
+- Depends on fixing the known blocker: `backup_qdrant.py` currently fails nightly ("Credential access key has length 0" — TODO MEDIUM). B2/S3 creds must be wired via rclone / the secrets manager before the permanence timer is enabled.
 
 ---
 
@@ -385,7 +385,7 @@ Total: ~8 steps, all S–M. No new services. No new MCPs.
 | Permanence key missing | Script refuses to run (fail-closed) and alerts; never writes plaintext snapshots by default (`--no-encrypt` exists for staging only) |
 | Collection config drift | `schema_version` in every payload; manifest records version; rebuild path = re-run Phase-1 scripts |
 
-**Security:** all data ingested is public security intel (addresses, domains, reports) — no user PII, no private keys, no credentials. Staged data lives outside the repo (`SEED_DATA_DIR`, default `/tmp/rag_seed`). The only secret is `RAG_PERMANENCE_KEY` (gopass → env).
+**Security:** all data ingested is public security intel (addresses, domains, reports) — no user PII, no private keys, no credentials. Staged data lives outside the repo (`SEED_DATA_DIR`, default `/tmp/rag_seed`). The only secret is `RAG_PERMANENCE_KEY` (secrets manager → env).
 
 ---
 

@@ -387,7 +387,7 @@ All 31 files referencing `rag_service` [verified count] move to `RagApiClient` c
 **Enforcement (add to CI, Phase 1):**
 1. `grep -rnE "from (app\.|rugbrain\.)" src/rugbrain/embedder.py src/rugbrain/store.py src/rugbrain/retrieval.py` → 0 matches (import_guard excluded by path).
 2. `grep -rn "import rugbrain\|from rugbrain\|qdrant_client\|from app\.rag" /path/to/rmi-backend/app --include="*.py"` → 0 matches except `app/rag_client.py`.
-3. Run both greps in CI (`.forgejo/workflows/`) as a hard gate. [decision]
+3. Run both greps in CI (`.github/workflows/`) as a hard gate. [decision]
 4. Ruff `TID252`/`PLC0415`-style rules are advisory; the greps are the contract.
 
 ---

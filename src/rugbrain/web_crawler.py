@@ -22,7 +22,7 @@ Public crawl entry points:
 
   * ``crawl_crypto_news()``      — RSS + homepage crawl of crypto news sites
   * ``crawl_security_feeds()``   — security blogs (CertiK, PeckShield, ...)
-  * ``crawl_social_sentiment()`` — crypto X/Twitter via SearXNG (Talos:8089)
+  * ``crawl_social_sentiment()`` — crypto X/Twitter via SearXNG (local, port 8089)
   * ``crawl_github_audits()``    — GitHub audit reports, post-mortems, PoCs
 
 Usage::
@@ -465,7 +465,7 @@ async def crawl_security_feeds(
 async def crawl_social_sentiment(
     crawler: WebCrawler | None = None, limit: int = 30, collection: str = SOCIAL_COLLECTION
 ) -> dict[str, int]:
-    """Crawl crypto X/Twitter via SearXNG (Talos:8089) for each tracked account."""
+    """Crawl crypto X/Twitter via SearXNG (local, port 8089) for each tracked account."""
     c = crawler or WebCrawler()
     docs: list[CrawlDocument] = []
     async with httpx.AsyncClient(

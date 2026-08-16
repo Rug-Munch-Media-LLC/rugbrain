@@ -144,9 +144,10 @@ from DeFiHackLabs incident READMEs (`### YYYYMMDD …` headers + `forge test
 ### 3.3 Proxy rotation + idempotency
 
 - **WebShare residential proxy** for `git clone --depth 1`: `_get_proxy()`
-  honors `WEBSHARE_PROXY` env, else shells `/root/scripts/webshare-proxy.sh`
-  (gopass). Rotating IPs dodge GitHub per-IP clone rate limits on catalog
-  sweeps. Repos cached under `/srv/work/repos/*` / `.repos/`; clones land in
+  honors `WEBSHARE_PROXY` env, else shells a fleet proxy helper (env
+  `WEBSHARE_PROXY`) that reads secrets from the secrets manager. Rotating
+  IPs dodge GitHub per-IP clone rate limits on catalog sweeps. Repos cached
+  under `/path/to/repos/*` / `.repos/`; clones land in
   `/tmp/opencode/ingest-*`.
 - **Idempotent IDs:** UUIDv5 in DNS namespace from
   `codebase-reference:{library_id}:{file_path}:{title}` — re-runs overwrite

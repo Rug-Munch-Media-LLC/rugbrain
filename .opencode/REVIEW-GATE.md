@@ -36,5 +36,5 @@
 | Gate | Where | Tool |
 |------|-------|------|
 | Pre-commit | Local | .pre-commit-config.yaml |
-| CI | Forgejo/GitHub | ci-quality-gate.yml |
+| CI | GitHub | ci-quality-gate.yml |
 | Review | Agent | ai-agent-quality-gate skill |

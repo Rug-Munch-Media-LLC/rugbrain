@@ -13,7 +13,7 @@
 #
 # Scheduled via crontab (see below) or a systemd timer:
 #
-#  30 */6 * * * /bin/bash /srv/work/repos/rmi-rag/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
+#  30 */6 * * * /bin/bash /path/to/rmi-rag/scripts/rmi-threat-intel-ingest.sh >> /var/log/rmi-threat-intel-ingest.log 2>&1
 #
 # No secrets: reads QDRANT_URL / INFINITY_URL from env or defaults.
 set -euo pipefail

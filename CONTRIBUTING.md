@@ -1,7 +1,7 @@
 <!--
 SPDX-License-Identifier: MIT
 Copyright (c) 2026 Rug Munch Media LLC
-Part of RugBrain — https://git.rugmunch.io/RugMunchMedia/rugbrain
+Part of RugBrain — https://github.com/RugMunchMedia/rugbrain
 -->
 
 # Contributing to RugBrain
@@ -17,7 +17,7 @@ git checkout -b feat/my-change
 make lint test            # pre-push gate
 make commit               # conventional commits via commitizen
 git push origin feat/my-change
-# Open a PR on Forgejo (git.rugmunch.io/RugMunchMedia/rugbrain)
+# Open a PR on GitHub (github.com/RugMunchMedia/rugbrain)
 ```
 
 ## Repository Model
@@ -28,7 +28,7 @@ Single-tenant branch-PR pattern. `feat/*` branches merged to `main` after CI pas
 
 | Branch             | Purpose                                          |
 |--------------------|--------------------------------------------------|
-| `main`             | Production-ready. Protected. Forgejo-mirrored.   |
+| `main`             | Production-ready. Protected. GitHub-mirrored.    |
 | `feat/<scope>`     | New feature or capability.                       |
 | `fix/<scope>`      | Bug fix.                                         |
 | `chore/<scope>`    | Tooling, deps, formatting, non-functional.       |
@@ -53,7 +53,7 @@ Allowed types: `feat`, `fix`, `docs`, `refactor`, `style`, `test`, `chore`,
 
 | Remote      | URL                                                       | Role                          |
 |-------------|-----------------------------------------------------------|-------------------------------|
-| `origin`    | `ssh://git@git.rugmunch.io:2222/RugMunchMedia/rugbrain.git`| Canonical — Forgejo.          |
+| `origin`    | `git@github.com:RugMunchMedia/rugbrain.git`| Canonical — GitHub.          |
 
 ## Pre-Push Checklist
 
@@ -67,7 +67,7 @@ ruff check scripts/ collections/
 python3 -m py_compile scripts/*.py
 ```
 
-CI is defined in `.forgejo/workflows/ci.yml`.
+CI is defined in `.github/workflows/ci.yml`.
 
 ## License
 

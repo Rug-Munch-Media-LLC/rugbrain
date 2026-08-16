@@ -15,7 +15,7 @@
 - Add cron for ingestion scripts
 
 ## Week 4 — CI
-- Add pre-commit, Makefile, GitHub/Forgejo CI
+- Add pre-commit, Makefile, GitHub Actions CI
 
 ## Acceptance
 - All collections documented as config files

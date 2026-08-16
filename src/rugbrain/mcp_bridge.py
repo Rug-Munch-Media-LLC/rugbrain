@@ -2,7 +2,7 @@
 
 Lets the RAG answer code-related queries with deeper answers from the local
 RMI Codebase MCP (FastMCP over stdio, running at
-``/srv/work/repos/rmi-codebase-mcp``).
+``/path/to/rmi-codebase-mcp``).
 
 Bridge functions:
     search_codebase(query)            → MCP ``rmi_search()``
@@ -22,7 +22,7 @@ Execution strategy (in order):
      bridge degrades gracefully when the MCP is unreachable.
 
 Environment:
-    RMI_MCP_DIR      — codebase MCP server dir (default /srv/work/repos/rmi-codebase-mcp)
+    RMI_MCP_DIR      — codebase MCP server dir (default /path/to/rmi-codebase-mcp)
     RMI_MCP_PYTHON   — interpreter with fastmcp+chromadb (default the x402 venv)
     RMI_MCP_TIMEOUT  — subprocess timeout seconds (default 90)
 

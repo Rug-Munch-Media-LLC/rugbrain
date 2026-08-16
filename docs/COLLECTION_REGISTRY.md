@@ -121,6 +121,6 @@ for filtering.
 | Job | Schedule | Script |
 |-----|----------|--------|
 | News RSS → Postgres → `news_v2` | every 15 min | `scripts/rmi-news-ingest.sh` |
-| News + scam knowledge + continuous ingest | hourly | `/root/scripts/rag-knowledge-refresh.sh` |
+| News + scam knowledge + continuous ingest | hourly | `/path/to/scripts/rag-knowledge-refresh.sh` |
 | **Threat intel + regulation** | **every 6h** | **`scripts/rmi-threat-intel-ingest.sh`** |
 | RAG backup | daily 03:00 | `fleet-infra/scripts/backup-rag.sh` |

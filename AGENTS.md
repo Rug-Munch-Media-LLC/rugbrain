@@ -39,7 +39,7 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 2. **NEVER use HTTPS remotes with embedded passwords — SSH only**
 3. **NEVER commit before gitleaks passes** (`gitleaks detect --no-git`)
 4. **NEVER push to main without lefthook pre-commit passing**
-5. **All secrets come from gopass — NEVER hardcoded**
+5. **All secrets come from the secrets manager — NEVER hardcoded**
 6. **All repos must have: .gitignore, .gitleaks.toml, .lefthook.yml**
 7. **Internal IPs/hostnames use [INTERNAL] placeholder in public repos**
 8. **Any agent caught leaking secrets will have their work rejected**

@@ -2,8 +2,8 @@
 
 Aggregates social signals without paid APIs:
 
-  * **X/Twitter** — tracked crypto accounts via SearXNG (self-hosted on
-    Talos:8089), which mirrors x.com/nitter content. No X API key needed.
+  * **X/Twitter** — tracked crypto accounts via SearXNG (self-hosted,
+    local port 8089), which mirrors x.com/nitter content. No X API key needed.
   * **Reddit** — ``r/cryptocurrency``, ``r/ethdev``, ``r/solana`` via the
     free Reddit JSON API (``.json`` endpoints, no auth; requires a UA).
   * **Farcaster** — casts from the fleet's own Hubble node

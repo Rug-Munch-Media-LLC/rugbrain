@@ -17,12 +17,12 @@
 #             + MCP patterns only, which is fast and offline-friendly)
 #
 # Cron (daily 03:15 UTC):
-#   15 3 * * *  /srv/work/repos/rugbrain/scripts/sync_code_knowledge.sh >> /var/log/rugbrain/sync_code_knowledge.log 2>&1
+#   15 3 * * *  /path/to/rugbrain/scripts/sync_code_knowledge.sh >> /var/log/rugbrain/sync_code_knowledge.log 2>&1
 #
 # Requires (host):
 #   - Qdrant at QDRANT_URL (default http://localhost:6333)
 #   - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
-#   - RMI Codebase MCP server dir at RMI_MCP_DIR (default /srv/work/repos/rmi-codebase-mcp)
+#   - RMI Codebase MCP server dir at RMI_MCP_DIR (default /path/to/rmi-codebase-mcp)
 #   - RMI_MCP_PYTHON with fastmcp+chromadb (default x402 venv)
 
 set -euo pipefail

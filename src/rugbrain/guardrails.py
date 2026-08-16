@@ -722,9 +722,9 @@ _GENERIC_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 _BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{20,}\b", re.IGNORECASE)
-# Internal hostnames: FQDN-only for ambiguous words (hydra/mail/redis are
-# legit prose topics; only hydra.rugmunch.io is internal), plus bare
-# unique fleet hostnames (talos, cinnabox). The public rugmunch.io domain
+# Internal hostnames: FQDN-only for ambiguous words (e.g. "mail"/"redis" are
+# legit prose topics; only their *.rugmunch.io FQDNs are internal), plus bare
+# unique fleet hostnames. The public rugmunch.io domain
 # itself is NOT redacted (see [REVIEW]).
 # ``*.internal`` / ``*.local`` require at least one prefix label — a bare
 # ``internal`` is a common Solidity visibility keyword and must survive
