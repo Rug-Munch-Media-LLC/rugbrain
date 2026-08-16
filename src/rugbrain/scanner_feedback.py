@@ -11,7 +11,7 @@ discovering similar tokens. Provides a bidirectional feedback channel:
 
 All embeddings use the existing Infinity BAAI/bge-m3 pipeline via
 ``rugbrain.embeddings.get_embedding()`` so the feedback collection shares
-the same 1024-dim vector space as the main threat_intel collection.
+the same 1024-dim vector space as the main threat_intel_v2 collection.
 """
 
 from __future__ import annotations

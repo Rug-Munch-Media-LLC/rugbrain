@@ -28,7 +28,7 @@ Data lifecycle this serves:
 
 Usage:
     python scripts/b2_permanence.py --dry-run
-    python scripts/b2_permanence.py --collection threat_intel --limit 10
+    python scripts/b2_permanence.py --collection threat_intel_v2 --limit 10
     python scripts/b2_permanence.py --format ndjson --limit 50
     python scripts/b2_permanence.py --env-file /path/to/b2-permanence.env
     python scripts/b2_permanence.py --prune              # retention dry-run

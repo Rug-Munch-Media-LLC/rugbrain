@@ -56,7 +56,7 @@ from rugbrain.qdrant_store import QdrantVectorStore
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("crypto_alert_digest")
 
-COLLECTION = "news"
+COLLECTION = "news_v2"
 SOURCE_TYPE = "alert_digest"
 EMBEDDING_DIM = 1024
 REQUEST_TIMEOUT = 30

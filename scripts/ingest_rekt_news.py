@@ -17,7 +17,7 @@ For each hack we:
 
 Fallback: if the Rekt leaderboard cannot be fetched, the script falls back
 to the DeFiHackLabs data (which covers most major exploits) stored in
-``threat_intel`` — it synthesizes hack entries from those points.
+``threat_intel_v2`` — it synthesizes hack entries from those points.
 
 Idempotent: point IDs are deterministic seeds derived from the hack slug +
 content hash which the store converts to UUIDv5, so re-running overwrites
@@ -294,10 +294,10 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
 
 
 async def fallback_from_defihacklabs(limit: int | None) -> list[dict[str, Any]]:
-    """Fallback: synthesize hack docs from threat_intel DeFiHackLabs points.
+    """Fallback: synthesize hack docs from threat_intel_v2 DeFiHackLabs points.
 
     Used when the Rekt leaderboard cannot be fetched. Reads existing
-    ``threat_intel`` points with source=defihacklabs and builds one doc per
+    ``threat_intel_v2`` points with source=defihacklabs and builds one doc per
     unique protocol.
     """
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
@@ -320,7 +320,7 @@ async def fallback_from_defihacklabs(limit: int | None) -> list[dict[str, Any]]:
                 if offset:
                     body["offset"] = offset
                 r = await client.post(
-                    f"{qdrant_url}/collections/threat_intel/points/scroll", json=body
+                    f"{qdrant_url}/collections/threat_intel_v2/points/scroll", json=body
                 )
                 if r.status_code != 200:
                     logger.warning(

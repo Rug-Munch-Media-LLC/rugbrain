@@ -85,7 +85,7 @@ NEW_SOURCES: tuple[SourceConfig, ...] = (
     ),
     SourceConfig(
         "messari",
-        "research",
+        "research_v2",
         "research_report",
         "crawl",
         ("https://messari.io/reports",),

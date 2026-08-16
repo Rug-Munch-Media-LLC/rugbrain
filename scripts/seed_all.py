@@ -9,7 +9,7 @@ Purpose:
   pipelines keep collections fresh.
 
 Collections seeded:
-  - threat_intel:      Known scam patterns + historical scam reports
+  - threat_intel_v2:  Known scam patterns + historical scam reports
   - rmi_agent_memory:  Entity profiles, wallet labels, cross-chain identities
   - rmi_community:     Community-reported scams, discussion topics
 
@@ -434,7 +434,7 @@ CROSS_CHAIN_KNOWN_ADDRESSES = [
 
 
 async def seed_threat_intel(client: httpx.AsyncClient, dry_run: bool) -> int:
-    """Seed known scam patterns and historical hacks into threat_intel."""
+    """Seed known scam patterns and historical hacks into threat_intel_v2."""
     count = 0
     texts: list[str] = []
     docs: list[dict[str, Any]] = []
@@ -481,13 +481,13 @@ Tags: {", ".join(hack["tags"])}"""
         )
         texts.append(text)
 
-    logger.info("Seeding %d documents into threat_intel...", len(docs))
+    logger.info("Seeding %d documents into threat_intel_v2...", len(docs))
 
     if dry_run:
-        logger.info("[DRY RUN] Would seed %d docs into threat_intel", len(docs))
+        logger.info("[DRY RUN] Would seed %d docs into threat_intel_v2", len(docs))
         return len(docs)
 
-    await _ensure_collection("threat_intel", client)
+    await _ensure_collection("threat_intel_v2", client)
     embeddings = await _embed_batch(texts)
 
     for i, doc in enumerate(docs):
@@ -497,7 +497,7 @@ Tags: {", ".join(hack["tags"])}"""
             continue
         ok = await _upsert_point(
             client,
-            "threat_intel",
+            "threat_intel_v2",
             doc["doc_id"],
             vec,
             content=doc["content"],
@@ -509,7 +509,7 @@ Tags: {", ".join(hack["tags"])}"""
         if ok:
             count += 1
 
-    logger.info("threat_intel seeded: %d/%d docs", count, len(docs))
+    logger.info("threat_intel_v2 seeded: %d/%d docs", count, len(docs))
     return count
 
 
@@ -700,7 +700,7 @@ async def try_fetch_backend_scans(client: httpx.AsyncClient) -> list[dict]:
 
 
 async def seed_backend_findings(client: httpx.AsyncClient, findings: list[dict]) -> int:
-    """Embed and upsert backend scanner findings into threat_intel."""
+    """Embed and upsert backend scanner findings into threat_intel_v2."""
     if not findings:
         return 0
 
@@ -744,7 +744,7 @@ Risk Flags: {", ".join(risk_flags[:15]) if risk_flags else "None detected"}"""
             continue
         ok = await _upsert_point(
             client,
-            "threat_intel",
+            "threat_intel_v2",
             doc["doc_id"],
             vec,
             doc["content"],
@@ -773,8 +773,8 @@ async def main() -> None:
     totals: dict[str, int] = {}
 
     async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=30.0) as client:
-        # 1. Seed threat_intel
-        totals["threat_intel"] = await seed_threat_intel(client, args.dry_run)
+        # 1. Seed threat_intel_v2
+        totals["threat_intel_v2"] = await seed_threat_intel(client, args.dry_run)
 
         # 2. Seed rmi_agent_memory
         totals["rmi_agent_memory"] = await seed_agent_memory(client, args.dry_run)
@@ -797,7 +797,7 @@ async def main() -> None:
     total = sum(totals.values())
     logger.info("=" * 60)
     logger.info("SEED COMPLETE")
-    logger.info("  threat_intel:     %d docs", totals.get("threat_intel", 0))
+    logger.info("  threat_intel_v2: %d docs", totals.get("threat_intel_v2", 0))
     logger.info("  rmi_agent_memory:  %d docs", totals.get("rmi_agent_memory", 0))
     logger.info("  rmi_community:    %d docs", totals.get("rmi_community", 0))
     if "backend_scans" in totals:
@@ -809,7 +809,7 @@ async def main() -> None:
     result = {
         "status": "complete" if not args.dry_run else "dry_run",
         "collections_seeded": {
-            "threat_intel": totals.get("threat_intel", 0),
+            "threat_intel_v2": totals.get("threat_intel_v2", 0),
             "rmi_agent_memory": totals.get("rmi_agent_memory", 0),
             "rmi_community": totals.get("rmi_community", 0),
         },

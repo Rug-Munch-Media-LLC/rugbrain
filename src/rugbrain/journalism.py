@@ -2,7 +2,7 @@
 Journalism Research Module — deep-dive research for crypto journalism.
 
 Provides structured research briefs synthesising data from all three RAG
-collections (``threat_intel``, ``rmi_agent_memory``, ``rmi_community``) to
+collections (``threat_intel_v2``, ``rmi_agent_memory``, ``rmi_community``) to
 support investigative journalism, bot content generation, and historical
 analysis.
 
@@ -23,7 +23,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Collections relevant to journalism research
-_COLLECTIONS = ["threat_intel", "rmi_agent_memory", "rmi_community"]
+_COLLECTIONS = ["threat_intel_v2", "rmi_agent_memory", "rmi_community"]
 _MAX_DOCS_PER_COLLECTION = 15
 
 
@@ -89,7 +89,7 @@ async def research_topic(
             return []
 
     results = await asyncio.gather(
-        _search_coll("threat_intel"),
+        _search_coll("threat_intel_v2"),
         _search_coll("rmi_agent_memory"),
         _search_coll("rmi_community"),
     )
@@ -116,7 +116,7 @@ async def research_topic(
         "research_timestamp": datetime.now(UTC).isoformat(),
         "collections_queried": _COLLECTIONS,
         "total_docs_retrieved": {
-            "threat_intel": len(threat_results),
+            "threat_intel_v2": len(threat_results),
             "rmi_agent_memory": len(entity_results),
             "rmi_community": len(community_results),
         },
@@ -151,7 +151,7 @@ def _empty_brief(topic: str, error: str = "") -> dict[str, Any]:
         "research_timestamp": datetime.now(UTC).isoformat(),
         "status": "empty" if not error else "error",
         "error": error if error else None,
-        "total_docs_retrieved": {"threat_intel": 0, "rmi_agent_memory": 0, "rmi_community": 0},
+        "total_docs_retrieved": {"threat_intel_v2": 0, "rmi_agent_memory": 0, "rmi_community": 0},
         "timeline": [],
         "key_entities": [],
         "related_scams": [],
@@ -458,7 +458,7 @@ def _synthesise(
 
     # Key metrics
     parts.append("\n### Research Quality Metrics")
-    parts.append("- Collections queried: 3 (threat_intel, rmi_agent_memory, rmi_community)")
+    parts.append("- Collections queried: 3 (threat_intel_v2, rmi_agent_memory, rmi_community)")
     parts.append(f"- Timeline coverage: {len(timeline)} events")
     parts.append(f"- Entity identification: {len(entities)} entities profiled")
     parts.append(f"- Scam/hack records evaluated: {len(scams)}")

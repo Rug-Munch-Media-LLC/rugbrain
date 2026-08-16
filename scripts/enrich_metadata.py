@@ -44,7 +44,7 @@ from rugbrain.crypto_schema import CANONICAL_FIELDS, enrich_payload
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("enrich_metadata")
 
-DEFAULT_COLLECTIONS = ("threat_intel", "scam_intel", "hacks", "news", "wallet")
+DEFAULT_COLLECTIONS = ("threat_intel_v2", "scam_intel_v2", "hacks_v2", "news_v2", "wallet_v2")
 CANONICAL_FIELDS_SET = set(CANONICAL_FIELDS)
 REQUEST_TIMEOUT = 30
 BATCH_SIZE = 100

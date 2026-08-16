@@ -60,7 +60,7 @@ logger = logging.getLogger("news_to_rag")
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 EMBED_DIM = 1024
-QDRANT_COLLECTION = "news"
+QDRANT_COLLECTION = "news_v2"
 UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rugbrain.qdrant_store._to_uuid
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "news_to_rag.lock")
 _ORDER_CLAUSES = {"asc": "ORDER BY published_at ASC", "desc": "ORDER BY published_at DESC"}
@@ -159,16 +159,16 @@ async def _ensure_collection(client: httpx.AsyncClient, base: str) -> bool:
 
 
 async def _collection_uses_named_vectors(client: httpx.AsyncClient, base: str) -> bool:
-    """Return True when the `news` collection is configured with named vectors.
+    """Return True when the `news_v2` collection is configured with named vectors.
 
     Qdrant 1.18 silently drops (HTTP 200, no store) a bare-vector upsert
-    against a named-vector collection such as ``news_v2`` (which ``news``
-    aliases). Detect the ``dense`` key in the collection's vectors config
+    against a named-vector collection such as ``news_v2``. Detect the
+    ``dense`` key in the collection's vectors config
     so the caller sends the named vector format. Results are cached per
     run so we only probe once.
     """
-    if _named_cache.get("news") is not None:
-        return _named_cache["news"]
+    if _named_cache.get(QDRANT_COLLECTION) is not None:
+        return _named_cache[QDRANT_COLLECTION]
     named = False
     try:
         r = await client.get(f"{base}/collections/{QDRANT_COLLECTION}")
@@ -181,7 +181,7 @@ async def _collection_uses_named_vectors(client: httpx.AsyncClient, base: str) -
                 named = True
     except Exception as e:
         logger.debug("qdrant_named_probe_failed collection=%s err=%s", QDRANT_COLLECTION, e)
-    _named_cache["news"] = named
+    _named_cache[QDRANT_COLLECTION] = named
     return named
 
 

@@ -85,11 +85,11 @@ async def test_find_similar_historical_tokens_qdrant_fallback(monkeypatch):
     monkeypatch.setattr("rugbrain.embeddings.get_embedding", fake_embedding)
 
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
-        respx_mock.get("/collections/threat_intel").respond(
+        respx_mock.get("/collections/threat_intel_v2").respond(
             200,
             json={"result": {"config": {"params": {"vectors": {"dense": {"size": 1024}}}}}},
         )
-        respx_mock.post("/collections/threat_intel/points/search").respond(
+        respx_mock.post("/collections/threat_intel_v2/points/search").respond(
             200,
             json={
                 "result": [
@@ -111,11 +111,11 @@ async def test_find_similar_historical_tokens_qdrant_fallback(monkeypatch):
                 ]
             },
         )
-        respx_mock.get("/collections/scams").respond(
+        respx_mock.get("/collections/scams_v2").respond(
             200,
             json={"result": {"config": {"params": {"vectors": {"dense": {"size": 1024}}}}}},
         )
-        respx_mock.post("/collections/scams/points/search").respond(200, json={"result": []})
+        respx_mock.post("/collections/scams_v2/points/search").respond(200, json={"result": []})
 
         result = await find_similar_historical_tokens(VALID_ADDRESS, chain="ethereum", limit=5)
 

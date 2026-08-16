@@ -300,7 +300,7 @@ async def fetch_news_sentiment(_client: httpx.AsyncClient | None = None) -> int 
         from rugbrain.qdrant_store import QdrantVectorStore
 
         store = QdrantVectorStore()
-        results, _ = await store.scroll("news", limit=200)
+        results, _ = await store.scroll("news_v2", limit=200)
         sentiments: list[float] = []
         for result in results:
             metadata = result.get("metadata") or {}

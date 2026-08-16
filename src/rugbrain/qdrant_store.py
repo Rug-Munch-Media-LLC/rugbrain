@@ -293,12 +293,10 @@ def normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any] | None:
 # aliases exist, so the old names must NOT be used — writing to them
 # auto-creates an empty fragment. The list below reflects the real
 # collections the RAG ingest pipelines write to (per
-# docs/COLLECTION_REGISTRY.md). "threat_intel" is kept for the scanner
-# subscriber legacy path; new writers use threat_intel_v2.
+# docs/COLLECTION_REGISTRY.md). All writers use *_v2 names — no legacy
+# collection is owned anymore.
 _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
     {
-        # Legacy scanner-subscriber path (deprecated; new writers use v2).
-        "threat_intel",
         # Hybrid-migrated RAG collections (real names — no aliases exist).
         "threat_intel_v2",
         "defi_exploits",

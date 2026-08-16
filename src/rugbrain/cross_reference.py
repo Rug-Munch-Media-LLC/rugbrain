@@ -13,7 +13,7 @@ Two similarity backends, tried in order:
    on-chain tokens with a local embedder, so this gives true
    bytecode/behavior similarity for live chain data.
 2. **Qdrant fallback** — hybrid (dense+BM25) search across the RAG's
-   ``threat_intel`` and ``scams`` collections for docs that mention the
+   ``threat_intel_v2`` and ``scams_v2`` collections for docs that mention the
    address or match its semantic fingerprint.
 
 Both backends fail open: if neither is available the module returns an
@@ -135,7 +135,7 @@ async def _qdrant_similar(
 ) -> list[dict[str, Any]]:
     """Find historical threat-intel docs related to *address* via Qdrant.
 
-    Runs hybrid (dense + BM25) search on ``threat_intel`` and ``scams``
+    Runs hybrid (dense + BM25) search on ``threat_intel_v2`` and ``scams_v2``
     with the address as the query, then merges and dedupes. Returns an
     empty list when Qdrant or the embedder is unavailable.
     """
@@ -151,7 +151,7 @@ async def _qdrant_similar(
             return []
 
         query = f"{address} {chain} scam rug hack exploit"
-        for collection in ("threat_intel", "scams"):
+        for collection in ("threat_intel_v2", "scams_v2"):
             try:
                 hits = await store.hybrid_search(
                     query_text=query,

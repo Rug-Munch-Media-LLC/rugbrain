@@ -17,7 +17,7 @@ Dataset format (JSONL, one object per line)::
 
     {"query": "How are cross-chain bridge exploits prevented?",
      "relevant_doc_ids": ["bridge_security_prevention", "cross_chain_audit"],
-     "expected_answer": "...", "collection": "threat_intel"}
+     "expected_answer": "...", "collection": "threat_intel_v2"}
 
 Search function contract: an async callable ``(query: str, limit: int) ->
 list[dict]`` whose result dicts carry an id under ``id`` / ``doc_id`` /

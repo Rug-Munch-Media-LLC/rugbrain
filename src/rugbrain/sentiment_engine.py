@@ -368,7 +368,7 @@ async def analyze_token_sentiment(
 ) -> TokenSentiment:
     """Aggregate sentiment for a token from social, news, and on-chain data.
 
-    Queries the RAG collections (threat_intel, news_articles, social_intel)
+    Queries the RAG collections (threat_intel_v2, news_articles, social_intel)
     for content mentioning *address*, scores each piece with
     ``analyze_text_sentiment``, and returns an aggregated result.
 
@@ -395,7 +395,7 @@ async def analyze_token_sentiment(
             collections_to_check.append("news_articles")
         if include_social:
             collections_to_check.append("social_intel")
-        collections_to_check.append("threat_intel")  # Always check threat intel.
+        collections_to_check.append("threat_intel_v2")  # Always check threat intel.
 
         for col in collections_to_check:
             try:
@@ -622,7 +622,7 @@ async def sentiment_token_endpoint(
 ) -> dict[str, Any]:
     """Aggregate sentiment for a token from RAG collections.
 
-    Queries the ``threat_intel``, ``news_articles``, and ``social_intel``
+    Queries the ``threat_intel_v2``, ``news_articles``, and ``social_intel``
     Qdrant collections for content mentioning *address*, scores each piece,
     and returns an aggregated result::
 

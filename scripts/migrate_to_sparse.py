@@ -7,6 +7,11 @@ collection that carries a named ``dense`` vector plus a ``bm25`` sparse
 vector (fastembed ``Qdrant/bm25``). The original collection name can then
 be pointed at ``_v2`` with a Qdrant alias.
 
+NOTE (2026-08-16): the migration is COMPLETE — the RAG collections are now
+``*_v2`` (real names, no aliases) and the legacy names no longer resolve.
+DEFAULT_COLLECTIONS below lists the real collections; re-running the tool
+is an idempotent no-op (all are already hybrid).
+
 Phases (safe by default — nothing is deleted without ``--swap``):
   1. Create ``{name}_v2`` with the hybrid config (named dense + bm25 sparse).
   2. Scroll points from the original collection and re-insert them into
@@ -17,10 +22,10 @@ Phases (safe by default — nothing is deleted without ``--swap``):
 
 Usage:
   python scripts/migrate_to_sparse.py --dry-run
-  python scripts/migrate_to_sparse.py --collection threat_intel --limit 10
-  python scripts/migrate_to_sparse.py --collection threat_intel
+  python scripts/migrate_to_sparse.py --collection threat_intel_v2 --limit 10
+  python scripts/migrate_to_sparse.py --collection threat_intel_v2
   python scripts/migrate_to_sparse.py
-  python scripts/migrate_to_sparse.py --swap --collection threat_intel
+  python scripts/migrate_to_sparse.py --swap --collection threat_intel_v2
 
 Exit codes: 0 ok, 1 one or more collections failed, 2 BM25 embedder missing.
 """
@@ -40,14 +45,14 @@ from rugbrain import qdrant_store
 logger = logging.getLogger("migrate_to_sparse")
 
 DEFAULT_COLLECTIONS = [
-    "threat_intel",
-    "scam_intel",
-    "hacks",
-    "news",
-    "scanner",
-    "wallet",
-    "research",
-    "scams",
+    "threat_intel_v2",
+    "scam_intel_v2",
+    "hacks_v2",
+    "news_v2",
+    "scanner_v2",
+    "wallet_v2",
+    "research_v2",
+    "scams_v2",
 ]
 DENSE_NAME = "dense"
 SPARSE_NAME = qdrant_store.SPARSE_VECTOR_NAME

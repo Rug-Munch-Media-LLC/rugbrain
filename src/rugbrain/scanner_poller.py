@@ -11,7 +11,7 @@ Architecture::
         → Redis LPUSH ``rmi:rag:findings_queue``
         → Poller (rugbrain, background task, LPOP polling loop)
         → ``_process_finding()`` (shared with scanner_subscriber)
-        → ``QdrantVectorStore.insert()`` → Qdrant ``threat_intel``
+        → ``QdrantVectorStore.insert()`` → Qdrant ``threat_intel_v2``
 
 Usage::
     from rugbrain.scanner_subscriber import is_subscriber_running, start_polling
@@ -208,7 +208,7 @@ async def _process_poller_finding(data: dict[str, Any]) -> None:
         )
         return
 
-    # Upsert into Qdrant threat_intel collection
+    # Upsert into Qdrant threat_intel_v2 collection
     from rugbrain.qdrant_store import QdrantVectorStore
 
     doc_id = f"scanner_{chain}_{token_address}".replace(":", "_").lower()
@@ -216,7 +216,7 @@ async def _process_poller_finding(data: dict[str, Any]) -> None:
     store = QdrantVectorStore()
     ok = await store.insert(
         doc_id=doc_id,
-        collection="threat_intel",
+        collection="threat_intel_v2",
         embedding=embedding,
         content=content,
         metadata={

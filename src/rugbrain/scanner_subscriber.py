@@ -4,13 +4,13 @@ Scanner Subscriber — live ingestion of high-risk scan findings into Qdrant.
 Listens on Redis channel ``rmi:rag:ingest`` for JSON payloads published by
 rmi-backend's ``UnifiedTokenScanner`` after every high/critical-risk scan.
 On receipt: generates a 2560-dim embedding (via the existing embedding pipeline)
-and upserts into the Qdrant ``threat_intel`` collection for live RAG search.
+and upserts into the Qdrant ``threat_intel_v2`` collection for live RAG search.
 
 Architecture::
     Scanner (rmi-backend)
         → Redis pub/sub ``rmi:rag:ingest``
         → Subscriber (rugbrain, background task)
-        → ``get_embedding()`` → ``QdrantVectorStore.insert()`` → Qdrant ``threat_intel``
+        → ``get_embedding()`` → ``QdrantVectorStore.insert()`` → Qdrant ``threat_intel_v2``
 
 If Redis is down the subscriber retries every 5s. Scanner findings are still
 stored in Postgres (existing behavior) — no data loss.
@@ -174,7 +174,7 @@ async def _process_finding(data: dict[str, Any]) -> None:
     Steps:
       1. Build a descriptive text from the finding payload.
       2. Generate a 2560-dim embedding via ``get_embedding()``.
-      3. Upsert into Qdrant ``threat_intel`` collection via ``QdrantVectorStore.insert()``.
+      3. Upsert into Qdrant ``threat_intel_v2`` collection via ``QdrantVectorStore.insert()``.
     """
     global _ingested_count, _last_ingested_at
 
@@ -217,7 +217,7 @@ async def _process_finding(data: dict[str, Any]) -> None:
         )
         return
 
-    # Upsert into Qdrant threat_intel collection
+    # Upsert into Qdrant threat_intel_v2 collection
     from rugbrain.qdrant_store import QdrantVectorStore
 
     doc_id = f"scanner_{chain}_{token_address}".replace(":", "_").lower()
@@ -225,7 +225,7 @@ async def _process_finding(data: dict[str, Any]) -> None:
     store = QdrantVectorStore()
     ok = await store.insert(
         doc_id=doc_id,
-        collection="threat_intel",
+        collection="threat_intel_v2",
         embedding=embedding,
         content=content,
         metadata={

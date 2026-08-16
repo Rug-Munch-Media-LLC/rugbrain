@@ -870,12 +870,12 @@ def load_community() -> list[dict[str, Any]]:
 # ── Orchestrator ──────────────────────────────────────────────────────
 
 COLLECTION_LOADERS: dict[str, Any] = {
-    "scam_intel": load_scam_intel,
-    "scanner": load_scanner_from_dumps,
-    "news": load_news_from_dump,
-    "research": load_research_from_arxiv,
-    "scams": load_scams_from_metamask,
-    "wallet": load_wallet_from_redis,
+    "scam_intel_v2": load_scam_intel,
+    "scanner_v2": load_scanner_from_dumps,
+    "news_v2": load_news_from_dump,
+    "research_v2": load_research_from_arxiv,
+    "scams_v2": load_scams_from_metamask,
+    "wallet_v2": load_wallet_from_redis,
     "rmi_agent_memory": load_agent_memory,
     "rmi_community": load_community,
 }
@@ -919,9 +919,9 @@ async def main() -> None:
 
     # Inject limits via env for loaders that accept them
     limits = {
-        "wallet": args.wallet_limit,
-        "news": args.news_limit,
-        "scam_intel": args.scam_intel_limit,
+        "wallet_v2": args.wallet_limit,
+        "news_v2": args.news_limit,
+        "scam_intel_v2": args.scam_intel_limit,
     }
     os.environ["_SEED_LIMITS"] = json.dumps(limits)
 

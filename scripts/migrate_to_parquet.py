@@ -20,7 +20,7 @@ encrypted — B2 SSE-B2 (AES256) encrypts them at rest.
 
 Usage:
     python scripts/migrate_to_parquet.py --date 2026-08-01
-    python scripts/migrate_to_parquet.py --date 2026-08-01 --collection threat_intel
+    python scripts/migrate_to_parquet.py --date 2026-08-01 --collection threat_intel_v2
     python scripts/migrate_to_parquet.py --date 2026-08-01 --dry-run
     python scripts/migrate_to_parquet.py --env-file /path/to/b2-permanence.env
 

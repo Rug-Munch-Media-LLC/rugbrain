@@ -20,7 +20,7 @@ Usage:
     python scripts/b2_restore.py --list
     python scripts/b2_restore.py --list --date 2026-08-01
     python scripts/b2_restore.py --date 2026-08-01 --mode replace
-    python scripts/b2_restore.py --collection threat_intel --mode merge
+    python scripts/b2_restore.py --collection threat_intel_v2 --mode merge
     python scripts/b2_restore.py --env-file /path/to/b2-permanence.env
 
 Behavior:

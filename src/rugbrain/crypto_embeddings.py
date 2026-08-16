@@ -93,7 +93,7 @@ if _COLLECTIONS_ENV:
     COLLECTIONS = [c.strip() for c in _COLLECTIONS_ENV.split(",")]
 else:
     COLLECTIONS = [
-        "threat_intel",
+        "threat_intel_v2",
         "rmi_agent_memory",
         "rmi_community",
     ]
