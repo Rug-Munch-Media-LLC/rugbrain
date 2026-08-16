@@ -112,8 +112,8 @@ def _redact_result(result: dict[str, Any], keys: tuple[str, ...]) -> dict[str, A
 
 
 # ── Config ──────────────────────────────────────────────────────────────
-MCP_DIR = os.getenv("RMI_MCP_DIR", "/srv/work/repos/rmi-codebase-mcp")
-MCP_PYTHON = os.getenv("RMI_MCP_PYTHON", "/srv/work/repos/rmi-mcp-x402/.venv/bin/python")
+MCP_DIR = os.getenv("RMI_MCP_DIR", "/path/to/rmi-codebase-mcp")
+MCP_PYTHON = os.getenv("RMI_MCP_PYTHON", "/path/to/rmi-mcp-x402/.venv/bin/python")
 MCP_TIMEOUT = float(os.getenv("RMI_MCP_TIMEOUT", "90"))
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent

@@ -722,24 +722,39 @@ _GENERIC_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 _BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{20,}\b", re.IGNORECASE)
-# Internal hostnames: FQDN-only for ambiguous words (e.g. "mail"/"redis" are
-# legit prose topics; only their *.rugmunch.io FQDNs are internal), plus bare
-# unique fleet hostnames. The public rugmunch.io domain
-# itself is NOT redacted (see [REVIEW]).
+# Internal fleet hostnames are configured via RMI_INTERNAL_HOSTS (a
+# comma-separated list of host labels) so no deployment-specific hostnames
+# ship in the public repo. Default is EMPTY — with no hosts configured only
+# the generic patterns below (RFC1918/CGNAT IPs, *.internal / *.local
+# FQDNs) are redacted. A configured label is redacted both as a bare word
+# and as <label>.rugmunch.io. The public rugmunch.io domain itself is NOT
+# redacted (see [REVIEW]).
 # ``*.internal`` / ``*.local`` require at least one prefix label — a bare
 # ``internal`` is a common Solidity visibility keyword and must survive
 # (fix: `+` quantifier; `*` would redact it and corrupt code snippets).
+_INTERNAL_HOSTS: tuple[str, ...] = tuple(
+    h.strip().lower() for h in os.getenv("RMI_INTERNAL_HOSTS", "").split(",") if h.strip()
+)
+
+_INTERNAL_FQDN_PARTS: list[str] = []
+if _INTERNAL_HOSTS:
+    _INTERNAL_FQDN_PARTS.append(
+        r"(?:" + "|".join(re.escape(h) for h in _INTERNAL_HOSTS) + r")\.rugmunch\.io\b"
+    )
+_INTERNAL_FQDN_PARTS.append(r"(?:[a-z0-9-]+\.)+(?:internal|local)\b")
 _INTERNAL_FQDN_RE = re.compile(
-    r"\b(?:"
-    r"(?:talos|cinnabox|hydra|mail|webmail|dockflare|grafana|prometheus|"
-    r"searxng|n8n|monitoring|logging|nats|redis|clickhouse|qdrant|rmi)"
-    r"\.rugmunch\.io\b"
-    r"|(?:[a-z0-9-]+\.)+(?:internal|local)\b"
-    r")",
+    r"\b(?:" + "|".join(_INTERNAL_FQDN_PARTS) + r")",
     re.IGNORECASE,
 )
-# Bare fleet hostnames that are unique enough to redact without qualification.
-_BARE_HOST_RE = re.compile(r"\b(?:talos|cinnabox)\b", re.IGNORECASE)
+# Bare host labels that are unique enough to redact without qualification.
+_BARE_HOST_RE = (
+    re.compile(
+        r"\b(?:" + "|".join(re.escape(h) for h in _INTERNAL_HOSTS) + r")\b",
+        re.IGNORECASE,
+    )
+    if _INTERNAL_HOSTS
+    else None
+)
 # RFC1918 + CGNAT (100.64/10) private IPs.
 _PRIVATE_IP_RE = re.compile(
     r"\b(?:10|127|192\.168|172\.(?:1[6-9]|2[0-9]|3[01])|100\.(?:6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7]))"
@@ -766,7 +781,8 @@ def redact_output(text: str) -> str:
     out = _GENERIC_KEY_RE.sub(_REDACTED, out)
     out = _BEARER_TOKEN_RE.sub(_REDACTED, out)
     out = _INTERNAL_FQDN_RE.sub(_REDACTED, out)
-    out = _BARE_HOST_RE.sub(_REDACTED, out)
+    if _BARE_HOST_RE is not None:
+        out = _BARE_HOST_RE.sub(_REDACTED, out)
     out = _PRIVATE_IP_RE.sub(_REDACTED, out)
     return out
 

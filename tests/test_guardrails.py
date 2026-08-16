@@ -12,8 +12,14 @@ Covers ``rugbrain.guardrails``:
 from __future__ import annotations
 
 import asyncio
+import os
 
 import pytest
+
+# Internal fleet hostnames are configured via RMI_INTERNAL_HOSTS (read at
+# module import time) — the public repo ships no hardcoded host list, so the
+# tests set a placeholder list here, BEFORE importing rugbrain.guardrails.
+os.environ["RMI_INTERNAL_HOSTS"] = "alpha,ops,mail,svc"
 
 from rugbrain import guardrails as g
 
@@ -140,9 +146,12 @@ def test_redact_output_api_keys() -> None:
 
 
 def test_redact_output_internal_hostnames() -> None:
-    assert "[REDACTED]" in g.redact_output("connect to talos.rugmunch.io")
-    assert "[REDACTED]" in g.redact_output("grafana.rugmunch.io dashboard")
+    # Host labels come from RMI_INTERNAL_HOSTS; configured labels are
+    # redacted both bare and as <label>.rugmunch.io FQDNs.
+    assert "[REDACTED]" in g.redact_output("connect to alpha.rugmunch.io")
+    assert "[REDACTED]" in g.redact_output("ops.rugmunch.io dashboard")
     assert "[REDACTED]" in g.redact_output("mail.rugmunch.io")
+    assert "[REDACTED]" in g.redact_output("deploy to alpha")
     # public domain NOT redacted
     assert g.redact_output("https://rugmunch.io/") == "https://rugmunch.io/"
 
@@ -152,7 +161,7 @@ def test_redact_output_internal_fqdn_requires_prefix() -> None:
     (a Solidity visibility keyword) must survive redaction."""
     assert "[REDACTED]" in g.redact_output("connect to node.internal")
     assert "[REDACTED]" in g.redact_output("connect to svc.local")
-    assert "[REDACTED]" in g.redact_output("host at nats.rugmunch.io")
+    assert "[REDACTED]" in g.redact_output("host at svc.rugmunch.io")
     # Bare ambiguous words that are legit code/prose must NOT be redacted.
     out = g.redact_output("function computeSwapStep(...) internal pure returns (uint256)")
     assert "internal" in out

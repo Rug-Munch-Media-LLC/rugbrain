@@ -576,7 +576,7 @@ async def email_accounts(request: Request) -> dict[str, Any]:
 
     return {
         "accounts": accounts,
-        "webmail_url": os.getenv("RMI_WEBMAIL_URL", "https://webmail.rugmunch.io/"),
+        "webmail_url": os.getenv("RMI_WEBMAIL_URL", ""),
     }
 
 

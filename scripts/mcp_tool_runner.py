@@ -34,7 +34,7 @@ from typing import Any
 
 
 def _mcp_dir() -> str:
-    return os.environ.get("RMI_MCP_DIR", "/srv/work/repos/rmi-codebase-mcp")
+    return os.environ.get("RMI_MCP_DIR", "/path/to/rmi-codebase-mcp")
 
 
 def _result(data: dict[str, Any]) -> None:

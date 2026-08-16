@@ -27,7 +27,7 @@ if ! flock -n 200; then
 fi
 trap 'flock -u 200 2>/dev/null || true' EXIT
 
-RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
+RAG_DIR="${RMI_RAG_DIR:-/path/to/rugbrain}"
 PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }

@@ -39,8 +39,8 @@ fi
 export QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
 export INFINITY_URL="${INFINITY_URL:-http://localhost:8001}"
 export RAG_CODEBASE_DIR="${RAG_CODEBASE_DIR:-/tmp/rag_codebases}"
-export RMI_MCP_DIR="${RMI_MCP_DIR:-/srv/work/repos/rmi-codebase-mcp}"
-export RMI_MCP_PYTHON="${RMI_MCP_PYTHON:-/srv/work/repos/rmi-mcp-x402/.venv/bin/python}"
+export RMI_MCP_DIR="${RMI_MCP_DIR:-/path/to/rmi-codebase-mcp}"
+export RMI_MCP_PYTHON="${RMI_MCP_PYTHON:-/path/to/rmi-mcp-x402/.venv/bin/python}"
 export REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
 
