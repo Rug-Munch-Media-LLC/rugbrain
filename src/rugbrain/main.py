@@ -382,6 +382,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # ── Auto-create Qdrant collections ──────────────────────────────
     try:
         import httpx
+
         from rugbrain.qdrant_store import _ensure_collection
 
         qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
@@ -538,6 +539,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("oracle_monitor_start_failed: %s", exc)
         _health_state["oracle_monitor"] = False
+
+    # ── Bucketshop Exchange Scam Tracker ───────────────────────────
+    try:
+        from rugbrain.monitors.bucketshop_tracker import bucketshop_tracker_loop
+
+        asyncio.ensure_future(bucketshop_tracker_loop())
+        _health_state["bucketshop_tracker"] = True
+        logger.info("bucketshop_tracker status=ok")
+    except Exception as exc:
+        logger.warning("bucketshop_tracker_start_failed: %s", exc)
+        _health_state["bucketshop_tracker"] = False
 
     yield
 
@@ -762,6 +774,7 @@ async def health() -> dict[str, Any]:
         "content_digest": _health_state.get("content_digest", False),
         "exchange_reserves": _health_state.get("exchange_reserves", False),
         "oracle_monitor": _health_state.get("oracle_monitor", False),
+        "bucketshop_tracker": _health_state.get("bucketshop_tracker", False),
         "qdrant_collections_auto": True,
     }
 

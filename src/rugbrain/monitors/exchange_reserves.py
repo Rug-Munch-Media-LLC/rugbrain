@@ -27,6 +27,31 @@ POR_ENDPOINTS: dict[str, str] = {
     "Kraken": "https://api.kraken.com/0/public/ProofOfAssets",
     "OKX": "https://www.okx.com/api/v5/asset/merkle-balance",
     "BitMEX": "https://www.bitmex.com/api/v1/merkleProof",
+    # Bucketshop exchanges — monitored via CoinGecko + their own APIs
+    "Gate.io": "https://www.gate.io/api/v4/proof_of_reserves",
+    "KuCoin": "https://www.kucoin.com/api/v1/proof-of-reserves",
+    "MEXC": "https://www.mexc.com/api/v1/proof_of_reserves",
+    "HTX": "https://www.htx.com/api/v1/proof_of_reserves",
+    "Phemex": "https://api.phemex.com/v1/proof-of-reserves",
+    "BingX": "https://api.bingx.com/api/v1/proof_of_reserves",
+    "BitMart": "https://api.bitmart.com/v2/proof_of_reserves",
+    "LBank": "https://api.lbank.com/v1/proof_of_reserves",
+    "XT.com": "https://api.xt.com/v1/proof_of_reserves",
+    "DigiFinex": "https://api.digifinex.com/v1/proof_of_reserves",
+}
+
+# Bucketshop exchange risk flags (from bucketshop_tracker)
+BUCKETSHOP_RISK: dict[str, dict[str, str]] = {
+    "MEXC": {"risk": "high", "reason": "wash_trading", "flag": "🚩"},
+    "DigiFinex": {"risk": "high", "reason": "wash_trading", "flag": "🚩"},
+    "LBank": {"risk": "high", "reason": "wash_trading", "flag": "🚩"},
+    "XT.com": {"risk": "high", "reason": "wash_trading", "flag": "🚩"},
+    "Phemex": {"risk": "medium", "reason": "regulatory_risk", "flag": "⚠️"},
+    "BingX": {"risk": "medium", "reason": "regulatory_risk", "flag": "⚠️"},
+    "BitMart": {"risk": "high", "reason": "previous_hack", "flag": "🚩"},
+    "Gate.io": {"risk": "medium", "reason": "reserves_concern", "flag": "⚠️"},
+    "KuCoin": {"risk": "medium", "reason": "regulatory_risk", "flag": "⚠️"},
+    "HTX": {"risk": "high", "reason": "reserves_concern", "flag": "🚩"},
 }
 
 CG_SLUGS: dict[str, str] = {
@@ -219,6 +244,9 @@ def get_all_reserves() -> dict[str, dict[str, Any]]:
             "scanned_at": s.scanned_at,
             "age_h": age,
             "source": "coingecko_proxy" if name in _cg_fallback else "direct_por",
+            "risk": BUCKETSHOP_RISK.get(name, {}).get("risk", "low"),
+            "risk_flag": BUCKETSHOP_RISK.get(name, {}).get("flag", ""),
+            "risk_reason": BUCKETSHOP_RISK.get(name, {}).get("reason", ""),
         }
     return out
 
