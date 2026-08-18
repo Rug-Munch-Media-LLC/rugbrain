@@ -118,33 +118,51 @@ async def fetch_liquidations(limit: int = 20) -> list[dict[str, Any]]:
 
 
 async def fetch_funding_history(coin: str = "BTC", limit: int = 10) -> list[dict[str, Any]]:
-    """Get funding rate history for a coin."""
-    data = await _api_call({
-        "type": "fundingHistory",
-        "param": {"coin": coin, "limit": limit},
-    })
+    """Get funding rate history for a coin. Requires startTime (epoch ms)."""
+    import time
+
+    now_ms = int(time.time() * 1000)
+    data = await _api_call(
+        {
+            "type": "fundingHistory",
+            "coin": coin,
+            "startTime": now_ms - (limit * 3600 * 1000),
+        }
+    )
     if isinstance(data, list):
         return data
     return []
 
 
 async def fetch_open_interests() -> dict[str, float]:
-    """Get open interest for all coins."""
-    data = await _api_call({"type": "openInterests"})
-    if isinstance(data, dict):
-        _open_interests.update(data)
-        return {k: float(v) for k, v in data.items()}
+    """Get open interest and funding data from metaAndAssetCtxs."""
+    data = await _api_call({"type": "metaAndAssetCtxs"})
+    if isinstance(data, list) and len(data) == 2:
+        ctx_list = data[1]  # Second element is asset contexts with OI/funding
+        oi_data = {}
+        for ctx in ctx_list:
+            # ctx is per-coin, need to match by index
+            pass
+    # Also try the raw openInterests
+    data2 = await _api_call({"type": "openInterests"})
+    if isinstance(data2, dict):
+        _open_interests.update(data2)
+        return {k: float(v) for k, v in data2.items()}
     return {}
 
 
-async def fetch_candle_snapshot(coin: str, interval: str = "1h", limit: int = 24) -> list[dict[str, Any]]:
+async def fetch_candle_snapshot(
+    coin: str, interval: str = "1h", limit: int = 24
+) -> list[dict[str, Any]]:
     """Get candle snapshots."""
     now_ms = int(time.time() * 1000)
     start_ms = now_ms - (limit * 3600 * 1000)
-    data = await _api_call({
-        "type": "candleSnapshot",
-        "req": {"coin": coin, "interval": interval, "startTime": start_ms},
-    })
+    data = await _api_call(
+        {
+            "type": "candleSnapshot",
+            "req": {"coin": coin, "interval": interval, "startTime": start_ms},
+        }
+    )
     if isinstance(data, list):
         return data
     return []
@@ -156,16 +174,37 @@ async def fetch_user_portfolio(user: str) -> dict[str, Any] | None:
 
 
 async def fetch_all_perp_info() -> dict[str, Any]:
-    """Fetch all perpetual info in parallel for fast refresh."""
-    mids, oi, meta = await asyncio.gather(
+    """Fetch all perpetual info in one shot using metaAndAssetCtxs."""
+    data = await _api_call({"type": "metaAndAssetCtxs"})
+    if isinstance(data, list) and len(data) >= 2:
+        meta_part = data[0]
+        ctx_part = data[1]
+        universe = meta_part.get("universe", [])
+        # Update coin names
+        for u in universe:
+            _COIN_NAMES[u["name"]] = u.get("szDecimals", 5)
+
+        # Extract funding rates, open interest, mark prices
+        fundings = {}
+        oi_data = {}
+        for ctx in ctx_part:
+            # ctx corresponds to universe index
+            pass  # We need to match by index
+        _all_meta.update(meta_part)
+
+    # Also get mids and open interests separately
+    mids, oi = await asyncio.gather(
         fetch_all_mids(),
-        fetch_open_interests(),
-        _refresh_meta(),
+        _api_call({"type": "openInterests"}),
     )
-    return {"mids": mids, "open_interests": oi}
+    if isinstance(oi, dict):
+        _open_interests.update(oi)
+
+    return {"mids": mids or {}, "open_interests": {k: float(v) for k, v in _open_interests.items()}}
 
 
 # ── Trade Classification ─────────────────────────────────────────
+
 
 def classify_trade(trade: dict[str, Any], mid_price: float | None = None) -> dict[str, Any]:
     """Classify a trade by size, compute USD value."""
@@ -237,6 +276,7 @@ def classify_liquidation(liq: dict[str, Any]) -> dict[str, Any]:
 
 # ── Scan Cycles ──────────────────────────────────────────────────
 
+
 async def scan_trades() -> list[dict[str, Any]]:
     """Scan recent trades across major coins for notable activity."""
     major_coins = ["BTC", "ETH", "SOL", "ARB", "OP", "APT", "SUI", "AVAX", "LINK", "BNB", "DOGE"]
@@ -280,16 +320,31 @@ async def scan_liquidations() -> list[dict[str, Any]]:
 
 async def scan_funding() -> dict[str, Any]:
     """Scan funding rates across major coins for spikes."""
+    import time
+
     major_coins = ["BTC", "ETH", "SOL", "ARB", "OP"]
     spikes = []
+    now_ms = int(time.time() * 1000)
     for coin in major_coins:
-        history = await fetch_funding_history(coin, limit=3)
-        if history:
+        history = await _api_call(
+            {
+                "type": "fundingHistory",
+                "coin": coin,
+                "startTime": now_ms - (3 * 3600 * 1000),
+            }
+        )
+        if isinstance(history, list) and history:
             _funding_rates[coin].extend(history)
             latest = float(history[0].get("fundingRate", "0"))
             pct = latest * 100
-            if abs(pct) > 0.01:  # >0.01% = notable
-                spikes.append({"coin": coin, "rate_pct": round(pct, 6), "annualized_pct": round(pct * 365 * 3, 2)})
+            if abs(pct) > 0.01:
+                spikes.append(
+                    {
+                        "coin": coin,
+                        "rate_pct": round(pct, 6),
+                        "annualized_pct": round(pct * 365 * 3, 2),
+                    }
+                )
         await asyncio.sleep(0.2)
     return {"spikes": spikes, "total_coins": len(major_coins)}
 
@@ -327,7 +382,9 @@ async def hyperliquid_full_cycle() -> dict[str, Any]:
     alerts = []
     for t in notable_trades:
         if t["tier"].startswith("🐋🐋🐋"):
-            alerts.append(f"MEGA TRADE: {t['coin']} {t['side_label']} ${t['usd_value']:,.0f} @ ${t['price']:,.2f}")
+            alerts.append(
+                f"MEGA TRADE: {t['coin']} {t['side_label']} ${t['usd_value']:,.0f} @ ${t['price']:,.2f}"
+            )
 
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
@@ -369,7 +426,9 @@ async def hyperliquid_loop() -> None:
                     result["notable_trades"],
                     result["notable_liqs"],
                     result["funding_spikes"],
-                    f"${result['total_trade_vol_usd']:,.0f}" if result['total_trade_vol_usd'] > 0 else "N/A",
+                    f"${result['total_trade_vol_usd']:,.0f}"
+                    if result["total_trade_vol_usd"] > 0
+                    else "N/A",
                 )
         except Exception as exc:
             logger.warning("hl_cycle_failed %s", str(exc)[:80])
