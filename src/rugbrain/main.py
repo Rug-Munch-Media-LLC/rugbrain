@@ -72,6 +72,8 @@ _health_state: dict[str, Any] = {
     "subscriber_stats": {},
     "scanner_poller": False,
     "poller_stats": {},
+    "mempool_scanner": False,
+    "social_sentiment": False,
     "realtime_monitor": False,
     "realtime_monitor_stats": {},
     "news_story_updater": False,
@@ -294,6 +296,34 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("news_story_updater_start_failed: %s", exc)
         _health_state["news_story_updater"] = False
+
+    # ── Start mempool scanner (pending tx monitoring) ──────────────
+    # Polls Etherscan + Helius for suspicious pending transactions.
+    _mempool_ok = False
+    try:
+        from rugbrain.mempool_scanner import mempool_scan_loop
+
+        asyncio.ensure_future(mempool_scan_loop())
+        _mempool_ok = True
+        _health_state["mempool_scanner"] = True
+        logger.info("mempool_scanner status=ok")
+    except Exception as exc:
+        logger.warning("mempool_scanner_start_failed: %s", exc)
+        _health_state["mempool_scanner"] = False
+
+    # ── Start social sentiment monitor ─────────────────────────────
+    # Polls LunarCrush + Discord webhooks for scam signals.
+    _social_ok = False
+    try:
+        from rugbrain.social_sentiment import social_sentiment_loop
+
+        asyncio.ensure_future(social_sentiment_loop())
+        _social_ok = True
+        _health_state["social_sentiment"] = True
+        logger.info("social_sentiment status=ok")
+    except Exception as exc:
+        logger.warning("social_sentiment_start_failed: %s", exc)
+        _health_state["social_sentiment"] = False
 
     yield
 
