@@ -313,19 +313,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         _health_state["mempool_scanner"] = False
 
     # ── Start social sentiment monitor ─────────────────────────────
-    # Polls LunarCrush + Discord webhooks for scam signals.
-    _social_ok = False
-    try:
-        from rugbrain.social_sentiment import social_sentiment_loop
-
-        asyncio.ensure_future(social_sentiment_loop())
-        _social_ok = True
-        _health_state["social_sentiment"] = True
-        logger.info("social_sentiment status=ok")
-    except Exception as exc:
-        logger.warning("social_sentiment_start_failed: %s", exc)
-        _health_state["social_sentiment"] = False
-
     # ── MEV detector ────────────────────────────────────────────────
     try:
         from rugbrain.mev_detector import mev_scan_loop
@@ -474,6 +461,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("hyperliquid_monitor_start_failed: %s", exc)
         _health_state["hyperliquid_monitor"] = False
+
+    # ── Social Sentiment (LunarCrush) ──────────────────────────────
+    try:
+        from rugbrain.monitors.social_sentiment import social_sentiment_loop
+
+        asyncio.ensure_future(social_sentiment_loop())
+        _health_state["social_sentiment"] = True
+        logger.info("social_sentiment status=ok")
+    except Exception as exc:
+        logger.warning("social_sentiment_start_failed: %s", exc)
+        _health_state["social_sentiment"] = False
 
     yield
 
@@ -691,6 +689,7 @@ async def health() -> dict[str, Any]:
         "token_unlock_monitor": _health_state.get("token_unlock_monitor", False),
         "market_health": _health_state.get("market_health", False),
         "hyperliquid_monitor": _health_state.get("hyperliquid_monitor", False),
+        "social_sentiment": _health_state.get("social_sentiment", False),
         "qdrant_collections_auto": True,
     }
 

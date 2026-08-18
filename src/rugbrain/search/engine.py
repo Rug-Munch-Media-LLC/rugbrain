@@ -365,7 +365,11 @@ def bias_toward_code_chunks(
         return results
 
     def _score(r: dict[str, Any]) -> float:
-        base = r.get("similarity", 0.0) or r.get("rrf_score", 0.0) or 0.0
+        base = (
+            r.get("similarity")
+            if r.get("similarity") is not None
+            else r.get("rrf_score", 0.0) or 0.0
+        )
         return float(base) + (_CODE_CHUNK_BONUS if _is_code_result(r) else 0.0)
 
     return sorted(results, key=_score, reverse=True)
@@ -447,7 +451,7 @@ async def search_similar(
     # 1. Check semantic cache
     cache_hit = False
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache# external dependency
+        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
         cache = get_semantic_cache()
         cached = await cache.check(query_vec)
@@ -467,7 +471,7 @@ async def search_similar(
     # 2. Try FAISS ANN index search
     results = []
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex# external dependency
+        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
         ann = get_ann_index()
         if ann.is_built(collection):
@@ -505,7 +509,7 @@ async def search_similar(
     # 3. Store in semantic cache
     if results:
         try:
-            from rugbrain.compat import get_semantic_cache, SemanticCache# external dependency
+            from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
             cache = get_semantic_cache()
             await cache.store(query_vec, results)
@@ -1041,7 +1045,7 @@ async def three_pillar_search(
     # ── Pillar 1: Dense vector search (ANN) ──
     pillar1_results: list[dict[str, Any]] = []
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache# external dependency
+        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
         cache = get_semantic_cache()
         cached = await cache.check(query_vec)
@@ -1067,7 +1071,7 @@ async def three_pillar_search(
 
             for coll in collections:
                 try:
-                    from rugbrain.compat import get_ann_index, AnnIndex# external dependency
+                    from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
                     ann = get_ann_index()
                     if expanded:
@@ -1171,7 +1175,7 @@ async def three_pillar_search(
     pillar3_results: list[dict[str, Any]] = []
     entity_extraction = None
     try:
-        from rugbrain.compat import EntityLookup, extract_entities# external dependency
+        from rugbrain.compat import EntityLookup, extract_entities  # external dependency
 
         entity_extraction = extract_entities(query)
         if entity_extraction.has_entities:
@@ -1192,7 +1196,7 @@ async def three_pillar_search(
                 # removed module degrades to ``kg = None`` instead of raising.
                 kg = None
                 try:
-                    from rugbrain.compat import get_knowledge_graph# external dependency
+                    from rugbrain.compat import get_knowledge_graph  # external dependency
 
                     kg = await get_knowledge_graph()
                 except ImportError:
@@ -1329,7 +1333,7 @@ async def three_pillar_search(
     mmr_applied = False
     if use_mmr and len(fused) > limit:
         try:
-            from rugbrain.compat import mmr_dedup_results# external dependency
+            from rugbrain.compat import mmr_dedup_results  # external dependency
 
             fused = await mmr_dedup_results(
                 fused,
@@ -1382,7 +1386,7 @@ async def three_pillar_search(
         # Stage 2: sentence-transformers CrossEncoder fallback
         if not reranker_applied:
             try:
-                from rugbrain.compat import get_reranker# external dependency
+                from rugbrain.compat import get_reranker  # external dependency
 
                 reranker = await get_reranker()
                 fused = await reranker.rerank(query, fused, top_k=limit * 3)
@@ -1435,7 +1439,7 @@ async def three_pillar_search(
 
     # ── Parent document context expansion (ParentRetriever) ──
     try:
-        from rugbrain.compat import get_parent_retriever# external dependency
+        from rugbrain.compat import get_parent_retriever  # external dependency
 
         pr = await get_parent_retriever()
         fused = await pr.expand_context(fused)
@@ -1539,7 +1543,7 @@ async def three_pillar_search(
     except ImportError:
         # Fallback to external rmi-backend confidence module
         try:
-            from rugbrain.compat import score_confidence# external dependency
+            from rugbrain.compat import score_confidence  # external dependency
 
             entity_list = list(entity_doc_ids)[:5] if entity_doc_ids else []
             confidence = score_confidence(final_results, query=query, entity_matches=entity_list)
@@ -1706,7 +1710,7 @@ async def search_with_transform(
     Transforms the query first, then searches with all transformed queries,
     and merges results using RRF.
     """
-    from rugbrain.compat import transform_query# external dependency
+    from rugbrain.compat import transform_query  # external dependency
 
     transformed = await transform_query(query, strategy=strategy)
 

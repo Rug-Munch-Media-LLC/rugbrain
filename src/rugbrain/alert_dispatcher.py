@@ -1,7 +1,7 @@
 """Alert Dispatcher — fires Telegram alerts for MEV, smart money, scam, and high-risk detections.
 
 Central dispatch point that sends alerts to Telegram via the configured
-ALERT_WEBHOOK_TELEGRAM. Called by MEV detector, smart money tracker, 
+ALERT_WEBHOOK_TELEGRAM. Called by MEV detector, smart money tracker,
 YouTube scam detector, and newsletter scam detector.
 """
 
@@ -70,20 +70,53 @@ async def dispatch_alert(
                 continue
 
             try:
-                payload = {
-                    "text": f"🚨 *{severity.upper()}*: {title}\n\n{message}",
-                    "parse_mode": "Markdown",
-                }
+                text = f"🚨 *{severity.upper()}*: {title}\n\n{message}"
+                if channel == "telegram":
+                    payload = {"text": text, "parse_mode": "Markdown"}
+                elif channel == "slack":
+                    payload = {
+                        "text": title,
+                        "mrkdwn": True,
+                        "attachments": [
+                            {
+                                "text": message,
+                                "color": "danger"
+                                if severity in ("critical", "high")
+                                else "warning",
+                            }
+                        ],
+                    }
+                elif channel == "discord":
+                    color = (
+                        0xFF0000
+                        if severity == "critical"
+                        else 0xFFA500
+                        if severity == "high"
+                        else 0xFFFF00
+                    )
+                    payload = {
+                        "content": f"🚨 **{severity.upper()}**: {title}",
+                        "embeds": [{"description": message, "color": color}],
+                    }
+                else:
+                    payload = {"text": text}
                 async with httpx.AsyncClient(timeout=10) as c:
                     r = await c.post(url, json=payload)
                     results[channel] = r.status_code == 200
                     if r.status_code != 200:
-                        logger.debug("alert_dispatch_failed channel=%s status=%d", channel, r.status_code)
+                        logger.debug(
+                            "alert_dispatch_failed channel=%s status=%d", channel, r.status_code
+                        )
             except Exception as exc:
                 logger.debug("alert_dispatch_error channel=%s error=%s", channel, str(exc)[:60])
                 results[channel] = False
 
-    logger.info("alert_dispatched type=%s severity=%s channels=%s", alert_type, severity, list(results.keys()))
+    logger.info(
+        "alert_dispatched type=%s severity=%s channels=%s",
+        alert_type,
+        severity,
+        list(results.keys()),
+    )
     return results
 
 
@@ -91,26 +124,30 @@ async def alert_mev_sandwich(details: dict[str, Any]) -> dict[str, bool]:
     """Dispatch alert for detected MEV sandwich attack."""
     title = "MEV Sandwich Attack Detected"
     msg = (
-        f"Frontrun: `{details.get('frontrun_tx','?')[:20]}...`\n"
-        f"Victim: `{details.get('victim_tx','?')[:20]}...`\n"
-        f"Backrun: `{details.get('backrun_tx','?')[:20]}...`\n"
+        f"Frontrun: `{details.get('frontrun_tx', '?')[:20]}...`\n"
+        f"Victim: `{details.get('victim_tx', '?')[:20]}...`\n"
+        f"Backrun: `{details.get('backrun_tx', '?')[:20]}...`\n"
         f"Token Pair: {details.get('token_pair', '?')}\n"
         f"Severity: {details.get('severity', 'medium')}"
     )
-    return await dispatch_alert(title, msg, alert_type="mev", severity=details.get("severity", "medium"))
+    return await dispatch_alert(
+        title, msg, alert_type="mev", severity=details.get("severity", "medium")
+    )
 
 
 async def alert_whale_movement(details: dict[str, Any]) -> dict[str, bool]:
     """Dispatch alert for significant whale movement."""
     title = f"Whale Movement: {details.get('value_eth', 0)} ETH"
     msg = (
-        f"Wallet: `{details.get('wallet','?')[:20]}...`\n"
+        f"Wallet: `{details.get('wallet', '?')[:20]}...`\n"
         f"Chain: {details.get('chain', 'ethereum')}\n"
         f"Value: {details.get('value_eth', 0)} ETH\n"
-        f"Tx: `{details.get('tx_hash','?')[:20]}...`\n"
+        f"Tx: `{details.get('tx_hash', '?')[:20]}...`\n"
         f"Severity: {details.get('severity', 'medium')}"
     )
-    return await dispatch_alert(title, msg, alert_type="whale", severity=details.get("severity", "medium"))
+    return await dispatch_alert(
+        title, msg, alert_type="whale", severity=details.get("severity", "medium")
+    )
 
 
 async def alert_scam_detection(details: dict[str, Any]) -> dict[str, bool]:
