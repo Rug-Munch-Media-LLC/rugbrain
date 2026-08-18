@@ -299,8 +299,7 @@ def _parse_rss(xml: str, h: str) -> list[dict[str, Any]]:
     out = []
     for entry in re.findall(r"<entry>(.*?)</entry>", xml, re.DOTALL):
         ct = _clean(
-            ((m := re.search(r"<content[^>]*>(.*?)</content>", entry, re.DOTALL))
-            and m.group(1))
+            ((m := re.search(r"<content[^>]*>(.*?)</content>", entry, re.DOTALL)) and m.group(1))
             or ""
         )
         text = ct or _clean(
@@ -439,6 +438,46 @@ async def twitter_tracker_cycle() -> dict[str, Any]:
     all_t = nt + st
     for t in all_t:
         _tweets.append(t)
+
+    # Score tweets with reranker for scam detection
+    try:
+        from rugbrain.reranker import rerank_kol_tweets
+
+        if all_t:
+            scored = await rerank_kol_tweets([dict(t) for t in all_t[-50:]], top_k=5)
+            _recent_alerts.clear()
+            for t in scored:
+                if t.get("_scam_score", 0) > 0.5:
+                    _recent_alerts.append(
+                        {
+                            "type": "kol_scam",
+                            "author": t.get("author", "unknown"),
+                            "text": t.get("text", "")[:100],
+                            "score": round(t["_scam_score"], 3),
+                            "time": datetime.now(UTC).isoformat(),
+                        }
+                    )
+                    # Alert if highly suspicious
+                    if t["_scam_score"] > 0.7:
+                        try:
+                            from rugbrain.alert_dispatcher import dispatch_alert
+
+                            asyncio.ensure_future(
+                                dispatch_alert(
+                                    title=f"\U0001f6a9 KOL Scam Alert: @{t.get('author', 'unknown')}",
+                                    message=(
+                                        f"Reranker scam score: {t['_scam_score']:.2f}\n"
+                                        f"{t.get('text', '')[:200]}"
+                                    ),
+                                    alert_type="kol_scam",
+                                    severity="high" if t["_scam_score"] > 0.85 else "medium",
+                                )
+                            )
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+
     if all_t:
         _trending.update(_trend(all_t))
     alerts = _alerts(all_t)

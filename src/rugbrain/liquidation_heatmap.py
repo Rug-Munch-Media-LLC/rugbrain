@@ -45,6 +45,8 @@ CEX_LIQUIDATION_ENDPOINTS: dict[str, str] = {
     "Kraken Futures": "https://futures.kraken.com/derivatives/api/v3",
     "BitMEX": "https://www.bitmex.com/api/v1/liquidation",
     "Deribit": "https://www.deribit.com/api/v2/public/get_last_settlements",
+    "KuCoin Futures": "https://api-futures.kucoin.com/api/v1/contracts/liquidation",
+    "Phemex": "https://api.phemex.com/md/liquidation",
 }
 
 # Known liquidators (wallets that profit from liquidations)
@@ -497,6 +499,171 @@ async def get_deribit_liquidations() -> list[dict[str, Any]]:
     return events
 
 
+async def get_hyperliquid_liquidations() -> list[dict[str, Any]]:
+    """Get liquidation orders from Hyperliquid via monitor import + direct API fallback."""
+    events = []
+    coins = ["BTC", "ETH", "SOL"]
+    try:
+        from rugbrain.monitors.hyperliquid_monitor import (
+            classify_liquidation,
+            fetch_liquidations,
+        )
+
+        liqs = await fetch_liquidations(limit=50)
+        if liqs:
+            for liq in liqs:
+                try:
+                    c = classify_liquidation(liq)
+                    coin = c.get("coin", "?")
+                    if coin not in coins:
+                        coins.append(coin)
+                    liq_id = f"hl_{liq.get('coin', '')}_{liq.get('time', '')}"
+                    if liq_id not in _seen_liquidations:
+                        _seen_liquidations.add(liq_id)
+                        usd_value = float(c.get("usd_value", 0))
+                        events.append(
+                            {
+                                "exchange": "Hyperliquid",
+                                "symbol": coin,
+                                "side": "LONG" if c.get("is_long") else "SHORT",
+                                "qty": float(c.get("size", 0)),
+                                "price": float(c.get("price", 0)),
+                                "value_usd": round(usd_value, 2),
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "severity": "critical"
+                                if usd_value > 10_000_000
+                                else "high"
+                                if usd_value > 1_000_000
+                                else "medium",
+                            }
+                        )
+                except Exception:
+                    continue
+            return events
+    except ImportError:
+        logger.debug("hl_monitor_not_available_falling_back_to_direct_api")
+    except Exception as exc:
+        logger.debug("hl_monitor_import_failed %s", str(exc)[:60])
+
+    # Direct API fallback
+    for coin in coins:
+        try:
+            payload = {"type": "liquidationOrders", "param": {"limit": 20}}
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.post("https://api.hyperliquid.xyz/info", json=payload)
+                if r.status_code == 200:
+                    data = r.json()
+                    if isinstance(data, list):
+                        for liq in data:
+                            liq_coin = liq.get("coin", coin)
+                            liq_id = f"hl_direct_{liq_coin}_{liq.get('time', '')}"
+                            if liq_id not in _seen_liquidations:
+                                _seen_liquidations.add(liq_id)
+                                sz = float(liq.get("sz", 0))
+                                px = float(liq.get("lidPx", liq.get("px", 0)))
+                                usd_value = sz * px
+                                events.append(
+                                    {
+                                        "exchange": "Hyperliquid",
+                                        "symbol": liq_coin,
+                                        "side": "LONG" if liq.get("side") == "B" else "SHORT",
+                                        "qty": sz,
+                                        "price": px,
+                                        "value_usd": round(usd_value, 2),
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        "severity": "critical"
+                                        if usd_value > 10_000_000
+                                        else "high"
+                                        if usd_value > 1_000_000
+                                        else "medium",
+                                    }
+                                )
+            await asyncio.sleep(0.3)
+        except Exception as exc:
+            logger.debug("hyperliquid_direct_liq_failed coin=%s %s", coin, str(exc)[:60])
+    return events
+
+
+async def get_kucoin_futures_liquidations() -> list[dict[str, Any]]:
+    """Get liquidation orders from KuCoin Futures API (free, no auth)."""
+    events = []
+    symbols = ["XBTUSDTM", "ETHUSDTM", "SOLUSDTM"]
+    for symbol in symbols:
+        try:
+            url = f"https://api-futures.kucoin.com/api/v1/contracts/liquidation?symbol={symbol}"
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get(url)
+                if r.status_code == 200:
+                    data = r.json().get("data", [])
+                    for liq in data:
+                        liq_id = f"kucoin_{symbol}_{liq.get('time', '')}"
+                        if liq_id not in _seen_liquidations:
+                            _seen_liquidations.add(liq_id)
+                            qty = float(liq.get("size", "0"))
+                            price = float(liq.get("price", "0"))
+                            usd_value = qty * price
+                            events.append(
+                                {
+                                    "exchange": "KuCoin Futures",
+                                    "symbol": symbol,
+                                    "side": liq.get("side", ""),
+                                    "qty": qty,
+                                    "price": price,
+                                    "value_usd": round(usd_value, 2),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "severity": "critical"
+                                    if usd_value > 10_000_000
+                                    else "high"
+                                    if usd_value > 1_000_000
+                                    else "medium",
+                                }
+                            )
+            await asyncio.sleep(0.3)
+        except Exception as exc:
+            logger.debug("kucoin_futures_liq_failed symbol=%s %s", symbol, str(exc)[:60])
+    return events
+
+
+async def get_phemex_liquidations() -> list[dict[str, Any]]:
+    """Get liquidation orders from Phemex API (free, no auth)."""
+    events = []
+    symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    for symbol in symbols:
+        try:
+            url = f"https://api.phemex.com/md/liquidation?symbol={symbol}"
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get(url)
+                if r.status_code == 200:
+                    data = r.json().get("result", {}).get("liquidation", [])
+                    for liq in data:
+                        liq_id = f"phemex_{symbol}_{liq.get('timestamp', '')}"
+                        if liq_id not in _seen_liquidations:
+                            _seen_liquidations.add(liq_id)
+                            qty = float(liq.get("qty", "0"))
+                            price = float(liq.get("price", "0"))
+                            usd_value = qty * price
+                            events.append(
+                                {
+                                    "exchange": "Phemex",
+                                    "symbol": symbol,
+                                    "side": liq.get("side", ""),
+                                    "qty": qty,
+                                    "price": price,
+                                    "value_usd": round(usd_value, 2),
+                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "severity": "critical"
+                                    if usd_value > 10_000_000
+                                    else "high"
+                                    if usd_value > 1_000_000
+                                    else "medium",
+                                }
+                            )
+            await asyncio.sleep(0.3)
+        except Exception as exc:
+            logger.debug("phemex_liq_failed symbol=%s %s", symbol, str(exc)[:60])
+    return events
+
+
 async def get_total_market_liq_24h() -> dict[str, Any]:
     """Get total market liquidation volume from Coinglass-style aggregation.
 
@@ -586,6 +753,9 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         kraken,
         bitmex,
         deribit,
+        hyperliquid,
+        kucoin,
+        phemex,
         market,
     ) = await asyncio.gather(
         get_binance_liquidations(),
@@ -598,11 +768,26 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         get_kraken_futures_liquidations(),
         get_bitmex_liquidations(),
         get_deribit_liquidations(),
+        get_hyperliquid_liquidations(),
+        get_kucoin_futures_liquidations(),
+        get_phemex_liquidations(),
         get_total_market_liq_24h(),
     )
 
     all_events = (
-        binance + bybit + okx + protocols + dydx + gmx + synthetix + kraken + bitmex + deribit
+        binance
+        + bybit
+        + okx
+        + protocols
+        + dydx
+        + gmx
+        + synthetix
+        + kraken
+        + bitmex
+        + deribit
+        + hyperliquid
+        + kucoin
+        + phemex
     )
     _liquidation_history.extend(all_events)
     if len(_liquidation_history) > 50000:

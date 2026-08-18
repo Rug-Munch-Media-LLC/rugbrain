@@ -174,3 +174,24 @@ async def alert_newsletter_high_risk(details: dict[str, Any]) -> dict[str, bool]
         f"Category: {details.get('category', '?')}"
     )
     return await dispatch_alert(title, msg, alert_type="newsletter", severity="high")
+
+
+async def rerank_alert_priority(
+    alerts: list[dict[str, Any]],
+    top_k: int = 10,
+) -> list[dict[str, Any]]:
+    """Use Qwen3 reranker to score alert priority.
+
+    Args:
+        alerts: List of alert dicts with 'title' and 'message' keys.
+        top_k: Return top-k ranked alerts.
+
+    Returns alerts sorted by threat score descending.
+    Degrades gracefully: returns top_k unsorted on failure.
+    """
+    try:
+        from rugbrain.reranker import rerank_alerts
+
+        return await rerank_alerts(alerts, top_k=top_k)
+    except Exception:
+        return alerts[:top_k]

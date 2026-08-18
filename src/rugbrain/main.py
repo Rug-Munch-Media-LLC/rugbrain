@@ -529,6 +529,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("exchange_reserves_start_failed: %s", exc)
         _health_state["exchange_reserves"] = False
 
+    # ── Exchange Wallet Monitoring ────────────────────────────────
+    try:
+        from rugbrain.monitors.exchange_wallets import exchange_wallet_loop
+
+        asyncio.ensure_future(exchange_wallet_loop())
+        _health_state["exchange_wallets"] = True
+        logger.info("exchange_wallets status=ok")
+    except Exception as exc:
+        logger.warning("exchange_wallets_start_failed: %s", exc)
+        _health_state["exchange_wallets"] = False
+
     # ── Oracle Manipulation Detector ───────────────────────────────
     try:
         from rugbrain.monitors.oracle_monitor import oracle_monitor_loop
@@ -773,6 +784,7 @@ async def health() -> dict[str, Any]:
         "token_distribution": _health_state.get("token_distribution", False),
         "content_digest": _health_state.get("content_digest", False),
         "exchange_reserves": _health_state.get("exchange_reserves", False),
+        "exchange_wallets": _health_state.get("exchange_wallets", False),
         "oracle_monitor": _health_state.get("oracle_monitor", False),
         "bucketshop_tracker": _health_state.get("bucketshop_tracker", False),
         "qdrant_collections_auto": True,
