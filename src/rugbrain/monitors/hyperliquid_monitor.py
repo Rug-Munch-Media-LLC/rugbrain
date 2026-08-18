@@ -381,10 +381,53 @@ async def hyperliquid_full_cycle() -> dict[str, Any]:
     # Alert on mega events
     alerts = []
     for t in notable_trades:
-        if t["tier"].startswith("🐋🐋🐋"):
+        tier = t.get("tier", "")
+        if "MEGA WHALE" in tier:
             alerts.append(
                 f"MEGA TRADE: {t['coin']} {t['side_label']} ${t['usd_value']:,.0f} @ ${t['price']:,.2f}"
             )
+            try:
+                from rugbrain.alert_dispatcher import dispatch_alert
+
+                side_emoji = "🟢 BUY" if t.get("is_buy") else "🔴 SELL"
+                await dispatch_alert(
+                    f"MEGA WHALE: {t['coin']} {side_emoji} ${t['usd_value']:,.0f}",
+                    f"Price: ${t['price']:,.2f}\nSize: {t['size']:.4f}\nExchange: Hyperliquid",
+                    alert_type="hyperliquid_whale",
+                    severity="critical",
+                )
+            except Exception:
+                pass
+        elif "WHALE" in tier and "MEGA" not in tier:
+            alerts.append(f"WHALE TRADE: {t['coin']} {t['side_label']} ${t['usd_value']:,.0f}")
+            try:
+                from rugbrain.alert_dispatcher import dispatch_alert
+
+                side_emoji = "🟢 BUY" if t.get("is_buy") else "🔴 SELL"
+                await dispatch_alert(
+                    f"WHALE: {t['coin']} {side_emoji} ${t['usd_value']:,.0f}",
+                    f"Price: ${t['price']:,.2f}\nSize: {t['size']:.4f}\nExchange: Hyperliquid",
+                    alert_type="hyperliquid_whale",
+                    severity="high",
+                )
+            except Exception:
+                pass
+
+    for l in notable_liqs:
+        ltier = l.get("tier", "")
+        if "MEGA LIQUIDATION" in ltier:
+            try:
+                from rugbrain.alert_dispatcher import dispatch_alert
+
+                side_emoji = "LONG" if l.get("is_long") else "SHORT"
+                await dispatch_alert(
+                    f"MEGA LIQUIDATION: {l['coin']} {side_emoji} ${l['usd_value']:,.0f}",
+                    f"Price: ${l['price']:,.2f}\nSize: {l['size']:.4f}\nExchange: Hyperliquid",
+                    alert_type="hyperliquid_liquidation",
+                    severity="critical",
+                )
+            except Exception:
+                pass
 
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
