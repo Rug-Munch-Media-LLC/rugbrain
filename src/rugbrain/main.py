@@ -399,7 +399,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
         async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as c:
-            for col in ["youtube_videos", "podcast_episodes", "newsletters"]:
+            for col in [
+                "youtube_videos",
+                "podcast_episodes",
+                "newsletters",
+                "wallet_clusters",
+                "exchange_flows",
+                "liquidation_events",
+                "token_unlocks",
+                "market_health",
+            ]:
                 ok = await _ensure_collection(col, 1024, c)
                 logger.info(
                     "qdrant_collection_%s collection=%s ok=%s",
@@ -409,6 +418,50 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 )
     except Exception as exc:
         logger.warning("qdrant_auto_create failed: %s", exc)
+
+    # ── Exchange flow monitor ───────────────────────────────────────
+    try:
+        from rugbrain.exchange_flow import exchange_flow_loop
+
+        asyncio.ensure_future(exchange_flow_loop())
+        _health_state["exchange_flow"] = True
+        logger.info("exchange_flow status=ok")
+    except Exception as exc:
+        logger.warning("exchange_flow_start_failed: %s", exc)
+        _health_state["exchange_flow"] = False
+
+    # ── Liquidation heatmap ─────────────────────────────────────────
+    try:
+        from rugbrain.liquidation_heatmap import liquidation_scan_loop
+
+        asyncio.ensure_future(liquidation_scan_loop())
+        _health_state["liquidation_heatmap"] = True
+        logger.info("liquidation_heatmap status=ok")
+    except Exception as exc:
+        logger.warning("liquidation_heatmap_start_failed: %s", exc)
+        _health_state["liquidation_heatmap"] = False
+
+    # ── Token unlock monitor ────────────────────────────────────────
+    try:
+        from rugbrain.token_unlock_monitor import unlock_scan_loop
+
+        asyncio.ensure_future(unlock_scan_loop())
+        _health_state["token_unlock_monitor"] = True
+        logger.info("token_unlock_monitor status=ok")
+    except Exception as exc:
+        logger.warning("token_unlock_monitor_start_failed: %s", exc)
+        _health_state["token_unlock_monitor"] = False
+
+    # ── Market health monitor ───────────────────────────────────────
+    try:
+        from rugbrain.market_health import market_health_loop
+
+        asyncio.ensure_future(market_health_loop())
+        _health_state["market_health"] = True
+        logger.info("market_health status=ok")
+    except Exception as exc:
+        logger.warning("market_health_start_failed: %s", exc)
+        _health_state["market_health"] = False
 
     yield
 
@@ -621,6 +674,10 @@ async def health() -> dict[str, Any]:
         "smart_money_tracker": _health_state.get("smart_money_tracker", False),
         "youtube_ingester": _health_state.get("youtube_ingester", False),
         "newsletter_ingester": _health_state.get("newsletter_ingester", False),
+        "exchange_flow": _health_state.get("exchange_flow", False),
+        "liquidation_heatmap": _health_state.get("liquidation_heatmap", False),
+        "token_unlock_monitor": _health_state.get("token_unlock_monitor", False),
+        "market_health": _health_state.get("market_health", False),
         "qdrant_collections_auto": True,
     }
 
