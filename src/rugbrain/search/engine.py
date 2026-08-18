@@ -1548,8 +1548,18 @@ async def three_pillar_search(
     except Exception as e:
         logger.debug("Confidence scoring failed (non-critical): %s", e)
 
+    # ── Pre-generation reflection: verify on-chain refs before output ──
+    reflection = None
+    try:
+        from rugbrain.pre_generation_reflection import pre_generation_reflection
+
+        reflection = await pre_generation_reflection(query, final_results)
+    except Exception as e:
+        logger.debug("Pre-generation reflection failed (non-critical): %s", e)
+
     return {
         "results": final_results,
+        "reflection": reflection,
         "pillar_summary": {
             "dense_hits": len(pillar1_results),
             "sparse_hits": len(pillar2_results),
