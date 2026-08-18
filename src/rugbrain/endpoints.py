@@ -872,11 +872,21 @@ async def search_threat_intel(
             q.strip().lower(), chain=chain_hint, limit=min(limit, 25)
         )
 
+    # ── Pre-generation reflection: verify on-chain refs before output ──
+    reflection = None
+    try:
+        from rugbrain.pre_generation_reflection import pre_generation_reflection
+
+        reflection = await pre_generation_reflection(q, results)
+    except Exception as e:
+        logger.debug("reflection_failed (non-critical): %s", e)
+
     return {
         "results": results,
         "query": q,
         "collection": collection,
         "total": len(results),
+        "reflection": reflection,
         "filters_applied": filters is not None,
         "reranker_applied": reranker_applied,
         "reranker_method": reranker_method,
