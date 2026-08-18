@@ -408,6 +408,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 "liquidation_events",
                 "token_unlocks",
                 "market_health",
+                "hyperliquid",
             ]:
                 ok = await _ensure_collection(col, 1024, c)
                 logger.info(
@@ -462,6 +463,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("market_health_start_failed: %s", exc)
         _health_state["market_health"] = False
+
+    # ── Hyperliquid Monitor ─────────────────────────────────────────
+    try:
+        from rugbrain.monitors.hyperliquid_monitor import hyperliquid_loop
+
+        asyncio.ensure_future(hyperliquid_loop())
+        _health_state["hyperliquid_monitor"] = True
+        logger.info("hyperliquid_monitor status=ok")
+    except Exception as exc:
+        logger.warning("hyperliquid_monitor_start_failed: %s", exc)
+        _health_state["hyperliquid_monitor"] = False
 
     yield
 
@@ -678,6 +690,7 @@ async def health() -> dict[str, Any]:
         "liquidation_heatmap": _health_state.get("liquidation_heatmap", False),
         "token_unlock_monitor": _health_state.get("token_unlock_monitor", False),
         "market_health": _health_state.get("market_health", False),
+        "hyperliquid_monitor": _health_state.get("hyperliquid_monitor", False),
         "qdrant_collections_auto": True,
     }
 
