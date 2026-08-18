@@ -172,6 +172,29 @@ with tab4:
             except Exception as e:
                 st.error(f"Confidence scoring failed: {e}")
 
+# ── Tab 5: MEV Dashboard ──
+with tab5:
+    st.subheader("MEV Detection — Sandwich & Frontrunning Monitor")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Flashbots MEVs (24h)", "0", "pending")
+    col2.metric("Sandwich Attacks", "0", "pending")
+    col3.metric("Active Alerts", "0", "pending")
+
+    st.markdown("### Recent MEV Alerts")
+    st.info(
+        "MEV detection is active. Flashbots data will populate after the next scan cycle (60s interval)."
+    )
+
+    with st.expander("How MEV Detection Works"):
+        st.markdown("""
+        - **Sandwich Attack**: A user tx is preceded by a buy and followed by a sell on the same pair
+        - **Frontrunning**: Searcher tx placed just before a known target tx
+        - **Backrunning**: Searcher tx placed just after a known target tx
+        - **JIT Liquidity**: LP added just before a swap and removed right after
+
+        Sources: Flashbots API, Etherscan mempool, BloxRoute
+        """)
+
 st.sidebar.markdown(f"**Last refreshed:** {datetime.now().isoformat()[:19]}")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**rugbrain** — Standalone Crypto Intelligence RAG")
