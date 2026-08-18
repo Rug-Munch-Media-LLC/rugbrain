@@ -160,9 +160,56 @@ _TAILORED: dict[str, types.ModuleType] = {
 }
 
 
+_COMPAT_MAP: dict[str, str] = {
+    "app.core.redis": "get_redis_async,get_redis",
+    "app.confidence": "score_confidence",
+    "app.entity_extraction": "EntityLookup,extract_entities",
+    "app.ann_index": "get_ann_index,AnnIndex",
+    "app.semantic_cache": "get_semantic_cache,SemanticCache",
+    "app.mmr_dedup": "mmr_dedup_results",
+    "app.knowledge_graph": "get_knowledge_graph",
+    "app.query_transform": "transform_query",
+    "app.scam_sources": "GoPlusConnector",
+    "app.cross_encoder_reranker": "get_reranker",
+    "app.rag.parent_retriever": "get_parent_retriever",
+}
+
+
+def _try_compat(name: str) -> types.ModuleType | None:
+    """Try to load a compat module for *name* from rugbrain.compat.
+
+    Returns a synthetic sys.modules entry that re-exports the compat
+    names under the *name* namespace, or None if no compat exists.
+    """
+    target = _COMPAT_MAP.get(name)
+    if not target:
+        return None
+    try:
+        from rugbrain import compat
+
+        mod = types.ModuleType(name)
+        for attr in target.split(","):
+            attr = attr.strip()
+            if hasattr(compat, attr):
+                setattr(mod, attr, getattr(compat, attr))
+        sys.modules[name] = mod
+        logger.debug("rugbrain import_guard: %s → rugbrain.compat.%s", name, target)
+        return mod
+    except Exception as exc:
+        logger.debug("rugbrain import_guard: compat failed for %s: %s", name, exc)
+        return None
+
+
 def _ensure_stub(name: str) -> None:
-    """Inject a stub module for ``name`` (and warn once)."""
+    """Inject a stub module for ``name`` (and warn once).
+
+    First tries rugbrain.compat; if no compat exists, creates a
+    safe stub that logs a warning on first use.
+    """
     if name in sys.modules:
+        return
+    # Try rugbrain-native compat first
+    if _try_compat(name):
         return
     mod = _TAILORED.get(name) or _StubModule(name)
     sys.modules[name] = mod

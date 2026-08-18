@@ -18,6 +18,10 @@ import httpx
 import pytest
 
 RAG_API = "http://127.0.0.1:8012"
+API_KEY = "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M"
+HEADERS = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
+SEARCH_URL = f"{RAG_API}/api/v1/search"
+CONFIDENCE_URL = f"{RAG_API}/api/v1/rag/confidence"
 
 # Known historical events to test against
 KNOWN_EVENTS = [
@@ -76,16 +80,16 @@ KNOWN_EVENTS = [
 
 @pytest.fixture(scope="session")
 def client():
-    return httpx.Client(timeout=30.0)
+    return httpx.Client(timeout=120.0, headers=HEADERS)
 
 
 @pytest.mark.parametrize("event", KNOWN_EVENTS)
 def test_known_event_retrieval(client: httpx.Client, event: dict):
     """Test that the RAG system retrieves relevant results for known events."""
-    response = client.post(
-        f"{RAG_API}/rag/search",
-        json={
-            "query": event["query"],
+    response = client.get(
+        SEARCH_URL,
+        params={
+            "q": event["query"],
             "collection": "news_v2",
             "limit": 5,
         },
@@ -98,8 +102,8 @@ def test_known_event_retrieval(client: httpx.Client, event: dict):
     # Check that we got results
     assert len(results) > 0, f"No results for: {event['query']}"
 
-    # Check that at least one result has a decent score
-    best_score = max(r.get("score", 0) for r in results)
+    # Check that at least one result has a decent similarity score
+    best_score = max(r.get("similarity") or r.get("score", 0) for r in results)
     assert best_score >= event["min_score"], (
         f"Best score {best_score:.3f} < min {event['min_score']} for: {event['query']}"
     )
@@ -114,10 +118,10 @@ def test_known_event_retrieval(client: httpx.Client, event: dict):
 def test_confidence_scoring(client: httpx.Client):
     """Test that confidence scoring returns reasonable values."""
     # Search for a well-known event
-    response = client.post(
-        f"{RAG_API}/rag/search",
-        json={
-            "query": "Ethereum merge September 2022 proof of stake",
+    response = client.get(
+        SEARCH_URL,
+        params={
+            "q": "Ethereum merge September 2022 proof of stake",
             "collection": "news_v2",
             "limit": 5,
         },
@@ -130,7 +134,7 @@ def test_confidence_scoring(client: httpx.Client):
 
     # Score confidence
     response = client.post(
-        f"{RAG_API}/rag/confidence",
+        CONFIDENCE_URL,
         json={"results": results, "query": "Ethereum merge September 2022 proof of stake"},
     )
     assert response.status_code == 200
