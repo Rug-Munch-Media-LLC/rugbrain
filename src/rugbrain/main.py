@@ -517,6 +517,28 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("content_digest_start_failed: %s", exc)
         _health_state["content_digest"] = False
 
+    # ── Exchange Reserve Proofs ────────────────────────────────────
+    try:
+        from rugbrain.monitors.exchange_reserves import exchange_reserves_loop
+
+        asyncio.ensure_future(exchange_reserves_loop())
+        _health_state["exchange_reserves"] = True
+        logger.info("exchange_reserves status=ok")
+    except Exception as exc:
+        logger.warning("exchange_reserves_start_failed: %s", exc)
+        _health_state["exchange_reserves"] = False
+
+    # ── Oracle Manipulation Detector ───────────────────────────────
+    try:
+        from rugbrain.monitors.oracle_monitor import oracle_monitor_loop
+
+        asyncio.ensure_future(oracle_monitor_loop())
+        _health_state["oracle_monitor"] = True
+        logger.info("oracle_monitor status=ok")
+    except Exception as exc:
+        logger.warning("oracle_monitor_start_failed: %s", exc)
+        _health_state["oracle_monitor"] = False
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -738,6 +760,8 @@ async def health() -> dict[str, Any]:
         "defi_lending": _health_state.get("defi_lending", False),
         "token_distribution": _health_state.get("token_distribution", False),
         "content_digest": _health_state.get("content_digest", False),
+        "exchange_reserves": _health_state.get("exchange_reserves", False),
+        "oracle_monitor": _health_state.get("oracle_monitor", False),
         "qdrant_collections_auto": True,
     }
 
