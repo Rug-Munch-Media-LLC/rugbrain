@@ -360,6 +360,25 @@ async def _agg():
         s["cr"] = n
         s["sc"] = round(s["sc"] + n * 15, 1)
     sigs.sort(key=lambda s: s["sc"], reverse=True)
+
+    # Use reranker to refine top-50 ranking if available
+    try:
+        from rugbrain.reranker import rerank as _rerank
+
+        top50 = [s for s in sigs[:50] if s.get("t", "") or s.get("d", "")]
+        if top50 and len([s for s in top50 if len(s.get("t", "") or "") > 10]) >= 3:
+            query = "Most important crypto market signal right now"
+            docs = [f"{s.get('t', '')}: {str(s.get('d', ''))[:200]}" for s in top50]
+            rr = await _rerank(query, docs, top_k=len(docs), raw=True)
+            if rr and len(rr) == len(top50):
+                ranks = {r["index"]: r["relevance_score"] for r in rr}
+                for i, s in enumerate(top50):
+                    s["rr"] = ranks.get(i, 0.0)
+                    s["sc"] = round(s["sc"] * 0.6 + ranks.get(i, 0.0) * 40, 1)
+                sigs.sort(key=lambda s: s["sc"], reverse=True)
+    except Exception:
+        logger.debug("reranker_skip")
+
     return sigs, src
 
 
