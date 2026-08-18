@@ -21,6 +21,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip --quiet && pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
+COPY tests/ tests/
 COPY scripts/ scripts/
 COPY pyproject.toml .
 
