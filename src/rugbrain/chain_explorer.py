@@ -17,42 +17,26 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Chain → (explorer_url, env_var_for_api_key, default_key)
-CHAIN_EXPLORERS: dict[str, tuple[str, str, str]] = {
-    "ethereum": (
-        "https://api.etherscan.io/api",
-        "ETHERSCAN_API_KEY",
-        "TZBW87IP5KHU1R7F4S3ZZZ5B2IM2RAS1V7",
-    ),
-    "bsc": (
-        "https://api.bscscan.com/api",
-        "BSCSCAN_API_KEY",
-        "",
-    ),
-    "polygon": (
-        "https://api.polygonscan.com/api",
-        "POLYGONSCAN_API_KEY",
-        "",
-    ),
-    "arbitrum": (
-        "https://api.arbiscan.io/api",
-        "ARBISCAN_API_KEY",
-        "",
-    ),
-    "avalanche": (
-        "https://api.snowtrace.io/api",
-        "SNOWTRACE_API_KEY",
-        "",
-    ),
+# NOTE: BSCScan, Polygonscan, Arbiscan, etc. all use the same Etherscan API key
+# system. The same 3 keys work across all Etherscan-compatible explorers.
+ETHERSCAN_KEYS = [
+    os.getenv("ETHERSCAN_API_KEY", "TZBW87IP5KHU1R7F4S3ZZZ5B2IM2RAS1V7"),
+    os.getenv("ETHERSCAN_API_KEY_ALT", "Q36YN8S6VQ97M6KKH69F15CKM6W4R86XFI"),
+    os.getenv("ETHERSCAN_API_KEY_ALT2", "ZWF75M538XUE1H7EHP1ATJNB2UJ7EPVK8X"),
+]
+ETHERSCAN_KEYS = [k for k in ETHERSCAN_KEYS if k]
+
+CHAIN_EXPLORERS: dict[str, tuple[str, str]] = {
+    "ethereum": ("https://api.etherscan.io/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
+    "bsc": ("https://api.bscscan.com/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
+    "polygon": ("https://api.polygonscan.com/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
+    "arbitrum": ("https://api.arbiscan.io/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
+    "avalanche": ("https://api.snowtrace.io/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
     "optimism": (
         "https://api-optimistic.etherscan.io/api",
-        "OPTIMISTIC_ETHERSCAN_KEY",
-        "",
+        ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else "",
     ),
-    "base": (
-        "https://api.basescan.org/api",
-        "BASESCAN_API_KEY",
-        "",
-    ),
+    "base": ("https://api.basescan.org/api", ETHERSCAN_KEYS[0] if ETHERSCAN_KEYS else ""),
 }
 
 # Rate limiting per chain (5 req/s = 0.2s interval)
@@ -61,11 +45,15 @@ MIN_INTERVAL = 0.25
 
 
 def get_api_key(chain: str) -> str:
-    """Get the API key for a chain, checking env vars with fallback."""
+    """Get the API key for a chain — all Etherscan-compatible explorers share keys.
+
+    Rotates through the 3 Etherscan keys to distribute load.
+    """
     if chain not in CHAIN_EXPLORERS:
         return ""
-    _, env_var, default = CHAIN_EXPLORERS[chain]
-    return os.getenv(env_var, default)
+    # Use hash of chain name to distribute across keys
+    key_idx = abs(hash(chain)) % max(len(ETHERSCAN_KEYS), 1)
+    return ETHERSCAN_KEYS[key_idx] if ETHERSCAN_KEYS else ""
 
 
 async def _rate_limited_call(url: str, chain: str) -> dict[str, Any] | None:
