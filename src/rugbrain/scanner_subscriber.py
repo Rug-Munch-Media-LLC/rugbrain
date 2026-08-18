@@ -124,12 +124,16 @@ async def _listen_forever() -> None:
             )
 
             async for message in pubsub.listen():
+                # Skip non-message events (subscribe confirmations, etc.)
+                # MUST check BEFORE _subscriber_running — the first event
+                # is a "subscribe" confirmation, and the flag may still be
+                # False during the 0.1s startup window.
+                if message["type"] != "message":
+                    continue
+
                 if not _subscriber_running:
                     logger.info("subscriber_stopping")
                     return
-
-                if message["type"] != "message":
-                    continue
 
                 try:
                     data = json.loads(message["data"])

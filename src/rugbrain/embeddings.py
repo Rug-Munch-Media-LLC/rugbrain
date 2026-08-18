@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Final
 
 import httpx
@@ -55,11 +56,17 @@ class RAGUnavailableError(Exception):
 def _infinity_reachable() -> bool:
     """Quick probe: is Infinity listening? Cached per process via env.
 
-    ``RAG_EMBED_NO_CACHE`` env var (any non-empty value) forces a fresh
-    probe every time, which is useful during development / container restarts.
+    Cache expires after 30s so a cold-start Infinity that was unreachable
+    during early startup will be retried automatically. Set
+    ``RAG_EMBED_NO_CACHE=1`` to force a fresh probe every time.
     """
-    if os.getenv("_INFINITY_PROBED") and not os.getenv("RAG_EMBED_NO_CACHE"):
-        return os.getenv("_INFINITY_OK") == "1"
+    probed = os.getenv("_INFINITY_PROBED")
+    probed_at = os.getenv("_INFINITY_PROBED_AT")
+    if probed and not os.getenv("RAG_EMBED_NO_CACHE"):
+        # Cache is valid for 30s — retry after that in case Infinity was
+        # still cold-starting during the initial probe.
+        if probed_at and (time.monotonic() - float(probed_at)) < 30.0:
+            return os.getenv("_INFINITY_OK") == "1"
     try:
         with httpx.Client(timeout=5.0) as c:
             r = c.get(f"{INFINITY_URL}/health")
@@ -67,6 +74,7 @@ def _infinity_reachable() -> bool:
     except Exception:
         ok = False
     os.environ["_INFINITY_PROBED"] = "1"
+    os.environ["_INFINITY_PROBED_AT"] = str(time.monotonic())
     os.environ["_INFINITY_OK"] = "1" if ok else "0"
     if not ok:
         log.info("rag_infinity_unreachable url=%s", INFINITY_URL)
@@ -154,8 +162,6 @@ async def get_embedding(text: str) -> list[float]:
     """
     if not text or not text.strip():
         raise RAGUnavailableError("empty text input")
-
-    import time
 
     from rugbrain.metrics import embed_latency, embed_requests
 
