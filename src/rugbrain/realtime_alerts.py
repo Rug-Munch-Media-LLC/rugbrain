@@ -1365,7 +1365,7 @@ class WatchlistManager:
             "added_at": datetime.now(UTC).isoformat(),
         }
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1378,7 +1378,7 @@ class WatchlistManager:
     async def remove_watch(address: str, user_id: str) -> bool:
         key = f"rag:watch:{user_id}:{address.lower()}"
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1393,7 +1393,7 @@ class WatchlistManager:
         watches = []
         pattern = f"rag:watch:{user_id}:*"
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1417,7 +1417,7 @@ class WatchlistManager:
             for addr in scam_doc["metadata"]["contract_addresses"]:
                 scam_addresses.add(addr.lower())
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1459,7 +1459,7 @@ class AlertDispatcher:
     @staticmethod
     async def _dispatch_websocket(user_id: str, alert: dict[str, Any]) -> None:
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1472,7 +1472,7 @@ class AlertDispatcher:
     @staticmethod
     async def _dispatch_telegram(user_id: str, alert: dict[str, Any]) -> None:
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = await get_redis_async()
             if r:
@@ -1494,7 +1494,7 @@ async def start_alert_listener() -> None:
     log.info("rag_alert_listener: starting")
     while True:
         try:
-            from app.core.redis import get_redis
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = get_redis()
             if r:

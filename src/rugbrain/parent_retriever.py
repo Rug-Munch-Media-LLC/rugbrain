@@ -33,7 +33,7 @@ class ParentRetriever:
             metadata: Document-level metadata dict.
         """
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = get_redis_async()
             if r is None:
@@ -62,7 +62,7 @@ class ParentRetriever:
             dict with keys doc_id, content, metadata, or None if not found.
         """
         try:
-            from app.core.redis import get_redis_async
+            from rugbrain.compat import get_redis_async, get_redis
 
             r = get_redis_async()
             if r is None:

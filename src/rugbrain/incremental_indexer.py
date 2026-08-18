@@ -27,7 +27,7 @@ class DeltaAction(StrEnum):
 
 
 def _redis() -> Any | None:
-    from app.core.redis import get_redis
+    from rugbrain.compat import get_redis_async, get_redis
 
     return get_redis()
 

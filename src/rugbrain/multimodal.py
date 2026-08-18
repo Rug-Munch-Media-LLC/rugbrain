@@ -222,7 +222,7 @@ async def describe_image(
     task: "describe" | "extract_addresses" | "analyze_chart" | "detect_scam"
     """
     try:
-        from app.rag_agentic import AI_BASE, LLM_API_KEY  # external dependency
+        from rugbrain.compat import AI_BASE, LLM_API_KEY# external dependency
 
         if not LLM_API_KEY:
             logger.warning("No LLM key available for image description")

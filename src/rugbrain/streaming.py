@@ -99,7 +99,7 @@ async def _run_watch_scans(watch_id: str) -> None:
     try:
         # 1. Run unified scanner if available
         try:
-            from app.domains.scanners.unified_scanner import scan_wallet  # external dependency
+            from rugbrain.compat import scan_wallet# external dependency
 
             result = await scan_wallet(token_address, chain=chain)
             _push_update(
@@ -148,7 +148,7 @@ async def _run_watch_scans(watch_id: str) -> None:
 
         # 3. Deployer reputation
         try:
-            from app.deployer_reputation import score_deployer_risk  # external dependency
+            from rugbrain.compat import score_deployer_risk# external dependency
 
             reputation = score_deployer_risk(
                 address=token_address,

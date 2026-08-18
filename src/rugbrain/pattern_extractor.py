@@ -76,7 +76,7 @@ async def extract_pattern_from_url(url: str) -> dict[str, Any]:
 async def _call_llm(article_text: str) -> dict[str, Any] | None:
     prompt = EXTRACT_PROMPT.format(article_text=article_text)
     try:
-        from app.llm_config import generate_content
+        from rugbrain.compat import generate_content, AI_BASE, LLM_API_KEY
 
         raw = await generate_content(prompt, max_tokens=2048, temperature=0.3)
         raw = raw.strip()

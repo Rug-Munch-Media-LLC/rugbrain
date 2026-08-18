@@ -363,7 +363,7 @@ async def rag_confidence_score(request: Request, data: dict[str, Any]) -> dict[s
             query_similarity=sources[0].get("score", 0.0) if sources else 0.0,
         )
     except ImportError:
-        from app.confidence import score_confidence  # external dependency
+        from rugbrain.compat import score_confidence# external dependency
 
         return score_confidence(  # type: ignore[no-any-return]
             data.get("results", []),
@@ -385,7 +385,7 @@ async def rag_chunk_solidity(request: Request, data: dict[str, Any]) -> dict[str
 
 @router.post("/scanner/deployer-risk")
 async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[str, Any]:
-    from app.deployer_reputation import score_deployer_risk  # external dependency
+    from rugbrain.compat import score_deployer_risk# external dependency
 
     return score_deployer_risk(  # type: ignore[no-any-return]  # app.deployer_reputation is an untyped external module
         address=data.get("address", ""),
@@ -400,7 +400,7 @@ async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[
 
 @router.post("/rag/cross-chain")
 async def rag_cross_chain(request: Request, data: dict[str, Any]) -> dict[str, Any]:
-    from app.cross_chain import resolve_cross_chain_identity  # external dependency
+    from rugbrain.compat import resolve_cross_chain_identity# external dependency
 
     return resolve_cross_chain_identity(  # type: ignore[no-any-return]  # app.cross_chain is an untyped external module
         address=data.get("address", ""),
@@ -440,7 +440,7 @@ async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> di
     q = data.get("query", "") or data.get("address", "")
     if not q:
         return {"error": "query is required"}
-    from app.investigation_narratives import investigate  # external dependency
+    from rugbrain.compat import investigate# external dependency
 
     return await investigate(  # type: ignore[no-any-return]  # app.investigation_narratives is an untyped external module
         query=q, investigation_type=data.get("type", "auto"), max_hops=data.get("max_hops", 5)

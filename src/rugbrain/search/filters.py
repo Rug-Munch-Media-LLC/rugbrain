@@ -226,7 +226,7 @@ async def ingest_document(
     await r.sadd(f"rag:idx:{collection}", doc_id)
 
     try:
-        from app.ann_index import get_ann_index  # external dependency
+        from rugbrain.compat import get_ann_index, AnnIndex# external dependency
 
         ann = get_ann_index()
         await ann.bump_version(collection)
@@ -243,7 +243,7 @@ async def ingest_document(
         logger.debug("BM25 cache invalidation skipped: %s", e)
 
     try:
-        from app.entity_extraction import EntityLookup, extract_entities  # external dependency
+        from rugbrain.compat import EntityLookup, extract_entities# external dependency
 
         entities = extract_entities(content)
         if entities.has_entities:
@@ -261,7 +261,7 @@ async def ingest_document(
 
     kg = None
     try:
-        from app.knowledge_graph import get_knowledge_graph  # external dependency
+        from rugbrain.compat import get_knowledge_graph# external dependency
 
         kg = await get_knowledge_graph()
     except ImportError:
@@ -281,7 +281,7 @@ async def ingest_document(
     logger.debug("pgvector upsert skipped (FAISS primary)")
 
     try:
-        from app.rag.parent_retriever import get_parent_retriever  # external dependency
+        from rugbrain.compat import get_parent_retriever# external dependency
 
         pr = await get_parent_retriever()
         await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)
@@ -436,7 +436,7 @@ async def get_stats() -> dict[str, Any]:
 
     ann_stats = {}
     try:
-        from app.ann_index import get_ann_index  # external dependency
+        from rugbrain.compat import get_ann_index, AnnIndex# external dependency
 
         ann = get_ann_index()
         ann_stats = ann.stats()
@@ -459,7 +459,7 @@ async def get_stats() -> dict[str, Any]:
 
     cache_stats = {}
     try:
-        from app.semantic_cache import get_semantic_cache  # external dependency
+        from rugbrain.compat import get_semantic_cache, SemanticCache# external dependency
 
         cache = get_semantic_cache()
         cache_stats = await cache.stats()
@@ -487,7 +487,7 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
     Chain IDs: 1=ETH, 56=BSC, 137=Polygon, 42161=Arbitrum, 43114=Avalanche,
     10=Optimism, 8453=Base, 324=zkSync, 534352=Scroll, 59144=Linea.
     """
-    from app.scam_sources import GoPlusConnector  # external dependency
+    from rugbrain.compat import GoPlusConnector# external dependency
 
     result = await GoPlusConnector.check_token(chain, token_address)
     if not result:
