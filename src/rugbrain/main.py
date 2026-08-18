@@ -325,6 +325,50 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("social_sentiment_start_failed: %s", exc)
         _health_state["social_sentiment"] = False
 
+    # ── MEV detector ────────────────────────────────────────────────
+    try:
+        from rugbrain.mev_detector import mev_scan_loop
+
+        asyncio.ensure_future(mev_scan_loop())
+        _health_state["mev_detector"] = True
+        logger.info("mev_detector status=ok")
+    except Exception as exc:
+        logger.warning("mev_detector_start_failed: %s", exc)
+        _health_state["mev_detector"] = False
+
+    # ── Governance aggregator ────────────────────────────────────────
+    try:
+        from rugbrain.governance_aggregator import governance_scan_loop
+
+        asyncio.ensure_future(governance_scan_loop())
+        _health_state["governance_aggregator"] = True
+        logger.info("governance_aggregator status=ok")
+    except Exception as exc:
+        logger.warning("governance_aggregator_start_failed: %s", exc)
+        _health_state["governance_aggregator"] = False
+
+    # ── Podcast ingester ─────────────────────────────────────────────
+    try:
+        from rugbrain.podcast_ingester import podcast_scan_loop
+
+        asyncio.ensure_future(podcast_scan_loop())
+        _health_state["podcast_ingester"] = True
+        logger.info("podcast_ingester status=ok")
+    except Exception as exc:
+        logger.warning("podcast_ingester_start_failed: %s", exc)
+        _health_state["podcast_ingester"] = False
+
+    # ── Smart money tracker ──────────────────────────────────────────
+    try:
+        from rugbrain.smart_money_tracker import smart_money_scan_loop
+
+        asyncio.ensure_future(smart_money_scan_loop())
+        _health_state["smart_money_tracker"] = True
+        logger.info("smart_money_tracker status=ok")
+    except Exception as exc:
+        logger.warning("smart_money_tracker_start_failed: %s", exc)
+        _health_state["smart_money_tracker"] = False
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -530,6 +574,10 @@ async def health() -> dict[str, Any]:
         "realtime_monitor_stats": realtime_stats,
         "news_story_updater": news_running,
         "news_story_updater_stats": news_stats,
+        "mev_detector": _health_state.get("mev_detector", False),
+        "governance_aggregator": _health_state.get("governance_aggregator", False),
+        "podcast_ingester": _health_state.get("podcast_ingester", False),
+        "smart_money_tracker": _health_state.get("smart_money_tracker", False),
     }
 
 
