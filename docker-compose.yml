@@ -67,6 +67,7 @@ services:
       - INFINITY_URL=http://infinity-rag:8001
       - RERANK_MODEL=BAAI/bge-reranker-v2-m3
       - RERANK_MODEL_NAME=BAAI/bge-reranker-v2-m3
+      - PRESIDIO_URL=http://presidio:8090
       # DuckDB query endpoint (/api/v1/rag/query) — B2 permanence snapshots.
       # B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY are required for the
       # endpoint; B2_S3_ENDPOINT defaults to s3.us-east-005.backblazeb2.com.
@@ -129,3 +130,57 @@ services:
       - app.rugmunch.io/name=rugbrain-ingest
       - app.rugmunch.io/role=worker
       - app.rugmunch.io/description=RAG ingestion worker
+
+  # ── PII Redaction Service (Presidio) ────────────────────────────
+  presidio:
+    build:
+      context: .
+      dockerfile: presidio.Dockerfile
+    container_name: rugbrain-presidio
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - rmi_network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "256m"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8090/health'); exit(0 if r.status_code == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Web Dashboard (Streamlit) ───────────────────────────────────
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rugbrain-dashboard
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:8501:8501"
+    networks:
+      - rmi_network
+    environment:
+      - RAG_API_URL=http://rugbrain-api:8012
+      - PRESIDIO_URL=http://presidio:8090
+    command: >
+      sh -c "pip install --upgrade pip --quiet && pip install streamlit --quiet && python3 -m streamlit run /app/src/rugbrain/dashboard.py --server.port 8501 --server.headless true --server.address 0.0.0.0"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512m"
+    depends_on:
+      - rag-api
+      - presidio

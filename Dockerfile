@@ -18,7 +18,7 @@ WORKDIR /app
 
 # ── Python deps (ordered for layer caching) ──────────────────────────
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip --quiet && pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY scripts/ scripts/
