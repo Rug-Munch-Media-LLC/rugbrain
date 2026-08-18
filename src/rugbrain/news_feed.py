@@ -1,199 +1,139 @@
-"""
-News feed API — ranked stories, story detail, trending, and topics.
+"""Unified News Feed — aggregates YouTube, podcast, and newsletter content.
 
-Part 4 of the Ground News / CryptoPanic-beating news aggregation system.
+Provides a single API endpoint that queries across all content sources:
+- youtube_videos collection
+- podcast_episodes collection
+- newsletters collection
+- threat_intel (news stories)
 
-Endpoints (mounted under ``/api/v1/news`` in main.py)::
-
-    GET /api/v1/news/feed?topic=security&min_quality=70&limit=20
-        Ranked feed of stories (composite score descending), optionally
-        filtered by topic and minimum quality.
-    GET /api/v1/news/story/{id}
-        Full story with all source articles + bias/sentiment chart.
-    GET /api/v1/news/trending
-        Trending stories (velocity-based, min 2 sources).
-    GET /api/v1/news/topics
-        Available topics with story counts.
-
-All endpoints fail open: when Qdrant is unreachable they return 200 with
-an empty result set (matching the existing ``/api/v1/news/top`` behavior).
+Returns deduplicated, sorted-by-date results with source attribution.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
-
-from rugbrain.news_ranking import (
-    load_story,
-    ranked_feed,
-    topic_counts,
-    trending_stories,
-)
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 
-news_feed_router = APIRouter(prefix="/api/v1/news", tags=["news-feed"])
+news_feed_router = APIRouter(prefix="/api/v1/feed", tags=["news-feed"])
 
 
-def _bias_chart(story: Any) -> dict[str, Any]:
-    """Bias chart payload: counts + percentages across known leanings."""
-    dist = dict(story.bias_distribution or {})
-    total_known = sum(v for k, v in dist.items() if k != "unknown")
-    total = sum(dist.values()) or 1
-    return {
-        "distribution": dist,
-        "known_total": total_known,
-        "percent": {k: round((v / total) * 100, 1) for k, v in dist.items()},
-    }
-
-
-def _sentiment_chart(story: Any) -> dict[str, Any]:
-    dist = dict(story.sentiment_distribution or {})
-    total = sum(dist.values()) or 1
-    return {
-        "distribution": dist,
-        "percent": {k: round((v / total) * 100, 1) for k, v in dist.items()},
-    }
-
-
-def _story_feed_item(story: Any) -> dict[str, Any]:
-    """Compact story representation for the feed list."""
-    sources = story.sources or []
-    primary = next(
-        (s for s in sources if s.article_id == story.primary_source_id),
-        sources[0] if sources else None,
-    )
-    return {
-        "id": story.id,
-        "title": story.title,
-        "summary": story.summary,
-        "source_count": len(sources),
-        "composite_score": story.composite_score,
-        "factual_consensus": story.factual_consensus,
-        "topics": story.topics,
-        "primary_source": primary.title if primary else "",
-        "primary_credibility": primary.credibility if primary else 0,
-        "updated_at": story.updated_at,
-        "velocity": story.velocity,
-        "bias": _bias_chart(story),
-        "sentiment": _sentiment_chart(story),
-    }
-
-
-@news_feed_router.get("/feed")
-async def news_feed(
-    request: Request,
-    topic: str | None = Query(
-        default=None,
-        description="Filter stories by topic (e.g. security, solana, ethereum)",
+@news_feed_router.get("/all")
+async def get_unified_news_feed(
+    q: str = Query(default="", description="Search query across all sources"),
+    limit: int = Query(default=20, ge=1, le=100),
+    sources: str = Query(
+        default="youtube,podcast,newsletter,news",
+        description="Comma-separated sources to include",
     ),
-    min_quality: float = Query(
-        default=70.0,
-        ge=0.0,
-        le=100.0,
-        description="Minimum composite quality score 0-100",
-    ),
-    limit: int = Query(default=20, ge=1, le=100, description="Max stories to return"),
+    category: str | None = Query(default=None, description="Filter by category"),
+    min_date: str | None = Query(default=None, description="ISO date filter (YYYY-MM-DD)"),
 ) -> dict[str, Any]:
-    """Ranked news feed — stories sorted by composite quality descending.
+    """Get unified news feed across YouTube, podcasts, newsletters, and news."""
+    source_list = [s.strip() for s in sources.split(",")]
 
-    Optionally filtered by ``topic`` and ``min_quality``. Fails open to an
-    empty list when Qdrant is unreachable::
-
-        curl "http://localhost:8012/api/v1/news/feed?topic=security&min_quality=70&limit=20"
-    """
-    stories = await ranked_feed(topic=topic, min_quality=min_quality, limit=limit)
-    return {
-        "stories": [_story_feed_item(s) for s in stories],
-        "total": len(stories),
-        "topic": topic,
-        "min_quality": min_quality,
-        "limit": limit,
+    # Collection map
+    collection_map = {
+        "youtube": ("youtube_videos", "youtube"),
+        "podcast": ("podcast_episodes", "podcast"),
+        "newsletter": ("newsletters", "newsletter"),
+        "news": ("threat_intel", "news"),
     }
 
+    # Build embedding for search
+    try:
+        from rugbrain.embeddings import get_embedding
+        from rugbrain.qdrant_store import QdrantVectorStore
 
-@news_feed_router.get("/story/{story_id}")
-async def news_story_detail(
-    request: Request,
-    story_id: str,
-) -> dict[str, Any]:
-    """Full story: all source articles + bias/sentiment charts + consensus.
+        query = q or "crypto market intelligence"
+        embedding = await get_embedding(query)
 
-    Raises 404 when the story does not exist (or Qdrant is unreachable —
-    the endpoint cannot distinguish, matching fail-open philosophy by
-    returning 404 for missing stories).
-    """
-    story = await load_story(story_id)
-    if story is None:
-        raise HTTPException(status_code=404, detail=f"story not found: {story_id}")
+        store = QdrantVectorStore()
+        all_results = []
 
-    sources = [
-        {
-            "article_id": s.article_id,
-            "title": s.title,
-            "url": s.url,
-            "source": s.source,
-            "domain": s.domain,
-            "credibility": s.credibility,
-            "tier": s.tier,
-            "leaning": s.leaning,
-            "published_at": s.published_at,
-            "summary": s.summary,
-            "sentiment": s.sentiment,
-            "rerank_score": s.rerank_score,
-            "is_primary": s.article_id == story.primary_source_id,
+        for source_key in source_list:
+            if source_key not in collection_map:
+                continue
+            collection, _ = collection_map[source_key]
+
+            try:
+                results = await store.hybrid_search(
+                    query_text=query,
+                    query_embedding=embedding,
+                    collection=collection,
+                    limit=limit // len(source_list) + 1,
+                    min_similarity=0.3,
+                )
+                for r in results:
+                    meta = r.get("metadata", {})
+                    if isinstance(meta, dict):
+                        # Add source tag
+                        meta["_source"] = source_key
+                        meta["_feed_date"] = (
+                            meta.get("upload_date") or
+                            meta.get("ingested_at") or
+                            meta.get("date") or
+                            datetime.now(timezone.utc).isoformat()
+                        )
+                    all_results.append(r)
+            except Exception:
+                logger.debug("feed_collection_failed collection=%s", collection)
+
+        # Sort by date descending
+        all_results.sort(
+            key=lambda r: (
+                r.get("metadata", {}).get("_feed_date", "") if isinstance(r.get("metadata"), dict) else ""
+            ),
+            reverse=True,
+        )
+
+        # Apply filters
+        filtered = []
+        for r in all_results:
+            meta = r.get("metadata", {}) if isinstance(r.get("metadata"), dict) else {}
+            if category and meta.get("category") != category:
+                continue
+            if min_date and meta.get("_feed_date", "")[:10] < min_date:
+                continue
+            filtered.append(r)
+            if len(filtered) >= limit:
+                break
+
+        return {
+            "results": filtered,
+            "total": len(filtered),
+            "query": q,
+            "sources_queried": source_list,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        for s in (story.sources or [])
-    ]
+
+    except Exception as exc:
+        logger.warning("news_feed_failed %s", str(exc)[:200])
+        return {"results": [], "total": 0, "error": str(exc)[:200]}
+
+
+@news_feed_router.get("/sources")
+async def list_sources() -> dict[str, Any]:
+    """List all tracked content sources."""
+    from rugbrain.youtube_ingester import YT_CHANNELS
+    from rugbrain.podcast_ingester import CRYPTO_PODCASTS
+    from rugbrain.newsletter_ingester import NEWSLETTERS
+
     return {
-        "id": story.id,
-        "title": story.title,
-        "summary": story.summary,
-        "primary_source_id": story.primary_source_id,
-        "sources": sources,
-        "timeline": story.timeline,
-        "topics": story.topics,
-        "factual_consensus": story.factual_consensus,
-        "consensus_detail": story.consensus_detail,
-        "bias_chart": _bias_chart(story),
-        "sentiment_chart": _sentiment_chart(story),
-        "axes": story.axes,
-        "composite_score": story.composite_score,
-        "velocity": story.velocity,
-        "created_at": story.created_at,
-        "updated_at": story.updated_at,
-    }
-
-
-@news_feed_router.get("/trending")
-async def news_trending(
-    request: Request,
-    limit: int = Query(default=20, ge=1, le=100, description="Max stories to return"),
-) -> dict[str, Any]:
-    """Trending stories — velocity-based (sources/hour), min 2 sources.
-
-    Stories breaking across many sources quickly rank highest::
-
-        curl "http://localhost:8012/api/v1/news/trending?limit=10"
-    """
-    stories = await trending_stories(limit=limit)
-    return {
-        "stories": [_story_feed_item(s) for s in stories],
-        "total": len(stories),
-        "limit": limit,
-    }
-
-
-@news_feed_router.get("/topics")
-async def news_topics(
-    request: Request,
-) -> dict[str, Any]:
-    """Available topics with story counts (descending, top 50)."""
-    counts = await topic_counts()
-    return {
-        "topics": [{"topic": topic, "count": count} for topic, count in counts.items()],
-        "total": len(counts),
+        "youtube": {
+            "total": len(YT_CHANNELS),
+            "categories": sorted(set(c for _, _, c in YT_CHANNELS)),
+        },
+        "podcasts": {
+            "total": len(CRYPTO_PODCASTS),
+        },
+        "newsletters": {
+            "total": len(NEWSLETTERS),
+            "categories": sorted(set(c for _, _, _, c in NEWSLETTERS)),
+        },
+        "total_sources": len(YT_CHANNELS) + len(CRYPTO_PODCASTS) + len(NEWSLETTERS),
     }

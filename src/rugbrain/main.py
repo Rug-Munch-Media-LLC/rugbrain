@@ -381,6 +381,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("youtube_ingester_start_failed: %s", exc)
         _health_state["youtube_ingester"] = False
 
+    # ── Newsletter ingester ─────────────────────────────────────────
+    try:
+        from rugbrain.newsletter_ingester import newsletter_scan_loop
+
+        asyncio.ensure_future(newsletter_scan_loop())
+        _health_state["newsletter_ingester"] = True
+        logger.info("newsletter_ingester status=ok")
+    except Exception as exc:
+        logger.warning("newsletter_ingester_start_failed: %s", exc)
+        _health_state["newsletter_ingester"] = False
+
     # ── Auto-create Qdrant collections ──────────────────────────────
     try:
         import httpx
@@ -388,7 +399,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
         async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as c:
-            for col in ["youtube_videos", "podcast_episodes"]:
+            for col in ["youtube_videos", "podcast_episodes", "newsletters"]:
                 ok = await _ensure_collection(col, 1024, c)
                 logger.info(
                     "qdrant_collection_%s collection=%s ok=%s",
@@ -609,6 +620,7 @@ async def health() -> dict[str, Any]:
         "podcast_ingester": _health_state.get("podcast_ingester", False),
         "smart_money_tracker": _health_state.get("smart_money_tracker", False),
         "youtube_ingester": _health_state.get("youtube_ingester", False),
+        "newsletter_ingester": _health_state.get("newsletter_ingester", False),
         "qdrant_collections_auto": True,
     }
 
