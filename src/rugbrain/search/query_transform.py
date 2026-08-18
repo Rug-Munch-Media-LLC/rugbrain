@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -37,6 +38,62 @@ logger = logging.getLogger(__name__)
 # Cap on the number of retrieval variants produced by multi-query expansion
 # (original query + up to 3 LLM rewrites).
 MAX_MULTI_QUERY_VARIANTS = 4
+
+# ── Lightweight synonym / alias expansion (curated, no LLM) ─────────────
+# Each group is (canonical term, aliases). Used by ``expand_synonyms`` to
+# build extra retrieval variants when a query mentions a crypto term under a
+# different spelling ("rug pull" vs "honeypot", "flash loan" vs "flashloan",
+# "sandwich" vs "MEV/frontrunning", ...). Deliberately small and deterministic.
+SYNONYM_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("rug pull", ("rugpull", "honeypot")),
+    ("flash loan", ("flashloan", "flash-loan")),
+    ("sandwich", ("mev", "frontrunning", "front-running")),
+    ("oracle manipulation", ("price manipulation", "oracle price")),
+    ("private key", ("secret key",)),
+    ("multisig", ("multi-sig", "multi sig", "gnosis safe")),
+)
+
+# Cap on the total number of synonym-expanded retrieval variants (original
+# query + matched alias clusters). Keeps embedding cost bounded per query.
+_MAX_SYNONYM_VARIANTS = 4
+
+
+def expand_synonyms(query: str, max_variants: int = _MAX_SYNONYM_VARIANTS) -> list[str]:
+    """Expand *query* with curated crypto term aliases (lightweight, no LLM).
+
+    For every ``SYNONYM_GROUPS`` cluster whose canonical term or any alias
+    appears in the query (word-boundary match), produce an additional variant
+    that surfaces the whole alias cluster — e.g. "rug pull token" becomes
+    "rug pull rugpull honeypot token" — so chunks that use a different
+    spelling ("honeypot", "rugpull") still match in embedding space.
+
+    Returns ``[query, ...variants]`` (the original query always first),
+    capped at ``max_variants``. Queries with no matched terms return
+    ``[query]`` — a no-op — so callers can enable this unconditionally.
+    """
+    q = (query or "").strip()
+    if not q:
+        return [q]
+    variants: list[str] = [q]
+    q_lower = q.lower()
+    for term, aliases in SYNONYM_GROUPS:
+        if len(variants) >= max_variants:
+            break
+        members = (term, *aliases)
+        matched = next((m for m in members if re.search(rf"\b{re.escape(m)}\b", q_lower)), None)
+        if matched is None:
+            continue
+        cluster = list(dict.fromkeys(members))
+        if len(cluster) < 2:
+            continue
+        replacement = " ".join(cluster)
+        if replacement.lower() == matched.lower():
+            continue
+        variant = re.sub(rf"\b{re.escape(matched)}\b", replacement, q, flags=re.IGNORECASE)
+        if variant != q and variant not in variants:
+            variants.append(variant)
+    return variants[:max_variants]
+
 
 # embed_fn accepts either an async embedder method (``embed_query``) or a
 # sync embedding function — both return ``list[float]``.

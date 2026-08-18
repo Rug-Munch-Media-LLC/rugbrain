@@ -108,6 +108,34 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  eval-check:
+    runs-on: docker-x64
+    container:
+      image: python:3.11-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system deps + uv
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl
+          rm -rf /var/lib/apt/lists/*
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Setup Python
+        run: |
+          uv python install 3.11
+          uv venv --python 3.11 .venv
+      - name: Install dependencies
+        run: |
+          uv pip install --python .venv/bin/python -e ".[dev]"
+      - name: Eval harness imports
+        run: |
+          source .venv/bin/activate
+          python -m rugbrain.eval.retrieval_eval --help
+      - name: Golden set schema check
+        run: |
+          source .venv/bin/activate
+          python -c "from rugbrain.eval.retrieval_eval import load_golden_set; examples = load_golden_set('src/rugbrain/eval/golden_set.jsonl'); print(f'golden set OK: {len(examples)} examples')"
+
   security:
     runs-on: docker-x64
     container:

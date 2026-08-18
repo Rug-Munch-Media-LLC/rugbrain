@@ -73,6 +73,15 @@ class VectorStore(Protocol):
         chain: str = "",
     ) -> bool: ...
 
+    async def has_point(self, doc_id: str, collection: str) -> bool:
+        """True when the deterministic point for *doc_id* is already stored.
+
+        Optional: callers use ``getattr(store, "has_point", None)`` and treat a
+        missing implementation as unknown (proceed to embed) so the existence
+        gate never blocks fresh ingestion.
+        """
+        ...
+
 
 def content_hash(text: str) -> str:
     """Short stable SHA-256 fingerprint of *text* (first 16 hex chars)."""
@@ -116,15 +125,26 @@ async def store_documents(
 ) -> dict[str, int]:
     """Embed and upsert *docs* into Qdrant.
 
-    Returns ``{"inserted": n, "failed": n, "chunks": n}``. Each document is
-    chunked, every chunk is embedded and upserted with a deterministic ID.
+    Returns ``{"inserted": n, "failed": n, "chunks": n, "skipped": n}``.
+    Each document is chunked, every chunk is embedded and upserted with a
+    deterministic ID. ``skipped`` counts chunks already present in the store
+    (checked via ``store.has_point`` when available) — those are NOT re-embedded.
     A failed embedding/storage increments ``failed`` and continues so one
     bad item never aborts the batch.
     """
     inserted = 0
     failed = 0
     chunks = 0
+    skipped = 0
     total = len(docs)
+    # Optional existence gate: pipelines that re-run on a cadence (news_crawl,
+    # full_recrawl, source ingestion) would otherwise re-embed every chunk on
+    # every run. When the store exposes ``has_point`` and the deterministic
+    # point id already exists, the chunk is skipped WITHOUT calling the
+    # embedder — this is what keeps the embedder free for interactive traffic.
+    # Fail-open: a missing implementation or a check error falls through to
+    # embed (never drops fresh content).
+    has_point = getattr(store, "has_point", None)
     for i, doc in enumerate(docs, start=1):
         for chunk in chunk_text(doc.content, chunk_size, chunk_overlap):
             doc_id = doc.stable_id(content_hash(chunk))
@@ -135,6 +155,9 @@ async def store_documents(
             metadata.setdefault("published", doc.published)
             metadata.setdefault("source", doc.source)
             try:
+                if has_point is not None and await has_point(doc_id, doc.collection):
+                    skipped += 1
+                    continue
                 embedding = await embedder.embed_one(chunk[:8000])
             except Exception as e:
                 log.warning("store_documents_embed_failed src=%s err=%s", doc.source, str(e)[:120])
@@ -178,7 +201,7 @@ async def store_documents(
         failed,
         chunks,
     )
-    return {"inserted": inserted, "failed": failed, "chunks": chunks}
+    return {"inserted": inserted, "failed": failed, "chunks": chunks, "skipped": skipped}
 
 
 def doc_from_article(

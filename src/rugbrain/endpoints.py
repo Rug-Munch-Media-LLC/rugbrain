@@ -353,13 +353,23 @@ async def rag_chain_catalog(request: Request) -> dict[str, Any]:
 
 @router.post("/rag/confidence")
 async def rag_confidence_score(request: Request, data: dict[str, Any]) -> dict[str, Any]:
-    from app.confidence import score_confidence  # external dependency
+    try:
+        from rugbrain.confidence_scorer import score_confidence as sc
 
-    return score_confidence(  # type: ignore[no-any-return]  # app.confidence is an untyped external module
-        data.get("results", []),
-        query=data.get("query", ""),
-        entity_matches=data.get("entity_matches", []),
-    )
+        sources = data.get("results", [])
+        query = data.get("query", "")
+        return sc(
+            sources,
+            query_similarity=sources[0].get("score", 0.0) if sources else 0.0,
+        )
+    except ImportError:
+        from app.confidence import score_confidence  # external dependency
+
+        return score_confidence(  # type: ignore[no-any-return]
+            data.get("results", []),
+            query=data.get("query", ""),
+            entity_matches=data.get("entity_matches", []),
+        )
 
 
 @router.post("/rag/chunk-solidity")

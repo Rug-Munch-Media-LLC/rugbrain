@@ -698,6 +698,26 @@ class QdrantVectorStore:
         """
         return str(uuid.uuid5(uuid.NAMESPACE_DNS, doc_id))
 
+    async def has_point(self, doc_id: str, collection: str) -> bool:
+        """Return True when a deterministic point for *doc_id* already exists.
+
+        Used by the shared ingest path (``ingest_common.store_documents``) to
+        skip re-embedding content that is already stored — every pipeline that
+        feeds the embedder goes through this check before calling Infinity, so
+        re-running a crawl/cron does NOT re-embed the same chunks. Fail-open:
+        any error (Qdrant down, malformed id) returns False so the caller
+        proceeds to embed rather than dropping fresh content.
+        """
+        try:
+            client = await self._get_client()
+            point_id = self._to_uuid(doc_id)
+            r = await client.get(f"/collections/{collection}/points/{point_id}")
+            # 200 = exists; 404 = not found; anything else -> treat as exists-unknown (False)
+            return r.status_code == 200
+        except Exception as e:
+            logger.debug("qdrant_has_point_error doc=%s err=%s", doc_id, str(e)[:120])
+            return False
+
     async def insert(
         self,
         doc_id: str,

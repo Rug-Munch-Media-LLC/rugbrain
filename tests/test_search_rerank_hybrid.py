@@ -299,12 +299,99 @@ def test_search_multi_collection_default_pure_vector(monkeypatch: pytest.MonkeyP
 
     async def run() -> list[dict[str, Any]]:
         return await engine_mod.search_multi_collection(
-            "some query", collections=["coll_a", "coll_b"], limit=10
+            "some query",
+            collections=["coll_a", "coll_b"],
+            limit=10,
+            # rerank default is now True (see test_..._rerank_defaults_on); this
+            # test isolates the hybrid-off behavior, so disable the reranker.
+            rerank=False,
         )
 
     out = asyncio.run(run())
     assert [r["id"] for r in out] == ["va", "vb"]
     assert all("rrf_score" not in r for r in out)
+
+
+# ── reranker: default ON + graceful timeout fallback ───────────────────
+
+
+def test_search_multi_collection_rerank_defaults_on():
+    """rerank defaults True on the main entry points (env-overridable)."""
+    import inspect
+
+    sig = inspect.signature(engine_mod.search_multi_collection)
+    assert sig.parameters["rerank"].default is True
+    sig3 = inspect.signature(engine_mod.three_pillar_search)
+    assert sig3.parameters["rerank"].default is True
+
+
+def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.MonkeyPatch):
+    """rerank=True default routes fused candidates through rerank_chunks."""
+    monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
+
+    calls: list[dict[str, Any]] = []
+
+    async def fake_rerank_chunks(
+        query: str,
+        chunks: list[dict[str, Any]],
+        top_n: int = 20,
+        keep: int = 5,
+    ) -> list[dict[str, Any]]:
+        calls.append({"top_n": top_n, "keep": keep, "count": len(chunks)})
+        return [dict(c) for c in chunks][:keep]
+
+    monkeypatch.setattr(rerank_mod, "rerank_chunks", fake_rerank_chunks)
+
+    async def run() -> list[dict[str, Any]]:
+        return await engine_mod.search_multi_collection(
+            "some query", collections=["coll_a", "coll_b"], limit=2
+        )
+
+    asyncio.run(run())
+    assert calls, "rerank_chunks must run by default (rerank=True)"
+    assert calls[0] == {"top_n": 20, "keep": 2, "count": 2}
+
+
+def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.MonkeyPatch):
+    """Slow reranker (past timeout) → raw ranking kept, request never fails."""
+    monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
+
+    async def slow_rerank_chunks(
+        query: str,
+        chunks: list[dict[str, Any]],
+        top_n: int = 20,
+        keep: int = 5,
+    ) -> list[dict[str, Any]]:
+        await asyncio.sleep(0.5)
+        return [dict(c) for c in chunks][:keep]
+
+    monkeypatch.setattr(rerank_mod, "rerank_chunks", slow_rerank_chunks)
+
+    async def run() -> list[dict[str, Any]]:
+        return await engine_mod.search_multi_collection(
+            "some query",
+            collections=["coll_a", "coll_b"],
+            limit=2,
+            rerank=True,
+            rerank_timeout=0.05,
+        )
+
+    out = asyncio.run(run())
+    # Raw ranking preserved and surfaced as a no-op rerank (graceful).
+    assert [r["id"] for r in out] == ["va", "vb"]
+    assert all(r.get("rerank_method") == "none" for r in out)
+    assert all(r.get("reranked") is False for r in out)
+
+
+def test_three_pillar_search_mmr_lambda_knob_default():
+    """MMR default lambda is 0.6 (relevance-leaning, not over-deduping)."""
+    import inspect
+
+    sig = inspect.signature(engine_mod.three_pillar_search)
+    assert sig.parameters["use_mmr"].default is True
+    assert sig.parameters["mmr_lambda"].default == 0.6
+    # Knob surface: caller may pass a different lambda.
+    assert "mmr_lambda" in sig.parameters
 
 
 def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.MonkeyPatch):

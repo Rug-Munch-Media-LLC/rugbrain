@@ -15,6 +15,7 @@ All cross-module deps resolved via search._state / inline imports.
 import asyncio
 import json
 import logging
+import os
 import re
 from collections.abc import Callable
 from typing import Any, cast
@@ -218,6 +219,40 @@ _HYBRID_KEYWORD_MAX_DOCS = 1000
 _HYBRID_KEYWORD_LIMIT_FACTOR = 2
 # Content preview attached to keyword-only hits (surfaces without vector hit).
 _HYBRID_CONTENT_PREVIEW = 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SEARCH-QUALITY DEFAULTS (env-overridable)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Parse a 0/1/true/false/yes/no/on/off env var into a bool."""
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+# Reranking is ON by default on the main search entry points: the top
+# ``rerank_top_k`` fused candidates are re-scored with a BGE cross-encoder
+# (bge-reranker-v2-m3) before truncation. The search-lane reranker degrades
+# gracefully — when no model backend is installed, or scoring takes longer
+# than ``rerank_timeout``, results fall back to their original retrieval
+# order with ``rerank_method="none"`` / ``reranked=false`` — a request never
+# fails because the reranker is missing or slow.
+_RERANK_DEFAULT = _env_bool("RAG_RERANK_ENABLED", True)
+# Reranker timeout (seconds). <=0 disables the timeout (score everything).
+_RERANK_TIMEOUT = float(os.getenv("RAG_RERANK_TIMEOUT", "2.0"))
+# Lightweight curated synonym/alias expansion (default OFF — additive recall;
+# see ``rugbrain.search.query_transform.expand_synonyms``). Flip on globally
+# with ``RAG_SYNONYM_EXPAND=1`` or per-call with ``synonym_expand=True``.
+_SYNONYM_EXPAND_DEFAULT = _env_bool("RAG_SYNONYM_EXPAND", False)
+# MMR diversity lambda: 1.0 = pure relevance, 0.0 = pure diversity. 0.6 leans
+# relevance while still de-duplicating near-duplicate chunks — deliberately
+# NOT over-deduping gold-relevant docs (the eval precision headroom comes from
+# the reranker, not from stronger MMR diversity).
+_MMR_LAMBDA_DEFAULT = float(os.getenv("RAG_MMR_LAMBDA", "0.6"))
 
 
 def detect_scam_query(query: str) -> bool:
@@ -477,6 +512,15 @@ async def search_similar(
         except Exception as e:
             logger.debug("Semantic cache store skipped: %s", e)
 
+    # Apply temporal decay weighting (boost recent content)
+    if results:
+        try:
+            from rugbrain.search.temporal_decay import apply_temporal_decay
+
+            results = apply_temporal_decay(results)
+        except Exception:
+            pass
+
     # Trace observability
     try:
         from rugbrain.observability import trace_retrieval  # external dependency
@@ -665,28 +709,38 @@ async def _build_search_variants(
     multi_query: bool,
     embedder: Any,
     llm_fn: Callable[..., Any] | None = None,
+    synonym_expand: bool = False,
 ) -> tuple[list[str], dict[str, Any]]:
     """Build the retrieval variants for *query* (original first).
 
     Returns ``(variants, meta)`` where ``meta`` describes the expansion:
-    ``{"hyde", "multi_query", "hyde_used_llm", "hyde_embedding", "variants"}``.
-    With both flags OFF (the default) this returns ``([query], {"variants": 1})``
+    ``{"hyde", "multi_query", "synonym_expand", "synonym_variants",
+    "hyde_used_llm", "hyde_embedding", "variants"}``.
+    With all flags OFF (the default) this returns ``([query], {"variants": 1})``
     so callers take the existing single-query path unchanged.
 
     ``meta["hyde_embedding"]`` carries the HyDE hypothetical-doc embedding
     (when HyDE produced a distinct document) so dense search can reuse it
     instead of re-embedding.
     """
-    from .query_transform import hyde_expand, multi_query_expand
+    from .query_transform import expand_synonyms, hyde_expand, multi_query_expand
 
     variants = [query]
     meta: dict[str, Any] = {
         "hyde": False,
         "multi_query": False,
+        "synonym_expand": False,
+        "synonym_variants": 0,
         "hyde_used_llm": False,
         "hyde_doc": None,
         "hyde_embedding": None,
     }
+    if synonym_expand:
+        for v in expand_synonyms(query):
+            if v not in variants:
+                variants.append(v)
+        meta["synonym_expand"] = True
+        meta["synonym_variants"] = max(0, len(variants) - 1)
     if hyde:
         hyde_out = await hyde_expand(query, embed_fn=embedder.embed_query, llm_fn=llm_fn)
         hypo = hyde_out.get("hypothetical_doc") or query
@@ -712,11 +766,13 @@ async def search_multi_collection(
     min_similarity: float = 0.5,
     content_limit: int = 500,
     hybrid: bool = False,
-    rerank: bool = False,
+    rerank: bool = _RERANK_DEFAULT,
     rerank_top_k: int = 20,
     rerank_keep: int | None = None,
+    rerank_timeout: float = _RERANK_TIMEOUT,
     hyde: bool = False,
     multi_query: bool = False,
+    synonym_expand: bool = _SYNONYM_EXPAND_DEFAULT,
     llm_fn: Callable[..., Any] | None = None,
     use_recency_decay: bool = False,
     recency_half_life_days: float = 30.0,
@@ -732,22 +788,32 @@ async def search_multi_collection(
     fenced code blocks stay intact) and the merged results are re-ranked so
     code-carrying chunks float above prose (see ``bias_toward_code_chunks``).
 
-    Additive search-quality parameters (all default OFF — behavior for
-    existing callers is preserved):
+    Search-quality parameters:
 
+    * ``rerank`` — **default True**: the top ``rerank_top_k`` candidate
+      chunks are re-ranked with a cross-encoder (BGE reranker) and the best
+      ``rerank_keep`` (defaults to *limit*) are kept before truncation.
+      Degrades gracefully: when the model backend is unavailable (or scoring
+      exceeds ``rerank_timeout``), results fall back to their original
+      retrieval order and every result is tagged ``rerank_method="none"`` /
+      ``reranked=false`` — the request never fails. Disable with
+      ``rerank=False`` or env ``RAG_RERANK_ENABLED=0``.
+    * ``rerank_timeout`` — seconds before the reranker falls back to raw
+      ranking (default 2.0; env ``RAG_RERANK_TIMEOUT``; ``<=0`` disables).
     * ``hybrid`` — when True, a lightweight keyword/BM25 lane runs alongside
       the vector search and the two lanes are fused with reciprocal rank
       fusion (RRF), surfacing keyword-only hits the vector search missed.
-    * ``rerank`` — when True, the top ``rerank_top_k`` candidate chunks are
-      re-ranked with a cross-encoder (BGE reranker; graceful no-op when the
-      model is not installed) and the best ``rerank_keep`` (defaults to
-      *limit*) are kept before truncation.
     * ``hyde`` — when True, a HyDE hypothetical document is embedded and
       searched as an extra retrieval vector (see
       ``rugbrain.search.query_transform.hyde_expand``).
     * ``multi_query`` — when True, the query is rewritten into 3-4 technical
       variations and each is searched; per-collection variant results are
       RRF-fused (see ``rugbrain.search.query_transform.multi_query_expand``).
+    * ``synonym_expand`` — when True, curated crypto-term aliases ("rug
+      pull"→"rugpull/honeypot", "flash loan"→"flashloan", "sandwich"→
+      "MEV/frontrunning", ...) are added as extra retrieval variants (see
+      ``rugbrain.search.query_transform.expand_synonyms``). Default OFF
+      (env ``RAG_SYNONYM_EXPAND=1``).
     * ``llm_fn`` — optional LLM callable for the expansion above (sync or
       async). Absent/failing ⇒ no-op fallback (expansion still works, just
       without model-generated rewrites).
@@ -762,11 +828,11 @@ async def search_multi_collection(
     if detect_coding_query(query):
         content_limit = max(content_limit, _CODE_CONTENT_LIMIT)
 
-    # Query expansion (HyDE + multi-query) — additive, default OFF.
-    if hyde or multi_query:
+    # Query expansion (HyDE + multi-query + synonyms) — additive, default OFF.
+    if hyde or multi_query or synonym_expand:
         embedder = await get_embedder()
         variants, _expansion_meta = await _build_search_variants(
-            query, hyde, multi_query, embedder, llm_fn
+            query, hyde, multi_query, embedder, llm_fn, synonym_expand=synonym_expand
         )
         expanded = len(variants) > 1
     else:
@@ -841,12 +907,26 @@ async def search_multi_collection(
     if rerank and fused:
         from .rerank import rerank_chunks
 
-        fused = await rerank_chunks(
-            query,
-            fused,
-            top_n=rerank_top_k,
-            keep=rerank_keep if rerank_keep is not None else limit,
-        )
+        try:
+            fused = await asyncio.wait_for(
+                rerank_chunks(
+                    query,
+                    fused,
+                    top_n=rerank_top_k,
+                    keep=rerank_keep if rerank_keep is not None else limit,
+                ),
+                timeout=None if rerank_timeout <= 0 else rerank_timeout,
+            )
+        except Exception as e:
+            # Reranker unavailable/slow — fall back to raw ranking, never fail.
+            logger.warning(
+                "search rerank timed out/failed after %.1fs (%s) — falling back to raw ranking",
+                rerank_timeout,
+                e,
+            )
+            for r in fused:
+                r.setdefault("rerank_method", "none")
+                r.setdefault("reranked", False)
 
     return bias_toward_code_chunks(fused, query)[:limit]
 
@@ -863,17 +943,19 @@ async def three_pillar_search(
     min_similarity: float = 0.5,
     entity_boost: float = 1.5,
     use_mmr: bool = True,
-    mmr_lambda: float = 0.6,
+    mmr_lambda: float = _MMR_LAMBDA_DEFAULT,
     use_kg: bool = True,
     use_parent_child: bool = True,
     use_reranker: bool = True,
     use_rating_boosts: bool = True,
     hybrid: bool = False,
-    rerank: bool = False,
+    rerank: bool = _RERANK_DEFAULT,
     rerank_top_k: int = 20,
     rerank_keep: int | None = None,
+    rerank_timeout: float = _RERANK_TIMEOUT,
     hyde: bool = False,
     multi_query: bool = False,
+    synonym_expand: bool = _SYNONYM_EXPAND_DEFAULT,
     llm_fn: Callable[..., Any] | None = None,
     use_recency_decay: bool = False,
     recency_half_life_days: float = 30.0,
@@ -890,8 +972,8 @@ async def three_pillar_search(
       Post-rank - Ground News-style rating boosts (when metadata carries a
                   ``rating`` payload) improve quality for news retrieval
 
-    Additive search-quality parameters (all default OFF except
-    ``use_reranker`` — behavior for existing callers is preserved):
+    Search-quality parameters (``use_reranker``, ``rerank``, ``use_mmr``
+    default ON — each degrades gracefully when its backend is unavailable):
 
     * ``hyde`` — when True, a HyDE hypothetical document is embedded and
       searched as an extra dense retrieval vector (see
@@ -900,6 +982,11 @@ async def three_pillar_search(
       variations and each is searched against the dense pillar; per-collection
       variant results are RRF-fused (see
       ``rugbrain.search.query_transform.multi_query_expand``).
+    * ``synonym_expand`` — when True, curated crypto-term aliases ("rug
+      pull"→"rugpull/honeypot", "flash loan"→"flashloan", "sandwich"→
+      "MEV/frontrunning", ...) are added as extra retrieval variants (see
+      ``rugbrain.search.query_transform.expand_synonyms``). Default OFF
+      (env ``RAG_SYNONYM_EXPAND=1``).
     * ``llm_fn`` — optional LLM callable for the expansion above (sync or
       async). Absent/failing ⇒ no-op fallback.
     * ``use_recency_decay`` — when True, a half-life decay on the
@@ -909,11 +996,20 @@ async def three_pillar_search(
     * ``hybrid`` — when True, a lightweight in-memory keyword/BM25 lane runs
       alongside the pillars and is fused into the RRF as an extra signal,
       surfacing keyword-only chunks the dense/sparse/entity lanes missed.
-    * ``rerank`` — when True, the top ``rerank_top_k`` fused candidates are
-      re-ranked with a cross-encoder (BGE reranker; graceful no-op when the
-      model is not installed) and the best ``rerank_keep`` (defaults to
-      *limit*) are kept before truncation. Independent of ``use_reranker``
-      (the news-lane reranker): ``rerank`` uses the search-lane reranker.
+    * ``mmr_lambda`` — MMR diversity lambda (1.0 = pure relevance, 0.0 =
+      pure diversity). Default 0.6 leans relevance so gold-relevant docs are
+      not over-deduped; env ``RAG_MMR_LAMBDA``.
+    * ``rerank`` — **default True**: the top ``rerank_top_k`` fused
+      candidates are re-ranked with the search-lane cross-encoder (BGE via
+      ``rugbrain.search.rerank.rerank_chunks``) and the best ``rerank_keep``
+      (defaults to *limit*) are kept. Graceful no-op when the model is not
+      installed (results keep their original order; ``search_reranker_applied
+      = false`` in ``pillar_summary``). Disable with ``rerank=False`` or env
+      ``RAG_RERANK_ENABLED=0``. Independent of ``use_reranker`` (the
+      news-lane reranker).
+    * ``rerank_timeout`` — seconds before the search-lane reranker falls back
+      to raw ranking (default 2.0; env ``RAG_RERANK_TIMEOUT``; ``<=0``
+      disables).
     * ``use_reranker`` — the news-lane cross-encoder reranker (BGE via
       Infinity / sentence-transformers), applied after fusion. Defaults True
       with a graceful no-op fallback: environments without a reranker model
@@ -934,10 +1030,11 @@ async def three_pillar_search(
     embedder = await get_embedder()
     query_vec = await embedder.embed_query(query)
 
-    # Query expansion (HyDE + multi-query) — additive, default OFF. Variants
-    # are built once and pre-embedded so the dense pillar can search each.
+    # Query expansion (HyDE + multi-query + synonyms) — additive, default OFF.
+    # Variants are built once and pre-embedded so the dense pillar can search
+    # each.
     query_variants, query_expansion_meta = await _build_search_variants(
-        query, hyde, multi_query, embedder, llm_fn
+        query, hyde, multi_query, embedder, llm_fn, synonym_expand=synonym_expand
     )
     expanded = query_expansion_meta["variants"] > 1
 
@@ -1349,27 +1446,41 @@ async def three_pillar_search(
     except Exception as e:
         logger.debug("ParentRetriever.expand_context failed (non-critical): %s", e)
 
-    # ── Search-lane cross-encoder reranking (optional, before truncation) ──
+    # ── Search-lane cross-encoder reranking (default ON, before truncation) ──
     # Re-ranks the top ``rerank_top_k`` fused candidates and keeps the best
     # ``rerank_keep`` (defaults to ``limit``). Independent of ``use_reranker``
     # above — this uses the search-lane reranker with a graceful no-op when
-    # the model is not installed.
+    # the model is not installed, and a timeout fallback to raw ranking when
+    # scoring is slow (``search_reranker_applied=false`` in that case).
     search_reranker_applied = False
     search_reranker_method: str | None = None
     if rerank and fused:
         from .rerank import rerank_chunks
 
         pre_rerank = len(fused)
-        reranked = await rerank_chunks(
-            query,
-            fused,
-            top_n=rerank_top_k,
-            keep=rerank_keep if rerank_keep is not None else limit,
-        )
-        if reranked:
-            fused = reranked
-            search_reranker_applied = any(r.get("reranked") for r in reranked)
-            methods = {r.get("rerank_method") for r in reranked if r.get("rerank_method")}
+        search_reranked: list[dict[str, Any]] | None = None
+        try:
+            search_reranked = await asyncio.wait_for(
+                rerank_chunks(
+                    query,
+                    fused,
+                    top_n=rerank_top_k,
+                    keep=rerank_keep if rerank_keep is not None else limit,
+                ),
+                timeout=None if rerank_timeout <= 0 else rerank_timeout,
+            )
+        except Exception as e:
+            # Reranker unavailable/slow — keep raw ranking, never fail.
+            logger.warning(
+                "search-lane rerank timed out/failed after %.1fs (%s) — keeping raw ranking",
+                rerank_timeout,
+                e,
+            )
+            search_reranked = None
+        if search_reranked:
+            fused = search_reranked
+            search_reranker_applied = any(r.get("reranked") for r in search_reranked)
+            methods = {r.get("rerank_method") for r in search_reranked if r.get("rerank_method")}
             search_reranker_method = next(iter(methods), None)
             logger.info(
                 "Search-lane reranker: %d → %d results (method=%s)",
@@ -1402,12 +1513,38 @@ async def three_pillar_search(
     # ── Confidence scoring ──
     confidence = None
     try:
-        from app.confidence import score_confidence  # external dependency
+        # Try our new rugbrain confidence scorer first (standalone)
+        from rugbrain.confidence_scorer import score_confidence
 
         entity_list = list(entity_doc_ids)[:5] if entity_doc_ids else []
-        confidence = score_confidence(final_results, query=query, entity_matches=entity_list)
+        sources = []
+        for r in final_results:
+            src = {"type": r.get("type", "unknown"), "score": r.get("score", 0.0)}
+            if r.get("metadata", {}).get("ingested_at"):
+                import time
+
+                try:
+                    from datetime import datetime
+
+                    src["timestamp"] = datetime.fromisoformat(
+                        r["metadata"]["ingested_at"].replace("Z", "+00:00")
+                    ).timestamp()
+                except (ValueError, TypeError):
+                    pass
+            sources.append(src)
+        confidence = score_confidence(
+            sources,
+            query_similarity=final_results[0].get("score", 0.0) if final_results else 0.0,
+        )
     except ImportError:
-        logger.debug("Confidence module not available")
+        # Fallback to external rmi-backend confidence module
+        try:
+            from app.confidence import score_confidence  # external dependency
+
+            entity_list = list(entity_doc_ids)[:5] if entity_doc_ids else []
+            confidence = score_confidence(final_results, query=query, entity_matches=entity_list)
+        except ImportError:
+            logger.debug("Confidence scoring not available (both modules missing)")
     except Exception as e:
         logger.debug("Confidence scoring failed (non-critical): %s", e)
 

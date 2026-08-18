@@ -208,6 +208,11 @@ async def _process_finding(data: dict[str, Any]) -> None:
 
     content = "\n".join(content_lines)
 
+    # ── PII scrubbing: redact wallet addresses, emails, etc. ────────
+    from rugbrain.pii_scrubber import scrub_text
+
+    content = await scrub_text(content)
+
     # Generate embedding (uses same pipeline as rest of rugbrain)
     from rugbrain.embeddings import get_embedding
 
@@ -258,6 +263,15 @@ async def _process_finding(data: dict[str, Any]) -> None:
             risk_level,
             doc_id,
         )
+
+        # ── Alert webhook: push notifications for critical findings ──
+        if risk_level in ("critical", "high"):
+            try:
+                from rugbrain.alert_webhook import send_alert
+
+                asyncio.ensure_future(send_alert(data))
+            except Exception as exc:
+                logger.warning("alert_webhook_failed %s", str(exc)[:80])
     else:
         logger.warning(
             "threat_intel_upsert_failed token=%s chain=%s",

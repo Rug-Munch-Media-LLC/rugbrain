@@ -307,6 +307,11 @@ class IngestionPipeline:
             }
         )
 
+        # ── PII scrubbing: redact wallet addresses, emails, etc. ──
+        from rugbrain.pii_scrubber import scrub_text
+
+        content = await scrub_text(content)
+
         if not self._check_rate(collection):
             return {"status": "rate_limited", "collection": collection}
 

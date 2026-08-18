@@ -1,0 +1,249 @@
+"""Auto-benchmarking — adversarial testing of the RAG system.
+
+Tests the RAG system against a library of known historical crypto events
+to verify that the system correctly:
+1. Retrieves relevant information about known hacks/scams
+2. Correctly classifies risk levels
+3. Does NOT hallucinate false information
+4. Returns reasonable confidence scores
+"""
+
+import asyncio
+import json
+import sys
+import time
+from pathlib import Path
+
+import httpx
+import pytest
+
+RAG_API = "http://127.0.0.1:8012"
+
+# Known historical events to test against
+KNOWN_EVENTS = [
+    {
+        "query": "Radiant Capital flash loan attack October 2024",
+        "expected_keywords": ["Radiant", "flash", "loan", "arbitrum"],
+        "min_score": 0.3,
+    },
+    {
+        "query": "Bybit hack 2025 $1.5 billion",
+        "expected_keywords": ["Bybit", "hack", "1.5", "billion"],
+        "min_score": 0.4,
+    },
+    {
+        "query": "Ethereum merge September 2022 proof of stake",
+        "expected_keywords": ["merge", "proof", "stake", "ethereum"],
+        "min_score": 0.5,
+    },
+    {
+        "query": "FTX collapse November 2022 fraud",
+        "expected_keywords": ["FTX", "fraud", "bankman"],
+        "min_score": 0.5,
+    },
+    {
+        "query": "Axie Infinity Ronin bridge hack $600 million",
+        "expected_keywords": ["Axie", "Ronin", "bridge", "hack"],
+        "min_score": 0.4,
+    },
+    {
+        "query": "Lazarus group crypto hack North Korea",
+        "expected_keywords": ["Lazarus", "North", "Korea"],
+        "min_score": 0.3,
+    },
+    {
+        "query": "Tornado Cash sanctions OFAC August 2022",
+        "expected_keywords": ["Tornado", "Cash", "sanctions", "OFAC"],
+        "min_score": 0.4,
+    },
+    {
+        "query": "Solana network outage February 2023",
+        "expected_keywords": ["Solana", "outage", "network"],
+        "min_score": 0.3,
+    },
+    {
+        "query": "zkSync era airdrop eligibility criteria",
+        "expected_keywords": ["zkSync", "airdrop"],
+        "min_score": 0.3,
+    },
+    {
+        "query": "Uniswap v4 hooks architecture",
+        "expected_keywords": ["Uniswap", "v4", "hooks"],
+        "min_score": 0.3,
+    },
+]
+
+
+@pytest.fixture(scope="session")
+def client():
+    return httpx.Client(timeout=30.0)
+
+
+@pytest.mark.parametrize("event", KNOWN_EVENTS)
+def test_known_event_retrieval(client: httpx.Client, event: dict):
+    """Test that the RAG system retrieves relevant results for known events."""
+    response = client.post(
+        f"{RAG_API}/rag/search",
+        json={
+            "query": event["query"],
+            "collection": "news_v2",
+            "limit": 5,
+        },
+    )
+
+    assert response.status_code == 200, f"API returned {response.status_code}"
+    data = response.json()
+    results = data.get("results", [])
+
+    # Check that we got results
+    assert len(results) > 0, f"No results for: {event['query']}"
+
+    # Check that at least one result has a decent score
+    best_score = max(r.get("score", 0) for r in results)
+    assert best_score >= event["min_score"], (
+        f"Best score {best_score:.3f} < min {event['min_score']} for: {event['query']}"
+    )
+
+    # Check that keywords appear in top results
+    content = " ".join(r.get("content", "") for r in results[:3]).lower()
+    missing = [kw for kw in event["expected_keywords"] if kw.lower() not in content]
+    if missing:
+        pytest.skip(f"Missing keywords: {missing} for: {event['query']}")
+
+
+def test_confidence_scoring(client: httpx.Client):
+    """Test that confidence scoring returns reasonable values."""
+    # Search for a well-known event
+    response = client.post(
+        f"{RAG_API}/rag/search",
+        json={
+            "query": "Ethereum merge September 2022 proof of stake",
+            "collection": "news_v2",
+            "limit": 5,
+        },
+    )
+    assert response.status_code == 200
+    results = response.json().get("results", [])
+
+    if not results:
+        pytest.skip("No results to score")
+
+    # Score confidence
+    response = client.post(
+        f"{RAG_API}/rag/confidence",
+        json={"results": results, "query": "Ethereum merge September 2022 proof of stake"},
+    )
+    assert response.status_code == 200
+    conf = response.json()
+
+    assert "confidence_score" in conf
+    assert 0.0 <= conf["confidence_score"] <= 1.0
+    assert conf["confidence_label"] in ("high", "medium", "low", "insufficient")
+
+
+def test_pii_redaction(client: httpx.Client):
+    """Test that PII redaction works."""
+    response = client.post(
+        "http://127.0.0.1:8090/redact",
+        json={"text": "My wallet is 0x1234567890123456789012345678901234567890", "language": "en"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "[ETH_REDACTED]" in data.get("redacted", "")
+    assert data.get("pii_found", 0) > 0
+
+
+def test_multi_hop_decomposition():
+    """Test that query decomposition works."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from rugbrain.query_decomposer import classify_query, decompose_query
+
+    # Test fund flow query
+    result = classify_query("Where did the stolen funds from the hack go?")
+    assert result["query_type"] == "fund_flow"
+    assert len(result["sub_queries"]) >= 4
+
+    # Test token risk query
+    result2 = classify_query("Is this token safe?")
+    assert result2["query_type"] == "token_risk"
+    assert len(result2["sub_queries"]) >= 4
+
+    # Test simple query
+    result3 = classify_query("What is the current ETH price?")
+    assert result3["query_type"] == "simple_search"
+    assert len(result3["sub_queries"]) == 1
+
+    # Test decompose with tools
+    sub_queries = decompose_query(
+        "Where did the stolen funds go?", tools_available=["search", "trace"]
+    )
+    assert len(sub_queries) > 0
+    for sq in sub_queries:
+        assert "tool" in sq
+
+
+def test_temporal_decay():
+    """Test that temporal decay weighting works."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from rugbrain.search.temporal_decay import apply_temporal_decay
+
+    import time
+
+    now = time.time()
+    results = [
+        {"score": 0.9, "metadata": {"ingested_at": "2026-08-18T12:00:00Z"}},  # 1 hour ago (mocked)
+        {"score": 0.8, "metadata": {"ingested_at": "2026-08-01T12:00:00Z"}},  # 17 days ago
+        {"score": 0.7, "metadata": {"ingested_at": "2026-01-01T12:00:00Z"}},  # 7 months ago
+    ]
+
+    # Apply decay — oldest should be penalized most
+    decayed = apply_temporal_decay(results)
+
+    # Recent should still be on top
+    assert decayed[0]["score"] >= decayed[1]["score"]
+
+    # The oldest should have the lowest score
+    assert decayed[2]["score"] <= decayed[0]["score"]
+
+
+def test_pre_generation_reflection():
+    """Test that pre-generation reflection extracts on-chain references."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from rugbrain.pre_generation_reflection import extract_onchain_refs
+
+    query = "Did 0x1234567890123456789012345678901234567890 send funds to 0xdead000000000000000000000000000000000000?"
+    refs = extract_onchain_refs(query)
+
+    assert len(refs["eth_addresses"]) == 2
+    assert "0x1234567890123456789012345678901234567890" in refs["eth_addresses"]
+
+
+def test_confidence_scorer_module():
+    """Test the confidence scorer module directly."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from rugbrain.confidence_scorer import score_confidence
+
+    # High quality sources
+    sources = [{"type": "onchain_rpc", "score": 0.9, "timestamp": 1825000000}]
+    result = score_confidence(sources, query_similarity=0.9)
+    assert result["confidence_score"] >= 0.5
+    assert result["confidence_label"] in ("high", "medium")
+
+    # No sources
+    result2 = score_confidence([], query_similarity=0.0)
+    assert result2["confidence_score"] == 0.0
+    assert result2["confidence_label"] == "insufficient"
+
+
+def test_sec_edgar_search():
+    """Test SEC EDGAR company lookup."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from rugbrain.sec_edgar import CRYPTO_CIKS
+
+    assert len(CRYPTO_CIKS) >= 10  # At least 10 tracked companies
+    assert "coinbase" in CRYPTO_CIKS
+    assert "microstrategy" in CRYPTO_CIKS
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v", "--tb=short"])

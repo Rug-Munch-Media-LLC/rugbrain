@@ -37,7 +37,7 @@ from rugbrain.search.fusion import (
     half_life_decay,
     rrf_fuse_recency,
 )
-from rugbrain.search.query_transform import hyde_expand, multi_query_expand
+from rugbrain.search.query_transform import expand_synonyms, hyde_expand, multi_query_expand
 
 # ── shared fakes ──────────────────────────────────────────────────────
 
@@ -180,6 +180,77 @@ def test_multi_query_expand_accepts_comma_separated_string():
 
 
 # ── 2. query_transform: HyDE ──────────────────────────────────────────
+
+
+def test_expand_synonyms_maps_crypto_terms():
+    """Common crypto terms gain alias variants (rug pull→rugpull/honeypot)."""
+    out = expand_synonyms("rug pull token cannot sell")
+    assert out[0] == "rug pull token cannot sell"
+    assert any("rugpull" in v for v in out)
+    assert any("honeypot" in v for v in out)
+
+
+def test_expand_synonyms_flash_loan_and_sandwich():
+    assert any("flashloan" in v for v in expand_synonyms("flash loan attack how it works"))
+    mev = expand_synonyms("MEV sandwich attack prevention")
+    assert any("frontrunning" in v for v in mev)
+
+
+def test_expand_synonyms_oracle_manipulation():
+    out = expand_synonyms("oracle manipulation TWAP spot price attack")
+    assert any("price manipulation" in v for v in out)
+
+
+def test_expand_synonyms_noop_unmatched():
+    assert expand_synonyms("bitcoin price today") == ["bitcoin price today"]
+
+
+def test_expand_synonyms_bounded():
+    q = "rug pull flash loan sandwich oracle manipulation"
+    out = expand_synonyms(q)
+    assert out[0] == q
+    assert 1 <= len(out) <= 4
+
+
+def test_search_multi_collection_synonym_expand_searches_variants(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """synonym_expand=True searches the original query plus alias variants."""
+    searches: list[str] = []
+
+    async def fake_search_similar(
+        query: str,
+        collection: str = "wallet_profiles",
+        limit: int = 10,
+        min_similarity: float = 0.0,
+        content_limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        searches.append(query)
+        return [
+            {
+                "id": f"{collection}-{len(searches)}",
+                "similarity": 0.9,
+                "content": query,
+                "collection": collection,
+            }
+        ]
+
+    monkeypatch.setattr(engine_mod, "search_similar", fake_search_similar)
+
+    async def run() -> list[dict[str, Any]]:
+        return await engine_mod.search_multi_collection(
+            "rug pull token cannot sell",
+            collections=["coll_a"],
+            limit=2,
+            synonym_expand=True,
+            rerank=False,
+        )
+
+    out = asyncio.run(run())
+    assert searches[0] == "rug pull token cannot sell"
+    assert any("honeypot" in q for q in searches)
+    assert len(searches) >= 2
+    assert out
 
 
 def test_hyde_expand_noop_fallback_uses_query():

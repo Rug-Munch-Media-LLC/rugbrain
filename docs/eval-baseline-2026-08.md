@@ -2,123 +2,171 @@
 
 **Date:** 2026-08-16
 **Harness:** `python -m rugbrain.eval.retrieval_eval` (`src/rugbrain/eval/retrieval_eval.py`)
-**Golden set:** `src/rugbrain/eval/golden_set.jsonl` (21 queries)
-**Runner mode:** live HTTP endpoint `http://localhost:8012/api/v1/search` (X-API-Key auth)
+**Golden set:** `src/rugbrain/eval/golden_set.jsonl` (**44 queries**)
+**Runner modes:** live HTTP endpoint `http://localhost:8012/api/v1/search` (X-API-Key auth) · `--inprocess` engine path · `--rerank` delta
 **Top-k:** 5
 **Read-only:** GET `/api/v1/search` only — no Qdrant/Redis writes.
 
+> **STATUS: BASELINE BLOCKED — embedder saturated (Infinity inference hangs).**
+> Real numbers NOT captured on 2026-08-16. Commands + expected runtime for a
+> clean re-run at the bottom. Do not re-run while `POST /embeddings` on
+> `infinity-rag` (127.0.0.1:8001) takes >60s per call.
+
 ## What is measured
 
-Retrieval quality + latency of the live RAG search endpoint against a curated
-golden set of 21 real crypto queries. Each golden line is `{query, gold_chunks,
-collection?}` where a gold chunk is a distinctive phrase that must appear in a
-retrieved document's content for the document to count as relevant (doc ids are
-UUIDs and not stable across ingests, so content matching is the ground truth).
+Retrieval quality + latency of the live RAG search path against a curated
+golden set of **44** real crypto queries. Each golden line is `{query,
+gold_chunks, collection?, expected_answer?}` where a gold chunk is a
+distinctive phrase that must appear in a retrieved document's content for the
+document to count as relevant (doc ids are UUIDs and not stable across
+ingests, so content matching is the ground truth).
 
-Per-query metrics:
+Per-query metrics (all implemented in the harness):
 
-* `hit@1` — the top-1 result contains ≥ 1 gold chunk.
-* `hit@5` — any of the top-5 results contains ≥ 1 gold chunk.
-* `recall@5` — fraction of the query's gold chunks surfaced in the top-5.
-* `precision@5` — fraction of the top-5 results that contain ≥ 1 gold chunk.
+| Metric | Definition |
+|--------|-----------|
+| `hit@1` | the top-1 result contains ≥ 1 gold chunk. |
+| `hit@5` | any of the top-5 results contains ≥ 1 gold chunk. |
+| `recall@5` | fraction of the query's gold chunks surfaced in the top-5. |
+| `precision@5` | fraction of the top-5 results that contain ≥ 1 gold chunk. |
+| `NDCG@5` | ranking quality with log2 position discount over binary per-rank relevance (gain 1.0 when a top-5 doc contains ≥ 1 gold chunk, else 0.0; ideal DCG from the best ordering of the actual gains). |
+| `MRR` | reciprocal rank of the first relevant result. |
+| latency | end-to-end per-query (HTTP round-trip in endpoint mode, engine call in inprocess mode), reported as p50 / p95 / mean. |
 
-Latency is the end-to-end HTTP round-trip per query (embedding + hybrid
-dense/BM25 search + response), reported as p50 / p95 / mean.
+Golden-set composition (44 queries):
 
-## Baseline numbers
+| collection | count |
+|-----------|------:|
+| coding_knowledge | 20 |
+| defi_exploits | 13 |
+| threat_intel_v2 | 4 |
+| (default) | 4 |
+| solana_patterns | 3 |
+
+## Baseline numbers — BLOCKED (no live numbers on 2026-08-16)
 
 | Metric | Value |
 |--------|-------|
-| Queries | 21 |
-| Errors | 0 |
-| **hit@1** | **0.809** |
-| **hit@5** | **1.000** |
-| **recall@5** | **0.984** |
-| **precision@5** | **0.409** |
-| **p50 latency** | **138 ms** |
-| **p95 latency** | **202 ms** |
-| mean latency | 152 ms |
+| Queries | 44 |
+| Errors | — (not run) |
+| hit@1 | — |
+| hit@5 | — |
+| recall@5 | — |
+| precision@5 | — |
+| NDCG@5 | — |
+| MRR | — |
+| p50 latency | — |
+| p95 latency | — |
 
-## Per-query detail
+### Why it's blocked — probe evidence
 
-| Query | collection | hit@1 | hit@5 | recall@5 | prec@5 | lat (ms) |
-|-------|-----------|------:|------:|---------:|-------:|---------:|
-| how does Uniswap V3 compute swap fees | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.20 | 202 |
-| reentrancy guard pattern solidity | coding_knowledge | 0.00 | 1.00 | 1.00 | 0.20 | 138 |
-| Checks-Effects-Interactions pattern Solidity | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.80 | 131 |
-| oracle manipulation TWAP spot price attack | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.40 | 124 |
-| flash loan attack how it works | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.20 | 126 |
-| MEV sandwich attack prevention | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.20 | 136 |
-| smart contract vulnerability classes reentrancy overflow | coding_knowledge | 1.00 | 1.00 | 1.00 | 1.00 | 133 |
-| private key storage security best practices | coding_knowledge | 0.00 | 1.00 | 1.00 | 0.20 | 121 |
-| secure contract coding best practices | coding_knowledge | 1.00 | 1.00 | 1.00 | 0.60 | 132 |
-| Gnosis Safe multisig wallet threshold | coding_knowledge | 0.00 | 1.00 | 1.00 | 0.20 | 138 |
-| Euler Finance flash loan attack 2023 | defi_exploits | 1.00 | 1.00 | 0.67 | 0.40 | 139 |
-| what was the Euler hack | (default) | 1.00 | 1.00 | 1.00 | 0.20 | 154 |
-| Wormhole bridge exploit 2022 120000 ETH | (default) | 1.00 | 1.00 | 1.00 | 0.20 | 150 |
-| Wormhole signature verification Solana bridge | defi_exploits | 1.00 | 1.00 | 1.00 | 1.00 | 139 |
-| Curve reentrancy exploit 2023 | defi_exploits | 1.00 | 1.00 | 1.00 | 0.20 | 154 |
-| Ronin bridge hacked 622 million validator | defi_exploits | 1.00 | 1.00 | 1.00 | 0.40 | 130 |
-| Nomad bridge exploit 190 million | defi_exploits | 1.00 | 1.00 | 1.00 | 0.80 | 143 |
-| honeypot token cannot sell | (default) | 1.00 | 1.00 | 1.00 | 0.40 | 146 |
-| honeypot token transfer restriction | (default) | 1.00 | 1.00 | 1.00 | 0.40 | 137 |
-| Solana PDA derived address signer | solana_patterns | 1.00 | 1.00 | 1.00 | 0.40 | 156 |
-| oracle price manipulation flash loan lending | defi_exploits | 0.00 | 1.00 | 1.00 | 0.20 | 153 |
+| Probe | Endpoint | Result |
+|-------|----------|--------|
+| embedder health | `GET http://127.0.0.1:8001/health` | 200 OK, 12 ms (HTTP layer healthy — but liveness only, does not exercise model inference) |
+| embedder models | `GET http://127.0.0.1:8001/models` | 200 OK, models served: `BAAI/bge-m3`, `BAAI/bge-reranker-v2-m3` |
+| **real embedding** | `POST /embeddings` (bge-m3, 1 tiny input) | **timed out at 30s** (no response, no log line — inference worker/queue saturated) |
+| **live search** | `GET /api/v1/search?q=how does Uniswap V3 compute swap fees&limit=5` (valid key) | **timed out at 90s** (HTTP 000, no response) |
+| **live search (confirm)** | `GET /api/v1/search?q=reentrancy guard pattern solidity&limit=5` (valid key) | **timed out at 15s** (HTTP 000, no response) |
+| unauthenticated | `GET /api/v1/search` (no key) | 401 in 5 ms (auth layer responsive) |
 
-## Observations
+Container status: `infinity-rag` Up 5 hours (healthy), `rmi-rag-api` Up 7
+days (healthy). API `/health` reports qdrant=true, redis=true. The hang is
+specifically the **embedding inference step**: the API accepts the search
+request (never logs a completion), and direct `POST /embeddings` to Infinity
+hangs even for a one-line input. This matches the earlier failure mode in the
+old 21-query baseline where `infinity-rag` returned 503
+`embedding_unavailable` — now it hangs instead of failing fast.
 
-1. **hit@5 = 1.000** — every query surfaces at least one gold chunk in the
-   top-5. The retrieval pipeline is reliable at finding *something* relevant.
-2. **hit@1 = 0.809 (17/21)** — 4 queries miss the top slot:
-   `reentrancy guard pattern solidity`, `private key storage security best
-   practices`, `Gnosis Safe multisig wallet threshold`, `oracle price
-   manipulation flash loan lending`. These are the ranking-quality
-   opportunities (relevant doc ranked #2+).
-3. **recall@5 = 0.984** — one gold chunk missed: the Euler query's `197`
-   chunk (the amount-lost figure) wasn't in the top-5, so `Euler Finance
-   flash loan attack 2023` scored recall 0.67. Multi-fact queries are the
-   recall pressure point.
-4. **precision@5 = 0.409** — on average only ~2 of 5 returned docs contain a
-   gold chunk. Retrieval is recall-heavy; the extra 3 slots are
-   near-duplicates/related-but-not-gold content. This is where a reranker or
-   MMR dedup shows up.
-5. **Latency: p50=138ms, p95=202ms** — matches the ARCHITECTURE.md claim
-   (p50 45ms is optimistic; measured live is ~3x higher but well under the
-   180ms p99 claim). These numbers include full HTTP + embedding + hybrid
-   search. The first baseline run (cold semantic cache) showed p50=276ms /
-   p95=401ms; the second run benefited from warm cache, so **cache warm-up
-   roughly halves p50**. Latency figures here are the warm-cache run.
-6. **Embedding backend availability**: the `infinity-rag` container was
-   restarting during early probing and the endpoint returned 503
-   `embedding_unavailable` (hash fallback removed per T04). All 21 eval
-   queries ran cleanly once Infinity was healthy — but the harness counts
-   503s as per-query errors, so infra downtime is visible in `errors`.
+Per the operator instruction **do not hammer a saturated embedder**, no
+further probes or eval runs were attempted. `--inprocess` was deliberately NOT
+run either: `rugbrain.search.engine.search_multi_collection` calls
+`get_embedder()` → `INFINITY_URL` (the same saturated Infinity), so it would
+hang identically on query #1.
 
-## How to re-run
+### Harness sanity checks performed (all pass)
 
-```bash
-# Live endpoint (requires RMI_RAG_API_KEY in env, endpoint up)
-python -m rugbrain.eval.retrieval_eval --top-k 5 --endpoint http://localhost:8012
-
-# JSON output for tooling
-python -m rugbrain.eval.retrieval_eval --top-k 5 --endpoint http://localhost:8012 --json
-
-# In-process engine (no HTTP; needs Redis/Qdrant reachable)
-python -m rugbrain.eval.retrieval_eval --top-k 5 --inprocess
+```
+.venv/bin/python -c "import rugbrain.eval.retrieval_eval"          # import OK
+.venv/bin/python -m rugbrain.eval.retrieval_eval --help            # CLI OK
+load_golden_set('src/rugbrain/eval/golden_set.jsonl')              # 44 queries parse OK
+rugbrain.eval.ndcg (ndcg_from_gains, mrr_from_gains, hit/recall/precision_at_k)  # importable
 ```
 
-## [REVIEW] — metrics not computed
+## Historical note (superseded — old 21-query run, 2026-08-16 earlier)
 
-* **Reranker contribution**: the golden set was run with the endpoint's
-  default `rerank=false`. The endpoint supports `rerank=true` (bge-reranker
-  cross-encoder on top-20 candidates); the harness does not yet compare
-  rerank on/off, so **the reranker's lift over raw hybrid retrieval is not
-  measured**.
-* **NDCG@k / MRR**: implemented in `rugbrain.eval.ndcg` and used by
-  `run_eval`, but not reported by `retrieval_eval` (kept to the task scope of
-  hit/recall/precision + latency).
-* **Generation/faithfulness**: retrieval-only by design — see `run_eval` +
-  `metrics` for the RAG-quality half (faithfulness, answer relevance,
-  context precision/recall). No LLM-judged (ragas) baseline yet.
-* **Chain-data fallback**: `chain_data=true` and the parquet-backed
-  `/api/v1/rag/chain/query` path are not exercised by this golden set.
+An earlier baseline doc captured a **21-query** run against the previous
+golden set with the previous harness (no NDCG/MRR, no `--rerank`). Those
+numbers are **not comparable** to the current 44-query set and are kept here
+only as historical context:
+
+| Metric | old 21-query value |
+|--------|--------------------|
+| hit@1 | 0.809 |
+| hit@5 | 1.000 |
+| recall@5 | 0.984 |
+| precision@5 | 0.409 |
+| p50 / p95 latency | 138 / 202 ms |
+
+The old run also surfaced: cache warm-up roughly halves p50 (276→138 ms), and
+the reranker contribution / NDCG / MRR were flagged as NOT computed. All three
+gaps are now implemented in the harness (NDCG@5, MRR, `--rerank` delta) and
+are ready for the first clean 44-query run.
+
+## How to re-run (when the embedder is healthy)
+
+Precondition: `POST http://127.0.0.1:8001/embeddings` (bge-m3) answers in
+well under 60s for a single input. Do not start while the embedder is
+saturated.
+
+```bash
+cd /srv/work/repos/rmi-rag
+
+# Baseline (rerank=false), live endpoint — requires RMI_RAG_API_KEY in env
+# (set via: set -a; source .env.rag; set +a)
+.venv/bin/python -m rugbrain.eval.retrieval_eval \
+  --top-k 5 --endpoint http://localhost:8012 --timeout 180
+
+# Rerank delta (rerank=false + rerank=true, prints with/without table) —
+# doubles the runtime
+.venv/bin/python -m rugbrain.eval.retrieval_eval \
+  --top-k 5 --endpoint http://localhost:8012 --timeout 180 --rerank
+
+# JSON output for tooling
+.venv/bin/python -m rugbrain.eval.retrieval_eval \
+  --top-k 5 --endpoint http://localhost:8012 --timeout 180 --json
+
+# In-process engine (no HTTP; same embedder dependency — needs Infinity +
+# Qdrant/Redis reachable from the eval process)
+.venv/bin/python -m rugbrain.eval.retrieval_eval --top-k 5 --inprocess
+```
+
+### Expected runtime (from the old 21-query run + harness shape)
+
+* 44 queries × ~150–300 ms/query (warm cache) ≈ **1–3 min** baseline.
+* With `--rerank`: baseline + rerank pass ≈ **2× baseline** (each query hits
+  the endpoint twice; rerank adds a cross-encoder scoring pass over top-20
+  candidates) — expect ≈ **2–6 min** total when healthy.
+* If the embedder is degraded-but-alive (per-query 5–60s), a full 44-query run
+  plus rerank could stretch to **30–90 min** — the operator's upper bound.
+  Use `--timeout 180` (default) so a single stuck query fails fast instead of
+  hanging the whole run; the harness counts per-query errors rather than
+  aborting.
+
+### What to record on the next run
+
+Aggregate table: queries (44), errors, hit@1, hit@5, recall@5, precision@5,
+NDCG@5, MRR, p50/p95/mean latency. If `--rerank` ran, also the delta table
+(hit@1 / NDCG@5 / MRR / hit@5 / recall@5 / precision@5 with vs without) and
+whether `reranker_applied` was true (the endpoint degrades silently to raw
+vector ranking when the reranker backend is unavailable).
+
+## Prior gaps — all closed in the current harness
+
+* ~~NDCG@k / MRR not reported~~ → now reported (`rugbrain.eval.ndcg`,
+  `mean_ndcg_at_k`, `mean_mrr`).
+* ~~Reranker contribution not measured~~ → `--rerank` runs the eval twice and
+  prints the delta, surfacing `reranker_applied` from the endpoint.
+* Generation/faithfulness — still out of scope by design (retrieval-only);
+  the RAG-quality half lives in `rugbrain.eval.run_eval` + `metrics`.
+* Chain-data fallback (`chain_data=true`, `/api/v1/rag/chain/query`) — still
+  not exercised by this golden set.
