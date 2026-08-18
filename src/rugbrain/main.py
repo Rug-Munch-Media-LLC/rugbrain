@@ -473,6 +473,50 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("social_sentiment_start_failed: %s", exc)
         _health_state["social_sentiment"] = False
 
+    # ── Twitter/X Influencer Tracker ──────────────────────────────
+    try:
+        from rugbrain.monitors.twitter_tracker import twitter_tracker_loop
+
+        asyncio.ensure_future(twitter_tracker_loop())
+        _health_state["twitter_tracker"] = True
+        logger.info("twitter_tracker status=ok")
+    except Exception as exc:
+        logger.warning("twitter_tracker_start_failed: %s", exc)
+        _health_state["twitter_tracker"] = False
+
+    # ── DeFi Lending Pool Health ──────────────────────────────────
+    try:
+        from rugbrain.monitors.defi_lending import defi_lending_loop
+
+        asyncio.ensure_future(defi_lending_loop())
+        _health_state["defi_lending"] = True
+        logger.info("defi_lending status=ok")
+    except Exception as exc:
+        logger.warning("defi_lending_start_failed: %s", exc)
+        _health_state["defi_lending"] = False
+
+    # ── Token Distribution + Airdrop Tracker ──────────────────────
+    try:
+        from rugbrain.monitors.token_distribution import token_distribution_loop
+
+        asyncio.ensure_future(token_distribution_loop())
+        _health_state["token_distribution"] = True
+        logger.info("token_distribution status=ok")
+    except Exception as exc:
+        logger.warning("token_distribution_start_failed: %s", exc)
+        _health_state["token_distribution"] = False
+
+    # ── Content Digest (aggregated signals) ────────────────────────
+    try:
+        from rugbrain.monitors.content_digest import content_digest_loop
+
+        asyncio.ensure_future(content_digest_loop())
+        _health_state["content_digest"] = True
+        logger.info("content_digest status=ok")
+    except Exception as exc:
+        logger.warning("content_digest_start_failed: %s", exc)
+        _health_state["content_digest"] = False
+
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -690,6 +734,10 @@ async def health() -> dict[str, Any]:
         "market_health": _health_state.get("market_health", False),
         "hyperliquid_monitor": _health_state.get("hyperliquid_monitor", False),
         "social_sentiment": _health_state.get("social_sentiment", False),
+        "twitter_tracker": _health_state.get("twitter_tracker", False),
+        "defi_lending": _health_state.get("defi_lending", False),
+        "token_distribution": _health_state.get("token_distribution", False),
+        "content_digest": _health_state.get("content_digest", False),
         "qdrant_collections_auto": True,
     }
 
