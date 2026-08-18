@@ -43,7 +43,7 @@ EXCHANGE_WALLETS: dict[str, list[str]] = {
         "0x0d0707963952f2fba59dd06f2b425ace40b492fe",
     ],
     "OKX": [
-        "0x05e0d5c0ac133b7a7a73d04e5b8d5a5c5d5e5f5",
+        "0x05e0d5c0ac133b7a7a73d04e5b8d5a5c5d5e5f50",
         "0x6cc5f688a315f3dc28a7781717a9a798a59fda7b",
     ],
     "Gate.io": [
@@ -72,7 +72,7 @@ async def get_exchange_balance(exchange: str, wallet: str) -> dict[str, Any]:
                     return {"balance_eth": balance_wei / 1e18, "wallet": wallet}
     except Exception:
         pass
-    return {"balance_eth": 0, "wallet": wallet}
+    return {"balance_eth": 0.0, "wallet": wallet}
 
 
 async def get_exchange_txns(wallet: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -87,13 +87,17 @@ async def get_exchange_txns(wallet: str, limit: int = 10) -> list[dict[str, Any]
                     txs = []
                     for tx in data.get("result", [])[:limit]:
                         value_eth = int(tx.get("value", "0")) / 1e18
-                        txs.append({
-                            "hash": tx.get("hash", ""),
-                            "from": tx.get("from", ""),
-                            "to": tx.get("to", ""),
-                            "value_eth": round(value_eth, 4),
-                            "timestamp": datetime.fromtimestamp(int(tx.get("timeStamp", 0)), tz=timezone.utc).isoformat(),
-                        })
+                        txs.append(
+                            {
+                                "hash": tx.get("hash", ""),
+                                "from": tx.get("from", ""),
+                                "to": tx.get("to", ""),
+                                "value_eth": round(value_eth, 4),
+                                "timestamp": datetime.fromtimestamp(
+                                    int(tx.get("timeStamp", 0)), tz=timezone.utc
+                                ).isoformat(),
+                            }
+                        )
                     return txs
     except Exception:
         pass
@@ -114,13 +118,15 @@ async def exchange_flow_cycle() -> dict[str, Any]:
                 if tx["value_eth"] >= LARGE_TX_THRESHOLD_ETH:
                     large_txns += 1
 
-        results.append({
-            "exchange": exchange,
-            "total_balance_eth": round(total_balance, 2),
-            "wallets_monitored": len(wallets),
-            "large_txns_24h": large_txns,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        results.append(
+            {
+                "exchange": exchange,
+                "total_balance_eth": round(total_balance, 2),
+                "wallets_monitored": len(wallets),
+                "large_txns_24h": large_txns,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         await asyncio.sleep(1)
 
     return {
@@ -132,11 +138,19 @@ async def exchange_flow_cycle() -> dict[str, Any]:
 
 async def exchange_flow_loop() -> None:
     """Run exchange flow monitoring in a continuous background loop."""
-    logger.info("exchange_flow_monitor_started interval=%ds exchanges=%d", POLL_INTERVAL, len(EXCHANGE_WALLETS))
+    logger.info(
+        "exchange_flow_monitor_started interval=%ds exchanges=%d",
+        POLL_INTERVAL,
+        len(EXCHANGE_WALLETS),
+    )
     while True:
         try:
             result = await exchange_flow_cycle()
-            logger.info("exchange_flow scanned=%d exchanges balance=%.2f ETH", len(result["exchanges"]), result["total_exchange_balance"])
+            logger.info(
+                "exchange_flow scanned=%d exchanges balance=%.2f ETH",
+                len(result["exchanges"]),
+                result["total_exchange_balance"],
+            )
         except Exception as exc:
             logger.warning("exchange_flow_failed %s", str(exc)[:80])
         await asyncio.sleep(POLL_INTERVAL)
