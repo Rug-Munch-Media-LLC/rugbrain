@@ -53,7 +53,16 @@ async def _analyze(text: str) -> list:
 st.title("🧠 rugbrain Intelligence Dashboard")
 st.markdown("Crypto Intelligence RAG — Qdrant · Infinity · Presidio PII · Multi-hop")
 
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 Search", "📊 Health", "🔒 PII Scanner", "✅ Confidence"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [
+        "🔍 Search",
+        "📊 Health",
+        "🔒 PII Scanner",
+        "✅ Confidence",
+        "📈 MEV",
+        "📰 News Feed",
+    ]
+)
 
 # ── Tab 1: Search ──
 with tab1:
@@ -193,6 +202,90 @@ with tab5:
         - **JIT Liquidity**: LP added just before a swap and removed right after
 
         Sources: Flashbots API, Etherscan mempool, BloxRoute
+        """)
+
+# ── Tab 6: News Feed ──
+with tab6:
+    st.subheader("Unified News Feed — YouTube, Podcasts, Newsletters")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("YouTube Channels", "194")
+    col2.metric("Podcasts", "88")
+    col3.metric("Newsletters", "70")
+
+    st.markdown("### Latest from All Sources")
+    feed_source = st.selectbox(
+        "Filter by source",
+        ["all", "youtube", "podcast", "newsletter", "news"],
+        index=0,
+    )
+
+    if st.button("Refresh Feed", type="primary"):
+        with st.spinner("Fetching unified feed..."):
+            try:
+                import asyncio
+                import httpx
+
+                params = {"limit": 20}
+                if feed_source != "all":
+                    params["sources"] = feed_source
+
+                async def _fetch_feed():
+                    async with httpx.AsyncClient(timeout=15) as c:
+                        r = await c.get(
+                            "http://localhost:8012/api/v1/feed/all",
+                            params=params,
+                            headers={
+                                "X-API-Key": "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M"
+                            },
+                        )
+                        return r.json() if r.status_code == 200 else {"results": []}
+
+                data = asyncio.run(_fetch_feed())
+                results = data.get("results", [])
+                if results:
+                    for r in results[:10]:
+                        meta = r.get("metadata", {})
+                        source = meta.get("_source", "?")
+                        title = meta.get("title", "Untitled")
+                        channel = meta.get("channel", meta.get("name", "?"))
+                        url = meta.get("url", meta.get("link", ""))
+                        risk = meta.get("risk_score", meta.get("safety_score", "?"))
+                        coins = meta.get("coins_mentioned", meta.get("top_coin", ""))
+
+                        icons = {
+                            "youtube": "🎬",
+                            "podcast": "🎙️",
+                            "newsletter": "📰",
+                            "news": "📡",
+                        }
+                        icon = icons.get(source, "📄")
+
+                        with st.container():
+                            st.markdown(f"**{icon} {title}**")
+                            st.caption(f"Source: {source} | Channel: {channel} | Risk: {risk}")
+                            if coins:
+                                st.caption(f"Coins: {coins}")
+                            if url:
+                                st.markdown(f"[🔗 Link]({url})")
+                            st.divider()
+                else:
+                    st.info("No results yet. Content will populate as scans complete.")
+            except Exception as e:
+                st.error(f"Feed fetch failed: {e}")
+
+    with st.expander("All Tracked Sources"):
+        st.markdown("""
+        **YouTube (194 channels)**: Coin Bureau, Altcoin Daily, CoinDesk, Cointelegraph, The Block,
+        Bloomberg Crypto, Benjamin Cowen, DataDash, Sheldon Evans, Crypto Cred, The Moon,
+        Crypto Rover, Bitcoin Magazine, BTC Sessions, Solana Foundation, Ethereum Foundation,
+        Delphi Digital, Bankless, Unchained, Zero Knowledge FM, Finematics, Whiteboard Crypto,
+        Coffeezilla, and 170+ more
+
+        **Podcasts (88 feeds)**: Bankless, Unchained, The Defiant, Empire, Bell Curve, UpOnly,
+        CoinDesk, CoinTelegraph, Delphi, Pomp, Zero Knowledge, Epicenter, and 75+ more
+
+        **Newsletters (70 sources)**: Blockworks, The Block, CoinDesk, CoinTelegraph, Bankless,
+        Messari, Nansen, Glassnode, a16z, Paradigm, and 60+ more
         """)
 
 st.sidebar.markdown(f"**Last refreshed:** {datetime.now().isoformat()[:19]}")

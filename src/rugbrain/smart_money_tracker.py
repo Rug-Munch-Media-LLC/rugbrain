@@ -68,7 +68,10 @@ async def get_whale_movements(chain: str = "ethereum") -> list[dict[str, Any]]:
 
     for wallet in SMART_WALLETS.get(chain, []):
         cache_key = f"tx_{wallet}_{chain}"
-        if cache_key in _whale_cache and (now - _whale_cache[cache_key].get("cached_at", 0)) < CACHE_TTL:
+        if (
+            cache_key in _whale_cache
+            and (now - _whale_cache[cache_key].get("cached_at", 0)) < CACHE_TTL
+        ):
             continue
 
         url = f"https://api.etherscan.io/api?module=account&action=txlist&address={wallet}&startblock=0&endblock=99999999&sort=desc&limit=10&apikey={ETHERSCAN_KEY}"
@@ -84,17 +87,21 @@ async def get_whale_movements(chain: str = "ethereum") -> list[dict[str, Any]]:
                 for tx in data.get("result", [])[:5]:
                     value_eth = int(tx.get("value", "0")) / 1e18
                     if value_eth > 0.1:  # > 0.1 ETH
-                        movements.append({
-                            "wallet": wallet,
-                            "chain": chain,
-                            "tx_hash": tx.get("hash", ""),
-                            "to": tx.get("to", ""),
-                            "from": tx.get("from", ""),
-                            "value_eth": round(value_eth, 4),
-                            "timestamp": datetime.fromtimestamp(int(tx.get("timeStamp", 0)), tz=timezone.utc).isoformat(),
-                            "detected_at": datetime.now(timezone.utc).isoformat(),
-                            "severity": "high" if value_eth > 100 else "medium",
-                        })
+                        movements.append(
+                            {
+                                "wallet": wallet,
+                                "chain": chain,
+                                "tx_hash": tx.get("hash", ""),
+                                "to": tx.get("to", ""),
+                                "from": tx.get("from", ""),
+                                "value_eth": round(value_eth, 4),
+                                "timestamp": datetime.fromtimestamp(
+                                    int(tx.get("timeStamp", 0)), tz=timezone.utc
+                                ).isoformat(),
+                                "detected_at": datetime.now(timezone.utc).isoformat(),
+                                "severity": "high" if value_eth > 100 else "medium",
+                            }
+                        )
         except Exception:
             continue
 
@@ -106,6 +113,16 @@ async def get_whale_movements(chain: str = "ethereum") -> list[dict[str, Any]]:
 async def smart_money_scan_cycle() -> dict[str, Any]:
     """Run one full smart money tracking cycle."""
     eth_movements = await get_whale_movements("ethereum")
+
+    # Dispatch Telegram alerts for significant movements
+    for m in eth_movements:
+        if m.get("value_eth", 0) > 100:  # Only >100 ETH on Telegram
+            try:
+                from rugbrain.alert_dispatcher import alert_whale_movement
+
+                asyncio.ensure_future(alert_whale_movement(m))
+            except Exception:
+                pass
 
     # Aggregate by wallet
     by_wallet: dict[str, list[dict[str, Any]]] = defaultdict(list)

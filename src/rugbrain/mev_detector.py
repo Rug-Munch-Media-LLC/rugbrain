@@ -98,18 +98,20 @@ async def detect_sandwich_attacks(block_txs: list[dict[str, Any]]) -> list[dict[
         if tokens1 and tokens2 and tokens3:
             if tokens1 == tokens3 and tokens1 != tokens2:
                 # Same token pair for front and back run, different from victim
-                sandwiches.append({
-                    "type": "sandwich",
-                    "frontrun_tx": tx1.get("hash", ""),
-                    "victim_tx": tx2.get("hash", ""),
-                    "backrun_tx": tx3.get("hash", ""),
-                    "token_pair": tokens1,
-                    "frontrun_from": tx1.get("from", ""),
-                    "victim_from": tx2.get("from", ""),
-                    "backrun_from": tx3.get("from", ""),
-                    "detected_at": datetime.now(timezone.utc).isoformat(),
-                    "severity": "medium",
-                })
+                sandwiches.append(
+                    {
+                        "type": "sandwich",
+                        "frontrun_tx": tx1.get("hash", ""),
+                        "victim_tx": tx2.get("hash", ""),
+                        "backrun_tx": tx3.get("hash", ""),
+                        "token_pair": tokens1,
+                        "frontrun_from": tx1.get("from", ""),
+                        "victim_from": tx2.get("from", ""),
+                        "backrun_from": tx3.get("from", ""),
+                        "detected_at": datetime.now(timezone.utc).isoformat(),
+                        "severity": "medium",
+                    }
+                )
 
     return sandwiches
 
@@ -127,20 +129,31 @@ async def poll_flashbots_mev_data() -> list[dict[str, Any]]:
 
     mevs = []
     for item in data.get("data", []):
-        mevs.append({
-            "type": "flashbots_sandwich",
-            "tx_hash": item.get("transaction_hash", ""),
-            "block_number": item.get("block_number", 0),
-            "profit_eth": item.get("profit", {}).get("amount", 0),
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-            "severity": "info",
-        })
+        mevs.append(
+            {
+                "type": "flashbots_sandwich",
+                "tx_hash": item.get("transaction_hash", ""),
+                "block_number": item.get("block_number", 0),
+                "profit_eth": item.get("profit", {}).get("amount", 0),
+                "detected_at": datetime.now(timezone.utc).isoformat(),
+                "severity": "info",
+            }
+        )
     return mevs
 
 
 async def mev_scan_cycle() -> dict[str, Any]:
     """Run one full MEV scanning cycle."""
     flashbots = await poll_flashbots_mev_data()
+
+    # Dispatch Telegram alerts for new MEVs
+    for mev in flashbots:
+        try:
+            from rugbrain.alert_dispatcher import alert_mev_sandwich
+
+            asyncio.ensure_future(alert_mev_sandwich(mev))
+        except Exception:
+            pass
 
     return {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
