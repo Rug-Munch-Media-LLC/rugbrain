@@ -92,7 +92,7 @@ async def g_hl():
                 "market",
                 f"⚠️ Funding {f2['coin']}: {f2.get('rate_pct', 0)}%",
                 coin=f2["coin"],
-                hrs=0.5,
+                hrs=0.5,  # type: ignore[arg-type]
             )
         )
     return r
@@ -165,9 +165,9 @@ async def g_ld():
         rk = sn.get("risk", {})
         u = rk.get("ltv_proximity_pct")
         if u and u > 80:
-            r.append(_mk("defi", "defi", f"🏦 {sn.get('protocol', pk)} {u}% LTV", hrs=0.5))
+            r.append(_mk("defi", "defi", f"🏦 {sn.get('protocol', pk)} {u}% LTV", hrs=0.5))  # type: ignore[arg-type]
         if rk.get("borrow_apy_risk") == "critical":
-            r.append(_mk("defi", "defi", f"🏦 Borrow spike {sn.get('protocol', pk)}", hrs=0.5))
+            r.append(_mk("defi", "defi", f"🏦 Borrow spike {sn.get('protocol', pk)}", hrs=0.5))  # type: ignore[arg-type]
     return r
 
 
@@ -242,7 +242,7 @@ async def g_mk():  # fear&greed + peg deviations + exchange flows
                     "market",
                     "market",
                     f"{'😱' if v < 25 else '🤑'} F&G: {v}/100 ({l})",
-                    hrs=0.5,
+                    hrs=0.5,  # type: ignore[arg-type]
                     sd=v - 50,
                 )
             )
@@ -254,7 +254,7 @@ async def g_mk():  # fear&greed + peg deviations + exchange flows
         d = None
     if d:
         r += [
-            _mk("market", "market", f"⚠️ {c} peg: {d2}%", coin=c, hrs=0.5, usd=d2 * 1000000)
+            _mk("market", "market", f"⚠️ {c} peg: {d2}%", coin=c, hrs=0.5, usd=d2 * 1000000)  # type: ignore[arg-type]
             for c, d2 in d.get("peg_deviations_pct", {}).items()
             if d2 > 0.2
         ]
@@ -287,7 +287,7 @@ async def g_mv():
     except:
         return []
     return (
-        [_mk("mev", "mev", f"⚡ {d.get('flashbots_mevs', 0)} MEV attacks", hrs=0.5)]
+        [_mk("mev", "mev", f"⚡ {d.get('flashbots_mevs', 0)} MEV attacks", hrs=0.5)]  # type: ignore[arg-type]
         if d.get("flashbots_mevs", 0)
         else []
     )
@@ -302,7 +302,7 @@ async def g_me():  # youtube + podcast + newsletter
     if yt:
         for n, u, c in yt[:5]:
             try:
-                for v in await gv(u, 2):
+                for v in await gv(u, 2):  # type: ignore[union-attr]
                     r.append(
                         _mk(
                             "video",
@@ -349,7 +349,7 @@ async def _agg():
     for rv, (_, lb) in zip(rs, GG):
         if isinstance(rv, Exception):
             continue
-        sigs.extend(rv)
+        sigs.extend(rv)  # type: ignore[arg-type]
         src.append(lb)
     cc = defaultdict(int)
     for s in sigs:
@@ -377,7 +377,7 @@ async def _agg():
                     s["sc"] = round(s["sc"] * 0.6 + ranks.get(i, 0.0) * 40, 1)
                 sigs.sort(key=lambda s: s["sc"], reverse=True)
     except Exception:
-        logger.debug("reranker_skip")
+        log.debug("reranker_skip")
 
     return sigs, src
 

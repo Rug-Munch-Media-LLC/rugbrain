@@ -156,7 +156,7 @@ async def get_reranker() -> Any | None:
     try:
         from rugbrain.reranker import get_reranker as _get_reranker
 
-        return await _get_reranker()
+        return _get_reranker()  # type: ignore[return-value]  # sync function returning Reranker instance
     except Exception:
         return None
 
@@ -186,7 +186,7 @@ def score_confidence(
     try:
         from rugbrain.confidence_scorer import score_confidence as _score
 
-        return _score(results, query=query, entity_matches=entity_matches)
+        return _score(results, query=query, entity_matches=entity_matches)  # type: ignore[call-arg]
     except Exception:
         return {"confidence_score": 0.5, "confidence_label": "unknown", "breakdown": {}}
 

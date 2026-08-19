@@ -52,7 +52,7 @@ def _get_b2_api() -> Any:
             )
         from b2sdk.v2 import B2Api, InMemoryAccountInfo
 
-        api = B2Api(InMemoryAccountInfo())
+        api = B2Api(InMemoryAccountInfo())  # type: ignore[arg-type]
         api.authorize_account("production", B2_KEY_ID, B2_APP_KEY)
         _b2_api = api
     return _b2_api
@@ -207,6 +207,7 @@ async def snapshot_all() -> dict[str, Any]:
     ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
     # Get collections from rag_service (Redis-backed)
+    redis: Any = None
     try:
         from rugbrain.search_service import COLLECTIONS, _get_redis
 
@@ -223,7 +224,7 @@ async def snapshot_all() -> dict[str, Any]:
                 results[name] = {"collection": name, "status": "skipped", "count": 0}
                 continue
 
-            doc_ids = await redis.smembers(f"rag:idx:{name}")
+            doc_ids = await redis.smembers(f"rag:idx:{name}")  # type: ignore[union-attr]
             count = len(doc_ids) if doc_ids else 0
             if count == 0:
                 results[name] = {"collection": name, "status": "empty", "count": 0}
@@ -234,7 +235,7 @@ async def snapshot_all() -> dict[str, Any]:
             items = []
             for doc_id in doc_ids:
                 try:
-                    raw = await redis.get(f"rag:{name}:{doc_id}")
+                    raw = await redis.get(f"rag:{name}:{doc_id}")  # type: ignore[union-attr]
                     if raw:
                         doc = json.loads(raw) if isinstance(raw, str) else raw
                         items.append(doc)
@@ -461,6 +462,7 @@ async def nightly_cycle() -> dict[str, Any]:
 async def b2_stats() -> dict[str, Any]:
     """Get B2 usage + local cache stats."""
     # Get collections and Redis connection
+    redis: Any = None
     try:
         from rugbrain.search_service import COLLECTIONS, _get_redis
 
@@ -493,7 +495,7 @@ async def b2_stats() -> dict[str, Any]:
     if has_redis:
         for name in COLLECTIONS:
             try:
-                count = await redis.scard(f"rag:idx:{name}")
+                count = await redis.scard(f"rag:idx:{name}")  # type: ignore[union-attr]
                 coll_info[name] = count
             except Exception:
                 coll_info[name] = 0

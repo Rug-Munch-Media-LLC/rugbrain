@@ -295,7 +295,7 @@ class TestSearchViaEndpoint:
     async def test_meta_absent_when_not_requested(self):
         client = FakeClient({"results": [], "reranker_applied": False})
         await search_via_endpoint("http://h", "key", client, "q", 5, None)
-        assert client.last_params.get("rerank") is None
+        assert client.last_params.get("rerank") is None  # type: ignore[union-attr]
 
 
 class TestDeltaBlock:

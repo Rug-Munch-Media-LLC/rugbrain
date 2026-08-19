@@ -47,7 +47,7 @@ class ParentRetriever:
                 "content": content,
                 "metadata": metadata,
             }
-            await r.set(key, json.dumps(doc))
+            await r.set(key, json.dumps(doc))  # type: ignore[operator]
             log.debug("parent_retriever: stored parent doc %s", doc_id)
         except Exception as e:
             log.debug("parent_retriever: store_parent failed for %s: %s", doc_id, e)
@@ -68,7 +68,7 @@ class ParentRetriever:
             if r is None:
                 return None
             key = f"rag:parent:{doc_id}"
-            data = await r.get(key)
+            data = await r.get(key)  # type: ignore[operator]
             if data:
                 return cast(dict[str, Any], json.loads(data))
         except Exception as e:

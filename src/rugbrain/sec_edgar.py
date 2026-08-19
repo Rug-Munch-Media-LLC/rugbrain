@@ -116,12 +116,14 @@ async def search_filings(
                 "company_name": company,
                 "cik": cik,
                 "filing_date": (
-                    entry.find("atom:updated", ns).text[:10]
+                    entry.find("atom:updated", ns).text[:10]  # type: ignore[union-attr]
                     if entry.find("atom:updated", ns) is not None
                     else ""
                 ),
                 "description": entry.findtext("atom:title", "", ns)[:500],
-                "url": entry.find("atom:link", ns).attrib.get("href", "") if entry.find("atom:link", ns) is not None else "",
+                "url": entry.find("atom:link", ns).attrib.get("href", "")  # type: ignore[union-attr]
+                if entry.find("atom:link", ns) is not None
+                else "",
                 "source": "sec_edgar",
                 "ingested_at": datetime.now(timezone.utc).isoformat(),
             }

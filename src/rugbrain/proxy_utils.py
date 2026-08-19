@@ -46,5 +46,5 @@ def get_proxy_client(**kwargs: Any) -> httpx.AsyncClient:
     """
     if _should_use_proxy():
         logger.debug("proxy_enabled url=%s", PROXY_URL[:30])
-        return httpx.AsyncClient(proxies=PROXY_URL, **kwargs)
+        return httpx.AsyncClient(proxies=PROXY_URL, **kwargs)  # type: ignore[arg-type]
     return httpx.AsyncClient(**kwargs)

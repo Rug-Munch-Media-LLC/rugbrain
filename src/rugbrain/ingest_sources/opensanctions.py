@@ -75,12 +75,12 @@ def wallet_entity_to_doc(entity: dict[str, Any]) -> IngestDoc | None:
     """
     entity_id = str(entity.get("id") or "").strip()
     props = entity.get("properties") if isinstance(entity.get("properties"), dict) else {}
-    address = _ftm_first(props, "address")
+    address = _ftm_first(props, "address")  # type: ignore[arg-type]
     if not entity_id and not address:
         return None
     caption = str(entity.get("caption") or "").strip()
-    asset = _ftm_first(props, "asset")
-    blockchain = _ftm_first(props, "blockchain") or _ftm_first(props, "network")
+    asset = _ftm_first(props, "asset")  # type: ignore[arg-type]
+    blockchain = _ftm_first(props, "blockchain") or _ftm_first(props, "network")  # type: ignore[arg-type]
     raw_datasets = entity.get("datasets")
     datasets = [str(d) for d in raw_datasets if str(d)] if isinstance(raw_datasets, list) else []
     target = bool(entity.get("target"))

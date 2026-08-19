@@ -21,7 +21,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import b2_permanence  # noqa: E402
+import b2_permanence  # type: ignore[import-not-found]  # noqa: E402
 
 # ── Fixtures / fakes ───────────────────────────────────────────────────
 

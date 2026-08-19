@@ -459,7 +459,7 @@ async def faithfulness(answer: str, context_chunks: list[str]) -> float:
         return 0.0
 
     try:
-        from app.hallucination_guard import (
+        from app.hallucination_guard import (  # type: ignore[import-not-found]
             HallucinationGuard,
         )  # external dependency  # pyright: ignore[reportMissingImports]
 

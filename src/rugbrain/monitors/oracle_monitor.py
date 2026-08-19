@@ -184,8 +184,8 @@ async def _alert(sev: str, coin: str, exc: str, dev: float, msg: str) -> None:
             severity=sev,
             channels=["telegram"],
         )
-    except Exception as exc:
-        logger.debug("alert_fail %s", str(exc)[:60])
+    except Exception as exc2:
+        logger.debug("alert_fail %s", str(exc2)[:60])
 
 
 def _mk_event(coin: str, exc: str, sev: str, typ: str, dev: float, msg: str) -> dict[str, Any]:

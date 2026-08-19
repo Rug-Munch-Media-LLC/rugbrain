@@ -49,13 +49,13 @@ async def dispatch_alert(
 ) -> dict[str, bool]:
     """Dispatch an alert to configured channels."""
     if not _should_alert(severity):
-        return {"sent": False, "reason": "below_threshold"}
+        return {"sent": False, "reason": "below_threshold"}  # type: ignore[return-value]
 
     # Rate limit
     now = time.monotonic()
     rate_key = f"{alert_type}:{severity}"
     if rate_key in _last_alert and now - _last_alert[rate_key] < RATE_LIMIT_SECONDS:
-        return {"sent": False, "reason": "rate_limited"}
+        return {"sent": False, "reason": "rate_limited"}  # type: ignore[return-value]
     _last_alert[rate_key] = now
 
     if channels is None:

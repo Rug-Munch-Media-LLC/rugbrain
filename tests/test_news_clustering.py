@@ -101,7 +101,7 @@ def test_build_story_sources_and_credibility():
 def test_build_story_timeline_sorted_ascending():
     story = nc.build_story(_articles())
     times = [nc._parse_dt(item["published_at"]) for item in story.timeline]
-    assert times == sorted(times)
+    assert times == sorted(times)  # type: ignore[arg-type]
     assert len(story.timeline) == 3
 
 

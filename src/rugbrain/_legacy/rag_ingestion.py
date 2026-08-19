@@ -35,7 +35,7 @@ async def nightly_rag_index(**kw: Any) -> dict[str, Any]:
 
     try:
         # ── 1. Index recent news articles ──
-        from app.domains.databus.news_intel import aggregate_all_news  # external dependency
+        from app.domains.databus.news_intel import aggregate_all_news  # type: ignore[import-not-found]  # external dependency
 
         news = await aggregate_all_news(limit=100)
         news_docs = []
@@ -66,7 +66,7 @@ async def nightly_rag_index(**kw: Any) -> dict[str, Any]:
 
     try:
         # ── 2. Index CT Rundown ──
-        from app.domains.databus.x_intel import fetch_ct_rundown  # external dependency
+        from app.domains.databus.x_intel import fetch_ct_rundown  # type: ignore[import-not-found]  # external dependency
 
         ct = await fetch_ct_rundown(limit=30)
         ct_docs = []
@@ -97,7 +97,7 @@ async def nightly_rag_index(**kw: Any) -> dict[str, Any]:
 
     try:
         # ── 3. Index market data snapshot ──
-        from app.domains.databus.news_provider import (  # external dependency
+        from app.domains.databus.news_provider import (  # type: ignore[import-not-found]  # external dependency
             get_fear_greed,
             get_market_brief,
         )
@@ -123,7 +123,7 @@ async def nightly_rag_index(**kw: Any) -> dict[str, Any]:
 
     try:
         # ── 4. Index social metrics ──
-        from app.domains.databus.social_intel import get_social_metrics  # external dependency
+        from app.domains.databus.social_intel import get_social_metrics  # type: ignore[import-not-found]  # external dependency
 
         social = await get_social_metrics()
         social_doc = {
@@ -201,7 +201,7 @@ async def _embed_batch(docs: list[dict[str, Any]], collection: str) -> int:
 
             # Store parent document for context expansion
             try:
-                from app.rag.parent_retriever import get_parent_retriever  # external dependency
+                from app.rag.parent_retriever import get_parent_retriever  # type: ignore[import-not-found]  # external dependency
 
                 pr = await get_parent_retriever()
                 await pr.store_parent(
@@ -213,7 +213,7 @@ async def _embed_batch(docs: list[dict[str, Any]], collection: str) -> int:
                 logger.debug("parent_store_failed doc_id=%s err=%s", doc_id, e)
 
             try:
-                from app.rag.incremental_indexer import DeltaTracker  # external dependency
+                from app.rag.incremental_indexer import DeltaTracker  # type: ignore[import-not-found]  # external dependency
 
                 DeltaTracker.track_add(doc_id, collection)
             except Exception as e:

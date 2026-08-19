@@ -900,6 +900,7 @@ async def is_duplicate(collection: str, text: str, redis_client: Any | None = No
         from rugbrain.search_service import _get_redis
 
         redis_client = await _get_redis()
+    assert redis_client is not None, "redis_client required for dedup"
 
     h = content_hash(text)
     key = f"rag:dedup:{collection}:{h}"
@@ -918,6 +919,7 @@ async def mark_ingested(
         from rugbrain.search_service import _get_redis
 
         redis_client = await _get_redis()
+    assert redis_client is not None, "redis_client required for mark_ingested"
 
     h = content_hash(text)
     key = f"rag:dedup:{collection}:{h}"

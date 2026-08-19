@@ -222,7 +222,7 @@ def test_trusted_filter_rank_mode_keeps_and_tags() -> None:
 
 def test_tag_unverified_additive_no_mutation() -> None:
     doc = _doc("user_upload")
-    original_meta = dict(doc["metadata"])
+    original_meta = dict(doc["metadata"])  # type: ignore[call-overload]
     tagged = g.tag_unverified(doc, reason="partition is user_upload")
     # original unchanged
     assert doc["metadata"] == original_meta

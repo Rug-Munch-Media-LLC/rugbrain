@@ -227,7 +227,7 @@ with tab6:
 
                 params = {"limit": 20}
                 if feed_source != "all":
-                    params["sources"] = feed_source
+                    params["sources"] = feed_source  # type: ignore[assignment]
 
                 async def _fetch_feed():
                     async with httpx.AsyncClient(timeout=15) as c:

@@ -76,7 +76,7 @@ async def test_store_documents_embeds_and_inserts():
     ]
     embedder = _FakeEmbedder()
     store = _FakeStore()
-    result = await mod.store_documents(docs, embedder, store, progress_every=1)
+    result = await mod.store_documents(docs, embedder, store, progress_every=1)  # type: ignore[arg-type]
     assert result["inserted"] == 2
     assert result["failed"] == 0
     assert result["chunks"] == 2
@@ -90,6 +90,6 @@ async def test_store_documents_failed_embed_continues():
             raise RuntimeError("embedding backend down")
 
     docs = [mod.doc_from_article(title="A", content="alpha", url="u1", source="s", collection="c")]
-    result = await mod.store_documents(docs, _BrokenEmbedder(), _FakeStore())
+    result = await mod.store_documents(docs, _BrokenEmbedder(), _FakeStore())  # type: ignore[arg-type]
     assert result["inserted"] == 0
     assert result["failed"] == 1

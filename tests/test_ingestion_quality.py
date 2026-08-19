@@ -181,7 +181,7 @@ def test_registry_error_retries():
         reg.should_reingest("news", max_age_seconds=3600, current_version="v1", now=1001.0) is True
     )
     assert reg.get("news") is not None
-    assert reg.get("news").last_status == "error"
+    assert reg.get("news").last_status == "error"  # type: ignore[union-attr]
 
 
 def test_registry_json_persistence(tmp_path: Path):
@@ -356,10 +356,14 @@ async def test_loop_stores_when_store_provided():
     store = _FakeStore()
     embedder = _FakeEmbedder()
     result = await run_continuous_ingest(
-        [_source("with_store", docs)], reg, dry_run=False, store=store, embedder=embedder
+        [_source("with_store", docs)],
+        reg,
+        dry_run=False,
+        store=store,  # type: ignore[arg-type]
+        embedder=embedder,
     )
     assert result["with_store"]["ok"] is True
     assert result["with_store"]["store"] is not None
     assert result["with_store"]["store"]["inserted"] >= 1
     assert len(store.points) >= 1
-    assert reg.get("with_store").last_count == result["with_store"]["ingested"]
+    assert reg.get("with_store").last_count == result["with_store"]["ingested"]  # type: ignore[union-attr]

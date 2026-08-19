@@ -58,7 +58,7 @@ class Reranker:
         top_k: int = 10,
     ) -> list[dict[str, Any]]:
         """Rank documents — wraps top-level rerank function."""
-        return await _rerank_impl(query, documents, top_k, url=self._url)
+        return await rerank(query, documents, top_k)
 
     async def health(self) -> dict[str, Any]:
         """Check reranker health."""

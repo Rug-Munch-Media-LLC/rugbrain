@@ -36,7 +36,7 @@ class TestBuildQdrantFilter:
 
     def test_range_skips_empty_constraint(self):
         assert build_qdrant_filter(None, [("date_ts", {})]) is None
-        assert build_qdrant_filter(None, [("date_ts", {"gte": None})]) is None
+        assert build_qdrant_filter(None, [("date_ts", {"gte": None})]) is None  # type: ignore[arg-type]
 
 
 class TestBuildSearchFilters:

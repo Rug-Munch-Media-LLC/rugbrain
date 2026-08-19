@@ -16,7 +16,7 @@ _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-from coding_ingest_common import (  # noqa: E402
+from coding_ingest_common import (  # type: ignore[import-not-found]  # noqa: E402
     build_coding_doc,
     html_to_text,
     markdown_sections,

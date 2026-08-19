@@ -215,7 +215,7 @@ def record_to_point(rec: dict[str, Any]) -> PointStruct:
 
     return PointStruct(
         id=parse_point_id(rec.get("id")),
-        vector=vector,
+        vector=vector or [],
         payload=payload or {},
     )
 

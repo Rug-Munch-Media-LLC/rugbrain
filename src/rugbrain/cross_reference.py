@@ -52,7 +52,7 @@ def _import_lance_store() -> Any | None:
     any failure so callers degrade to the Qdrant fallback.
     """
     try:
-        from lite_indexer.vectors.lance_store import (
+        from lite_indexer.vectors.lance_store import (  # type: ignore[import-not-found]
             LanceVectorStore,
         )
 
@@ -67,7 +67,7 @@ def _import_lance_store() -> Any | None:
         if os.path.isdir(candidate):
             sys.path.insert(0, LITE_INDEXER_PATH)
             try:
-                from lite_indexer.vectors.lance_store import LanceVectorStore
+                from lite_indexer.vectors.lance_store import LanceVectorStore  # type: ignore[import-not-found]
 
                 return LanceVectorStore
             except Exception as e:

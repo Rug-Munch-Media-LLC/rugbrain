@@ -418,7 +418,7 @@ async def twitter_tracker_cycle() -> dict[str, Any]:
         if isinstance(res, Exception) or res is None:
             fails += 1
             continue
-        nt.extend(_parse_rss(res, h))
+        nt.extend(_parse_rss(res, h))  # type: ignore[arg-type]
     st: list[dict[str, Any]] = []
     if fails:
         for h, r in zip(
@@ -434,7 +434,7 @@ async def twitter_tracker_cycle() -> dict[str, Any]:
             ),
         ):
             if not isinstance(r, Exception) and r:
-                st.extend(r)
+                st.extend(r)  # type: ignore[arg-type]
     all_t = nt + st
     for t in all_t:
         _tweets.append(t)

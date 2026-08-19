@@ -287,7 +287,7 @@ async def test_redis_publish_survives_invalid_json():
         await r.publish(CHANNEL, "")
         await r.publish(CHANNEL, "null")
     finally:
-        await r.aclose()
+        await r.aclose()  # type: ignore[operator]
 
     # If we get here without exception, the publish operations completed.
     # The subscriber handles malformed input gracefully (logs warnings).

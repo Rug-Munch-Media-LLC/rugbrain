@@ -91,7 +91,13 @@ async def send_alert(
     """
     severity = finding.get("risk_level", "low")
     if not force and not _severity_meets_threshold(severity):
-        return {"sent": [], "skipped": [{"channel": "all", "reason": f"severity {severity} below threshold {MIN_SEVERITY}"}], "errors": []}
+        return {
+            "sent": [],
+            "skipped": [
+                {"channel": "all", "reason": f"severity {severity} below threshold {MIN_SEVERITY}"}
+            ],
+            "errors": [],
+        }
 
     now = time.time()
     message = _format_alert_message(finding)
@@ -107,7 +113,7 @@ async def send_alert(
             last = _last_alert.get(channel_name, 0)
             if not force and (now - last) < RATE_LIMIT_SECONDS:
                 results["skipped"].append(
-                    {"channel": channel_name, "reason": "rate_limited"}
+                    {"channel": channel_name, "reason": "rate_limited"}  # type: ignore[arg-type]
                 )
                 continue
 
@@ -128,13 +134,9 @@ async def send_alert(
                         _last_alert[channel_name] = now
                         results["sent"].append(channel_name)
                     else:
-                        results["errors"].append(
-                            {"channel": channel_name, "status": r.status_code}
-                        )
+                        results["errors"].append({"channel": channel_name, "status": r.status_code})  # type: ignore[arg-type]
             except Exception as exc:
-                results["errors"].append(
-                    {"channel": channel_name, "error": str(exc)[:100]}
-                )
+                results["errors"].append({"channel": channel_name, "error": str(exc)[:100]})  # type: ignore[arg-type]
 
     return results
 

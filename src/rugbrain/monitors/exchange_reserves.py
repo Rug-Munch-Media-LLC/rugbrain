@@ -136,8 +136,12 @@ async def _fetch_por(client: httpx.AsyncClient, name: str) -> ReserveSnapshot | 
     if not ep:
         return None
     try:
-        meth = client.post if name in ("Binance", "Kraken") else client.get
-        r = await meth(ep, timeout=15, json={"type": "por"} if name == "Binance" else None)
+        if name in ("Binance", "Kraken"):
+            r = await client.post(
+                ep, timeout=15, json={"type": "por"} if name == "Binance" else None
+            )
+        else:
+            r = await client.get(ep, timeout=15)
         if r.status_code != 200:
             return None
         body = r.json()
@@ -281,14 +285,14 @@ async def exchange_reserves_cycle() -> dict[str, Any]:
                     continue
                 raw = cg_raw
 
-            raw.scanned_at = now_iso
+            raw.scanned_at = now_iso  # type: ignore[union-attr]
             prev = _reserves.get(name)
             if prev is not None:
                 _previous[name] = prev
-            _reserves[name] = raw
+            _reserves[name] = raw  # type: ignore[arg-type]
             _last_check[name] = now_ts
 
-            msgs = _check_alerts(name, raw, _previous.get(name))
+            msgs = _check_alerts(name, raw, _previous.get(name))  # type: ignore[arg-type]
             all_alerts.extend(msgs)
 
     for msg in all_alerts:

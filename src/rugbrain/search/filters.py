@@ -226,10 +226,10 @@ async def ingest_document(
     await r.sadd(f"rag:idx:{collection}", doc_id)
 
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex# external dependency
+        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
         ann = get_ann_index()
-        await ann.bump_version(collection)
+        await ann.bump_version(collection)  # type: ignore[operator]
     except Exception as e:
         logger.debug("ANN version bump skipped: %s", e)
 
@@ -243,27 +243,27 @@ async def ingest_document(
         logger.debug("BM25 cache invalidation skipped: %s", e)
 
     try:
-        from rugbrain.compat import EntityLookup, extract_entities# external dependency
+        from rugbrain.compat import EntityLookup, extract_entities  # external dependency
 
         entities = extract_entities(content)
-        if entities.has_entities:
-            lookup = EntityLookup.get_instance()
-            for entity in entities.all_entities():
+        if entities.has_entities:  # type: ignore[union-attr]
+            lookup = EntityLookup.get_instance()  # type: ignore[union-attr]
+            for entity in entities.all_entities():  # type: ignore[union-attr]
                 await lookup.index_entity(
                     entity["type"],
                     entity["value"],
                     doc_id,
                     metadata={**metadata, "collection": collection},
                 )
-            logger.debug("Entity indexing: %s entities", len(entities.all_entities()))
+            logger.debug("Entity indexing: %s entities", len(entities.all_entities()))  # type: ignore[union-attr]
     except Exception as e:
         logger.debug("Entity indexing skipped: %s", e)
 
     kg = None
     try:
-        from rugbrain.compat import get_knowledge_graph# external dependency
+        from rugbrain.compat import get_knowledge_graph  # external dependency
 
-        kg = await get_knowledge_graph()
+        kg = await get_knowledge_graph()  # type: ignore[operator]
     except ImportError:
         logger.debug("Knowledge Graph module not available, skipping KG edge creation")
         kg = None
@@ -273,7 +273,7 @@ async def ingest_document(
 
     if kg is not None:
         try:
-            await kg.ingest_rag_document(collection, doc_id, content, metadata)
+            await kg.ingest_rag_document(collection, doc_id, content, metadata)  # type: ignore[operator]
             logger.debug("KG edge creation complete")
         except Exception as e:
             logger.debug("KG edge creation failed: %s", e)
@@ -281,10 +281,10 @@ async def ingest_document(
     logger.debug("pgvector upsert skipped (FAISS primary)")
 
     try:
-        from rugbrain.compat import get_parent_retriever# external dependency
+        from rugbrain.compat import get_parent_retriever  # external dependency
 
-        pr = await get_parent_retriever()
-        await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)
+        pr = await get_parent_retriever()  # type: ignore[operator]
+        await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)  # type: ignore[union-attr]
     except Exception as e:
         logger.debug("ParentRetriever.store_parent skipped: %s", e)
 
@@ -436,10 +436,10 @@ async def get_stats() -> dict[str, Any]:
 
     ann_stats = {}
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex# external dependency
+        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
         ann = get_ann_index()
-        ann_stats = ann.stats()
+        ann_stats = ann.stats()  # type: ignore[operator]
     except Exception:
         logger.warning("swallowed exception", exc_info=True)
 
@@ -459,10 +459,10 @@ async def get_stats() -> dict[str, Any]:
 
     cache_stats = {}
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache# external dependency
+        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
         cache = get_semantic_cache()
-        cache_stats = await cache.stats()
+        cache_stats = await cache.stats()  # type: ignore[operator]
     except Exception:
         logger.warning("swallowed exception", exc_info=True)
 
@@ -487,9 +487,9 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
     Chain IDs: 1=ETH, 56=BSC, 137=Polygon, 42161=Arbitrum, 43114=Avalanche,
     10=Optimism, 8453=Base, 324=zkSync, 534352=Scroll, 59144=Linea.
     """
-    from rugbrain.compat import GoPlusConnector# external dependency
+    from rugbrain.compat import GoPlusConnector  # external dependency
 
-    result = await GoPlusConnector.check_token(chain, token_address)
+    result = await GoPlusConnector.check_token(chain, token_address)  # type: ignore[operator]
     if not result:
         return {"error": "GoPlus check returned no data", "address": token_address, "chain": chain}
 

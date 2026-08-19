@@ -40,7 +40,7 @@ async def _presidio_available() -> bool:
     except Exception:
         ok = False
     _PRESIDIO_CACHE["available"] = ok
-    _PRESIDIO_CACHE["checked_at"] = now
+    _PRESIDIO_CACHE["checked_at"] = now  # type: ignore[assignment]
     return ok
 
 

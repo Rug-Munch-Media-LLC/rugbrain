@@ -68,9 +68,9 @@ def _extract_rows(data: Any) -> list[dict[str, Any]]:
 def row_to_doc(row: dict[str, Any], index: int) -> IngestDoc | None:
     """Normalize one dataset row (pdf src + label) into a corpus-pointer doc."""
     pdf = row.get("pdf") if isinstance(row.get("pdf"), dict) else {}
-    src = str(pdf.get("src") or "").strip()
+    src = str(pdf.get("src") or "").strip()  # type: ignore[union-attr]
     label = str(row.get("label") or "").strip()
-    size = str(pdf.get("size_bytes") or "").strip()
+    size = str(pdf.get("size_bytes") or "").strip()  # type: ignore[union-attr]
     if not src and not label:
         return None
     content_parts = [

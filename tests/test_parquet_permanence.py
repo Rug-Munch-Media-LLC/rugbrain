@@ -22,9 +22,9 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import b2_common  # noqa: E402
-import b2_restore  # noqa: E402
-import migrate_to_parquet  # noqa: E402
+import b2_common  # type: ignore[import-not-found]  # noqa: E402
+import b2_restore  # type: ignore[import-not-found]  # noqa: E402
+import migrate_to_parquet  # type: ignore[import-not-found]  # noqa: E402
 
 # Re-exported for use by later modules in this file
 __all__ = ["b2_common", "b2_restore", "migrate_to_parquet"]

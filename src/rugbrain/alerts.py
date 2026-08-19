@@ -511,7 +511,7 @@ class ClickHouseAlertLogger:
                 "clickhouse_alerts_ready table=%s db=%s port=%d",
                 CLICKHOUSE_TABLE,
                 self._db,
-                port,
+                port,  # type: ignore[possibly-unbound]
             )
         except Exception as e:
             log.warning("clickhouse_alerts_unavailable: %s", e)

@@ -29,7 +29,7 @@ def test_classify_fear_boundaries():
 def test_compute_fear_index_weighted_all_components():
     components = {"fng": 80, "social": 60, "onchain": 40, "news": 50}
     expected = round((0.35 * 80 + 0.20 * 60 + 0.25 * 40 + 0.20 * 50) / (0.35 + 0.20 + 0.25 + 0.20))
-    assert fi.compute_fear_index(components) == expected
+    assert fi.compute_fear_index(components) == expected  # type: ignore[arg-type]
 
 
 def test_compute_fear_index_renormalizes_missing():

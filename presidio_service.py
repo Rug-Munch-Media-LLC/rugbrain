@@ -4,6 +4,7 @@ Presidio PII Redaction — Production Service for RAG
 REST API on port 8090. Custom crypto wallet recognizers.
 Wired into RAG ingest pipeline.
 """
+
 import os
 import logging
 from flask import Flask, request, jsonify
@@ -45,6 +46,7 @@ REDACTION_MAP = {
 
 _engine_cache = {"analyzer": None, "anonymizer": None}
 
+
 def get_engines():
     if _engine_cache["analyzer"] is None:
         from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
@@ -54,7 +56,7 @@ def get_engines():
         # Force en_core_web_sm (not lg which would need 800MB download)
         nlp_config = {
             "nlp_engine_name": "spacy",
-            "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]
+            "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
         }
         nlp_engine = NlpEngineProvider(nlp_configuration=nlp_config).create_engine()
         analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["en"])
@@ -67,8 +69,8 @@ def get_engines():
                 name=f"{p['name']}_recognizer",
             )
             analyzer.registry.add_recognizer(recognizer)
-        _engine_cache["analyzer"] = analyzer
-        _engine_cache["anonymizer"] = AnonymizerEngine()
+        _engine_cache["analyzer"] = analyzer  # type: ignore[assignment]
+        _engine_cache["anonymizer"] = AnonymizerEngine()  # type: ignore[assignment]
         log.info("Presidio engines loaded with %d custom crypto recognizers", len(CRYPTO_PATTERNS))
     return _engine_cache["analyzer"], _engine_cache["anonymizer"]
 
@@ -80,25 +82,38 @@ def redact_text(text, language="en"):
         return {"redacted": text, "pii_found": 0, "entities": []}
 
     from presidio_anonymizer.entities import OperatorConfig
+
     operators = {}
     for r in results:
         placeholder = REDACTION_MAP.get(r.entity_type, f"[{r.entity_type}_REDACTED]")
         operators[r.entity_type] = OperatorConfig("replace", {"new_value": placeholder})
 
-    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
+    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)  # type: ignore[union-attr]
     return {
         "redacted": anonymized.text,
         "pii_found": len(results),
-        "entities": [{"type": r.entity_type, "start": r.start, "end": r.end, "score": round(r.score, 2)} for r in results],
+        "entities": [
+            {"type": r.entity_type, "start": r.start, "end": r.end, "score": round(r.score, 2)}
+            for r in results
+        ],
     }
 
 
 # Flask app
 app = Flask("presidio-rag")
 
+
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok", "service": "presidio-rag", "port": SERVICE_PORT, "custom_recognizers": len(CRYPTO_PATTERNS)})
+    return jsonify(
+        {
+            "status": "ok",
+            "service": "presidio-rag",
+            "port": SERVICE_PORT,
+            "custom_recognizers": len(CRYPTO_PATTERNS),
+        }
+    )
+
 
 @app.route("/redact", methods=["POST"])
 def redact():
@@ -109,6 +124,7 @@ def redact():
         return jsonify({"error": "no text provided"}), 400
     return jsonify(redact_text(text, language))
 
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json(force=True, silent=True) or {}
@@ -117,7 +133,13 @@ def analyze():
         return jsonify({"error": "no text provided"}), 400
     analyzer, _ = get_engines()
     results = analyzer.analyze(text=text, language=data.get("language", "en"))
-    return jsonify([{"type": r.entity_type, "start": r.start, "end": r.end, "score": round(r.score, 2)} for r in results])
+    return jsonify(
+        [
+            {"type": r.entity_type, "start": r.start, "end": r.end, "score": round(r.score, 2)}
+            for r in results
+        ]
+    )
+
 
 @app.route("/redact/batch", methods=["POST"])
 def redact_batch():
@@ -132,12 +154,21 @@ def redact_batch():
         text = doc.get("text", "")
         meta = doc.get("meta", {})
         result = redact_text(text)
-        results.append({"id": doc_id, "redacted": result["redacted"], "pii_found": result["pii_found"], "entities": result["entities"], "meta": meta})
+        results.append(
+            {
+                "id": doc_id,
+                "redacted": result["redacted"],
+                "pii_found": result["pii_found"],
+                "entities": result["entities"],
+                "meta": meta,
+            }
+        )
     return jsonify({"count": len(results), "results": results})
 
 
 if __name__ == "__main__":
     import argparse
+
     p = argparse.ArgumentParser()
     p.add_argument("--test", action="store_true")
     p.add_argument("--daemon", action="store_true")

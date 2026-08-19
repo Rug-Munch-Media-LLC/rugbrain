@@ -164,7 +164,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # Probe Qdrant once at startup
     try:
-        async with httpx.AsyncClient(base_url=_health_state["qdrant_url"], timeout=5.0) as client:
+        async with httpx.AsyncClient(base_url=_health_state["qdrant_url"], timeout=5.0) as client:  # type: ignore[var-annotated]
             r = await client.get("/")
             _health_state["qdrant"] = r.status_code == 200
             logger.info("qdrant_probe status=%s", "ok" if _health_state["qdrant"] else "fail")

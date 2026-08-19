@@ -387,14 +387,14 @@ async def rag_chunk_solidity(request: Request, data: dict[str, Any]) -> dict[str
 async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.compat import score_deployer_risk  # external dependency
 
-    return score_deployer_risk(  # type: ignore[no-any-return]  # app.deployer_reputation is an untyped external module
+    return score_deployer_risk(  # type: ignore[no-any-return, call-arg]  # app.deployer_reputation is an untyped external module
         address=data.get("address", ""),
-        deployment_count=data.get("deployment_count", 0),
-        mixer_funded=data.get("mixer_funded", False),
-        source_verified=data.get("source_verified", False),
-        code_similarity=data.get("code_similarity", 0.0),
-        rapid_deploy=data.get("rapid_deploy", False),
-        funded_by_scammer=data.get("funded_by_scammer", False),
+        deployment_count=data.get("deployment_count", 0),  # type: ignore[call-arg]
+        mixer_funded=data.get("mixer_funded", False),  # type: ignore[call-arg]
+        source_verified=data.get("source_verified", False),  # type: ignore[call-arg]
+        code_similarity=data.get("code_similarity", 0.0),  # type: ignore[call-arg]
+        rapid_deploy=data.get("rapid_deploy", False),  # type: ignore[call-arg]
+        funded_by_scammer=data.get("funded_by_scammer", False),  # type: ignore[call-arg]
     )
 
 
@@ -402,11 +402,11 @@ async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[
 async def rag_cross_chain(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.compat import resolve_cross_chain_identity  # external dependency
 
-    return resolve_cross_chain_identity(  # type: ignore[no-any-return]  # app.cross_chain is an untyped external module
+    return resolve_cross_chain_identity(  # type: ignore[no-any-return, call-arg]  # app.cross_chain is an untyped external module
         address=data.get("address", ""),
-        chain=data.get("chain", "ethereum"),
-        funding_sources=data.get("funding_sources", []),
-        label_hints=data.get("label_hints", []),
+        chain=data.get("chain", "ethereum"),  # type: ignore[call-arg]
+        funding_sources=data.get("funding_sources", []),  # type: ignore[call-arg]
+        label_hints=data.get("label_hints", []),  # type: ignore[call-arg]
     )
 
 
@@ -443,8 +443,10 @@ async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> di
         return {"error": "query is required"}
     from rugbrain.compat import investigate  # external dependency
 
-    return await investigate(  # type: ignore[no-any-return]  # app.investigation_narratives is an untyped external module
-        query=q, investigation_type=data.get("type", "auto"), max_hops=data.get("max_hops", 5)
+    return await investigate(  # type: ignore[no-any-return, call-arg]  # app.investigation_narratives is an untyped external module
+        query=q,  # type: ignore[call-arg]
+        investigation_type=data.get("type", "auto"),  # type: ignore[call-arg]
+        max_hops=data.get("max_hops", 5),  # type: ignore[call-arg]
     )
 
 

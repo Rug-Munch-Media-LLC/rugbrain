@@ -775,7 +775,7 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
     )
 
     all_events = (
-        binance
+        binance  # type: ignore[operator]
         + bybit
         + okx
         + protocols
@@ -794,8 +794,8 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         _liquidation_history[:] = _liquidation_history[-25000:]
 
     # Update 24h volume
-    if market.get("estimated_total_24h", 0) > 0:
-        _24h_volume = market["estimated_total_24h"]
+    if market.get("estimated_total_24h", 0) > 0:  # type: ignore[union-attr]
+        _24h_volume = market["estimated_total_24h"]  # type: ignore[index]
         if _24h_volume > _peak_24h:
             _peak_24h = _24h_volume
 

@@ -128,14 +128,14 @@ def _is_crypto_item(title: str, description: str, categories: list[str]) -> bool
     return bool(_CRYPTO_RE.search(haystack))
 
 
-def _lenient_rss_fetch(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
+async def _lenient_rss_fetch(client: httpx.AsyncClient, url: str) -> list[dict[str, Any]]:
     """Fetch an RSS feed and parse items even when the XML is malformed.
 
     SEC feeds have shipped unescaped ``&`` inside titles (e.g. 'DJ&S
     Property'). We pre-escape bare ampersands, then fall back to a
     regex-based item extractor if ElementTree still fails.
     """
-    r = client.get(url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
+    r = await client.get(url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
     r.raise_for_status()
     raw = r.text
     fixed = re.sub(r"&(?!(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)", "&amp;", raw)
@@ -521,7 +521,7 @@ async def run(
                     (SEC_PRESS_RSS, "sec_press_rss"),
                 ):
                     try:
-                        items = await asyncio.to_thread(_lenient_rss_fetch, client, url)
+                        items = await _lenient_rss_fetch(client, url)
                         docs.extend(_rss_docs(items, st, days))
                     except Exception as e:
                         logger.warning("rss_fetch_failed url=%s err=%s", url, str(e)[:150])

@@ -11,7 +11,7 @@ import pytest
 # installed package; this makes the scheduler testable in-process).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import ingest_continuous as mod
+import ingest_continuous as mod  # type: ignore[import-not-found]
 
 
 def _no_redis(monkeypatch) -> None:

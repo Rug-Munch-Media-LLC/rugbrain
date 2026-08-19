@@ -370,7 +370,7 @@ def bias_toward_code_chunks(
             if r.get("similarity") is not None
             else r.get("rrf_score", 0.0) or 0.0
         )
-        return float(base) + (_CODE_CHUNK_BONUS if _is_code_result(r) else 0.0)
+        return float(base) + (_CODE_CHUNK_BONUS if _is_code_result(r) else 0.0)  # type: ignore[arg-type]
 
     return sorted(results, key=_score, reverse=True)
 
@@ -1187,7 +1187,7 @@ async def three_pillar_search(
             lookup = EntityLookup()
             for entity in entity_extraction:
                 try:
-                    matches = await lookup.lookup(entity["entity"])
+                    matches = await lookup.lookup(entity["entity"])  # type: ignore[operator]
                     for m in matches:
                         m["pillar"] = "entity"
                     pillar3_results.extend(matches)
@@ -1203,7 +1203,7 @@ async def three_pillar_search(
                 try:
                     from rugbrain.compat import get_knowledge_graph  # external dependency
 
-                    kg = await get_knowledge_graph()
+                    kg = await get_knowledge_graph()  # type: ignore[operator]
                 except ImportError:
                     logger.debug("Knowledge Graph module not available, skipping KG expansion")
                     kg = None
@@ -1338,7 +1338,7 @@ async def three_pillar_search(
         try:
             from rugbrain.compat import mmr_dedup_results  # external dependency
 
-            fused = await mmr_dedup_results(
+            fused = await mmr_dedup_results(  # type: ignore[operator]
                 fused,
                 query_score_field="rrf_score",
                 content_field="content",
@@ -1429,8 +1429,8 @@ async def three_pillar_search(
     try:
         from rugbrain.compat import get_parent_retriever  # external dependency
 
-        pr = await get_parent_retriever()
-        fused = await pr.expand_context(fused)
+        pr = await get_parent_retriever()  # type: ignore[operator]
+        fused = await pr.expand_context(fused)  # type: ignore[union-attr]
         if fused:
             parent_child_applied = True
     except ImportError:
@@ -1582,7 +1582,7 @@ async def three_pillar_search(
             "recency_applied": recency_applied,
             "recency_half_life_days": recency_half_life_days if recency_applied else None,
         },
-        "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,
+        "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,  # type: ignore[union-attr]
         "query": query,
         "query_type": query_type,
         "fusion_weights": {"dense": w_dense, "sparse": w_sparse, "entity": w_entity},
@@ -1700,7 +1700,7 @@ async def search_with_transform(
     """
     from rugbrain.compat import transform_query  # external dependency
 
-    transformed = await transform_query(query, strategy=strategy)
+    transformed = await transform_query(query, strategy=strategy)  # type: ignore[operator]
 
     all_result_lists = []
     for tq in transformed.transformed_queries:

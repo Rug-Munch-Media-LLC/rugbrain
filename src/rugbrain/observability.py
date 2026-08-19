@@ -91,7 +91,7 @@ def trace_embedding(duration_ms: float, dims: int = 2560, model: str = "qwen3-la
     _metrics.embedding_total_ms += duration_ms
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[operator]
                 name="rag.embedding",
                 metadata={"duration_ms": duration_ms, "dims": dims, "model": model},
             )
@@ -109,7 +109,7 @@ def trace_retrieval(
         _metrics.cache_misses += 1
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[operator]
                 name="rag.retrieval",
                 metadata={
                     "duration_ms": duration_ms,
@@ -126,7 +126,7 @@ def trace_reranker(
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[operator]
                 name="rag.reranker",
                 metadata={
                     "duration_ms": duration_ms,
@@ -142,7 +142,7 @@ def trace_ingest(docs: int, collection: str) -> None:
     _metrics.ingest_docs += docs
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[operator]
                 name="rag.ingest",
                 metadata={"docs": docs, "collection": collection},
             )
