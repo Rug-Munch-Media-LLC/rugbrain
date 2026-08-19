@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-import sys
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -665,8 +664,17 @@ def test_three_pillar_search_recency_off_by_default(monkeypatch: pytest.MonkeyPa
 
 
 def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.MonkeyPatch):
-    """With ANN available, hyde runs one dense search per variant."""
-    import types as _types
+    """With ANN available, hyde runs one dense search per variant.
+
+    The Qdrant-backed ``search_multi_collection`` is the primary pillar-1
+    path; this test forces it to fail so the standalone ANN fallback (which
+    runs one search per HyDE variant) is exercised.
+    """
+
+    async def _raise_multi(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("qdrant unavailable (test)")
+
+    monkeypatch.setattr(engine_mod, "search_multi_collection", _raise_multi)
 
     class _FakeCache:
         async def check(self, vec: list[float]) -> None:
@@ -675,9 +683,7 @@ def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.M
         async def store(self, vec: list[float], results: list[dict[str, Any]]) -> None:
             pass
 
-    sem_mod = _types.ModuleType("app.semantic_cache")
-    sem_mod.get_semantic_cache = lambda: _FakeCache()  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "app.semantic_cache", sem_mod)
+    monkeypatch.setattr("rugbrain.compat.get_semantic_cache", lambda: _FakeCache())
 
     class _FakeAnn:
         def __init__(self) -> None:
@@ -699,9 +705,7 @@ def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.M
             ]
 
     fake_ann = _FakeAnn()
-    ann_mod = _types.ModuleType("app.ann_index")
-    ann_mod.get_ann_index = lambda: fake_ann  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "app.ann_index", ann_mod)
+    monkeypatch.setattr("rugbrain.compat.get_ann_index", lambda: fake_ann)
 
     fake_redis = _FakeRedis()
     for cid in ("coll_a-r1", "coll_a-r2"):

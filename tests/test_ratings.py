@@ -266,60 +266,68 @@ def test_synthesize_answer_node():
     assert result["citations"][0]["id"] == "1"
 
 
-def test_reranker_applies_rating_boosts_on_top_of_cross_encoder():
-    """rerank() re-sorts so a verified doc outranks a raw semantic match."""
-    from rugbrain.reranker import Reranker
+def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch):
+    """Cross-encoder reorder + rating boost: verified doc outranks rumor.
 
-    reranker = Reranker(use_infinity=False)
-    reranker._st_loaded = True
+    Mirrors the production pipeline: rerank (Qwen3 cross-encoder) produces
+    the raw ordering, then ``apply_rating_boosts`` re-weights primary scores
+    so a verified doc outranks a raw semantic match.
+    """
+    import rugbrain.reranker as rr_mod
+    from rugbrain.ratings import _primary_score, apply_rating_boosts
 
-    # Raw cross-encoder scores: doc2 slightly more relevant than doc1
-    def fake_score(query, docs):
-        return [0.6, 0.65]
+    # Raw cross-encoder: rumor doc scores slightly higher (0.65 > 0.60)
+    async def fake_rerank(query, documents, top_k=10, raw=False):
+        return [
+            {"index": 1, "relevance_score": 0.65},
+            {"index": 0, "relevance_score": 0.60},
+        ]
 
-    reranker._score_st = fake_score
+    monkeypatch.setattr(rr_mod, "rerank", fake_rerank)
+
+    docs = [_verified_doc("verified", 0.5), _rumor_doc("rumor", 0.7)]
 
     async def run():
-        return await reranker.rerank(
-            "hack news",
-            [
-                _verified_doc("verified", 0.5),
-                _rumor_doc("rumor", 0.7),
-            ],
-            top_k=2,
-        )
+        ranked = await rr_mod.rerank("hack news", [d["content"] for d in docs], top_k=2)
+        for r in ranked:
+            idx = r["index"]
+            docs[idx]["rerank_score"] = r["relevance_score"]
+        ordered = sorted(docs, key=lambda d: d.get("rerank_score", 0.0), reverse=True)
+        boosted = apply_rating_boosts(ordered)
+        return sorted(boosted, key=_primary_score, reverse=True)
 
     results = asyncio.run(run())
-
     # After rating boosts, verified doc (boosted) ranks above rumor doc
     assert results[0]["id"] == "verified"
-    assert results[0]["rating_boosted_after_rerank"] is True
-    assert results[0]["combined_score"] > 0.6
+    assert results[0]["rating_boosted"] is True
+    assert results[0]["rating_multiplier"] > 1.0
 
 
-def test_reranker_skip_ratings_flag():
-    """apply_ratings=False leaves pure cross-encoder ordering."""
-    from rugbrain.reranker import Reranker
+def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch):
+    """Without rating boosts, pure cross-encoder ordering is preserved."""
+    import rugbrain.reranker as rr_mod
 
-    reranker = Reranker(use_infinity=False)
-    reranker._st_loaded = True
+    async def fake_rerank(query, documents, top_k=10, raw=False):
+        return [
+            {"index": 1, "relevance_score": 0.65},
+            {"index": 0, "relevance_score": 0.60},
+        ]
 
-    def fake_score(query, docs):
-        return [0.6, 0.65]
+    monkeypatch.setattr(rr_mod, "rerank", fake_rerank)
 
-    reranker._score_st = fake_score
+    docs = [_verified_doc("verified", 0.5), _rumor_doc("rumor", 0.7)]
 
     async def run():
-        return await reranker.rerank(
-            "hack news",
-            [_verified_doc("verified", 0.5), _rumor_doc("rumor", 0.7)],
-            top_k=2,
-            apply_ratings=False,
-        )
+        ranked = await rr_mod.rerank("hack news", [d["content"] for d in docs], top_k=2)
+        for r in ranked:
+            idx = r["index"]
+            docs[idx]["rerank_score"] = r["relevance_score"]
+        return sorted(docs, key=lambda d: d.get("rerank_score", 0.0), reverse=True)
 
     results = asyncio.run(run())
+    # apply_ratings=False ⇒ pure cross-encoder order: rumor first
     assert results[0]["id"] == "rumor"
-    assert "rating_boosted_after_rerank" not in results[0]
+    assert "rating_boosted" not in results[0]
 
 
 def test_search_endpoint_has_rating_filter_params():

@@ -4,7 +4,7 @@
 
 1. **Ingestion** — Scrapers fetch from 50+ crypto sources
 2. **Normalization** — Parse HTML/JSON into structured data
-3. **Embedding** — BGE-M3 (1024-dim) generates vector embeddings
+3. **Embedding** — Qwen3-Embedding-4B (2560-dim) generates vector embeddings
 4. **Storage** — Qdrant collections (20 total)
 5. **Retrieval** — Semantic search via RAG v2 search endpoint
 6. **Augmentation** — Context injection into LLM prompts
@@ -17,7 +17,7 @@ Each Qdrant collection follows this structure:
 ```python
 {
   "id": "uuid",
-  "vector": [1024 floats],  # BGE-M3 embedding
+  "vector": [2560 floats],  # Qwen3-Embedding-4B embedding
   "payload": {
     "source": "etherscan|goPlus|community|...",
     "category": "threat|scam|token|wallet|...",
@@ -47,7 +47,7 @@ Each Qdrant collection follows this structure:
 
 ## Embedding Pipeline
 
-- **Primary model:** BAAI/bge-m3 (1024 dimensions)
+- **Primary model:** Qwen3-Embedding-4B (2560 dimensions)
 - **Fallback:** OpenAI text-embedding-3-small
 - **Batch size:** 64 texts per batch
 - **GPU:** Optional (CPU works at ~100 texts/sec)

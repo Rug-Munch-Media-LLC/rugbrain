@@ -24,7 +24,7 @@ happens in later phases and is subject to the acceptance gates in §7.
    route are **deleted** (`aadf85f`); the `synthesize_answer` shim it exposed lives on in
    `src/rugbrain/ratings.py` (kept, shared rating node), and its graph tests were renamed
    (`test_synthesize_answer_node`). No code in rugbrain imports the deleted module.
-2. **ONE vector store:** Qdrant (`rmi-qdrant:6333`), dense 1024-d BGE-M3 + BM25 sparse. GraphRAG
+2. **ONE vector store:** Qdrant (`rmi-qdrant:6333`), dense 2560-d Qwen3-Embedding-4B + BM25 sparse. GraphRAG
    adds a **graph lane** to retrieval; it does not add a second vector store.
 3. **Graph read path lives in rmi-backend** (it already owns the Neo4j driver, entity resolution,
    and `app/domains/wallet/neo4j_client.py`). rugbrain never talks to Neo4j; it receives graph
@@ -137,8 +137,8 @@ The response schema of `POST /api/v1/rag/v2/search` is extended backward-compati
 
 ### 2.2 The two lanes
 
-**Vector lane (unchanged mechanics):** rugbrain `search/engine.py` hybrid — dense BGE-M3 + BM25
-sparse + RRF, optional rerank (self-hosted Qwen3-Reranker-8B, llama.cpp :8003), optional HyDE/multi-query, MMR dedup. The bot
+**Vector lane (unchanged mechanics):** rugbrain `search/engine.py` hybrid — dense Qwen3-Embedding-4B + BM25
+sparse + RRF, optional rerank (self-hosted Qwen3-Reranker-4B, llama.cpp :8003), optional HyDE/multi-query, MMR dedup. The bot
 fans out over its **5 knowledge collections** `[verified, 2026-08-15
 `app/domains/telegram/rugmunchbot/tools/rag_lookup.py`]`:
 
@@ -266,12 +266,12 @@ the chat path also gates context at `RAG_CONTEXT_MAX_CHARS = 1800`.
 
 | Stage | Budget | Notes |
 |---|---|---|
-| Embedding (query, BGE-M3 via Infinity) | 0.4 s (0.15–0.3) | warm model; cold start handled by existing keep-alive |
+| Embedding (query, Qwen3-Embedding-4B via llama.cpp) | 0.4 s (0.15–0.3) | warm model; cold start handled by existing keep-alive |
 | Vector lane: 5 collections × top-K in parallel | 0.8 s (0.3–0.5) | `asyncio.gather` fan-out, unchanged |
 | Graph lane: Redis subgraph hit | 0.01 s | O(1) GET — the common case |
 | Graph lane: live traversal (cache miss) | ≤ 1.0 s (0.2–0.5) | hard `wait_for` deadline; runs CONCURRENTLY with vector lane |
 | Fusion (RRF + dedup) | 0.01 s | in-process |
-| Optional rerank (Qwen3-Reranker-8B, ≤ 25 candidates) | 0.3 s | only if budget remains |
+| Optional rerank (Qwen3-Reranker-4B, ≤ 25 candidates) | 0.3 s | only if budget remains |
 | **Total (worst case)** | **≈ 2.5 s** | parallel lanes: max(vector, graph) + fusion, not sum |
 
 **Why it stays under 5 s:** the graph lane runs concurrently with the vector lane, so the wall

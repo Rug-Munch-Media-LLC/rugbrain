@@ -127,7 +127,7 @@ class EmbeddingTrainingData:
 - Positive pairs: {len(pairs["positive_pairs"])} confirmed scam document pairs
 - Triplets: {len(pairs["triplets"])} anchor-positive-negative triplets
 - Source: 20 RMI Qdrant collections from rugmunch.io
-- Training target: bge-m3 fine-tuned for crypto scam detection
+- Training target: Qwen3-Embedding-4B fine-tuned for crypto scam detection
 - License: Proprietary — Rug Munch Media LLC
 """
             with open(card_path, "w") as f:

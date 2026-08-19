@@ -3,7 +3,7 @@ News story clustering — group related news articles into "stories".
 
 Ground News / CryptoPanic-style story detection for RugBrain.
 
-Articles are embedded with Infinity ``BAAI/bge-m3`` (1024-dim) and grouped
+Articles are embedded with ``/v1/embeddings`` via self-hosted Qwen3-Embedding-4B (2560-dim) and grouped
 with a greedy cosine-similarity centroid clusterer. Every resulting cluster
 is a single *story*: a title, a summary, the source articles (each with a
 credibility score and editorial leaning), a timeline, a sentiment
@@ -11,7 +11,7 @@ distribution and a bias distribution.
 
 Pipeline
 --------
-1. ``embed_titles()`` — batch-embed article titles via Infinity (bge-m3).
+1. ``embed_titles()`` — batch-embed article titles via Qwen3-Embedding-4B (2560-dim).
 2. ``cluster_embeddings()`` — greedy single-pass clustering with centroid
    tracking; returns a list of article-index groups.
 3. ``build_story()`` — enrich one cluster into a ``Story`` (sources,
@@ -46,11 +46,11 @@ logger = logging.getLogger(__name__)
 # ── Configuration ────────────────────────────────────────────────────────
 
 #: Default cosine threshold for grouping article titles into one story.
-#: Tuned for bge-m3 1024-dim title embeddings (same-story titles typically
+#: Tuned for Qwen3-Embedding-4B 2560-dim title embeddings (same-story titles typically
 #: land 0.78+; distinct stories usually < 0.70).
 CLUSTER_THRESHOLD = float(os.getenv("NEWS_CLUSTER_THRESHOLD", "0.72"))
 
-#: Embedding model dimension (bge-m3). Aligned with rugbrain.embeddings.
+#: Embedding model dimension (Qwen3-Embedding-4B). Aligned with rugbrain.embeddings.
 EMBED_DIM = 1024
 
 #: Max sources kept in a single story (guard against runaway clusters).
@@ -109,7 +109,7 @@ class Story(BaseModel):
 
 
 async def embed_titles(titles: list[str]) -> list[list[float]]:
-    """Embed article titles with Infinity ``BAAI/bge-m3`` (1024-dim).
+    """Embed article titles with llama.cpp ``Qwen3-Embedding-4B`` (2560-dim).
 
     Delegates to ``rugbrain.embeddings.get_embeddings`` (the canonical
     embedder used across RugBrain). Fails loud when no backend is
@@ -474,7 +474,7 @@ async def cluster_articles(
         Cosine similarity threshold for grouping titles into a story.
     embedder:
         Async ``list[str] -> list[list[float]]`` callable; defaults to
-        Infinity bge-m3 via :func:`embed_titles`. Inject for tests.
+        llama.cpp Qwen3-Embedding-4B via :func:`embed_titles`. Inject for tests.
 
     Returns
     -------

@@ -3,7 +3,7 @@
 Polls free security-intel sources every ``ALERT_POLL_INTERVAL`` (default
 300s) and, whenever a NEW incident is detected:
 
-  1. embeds the incident description (Infinity BAAI/bge-m3, 1024-dim)
+  1. embeds the incident description (llama.cpp Qwen3-Embedding-4B, 2560-dim)
   2. stores it in the Qdrant ``security_alerts`` collection
   3. pushes to NATS subject ``alerts.crypto.security`` for downstream
      consumers (telegram bot, alert pipelines, etc.) — or falls back to

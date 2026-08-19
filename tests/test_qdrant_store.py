@@ -167,9 +167,11 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection():
 
 
 @pytest.mark.asyncio
-async def test_insert_stores_document():
+async def test_insert_stores_document(monkeypatch):
     """insert() should PUT document to Qdrant and return True."""
     from rugbrain.qdrant_store import QdrantVectorStore
+
+    monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -216,9 +218,11 @@ async def test_insert_fails_on_http_error():
 
 
 @pytest.mark.asyncio
-async def test_insert_creates_collection_if_missing():
+async def test_insert_creates_collection_if_missing(monkeypatch):
     """insert() should create the collection if it doesn't exist."""
     from rugbrain.qdrant_store import QdrantVectorStore
+
+    monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
     store = QdrantVectorStore(url="http://rmi-qdrant:6333")
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
@@ -340,6 +344,8 @@ async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
+    monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
+
     async def _fake_embed_sparse(text):
         assert text == "solana honeypot rug"
         return ([10, 20, 30], [1.5, 0.8, 0.4])
@@ -373,6 +379,8 @@ async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
     """insert() should keep dense-only payload for legacy collections."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
+
+    monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
     async def _fake_embed_sparse(text):
         raise AssertionError("sparse embedder must not be called for dense-only")

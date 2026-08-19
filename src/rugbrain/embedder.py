@@ -1,8 +1,8 @@
-"""RAG Embedder — bge-m3 primary (Infinity migration complete).
+"""RAG Embedder — Qwen3-Embedding-4B primary (llama.cpp).
 
-bge-m3 (1024d) is the primary embedding model, served by Infinity's
-OpenAI-compatible ``/embeddings`` endpoint (michaelfeil/infinity).
-qwen3-embed:4b (2560d) is retired. All Qdrant collections are 1024d Cosine.
+Qwen3-Embedding-4B (2560d) is the primary embedding model, served by llama.cpp's
+OpenAI-compatible ``/embeddings`` endpoint (port 8085/8086).
+bge-m3 (1024d) is retired. All Qdrant collections are 2560d Cosine.
 """
 
 from __future__ import annotations

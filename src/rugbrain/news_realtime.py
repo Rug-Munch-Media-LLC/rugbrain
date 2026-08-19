@@ -5,7 +5,7 @@ Part 5 of the Ground News / CryptoPanic-beating news aggregation system.
 
 When new articles are ingested, ``process_news_batch()``:
 
-1. embeds the new article titles with bge-m3,
+1. embeds the new article titles with Qwen3-Embedding-4B,
 2. matches each against existing stories (stored in Qdrant ``news_v2``)
    by title-embedding cosine similarity — matching stories are extended,
    new stories are created,

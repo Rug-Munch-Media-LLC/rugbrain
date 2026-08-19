@@ -85,7 +85,7 @@ async def _save_local_metrics() -> None:
         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 
 
-def trace_embedding(duration_ms: float, dims: int = 1024, model: str = "bge-m3") -> None:
+def trace_embedding(duration_ms: float, dims: int = 2560, model: str = "qwen3-last") -> None:
     """Record an embedding operation."""
     _metrics.embedding_calls += 1
     _metrics.embedding_total_ms += duration_ms
@@ -120,7 +120,9 @@ def trace_retrieval(
             )
 
 
-def trace_reranker(duration_ms: float, doc_count: int, top_k: int, model: str = "bge-m3") -> None:
+def trace_reranker(
+    duration_ms: float, doc_count: int, top_k: int, model: str = "qwen3-reranker-4b"
+) -> None:
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
@@ -153,7 +155,7 @@ def trace_error(error_type: str, detail: str = "") -> None:
 
 
 @asynccontextmanager
-async def timed_embedding(dims: int = 1024, model: str = "bge-m3") -> AsyncIterator[None]:
+async def timed_embedding(dims: int = 2560, model: str = "qwen3-last") -> AsyncIterator[None]:
     """Context manager for timing embedding operations."""
     t0 = time.time()
     try:
