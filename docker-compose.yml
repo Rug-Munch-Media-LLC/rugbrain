@@ -51,8 +51,8 @@ services:
       # up -d rag-api).
       - ${RCLONE_CONF_SOURCE:-/path/to/rclone.conf}:/home/rmi/.config/rclone/rclone.conf:ro
     environment:
-      - QDRANT_URL=http://rmi-qdrant:6333
-      - QDRANT_HOST=rmi-qdrant
+      - QDRANT_URL=http://rmi-qdrant-v2:6333
+      - QDRANT_HOST=rmi-qdrant-v2
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-redis
       - REDIS_PORT=6379
@@ -64,7 +64,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
-      - INFINITY_URL=http://infinity-rag:8001
+      - INFINITY_URL=http://[INTERNAL]:8004/v1
       - RERANKER_URL=http://172.22.0.1:8003
       - RERANKER_TIMEOUT=30
       - PRESIDIO_URL=http://presidio:8090
@@ -110,8 +110,8 @@ services:
     networks:
       - rmi_network
     environment:
-      - QDRANT_URL=http://rmi-qdrant:6333
-      - QDRANT_HOST=rmi-qdrant
+      - QDRANT_URL=http://rmi-qdrant-v2:6333
+      - QDRANT_HOST=rmi-qdrant-v2
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-redis
       - REDIS_PORT=6379
@@ -122,7 +122,7 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
-      - INFINITY_URL=http://infinity-rag:8001
+      - INFINITY_URL=http://[INTERNAL]:8004/v1
     volumes:
       - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py

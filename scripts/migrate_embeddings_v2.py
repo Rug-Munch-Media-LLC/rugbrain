@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import httpx
@@ -122,7 +123,9 @@ async def migrate_collection(
     batch: int,
     limit: int,
     skip_sparse: bool = False,
+    concurrent: int = 1,
 ) -> dict:
+    """Re-embed one collection. Concurrency not yet implemented (sequential loop)."""
     info = (await client.get(f"{LEGACY}/collections/{name}")).json()["result"]
     total = info.get("points_count", 0)
     done = state.get(name, {}).get("done", 0)
@@ -178,7 +181,7 @@ async def migrate_collection(
                         put = await client.put(
                             f"{V2}/collections/{name}/points",
                             json={"points": points_to_upsert},
-                            timeout=60.0,
+                            timeout=120.0,
                         )
                         put.raise_for_status()
                         stats["upserted"] += len(points_to_upsert)
@@ -187,15 +190,19 @@ async def migrate_collection(
                     except Exception as e:
                         if attempt < retries - 1:
                             logger.warning(
-                                "retry %d/%d offset=%d: %s", attempt + 1, retries, offset, e
+                                "retry %d/%d offset=%d: %s\n%s",
+                                attempt + 1, retries, offset, e, traceback.format_exc()
                             )
                             await asyncio.sleep(5 * (attempt + 1))
                         else:
                             raise
             except Exception as e:
-                logger.warning("batch_failed %s offset=%d: %s", name, offset, e)
+                logger.warning(
+                    "batch_failed %s offset=%d: %s\n%s",
+                    name, offset, e, traceback.format_exc()
+                )
                 stats["failed"] += len(texts)
-                offset += len(points)
+                offset += len(points)  # skip failed batch, don't loop forever
 
         state.setdefault(name, {})["done"] = offset
         state[name]["cursor"] = cursor
@@ -205,26 +212,14 @@ async def migrate_collection(
             eta = (total - offset) / max(rate, 0.01)
             logger.info(
                 "%s %d/%d (%.0f%%) upserted=%d no_text=%d failed=%d rate=%.1f/s eta=%.0fm",
-                name,
-                offset,
-                total,
+                name, offset, total,
                 100 * offset / total,
-                stats["upserted"],
-                stats["no_text"],
-                stats["failed"],
-                rate,
-                eta / 60,
+                stats["upserted"], stats["no_text"], stats["failed"],
+                rate, eta / 60,
             )
-        if limit and offset >= limit:
-            logger.info("%s: hit --limit %d, stopping", name, limit)
-            break
-        if cursor is None:
-            break
-
-    state.setdefault(name, {})["done"] = offset
-    state[name].pop("cursor", None)
-    _save_state(state)
-    stats["done"] = offset
+            if limit and offset >= limit:
+                logger.info("%s: hit --limit %d, stopping", name, limit)
+                break
     logger.info("collection done: %s %d/%d in %.0fs", name, offset, total, time.time() - t0)
     return stats
 
@@ -246,7 +241,7 @@ async def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         cols = [
             c["name"]
             for c in (await client.get(f"{LEGACY}/collections")).json()["result"]["collections"]
@@ -281,7 +276,9 @@ async def main() -> int:
         summary = []
         for c in cols:
             summary.append(
-                await migrate_collection(client, c, state, args.batch, args.limit, args.skip_sparse)
+                await migrate_collection(
+                    client, c, state, args.batch, args.limit, args.skip_sparse, args.concurrent
+                )
             )
         logger.info("MIGRATION COMPLETE: %s", json.dumps(summary))
     return 0

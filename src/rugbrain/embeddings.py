@@ -30,13 +30,13 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-EMBEDDING_DIM: Final = 1024
+EMBEDDING_DIM: Final = 2560
 
 # Embedding versioning (ADR-0007 compliance)
 # Stamped on every embedding so downstream consumers can migrate
 # when the model changes. Format: {model}:{version}:{dim}
-EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "bge-m3")
-EMBED_MODEL_VERSION = os.getenv("RAG_EMBED_VERSION", "1.1")
+EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+EMBED_MODEL_VERSION = os.getenv("RAG_EMBED_VERSION", "2.0")
 EMBED_VERSION_STAMP = f"{EMBED_MODEL_NAME}:{EMBED_MODEL_VERSION}:{EMBEDDING_DIM}"
 EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI build number
 # Backends
@@ -105,7 +105,7 @@ async def _infinity_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | 
     for 38-90s, tripping the container healthcheck.
     """
     try:
-        async with httpx.AsyncClient(timeout=120.0) as c:
+        async with httpx.AsyncClient(timeout=300.0) as c:
             r = await c.post(
                 f"{INFINITY_URL}/embeddings",
                 json={"model": INFINITY_MODEL, "input": [text[:8000]]},

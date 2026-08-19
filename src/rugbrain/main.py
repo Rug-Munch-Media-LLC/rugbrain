@@ -97,7 +97,7 @@ class RAGAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Exempt health/readiness probes
-        if path in ("/health", "/ready") or path.startswith("/health"):
+        if path in ("/health", "/ready", "/api/v1/health") or path.startswith("/health"):
             return await call_next(request)
 
         # Fail closed: refuse all requests when no API key is configured

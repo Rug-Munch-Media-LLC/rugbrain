@@ -4,6 +4,7 @@ Confidence scoring, Solidity chunking, deployer reputation, cross-chain,
 multi-modal, investigation narratives, graph RAG, streaming, email.
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -13,6 +14,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,37 @@ async def _check_rate_limit(identifier: str, tier: str, hour_key: str) -> tuple[
 
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
+
+
+class EmbedRequest(BaseModel):
+    text: str
+
+
+@router.get("/health")
+async def health() -> dict[str, str]:
+    """Health check — verifies service is running."""
+    return {"status": "ok", "service": "rugbrain"}
+
+
+@router.post("/embed")
+async def embed_text(request: EmbedRequest) -> dict[str, Any]:
+    """Embed text via Qwen3-Embedding-4B and return vector."""
+    import httpx
+
+    infinity_url = os.getenv("INFINITY_URL", "http://[INTERNAL]:8004/v1")
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{infinity_url}/embeddings",
+                json={"input": request.text, "model": "BAAI/bge-m3"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                vec = data.get("data", [{}])[0].get("embedding", [])
+                return {"embedding": vec, "dim": len(vec)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Embedder unavailable: {e}")
+    return {"embedding": [], "dim": 0}
 
 
 _TOKEN_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
@@ -916,6 +949,247 @@ async def search_threat_intel(
     }
 
 
+# ── Multi-collection search ─────────────────────────────────────────────
+_RRF_K = 60
+
+
+class MultiSearchRequest(BaseModel):
+    query: str = ""
+    collections: list[str] = ["threat_intel_v2"]
+    limit: int = 10
+    limit_per_collection: int = 20
+    rerank: bool = False
+
+
+@router.post("/search/multi")
+async def search_multi(
+    request: Request,
+    body: MultiSearchRequest,
+) -> dict[str, Any]:
+    """Search across multiple Qdrant collections in parallel, fuse with RRF.
+
+    Queries each collection independently, then fuses results via
+    Reciprocal Rank Fusion (RRF, k=60). Boosts results from ``threat_intel_v2``
+    and ``scam_intel_v2`` by 20% (higher priority sources).
+
+    When ``rerank=true``, the top-40 fused candidates are scored by the
+    self-hosted Qwen3-Reranker-4B cross-encoder before truncating to ``limit``.
+
+    Example::
+
+        curl -X POST "http://localhost:8012/api/v1/search/multi" \\
+          -H "Content-Type: application/json" \\
+          -H "X-API-Key: ..." \\
+          -d '{"query":"flash loan attack","collections":["threat_intel_v2","scam_patterns"],"rerank":true}'
+    """
+    from rugbrain.embeddings import get_embedding
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    q = body.query
+    cols = body.collections
+    lim = body.limit
+    per_col = body.limit_per_collection
+    do_rerank = body.rerank
+
+    if not q:
+        return {"results": [], "query": q, "collections": cols, "total": 0}
+
+    # Rate limit by client IP
+    hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, ttl = await _check_rate_limit(client_ip, "search", hour_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "tier": "search",
+                "limit": RATE_LIMITS["search"],
+                "reset_in_seconds": ttl,
+            },
+            headers={"X-RateLimit-Reset": str(ttl)},
+        )
+
+    try:
+        embedding = await get_embedding(q)
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "embedding_unavailable", "message": str(e)[:200]},
+        ) from e
+
+    # Search each collection in parallel
+    store = QdrantVectorStore()
+    tasks = [
+        store.hybrid_search(
+            query_text=q,
+            query_embedding=embedding,
+            collection=col,
+            limit=per_col,
+            min_similarity=0.4,
+        )
+        for col in cols
+    ]
+    per_collection = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # RRF fusion: collect results from each collection, score by RRF
+    rrf_scores: dict[str, dict[str, Any]] = {}
+    for idx, results in enumerate(per_collection):
+        if isinstance(results, Exception):
+            logger.debug("search_multi collection=%s failed: %s", cols[idx], results)
+            continue
+        for rank, hit in enumerate(results):
+            doc_id = hit.get("doc_id") or hit.get("id") or str(hit.get("payload", {}).get("id", ""))
+            if not doc_id:
+                continue
+            rrf_score = 1.0 / (_RRF_K + rank + 1)
+            # Boost high-priority collections
+            coll = cols[idx]
+            if coll in ("threat_intel_v2", "scam_intel_v2"):
+                rrf_score *= 1.2
+            if doc_id in rrf_scores:
+                rrf_scores[doc_id]["rrf_score"] += rrf_score
+            else:
+                hit["rrf_score"] = rrf_score
+                hit["_source_collections"] = [coll]
+                rrf_scores[doc_id] = hit
+
+    # Sort by RRF score descending
+    fused = sorted(rrf_scores.values(), key=lambda r: r.get("rrf_score", 0.0), reverse=True)
+
+    # Optional rerank
+    reranker_applied = False
+    reranker_method: str | None = None
+    if do_rerank and fused:
+        try:
+            from rugbrain.reranker import rerank as _rerank
+
+            top_n = min(len(fused), 40)
+            docs = []
+            for r in fused[:top_n]:
+                txt = r.get("content") or r.get("text") or r.get("title") or r.get("summary") or ""
+                docs.append(str(txt)[:2000])
+            reranked = await _rerank(q, docs, top_k=min(top_n, lim))
+            if reranked:
+                rev_index = {id(r): i for i, r in enumerate(fused[:top_n])}
+                for r in reranked:
+                    idx = r.get("index")
+                    if isinstance(idx, int) and 0 <= idx < len(docs):
+                        fused[idx]["rerank_score"] = r.get("relevance_score", 0.0)
+                        fused[idx]["reranked"] = True
+                        fused[idx]["rerank_method"] = "qwen3-reranker-4b"
+                fused[:top_n] = sorted(
+                    fused[:top_n], key=lambda r: r.get("rerank_score", 0.0), reverse=True
+                )
+                reranker_applied = True
+                reranker_method = "qwen3-reranker-4b"
+        except Exception as e:
+            logger.debug("search_multi rerank failed (non-critical): %s", e)
+
+    return {
+        "results": fused[:lim],
+        "query": q,
+        "collections": cols,
+        "total": len(fused[:lim]),
+        "reranker_applied": reranker_applied,
+        "reranker_method": reranker_method,
+    }
+
+
+# ── Ingestion endpoint ───────────────────────────────────────────────────
+
+
+class IngestDocument(BaseModel):
+    doc_id: str = ""
+    content: str
+    metadata: dict[str, Any] = {}
+    collection: str = "default"
+    source: str = "api"
+    severity: str = "medium"
+    chain: str = ""
+
+
+class IngestRequest(BaseModel):
+    documents: list[IngestDocument]
+
+
+@router.post("/ingest")
+async def ingest_documents(
+    request: Request,
+    body: IngestRequest,
+) -> dict[str, Any]:
+    """Accept documents, embed them, and store in Qdrant.
+
+    Each document is embedded using the Qwen3 embedder and inserted into the
+    specified collection. Returns per-document status (ok/failed).
+
+    Example::
+
+        curl -X POST "http://localhost:8012/api/v1/ingest" \\
+          -H "Content-Type: application/json" \\
+          -H "X-API-Key: ..." \\
+          -d '{"documents":[{"content":"Flash loan attack on...","collection":"defi_exploits","severity":"high"}]}'
+    """
+    from rugbrain.embeddings import get_embedding
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    if not body.documents:
+        return {"status": "ok", "ingested": 0, "results": []}
+
+    # Rate limit by client IP
+    hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, ttl = await _check_rate_limit(client_ip, "search", hour_key)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "rate_limit_exceeded",
+                "tier": "search",
+                "limit": RATE_LIMITS["search"],
+                "reset_in_seconds": ttl,
+            },
+            headers={"X-RateLimit-Reset": str(ttl)},
+        )
+
+    store = QdrantVectorStore()
+    results: list[dict[str, Any]] = []
+
+    for doc in body.documents:
+        try:
+            embedding = await get_embedding(doc.content)
+            if not embedding:
+                results.append(
+                    {"doc_id": doc.doc_id, "status": "failed", "error": "embedding_failed"}
+                )
+                continue
+
+            doc_id = doc.doc_id or doc.content[:64]
+            ok = await store.insert(
+                doc_id=doc_id,
+                collection=doc.collection,
+                embedding=embedding,
+                content=doc.content,
+                metadata=doc.metadata,
+                source=doc.source,
+                severity=doc.severity,
+                chain=doc.chain,
+            )
+            results.append(
+                {"doc_id": doc_id, "status": "ok" if ok else "failed", "collection": doc.collection}
+            )
+        except Exception as e:
+            logger.warning("ingest_failed doc_id=%s error=%s", doc.doc_id, e)
+            results.append({"doc_id": doc.doc_id, "status": "failed", "error": str(e)[:200]})
+
+    return {
+        "status": "ok",
+        "ingested": sum(1 for r in results if r["status"] == "ok"),
+        "total": len(results),
+        "results": results,
+    }
+
+
 scam_check_router = APIRouter(prefix="/api/v1/rag/v2", tags=["scam-check"])
 
 
@@ -1558,8 +1832,8 @@ async def rag_status_all(request: Request) -> dict[str, Any]:
     # ── DeFi Lending ──────────────────────────────────────────────────
     try:
         from rugbrain.monitors.defi_lending import (
-            get_defi_lending_state,
             defi_lending_health,
+            get_defi_lending_state,
         )
 
         monitors["defi_lending"] = get_defi_lending_state()
@@ -1606,8 +1880,8 @@ async def rag_status_all(request: Request) -> dict[str, Any]:
     # ── Liquidation Heatmap ───────────────────────────────────────────
     try:
         from rugbrain.liquidation_heatmap import (
-            _24h_volume,
             _7d_volume,
+            _24h_volume,
             _30d_volume,
             _biggest_single,
             _liquidation_history,
