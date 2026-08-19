@@ -601,7 +601,7 @@ async def search_threat_intel(
     collection: str = Query(default="threat_intel_v2", description="Qdrant collection to search"),
     rerank: bool = Query(
         default=False,
-        description="Rerank top-20 candidates with the bge-reranker-v2-m3 cross-encoder",
+        description="Rerank top-20 candidates with the self-hosted Qwen3-Reranker-8B cross-encoder",
     ),
     filter_severity: str | None = Query(
         default=None,
@@ -676,7 +676,7 @@ async def search_threat_intel(
     scanner subscriber) for tokens that match the query by semantic similarity.
 
     When ``rerank=true``, the top-20 candidates from vector search are scored
-    by the bge-reranker-v2-m3 cross-encoder and re-sorted before truncating
+    by the self-hosted Qwen3-Reranker-8B cross-encoder and re-sorted before truncating
     to ``limit``. If the reranker backend is unavailable, results fall back
     to the original vector ranking (search never breaks).
 
@@ -765,14 +765,25 @@ async def search_threat_intel(
     reranker_applied = False
     if rerank and results:
         try:
-            from rugbrain.reranker import get_reranker
+            from rugbrain.reranker import rerank as _rerank
 
-            reranker = await get_reranker()
-            reranked = await reranker.rerank(q, results, top_k=limit)
-            if reranked and reranked[0].get("rerank_method", "none") != "none":
-                results = reranked
+            # Build document strings from result dicts (content/text/title).
+            docs = []
+            for r in results:
+                txt = r.get("content") or r.get("text") or r.get("title") or r.get("summary") or ""
+                docs.append(str(txt)[:2000])
+            reranked = await _rerank(q, docs, top_k=limit)
+            if reranked:
+                # Map reranker scores back onto the result dicts.
+                for r in reranked:
+                    idx = r.get("index")
+                    if isinstance(idx, int) and 0 <= idx < len(results):
+                        results[idx]["rerank_score"] = r.get("relevance_score", 0.0)
+                        results[idx]["reranked"] = True
+                        results[idx]["rerank_method"] = "qwen3-reranker-8b"
+                results.sort(key=lambda r: r.get("rerank_score", 0.0), reverse=True)
                 reranker_applied = True
-                reranker_method = reranked[0].get("rerank_method")
+                reranker_method = "qwen3-reranker-8b"
         except Exception as e:
             logger.debug("search rerank failed (non-critical): %s", e)
 

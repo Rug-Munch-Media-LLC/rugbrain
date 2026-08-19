@@ -3,13 +3,14 @@
 Covers the two additive search-quality features added to the search lane:
 
   * cross-encoder reranking (``rugbrain.search.rerank.rerank_chunks``):
-    BGE reranker via sentence-transformers / FlagEmbedding with a graceful
-    no-op fallback (no model installed -> original ordering preserved);
+    self-hosted Qwen3-Reranker-8B (llama.cpp HTTP) with a graceful no-op
+    fallback (server unreachable -> original ordering preserved);
   * hybrid retrieval (``hybrid=True`` on ``search_multi_collection`` /
     ``three_pillar_search``): a lightweight in-memory keyword/BM25 lane is
     RRF-fused with the vector lane, surfacing keyword-only hits.
 
-All unit tests: no external services, no ML models required.
+All unit tests: no external services, no ML models required (the HTTP
+scoring layer ``_score_candidates`` is monkeypatched).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import pytest
 import rugbrain.search.engine as engine_mod
 import rugbrain.search.rerank as rerank_mod
 from rugbrain.search.engine import _hybrid_fuse
-from rugbrain.search.rerank import Reranker, rerank_chunks
+from rugbrain.search.rerank import rerank_chunks
 
 # ── helpers ──────────────────────────────────────────────────────────
 
@@ -42,37 +43,33 @@ class _FakeEmbedder:
         return [0.1, 0.2, 0.3]
 
 
-class _FakeCrossEncoder:
-    """Fake sentence-transformers CrossEncoder: scores = position-based."""
+def _fake_score_factory(
+    scores: list[float],
+    *,
+    method: str = "qwen3-reranker-8b",
+    seen: list[list[dict[str, Any]]] | None = None,
+):
+    """Build an async ``_score_candidates`` stand-in returning *scores*."""
 
-    def __init__(self, scores: list[float] | None = None) -> None:
-        self.scores = scores or []
+    async def fake_score(query: str, candidates: list[dict[str, Any]]) -> tuple[list[float], str]:
+        if seen is not None:
+            seen.append(candidates)
+        return list(scores), method
 
-    def predict(self, pairs: list[tuple[str, str]]) -> list[float]:
-        if self.scores:
-            return self.scores[: len(pairs)]
-        # Default: descending score matching candidate order.
-        return [float(len(pairs) - i) for i in range(len(pairs))]
+    return fake_score
 
 
 # ── 1. reranker: module import + graceful no-op fallback ─────────────
 
 
 def test_rerank_module_imports_cleanly():
-    """No hard deps at import time (sentence-transformers may be absent)."""
+    """No hard deps at import time (no torch/sentence-transformers)."""
     import rugbrain.search.rerank  # noqa: F401
 
 
 def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytest.MonkeyPatch):
-    """Without a model backend, docs keep original ordering, tagged 'none'."""
-    reranker = Reranker()
-    reranker._st_failed = True
-    reranker._flag_failed = True
-
-    async def fake_get_reranker() -> Reranker:
-        return reranker
-
-    monkeypatch.setattr(rerank_mod, "get_reranker", fake_get_reranker)
+    """Scorer unavailable -> docs keep original ordering, tagged 'none'."""
+    monkeypatch.setattr(rerank_mod, "_score_candidates", _fake_score_factory([], method="none"))
 
     chunks = [
         {"id": "low", "content": "low", "similarity": 0.3},
@@ -101,14 +98,9 @@ def test_rerank_chunks_returns_empty_for_empty_chunks(monkeypatch: pytest.Monkey
 
 def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyPatch):
     """Cross-encoder scores drive final ordering, not original similarity."""
-    reranker = Reranker()
-    reranker._st_ready = True
-    reranker._st_model = _FakeCrossEncoder(scores=[0.1, 0.9, 0.5])  # chunk-1 wins
-
-    async def fake_get_reranker() -> Reranker:
-        return reranker
-
-    monkeypatch.setattr(rerank_mod, "get_reranker", fake_get_reranker)
+    monkeypatch.setattr(
+        rerank_mod, "_score_candidates", _fake_score_factory([0.1, 0.9, 0.5])
+    )  # chunk-1 (by original order) wins
 
     chunks = [
         {"id": "a", "content": "a", "similarity": 0.99},
@@ -123,26 +115,17 @@ def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyP
     assert [r["id"] for r in out] == ["b", "c"]  # scores 0.9 then 0.5
     assert out[0]["rerank_score"] == pytest.approx(0.9)
     assert all(r["reranked"] is True for r in out)
-    assert out[0]["rerank_method"] == "sentence-transformers"
+    assert out[0]["rerank_method"] == "qwen3-reranker-8b"
 
 
 def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch):
     """Only the top_n candidates (by original score) reach the scorer."""
     seen: list[list[dict[str, Any]]] = []
-    reranker = Reranker()
-    reranker._st_ready = True
-    reranker._st_model = _FakeCrossEncoder()
-
-    async def fake_score(query: str, documents: list[dict[str, Any]]) -> tuple[list[float], str]:
-        seen.append(documents)
-        return [float(len(documents) - i) for i in range(len(documents))], "sentence-transformers"
-
-    reranker.score_candidates = fake_score  # type: ignore[method-assign]
-
-    async def fake_get_reranker() -> Reranker:
-        return reranker
-
-    monkeypatch.setattr(rerank_mod, "get_reranker", fake_get_reranker)
+    monkeypatch.setattr(
+        rerank_mod,
+        "_score_candidates",
+        _fake_score_factory([float(len(_chunks(20)) - i) for i in range(20)], seen=seen),
+    )
 
     chunks = _chunks(25)
 
@@ -157,14 +140,7 @@ def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch
 
 
 def test_rerank_chunks_keep_clamped_to_top_n(monkeypatch: pytest.MonkeyPatch):
-    reranker = Reranker()
-    reranker._st_ready = True
-    reranker._st_model = _FakeCrossEncoder()
-
-    async def fake_get_reranker() -> Reranker:
-        return reranker
-
-    monkeypatch.setattr(rerank_mod, "get_reranker", fake_get_reranker)
+    monkeypatch.setattr(rerank_mod, "_score_candidates", _fake_score_factory([0.9, 0.6, 0.3]))
 
     chunks = _chunks(5)
 
@@ -176,14 +152,11 @@ def test_rerank_chunks_keep_clamped_to_top_n(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_rerank_chunks_scores_all_when_top_n_nonpositive(monkeypatch: pytest.MonkeyPatch):
-    reranker = Reranker()
-    reranker._st_ready = True
-    reranker._st_model = _FakeCrossEncoder()
-
-    async def fake_get_reranker() -> Reranker:
-        return reranker
-
-    monkeypatch.setattr(rerank_mod, "get_reranker", fake_get_reranker)
+    monkeypatch.setattr(
+        rerank_mod,
+        "_score_candidates",
+        _fake_score_factory([float(7 - i) for i in range(7)]),
+    )
 
     chunks = _chunks(7)
 
@@ -412,7 +385,7 @@ def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.Monke
             entry = dict(c)
             entry["rerank_score"] = float(len(chunks) - i)
             entry["reranked"] = True
-            entry["rerank_method"] = "sentence-transformers"
+            entry["rerank_method"] = "qwen3-reranker-8b"
             out.append(entry)
         return out[:keep]
 
@@ -526,7 +499,7 @@ def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytes
             entry = dict(c)
             entry["rerank_score"] = float(len(chunks) - i)
             entry["reranked"] = True
-            entry["rerank_method"] = "sentence-transformers"
+            entry["rerank_method"] = "qwen3-reranker-8b"
             out.append(entry)
         return out[:keep]
 
@@ -547,4 +520,4 @@ def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytes
     out = asyncio.run(run())
     assert len(out["results"]) == 1
     assert out["pillar_summary"]["search_reranker_applied"] is True
-    assert out["pillar_summary"]["search_reranker_method"] == "sentence-transformers"
+    assert out["pillar_summary"]["search_reranker_method"] == "qwen3-reranker-8b"

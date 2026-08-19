@@ -66,7 +66,7 @@ RugBrain's `search/engine.py` runs a **three-pillar hybrid**: dense
 (BGE-M3 1024-dim via Infinity), sparse (in-memory Okapi BM25 over
 `rugbrain.splade_bm25.BM25Index`), and entity lanes, fused with
 **reciprocal rank fusion (RRF)** then **MMR dedup**. Optional
-post-fusion: rerank (`bge-reranker-v2-m3`, ≤ 25 candidates), HyDE /
+post-fusion: rerank (self-hosted Qwen3-Reranker-8B, ≤ 25 candidates), HyDE /
 multi-query expansion, Redis query cache. Per-collection payload filters
 (chain, category, severity, verdict, address) narrow before scoring.
 

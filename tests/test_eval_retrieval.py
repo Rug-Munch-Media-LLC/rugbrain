@@ -282,14 +282,14 @@ class TestSearchViaEndpoint:
             {
                 "results": [{"id": "x", "content": "c"}],
                 "reranker_applied": True,
-                "reranker_method": "infinity-bge-reranker-v2-m3",
+                "reranker_method": "qwen3-reranker-8b",
                 "total": 1,
             }
         )
         meta: dict = {}
         await search_via_endpoint("http://h", "key", client, "q", 5, None, rerank=True, meta=meta)
         assert meta["reranker_applied"] is True
-        assert meta["reranker_method"] == "infinity-bge-reranker-v2-m3"
+        assert meta["reranker_method"] == "qwen3-reranker-8b"
         assert meta["total"] == 1
 
     async def test_meta_absent_when_not_requested(self):

@@ -138,7 +138,7 @@ The response schema of `POST /api/v1/rag/v2/search` is extended backward-compati
 ### 2.2 The two lanes
 
 **Vector lane (unchanged mechanics):** rugbrain `search/engine.py` hybrid — dense BGE-M3 + BM25
-sparse + RRF, optional rerank (bge-reranker-v2-m3), optional HyDE/multi-query, MMR dedup. The bot
+sparse + RRF, optional rerank (self-hosted Qwen3-Reranker-8B, llama.cpp :8003), optional HyDE/multi-query, MMR dedup. The bot
 fans out over its **5 knowledge collections** `[verified, 2026-08-15
 `app/domains/telegram/rugmunchbot/tools/rag_lookup.py`]`:
 
@@ -271,7 +271,7 @@ the chat path also gates context at `RAG_CONTEXT_MAX_CHARS = 1800`.
 | Graph lane: Redis subgraph hit | 0.01 s | O(1) GET — the common case |
 | Graph lane: live traversal (cache miss) | ≤ 1.0 s (0.2–0.5) | hard `wait_for` deadline; runs CONCURRENTLY with vector lane |
 | Fusion (RRF + dedup) | 0.01 s | in-process |
-| Optional rerank (bge-reranker-v2-m3, ≤ 25 candidates) | 0.3 s | only if budget remains |
+| Optional rerank (Qwen3-Reranker-8B, ≤ 25 candidates) | 0.3 s | only if budget remains |
 | **Total (worst case)** | **≈ 2.5 s** | parallel lanes: max(vector, graph) + fusion, not sum |
 
 **Why it stays under 5 s:** the graph lane runs concurrently with the vector lane, so the wall

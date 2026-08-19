@@ -63,7 +63,7 @@ Golden-set composition (44 queries):
 | Probe | Endpoint | Result |
 |-------|----------|--------|
 | embedder health | `GET http://127.0.0.1:8001/health` | 200 OK, 12 ms (HTTP layer healthy — but liveness only, does not exercise model inference) |
-| embedder models | `GET http://127.0.0.1:8001/models` | 200 OK, models served: `BAAI/bge-m3`, `BAAI/bge-reranker-v2-m3` |
+| embedder models | `GET http://127.0.0.1:8001/models` | 200 OK, models served: `BAAI/bge-m3` (reranking served by Qwen3-Reranker-8B on :8003, not Infinity) |
 | **real embedding** | `POST /embeddings` (bge-m3, 1 tiny input) | **timed out at 30s** (no response, no log line — inference worker/queue saturated) |
 | **live search** | `GET /api/v1/search?q=how does Uniswap V3 compute swap fees&limit=5` (valid key) | **timed out at 90s** (HTTP 000, no response) |
 | **live search (confirm)** | `GET /api/v1/search?q=reentrancy guard pattern solidity&limit=5` (valid key) | **timed out at 15s** (HTTP 000, no response) |

@@ -102,8 +102,8 @@ def test_story_velocity_sources_per_hour():
 
 
 @pytest.mark.asyncio
-async def test_rerank_story_sources_infinity(monkeypatch):
-    """Infinity /rerank reorders sources by relevance score."""
+async def test_rerank_story_sources_qwen3(monkeypatch):
+    """Qwen3-Reranker-8B /rerank reorders sources by relevance score."""
 
     class FakeResp:
         def raise_for_status(self) -> None:
@@ -140,7 +140,7 @@ async def test_rerank_story_sources_infinity(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
     story = _story()
     ordered, method = await nk.rerank_story_sources(story)
-    assert method == "infinity-bge-reranker-v2-m3"
+    assert method == "qwen3-reranker-8b"
     assert [s.article_id for s in ordered] == ["s3", "s1", "s2"]
     assert captured["json"]["query"] == story.title
     assert "documents" in captured["json"]

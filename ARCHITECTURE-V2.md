@@ -22,7 +22,7 @@
 - **Client-side B2 encryption REMOVED**: `B2_ENCRYPTION_KEY` is deprecated; all objects are encrypted at rest by **B2 SSE-B2 (AES256)** — no client-side AES-GCM on new uploads. `[DONE]`
 - **DuckDB query endpoint added**: `POST /api/v1/rag/query` (in `endpoints.py` + `parquet_analytics.py`) runs read-only SQL (SELECT/WITH/DESCRIBE/SHOW only) over the B2 parquet snapshots (httpfs direct or download fallback). **DEPLOYED 2026-08-01**: container rebuilt from HEAD; verified live `200` with `source=b2-direct` (DuckDB httpfs). Dockerfile bakes the httpfs extension at build time (`RUN INSTALL/LOAD httpfs`) so no runtime download. `[DONE]`
 - **RAGAS evaluation added**: `src/rugbrain/evaluation.py` + `eval_ragas.py`, route `GET /api/v1/eval/run`, golden-set metrics. **DEPLOYED 2026-08-01** on :8012; stale `rugbrain-eval-test` container (:8013) removed. `[DONE]`
-- **BGE reranker added**: `reranker.py` (bge-reranker-v2-m3 cross-encoder), opt-in via `rerank=true` on search. Committed + merged; live in code, not exercised in the running container build. `[PARTIAL]`
+- **Qwen3-Reranker-8B self-hosted**: `qwen-reranker.service` (systemd, llama.cpp `--rerank`, Q4_K_M, :8003) replaces bge-reranker-v2-m3/Infinity reranking. HTTP client in `reranker.py` + `search/rerank.py`; opt-in via `rerank=true`, graceful no-op fallback. `[DONE]`
 - **Metrics router**: `metrics.py` + `/metrics` Prometheus mount. **DEPLOYED 2026-08-01** — `/metrics` returns 200 behind API key on the rebuilt :8012 container. `[DONE]`
 - **Rate limiting**: IP-based per-hour limiter on `/search` shipped (commit 57a5f81). `[DONE in code]`
 
@@ -36,7 +36,7 @@
 - **Live search is slow when the embedder is cold**: first call after model expiry reloads bge-m3 (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
 
 **Session-close changes (2026-08-01):**
-- **Infinity is the sole embedding/reranking engine** — `infinity-rag` (michaelfeil/infinity) serves `BAAI/bge-m3` embeddings and `BAAI/bge-reranker-v2-m3` reranking on port 8001. Ollama is retained for LLM generation only. `[DONE]`
+- **Infinity is the embedding engine; reranking moved to self-hosted Qwen3** — `infinity-rag` serves `BAAI/bge-m3` embeddings on port 8001; cross-encoder reranking now runs on `qwen-reranker.service` (Qwen3-Reranker-8B Q4_K_M via llama.cpp `--rerank`, :8003). Ollama is retained for LLM generation only. `[DONE]`
 - **Stale containers/clones cleaned** — `rugbrain-eval-test` container removed; nested clone `/path/to/rmi-backend/rugbrain/` removed + gitlink dropped; `/tmp/opencode/rugbrain-main-verify` + `/tmp/opencode/rugbrain-reranker` worktrees removed. Remaining: `rugbrain-wt-ragas` worktree (branch merged) — remove with `git worktree remove`. `[PARTIAL]`
 - **News ingest flock guard** — `c17dc59` adds `flock -n` to `rmi-news-ingest.sh`; concurrent cron ticks skip instead of piling up. `[DONE]`
 - **BM25 alias swap NOT yet complete** — `hybrid_search` implemented in endpoints/qdrant_store (uncommitted WIP) but canonical-name → `_v2` aliases are NOT created (Qdrant aliases empty 2026-08-01). `[NOT DONE]`
@@ -92,8 +92,8 @@
     ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐
     │ Qdrant          │  │ Infinity BGE-M3 │  │ B2 rugbrain-      │
     │ rmi-qdrant:6333 │  │ 1024d (primary) │  │ permanence       │
-    │ 20 collections  │  │ bge-reranker    │  │ parquet snapshots│
-    │ dense + bm25    │  │ v2-m3 (opt-in)  │  │ SSE-B2 (AES256)  │
+    │ 20 collections  │  │ Qwen3-Reranker- │  │ parquet snapshots│
+    │ dense + bm25    │  │ 8B Q4_K_M :8003 │  │ SSE-B2 (AES256)  │
     │ (9 _v2 hybrid)  │  │                 │  │ DuckDB queryable │
     └─────────────────┘  └─────────────────┘  └──────────────────┘
 ```
@@ -108,7 +108,7 @@
 **Permanence (added in consolidation, not in original blueprint):**
 6. Every Qdrant collection is snapshotted to B2 as **parquet** (`scripts/b2_permanence.py`), queryable via DuckDB `POST /api/v1/rag/query`. **[COMMITTED; not deployed on :8012 yet]**
 7. No client-side encryption — **B2 SSE-B2 (AES256)** encrypts objects at rest; `B2_ENCRYPTION_KEY` is deprecated. **[DONE]**
-8. Search may optionally rerank with **bge-reranker-v2-m3** (`rerank=true`); reranker failure never breaks search. **[DONE in code]**
+8. Search may optionally rerank with the **self-hosted Qwen3-Reranker-8B** (llama.cpp `--rerank`, :8003, `rerank=true`); reranker failure never breaks search. **[DONE]**
 9. Evaluation runs via **RAGAS-style golden set** (`GET /api/v1/eval/run`). **[COMMITTED; only on stale :8013 container]**
 
 ---
@@ -117,7 +117,7 @@
 
 | Concern | Lives in | Why |
 |---|---|---|
-| Embedding/reranking (BGE-M3 + bge-reranker-v2-m3 via Infinity) | rugbrain | single model, single dim (1024), owns Infinity latency/retry |
+| Embedding (BGE-M3 via Infinity) + reranking (Qwen3-Reranker-8B, llama.cpp :8003) | rugbrain | single dim (1024); HTTP-only rerank client — no torch in container |
 | Vector storage (Qdrant) | rugbrain | single writer to collections; backend must not touch Qdrant |
 | Retrieval (dense + keyword + RRF) | rugbrain | one search implementation, one ranking contract |
 | Ingestion (scanner/news/wallet → embed → upsert) | rugbrain | embedding is co-located with storage |
@@ -284,7 +284,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 | `permanence.py` | DELETE |
 | `qdrant_store.py` | KEEP (becomes `store.py` internals) |
 | `parquet_analytics.py` | **NEW (post-blueprint)** — KEEP. DuckDB read-only SQL over B2 parquet snapshots; backs `POST /api/v1/rag/query`. |
-| `reranker.py` | **NEW (post-blueprint)** — KEEP. bge-reranker-v2-m3 cross-encoder, opt-in via `rerank=true`; failure is non-fatal. |
+| `reranker.py` | **NEW (post-blueprint)** — KEEP. Qwen3-Reranker-8B HTTP client (llama.cpp :8003), opt-in via `rerank=true`; failure is non-fatal. |
 | `metrics.py` | **NEW (post-blueprint)** — KEEP. Prometheus counters (embed_latency, embed_requests); mounted at `/metrics`. |
 | `query_classifier.py` | DELETE |
 | `query_rewriter.py` | DELETE |

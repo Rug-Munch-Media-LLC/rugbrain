@@ -235,8 +235,8 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 # Reranking is ON by default on the main search entry points: the top
-# ``rerank_top_k`` fused candidates are re-scored with a BGE cross-encoder
-# (bge-reranker-v2-m3) before truncation. The search-lane reranker degrades
+# ``rerank_top_k`` fused candidates are re-scored with the self-hosted Qwen3 cross-encoder
+# (Qwen3-Reranker-8B) before truncation. The search-lane reranker degrades
 # gracefully — when no model backend is installed, or scoring takes longer
 # than ``rerank_timeout``, results fall back to their original retrieval
 # order with ``rerank_method="none"`` / ``reranked=false`` — a request never
@@ -795,7 +795,7 @@ async def search_multi_collection(
     Search-quality parameters:
 
     * ``rerank`` — **default True**: the top ``rerank_top_k`` candidate
-      chunks are re-ranked with a cross-encoder (BGE reranker) and the best
+      chunks are re-ranked with a cross-encoder (Qwen3-Reranker-8B) and the best
       ``rerank_keep`` (defaults to *limit*) are kept before truncation.
       Degrades gracefully: when the model backend is unavailable (or scoring
       exceeds ``rerank_timeout``), results fall back to their original
@@ -1015,7 +1015,7 @@ async def three_pillar_search(
       to raw ranking (default 2.0; env ``RAG_RERANK_TIMEOUT``; ``<=0``
       disables).
     * ``use_reranker`` — the news-lane cross-encoder reranker (BGE via
-      Infinity / sentence-transformers), applied after fusion. Defaults True
+      self-hosted Qwen3-Reranker-8B), applied after fusion. Defaults True
       with a graceful no-op fallback: environments without a reranker model
       return results by their original score (``rerank_method="none"``), so
       search never breaks when the model is missing.
@@ -1045,42 +1045,86 @@ async def three_pillar_search(
     # ── Pillar 1: Dense vector search (ANN) ──
     pillar1_results: list[dict[str, Any]] = []
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
+        # Primary: the full-featured multi-collection dense search (Qdrant
+        # vector + optional hybrid lanes; handles hyde/multi-query). This is
+        # the same implementation the search endpoints use. The standalone
+        # ANN/compat path below is only a fallback when Qdrant-backed search
+        # is unavailable (ImportError, connection failure, etc.).
+        pillar1_results = await search_multi_collection(
+            query,
+            collections,
+            limit=limit * 2,
+            min_similarity=min_similarity,
+            hyde=hyde,
+            multi_query=multi_query,
+            llm_fn=llm_fn,
+        )
+        for r in pillar1_results:
+            r["pillar"] = "dense"
+    except Exception as e:
+        logger.warning("Pillar 1 (dense) primary failed: %s — trying ANN fallback", e)
+        try:
+            from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
-        cache = get_semantic_cache()
-        cached = await cache.check(query_vec)
-        if cached is not None:
-            pillar1_results = cached
-            for r in pillar1_results:
-                r["pillar"] = "dense (cached)"
-        else:
-            # Pre-embed the variant vectors once (shared across collections).
-            # The original query reuses ``query_vec``; the HyDE document
-            # reuses its expansion embedding when available.
-            if expanded:
-                hyde_doc = query_expansion_meta.get("hyde_doc")
-                hyde_vec = query_expansion_meta.get("hyde_embedding")
-                variant_vecs: list[tuple[str, list[float]]] = [(query, query_vec)]
-                for v in query_variants[1:]:
-                    if hyde_doc is not None and v == hyde_doc and hyde_vec is not None:
-                        variant_vecs.append((v, hyde_vec))
-                    else:
-                        variant_vecs.append((v, await embedder.embed_query(v)))
+            cache = get_semantic_cache()
+            cached = await cache.check(query_vec)
+            if cached is not None:
+                pillar1_results = cached
+                for r in pillar1_results:
+                    r["pillar"] = "dense (cached)"
             else:
-                variant_vecs = [(query, query_vec)]
+                # Pre-embed the variant vectors once (shared across collections).
+                # The original query reuses ``query_vec``; the HyDE document
+                # reuses its expansion embedding when available.
+                if expanded:
+                    hyde_doc = query_expansion_meta.get("hyde_doc")
+                    hyde_vec = query_expansion_meta.get("hyde_embedding")
+                    variant_vecs: list[tuple[str, list[float]]] = [(query, query_vec)]
+                    for v in query_variants[1:]:
+                        if hyde_doc is not None and v == hyde_doc and hyde_vec is not None:
+                            variant_vecs.append((v, hyde_vec))
+                        else:
+                            variant_vecs.append((v, await embedder.embed_query(v)))
+                else:
+                    variant_vecs = [(query, query_vec)]
 
-            for coll in collections:
-                try:
-                    from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
+                for coll in collections:
+                    try:
+                        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
-                    ann = get_ann_index()
-                    if expanded:
-                        # Search each variant against the collection and
-                        # RRF-fuse the per-variant dense lists.
-                        variant_lists: list[list[dict[str, Any]]] = []
-                        for _v, vec in variant_vecs:
+                        ann = get_ann_index()
+                        if expanded:
+                            # Search each variant against the collection and
+                            # RRF-fuse the per-variant dense lists.
+                            variant_lists: list[list[dict[str, Any]]] = []
+                            for _v, vec in variant_vecs:
+                                ann_hits = await ann.search(
+                                    query_embedding=vec,
+                                    collection=coll,
+                                    limit=limit,
+                                    min_similarity=min_similarity,
+                                )
+                                enriched = await _enrich_ann_results(
+                                    coll, ann_hits, content_limit=content_limit
+                                )
+                                if enriched:
+                                    variant_lists.append(enriched)
+                            if variant_lists:
+                                ranked = [
+                                    sorted(
+                                        vl,
+                                        key=lambda x: float(x.get("similarity", 0.0) or 0.0),
+                                        reverse=True,
+                                    )
+                                    for vl in variant_lists
+                                ]
+                                fused_coll = _rrf_fuse(ranked, k=60)[: limit * 3]
+                                for r in fused_coll:
+                                    r["pillar"] = "dense"
+                                pillar1_results.extend(fused_coll)
+                        else:
                             ann_hits = await ann.search(
-                                query_embedding=vec,
+                                query_embedding=query_vec,
                                 collection=coll,
                                 limit=limit,
                                 min_similarity=min_similarity,
@@ -1088,62 +1132,23 @@ async def three_pillar_search(
                             enriched = await _enrich_ann_results(
                                 coll, ann_hits, content_limit=content_limit
                             )
-                            if enriched:
-                                variant_lists.append(enriched)
-                        if variant_lists:
-                            ranked = [
-                                sorted(
-                                    vl,
-                                    key=lambda x: float(x.get("similarity", 0.0) or 0.0),
-                                    reverse=True,
-                                )
-                                for vl in variant_lists
-                            ]
-                            fused_coll = _rrf_fuse(ranked, k=60)[: limit * 3]
-                            for r in fused_coll:
+                            for r in enriched:
                                 r["pillar"] = "dense"
-                            pillar1_results.extend(fused_coll)
-                    else:
-                        ann_hits = await ann.search(
-                            query_embedding=query_vec,
-                            collection=coll,
-                            limit=limit,
-                            min_similarity=min_similarity,
-                        )
-                        enriched = await _enrich_ann_results(
-                            coll, ann_hits, content_limit=content_limit
-                        )
-                        for r in enriched:
-                            r["pillar"] = "dense"
-                        pillar1_results.extend(enriched)
-                except Exception as e:
-                    logger.debug("ANN search for %s failed: %s", coll, e)
-                    try:
-                        hits = await embedder.search(
-                            query, coll, limit=limit, min_similarity=min_similarity
-                        )
-                        for r in hits:
-                            r["pillar"] = "dense"
-                        pillar1_results.extend(hits)
-                    except Exception:
-                        logger.warning("swallowed exception", exc_info=True)
+                            pillar1_results.extend(enriched)
+                    except Exception as e:
+                        logger.debug("ANN search for %s failed: %s", coll, e)
+                        try:
+                            hits = await embedder.search(
+                                query, coll, limit=limit, min_similarity=min_similarity
+                            )
+                            for r in hits:
+                                r["pillar"] = "dense"
+                            pillar1_results.extend(hits)
+                        except Exception:
+                            logger.warning("swallowed exception", exc_info=True)
 
-            if pillar1_results:
-                await cache.store(query_vec, pillar1_results)
-    except Exception as e:
-        logger.warning("Pillar 1 (dense) failed: %s", e)
-        try:
-            pillar1_results = await search_multi_collection(
-                query,
-                collections,
-                limit=limit * 2,
-                min_similarity=min_similarity,
-                hyde=hyde,
-                multi_query=multi_query,
-                llm_fn=llm_fn,
-            )
-            for r in pillar1_results:
-                r["pillar"] = "dense"
+                if pillar1_results:
+                    await cache.store(query_vec, pillar1_results)
         except Exception:
             logger.warning("swallowed exception", exc_info=True)
 
@@ -1173,21 +1178,21 @@ async def three_pillar_search(
 
     # ── Pillar 3: Entity exact-match + Knowledge Graph expansion ──
     pillar3_results: list[dict[str, Any]] = []
-    entity_extraction = None
+    entity_extraction: list[dict[str, Any]] = []
     try:
         from rugbrain.compat import EntityLookup, extract_entities  # external dependency
 
         entity_extraction = extract_entities(query)
-        if entity_extraction.has_entities:
-            lookup = EntityLookup.get_instance()
-            for entity in entity_extraction.all_entities():
+        if entity_extraction:
+            lookup = EntityLookup()
+            for entity in entity_extraction:
                 try:
-                    matches = await lookup.lookup(entity["value"])
+                    matches = await lookup.lookup(entity["entity"])
                     for m in matches:
                         m["pillar"] = "entity"
                     pillar3_results.extend(matches)
                 except Exception as e:
-                    logger.debug("Entity lookup for %s failed: %s", entity["value"], e)
+                    logger.debug("Entity lookup for %s failed: %s", entity["entity"], e)
 
             if use_kg:
                 # Legacy Redis/Neo4j knowledge-graph lane (app.knowledge_graph)
@@ -1208,9 +1213,7 @@ async def three_pillar_search(
 
                 if kg is not None:
                     try:
-                        kg_results = await kg.expand_query_entities(
-                            entity_extraction.all_entities(), max_depth=2
-                        )
+                        kg_results = await kg.expand_query_entities(entity_extraction, max_depth=2)
                         if kg_results:
                             for r in kg_results:
                                 r["pillar"] = "entity+kg"
@@ -1359,48 +1362,33 @@ async def three_pillar_search(
             r["similarity"] = r.get("rrf_score", 0.0)
         pre_rerank = len(fused)
 
-        # Stage 1: BGE cross-encoder (bge-reranker-v2-m3) — true cross-encoder
+        # Self-hosted Qwen3-Reranker-8B (llama.cpp:8003) — true cross-encoder.
+        # Graceful no-op: falls back to raw retrieval order when the server
+        # is unreachable (rerank_method="none", reranked=false).
         try:
-            from rugbrain.reranker import (
-                get_reranker as _get_bge_reranker,  # external dependency
-            )
+            from .rerank import rerank_chunks
 
-            reranker = await _get_bge_reranker()
-            reranked = await reranker.rerank(query, fused, top_k=limit * 3)
+            reranked = await rerank_chunks(
+                query,
+                fused,
+                top_n=pre_rerank,
+                keep=limit * 3,
+            )
             if reranked and reranked[0].get("rerank_method", "none") != "none":
                 fused = reranked
                 reranker_applied = True
-                reranker_method = reranked[0].get("rerank_method", "cross-encoder")
+                reranker_method = reranked[0].get("rerank_method", "qwen3-reranker-8b")
                 logger.info(
-                    "Cross-encoder (bge-reranker-v2-m3) reranked: %d → %d results",
+                    "Cross-encoder (Qwen3-Reranker-8B) reranked: %d → %d results",
                     pre_rerank,
                     len(fused),
                 )
             else:
                 logger.debug("Reranker backend unavailable — skipping cross-encoder stage")
         except ImportError:
-            logger.debug("rugbrain.reranker not available")
+            logger.debug("rugbrain.search.rerank not available")
         except Exception as e:
-            logger.debug("BGE cross-encoder rerank failed (non-critical): %s", e)
-
-        # Stage 2: sentence-transformers CrossEncoder fallback
-        if not reranker_applied:
-            try:
-                from rugbrain.compat import get_reranker  # external dependency
-
-                reranker = await get_reranker()
-                fused = await reranker.rerank(query, fused, top_k=limit * 3)
-                reranker_applied = True
-                reranker_method = "cross-encoder"
-                logger.info(
-                    "Cross-encoder (sentence-transformers) reranked: %d → %d results",
-                    pre_rerank,
-                    len(fused),
-                )
-            except ImportError:
-                logger.debug("Cross-encoder module not available, skipping rerank")
-            except Exception as e:
-                logger.debug("Cross-encoder rerank failed (non-critical): %s", e)
+            logger.debug("Qwen3 cross-encoder rerank failed (non-critical): %s", e)
 
     # ── Parent-child context expansion ──
     parent_child_applied = False

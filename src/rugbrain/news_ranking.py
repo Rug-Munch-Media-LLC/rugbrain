@@ -4,7 +4,7 @@ News story ranking — rerank sources within a story and rank the feed.
 Part 2 of the Ground News / CryptoPanic-beating news aggregation system.
 
 For every story cluster, articles are reranked against the story title
-using the Infinity reranker (``BAAI/bge-reranker-v2-m3``); the best
+using the self-hosted Qwen3-Reranker-8B (llama.cpp port 8003); the best
 article becomes the story's primary source. Stories themselves are scored
 on five weighted axes and the resulting scores are persisted to the Qdrant
 ``news_v2`` collection:
@@ -47,8 +47,8 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
-INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001").rstrip("/")
-RERANK_MODEL = os.getenv("RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
+RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 NEWS_V2_COLLECTION = os.getenv("NEWS_V2_COLLECTION", "news_v2")
 EMBED_DIM = 1024
 
@@ -73,10 +73,11 @@ async def rerank_story_sources(
 ) -> tuple[list[StorySource], str]:
     """Rerank the story's source articles against its title.
 
-    Calls Infinity ``POST /rerank`` with ``query=story.title`` and
-    ``documents=article_summaries``. The top document becomes the story's
-    primary source. When Infinity is unreachable the sources are returned
-    sorted by credibility (best-effort) with ``method="fallback"``.
+    Calls the self-hosted Qwen3-Reranker-8B ``POST /rerank`` with
+    ``query=story.title`` and ``documents=article_summaries``. The top
+    document becomes the story's primary source. When the reranker is
+    unreachable the sources are returned sorted by credibility (best-effort)
+    with ``method="fallback"``.
 
     Returns ``(sorted_sources, method)``.
     """
@@ -85,11 +86,10 @@ async def rerank_story_sources(
 
     documents = [src.summary[:2000] or src.title[:2000] for src in story.sources]
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
             resp = await client.post(
-                f"{INFINITY_URL}/rerank",
+                f"{RERANKER_URL}/rerank",
                 json={
-                    "model": RERANK_MODEL,
                     "query": story.title[:2000],
                     "documents": documents,
                     "top_n": len(documents),
@@ -108,9 +108,9 @@ async def rerank_story_sources(
             src.rerank_score = scored.get(idx, 0.0)
             ranked.append(src)
         ordered = sorted(ranked, key=lambda s: s.rerank_score, reverse=True)
-        return ordered, "infinity-bge-reranker-v2-m3"
+        return ordered, "qwen3-reranker-8b"
     except Exception as exc:
-        logger.debug("news_ranking: Infinity /rerank failed (%s) — credibility fallback", exc)
+        logger.debug("news_ranking: Qwen3 /rerank failed (%s) — credibility fallback", exc)
         for src in story.sources:
             src.rerank_score = 0.0
         ordered = sorted(story.sources, key=lambda s: s.credibility, reverse=True)

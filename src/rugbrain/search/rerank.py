@@ -2,29 +2,24 @@
 RAG Search — cross-encoder reranking (search lane).
 
 Cross-encoder rerank step for retrieval: after candidate chunks are
-retrieved, score each (query, chunk) pair with a BGE reranker and keep only
-the most relevant chunks before truncation.
+retrieved, score each (query, chunk) pair with the self-hosted Qwen3
+Reranker 8B (llama.cpp, port 8003) and keep only the most relevant chunks
+before truncation.
 
-Unlike ``rugbrain.reranker`` (the news-lane reranker, Infinity-first with
-rating boosts), this module is a self-contained search-lane reranker:
-
-  * Backend 1 — sentence-transformers ``CrossEncoder`` with a BGE reranker
-    model (default ``BAAI/bge-reranker-v2-m3``).
-  * Backend 2 — ``FlagEmbedding.FlagReranker`` with the same model id.
-  * Graceful no-op — if neither backend can be loaded (the model / torch is
-    not installed in this environment), documents are returned ordered by
-    their original retrieval score, tagged ``rerank_method="none"``. Search
-    never breaks because the reranker is unavailable.
-
-All heavy imports (torch, sentence_transformers, FlagEmbedding) are lazy —
-``import rugbrain.search.rerank`` always succeeds, even in minimal
-environments. The model is loaded once per process (singleton) and kept
-resident; loading and scoring run in worker threads so the event loop is
-never blocked.
+Backend:
+  * Qwen3-Reranker-8B Q4_K_M served by llama.cpp ``--rerank`` on Talos
+    (http://172.22.0.1:8003 from inside the container, 127.0.0.1:8003 on
+    the host). HTTP-only — no torch, no sentence-transformers, no local
+    model weights in the container.
+  * Graceful no-op — if the reranker server is unreachable, documents are
+    returned ordered by their original retrieval score, tagged
+    ``rerank_method="none"``. Search never breaks because the reranker is
+    unavailable.
 
 Environment variables:
-  - ``RERANK_MODEL_NAME`` — HuggingFace model id (default: BAAI/bge-reranker-v2-m3)
-  - ``RERANK_MAX_LENGTH`` — max tokens per (query, chunk) pair (default: 512)
+  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://127.0.0.1:8003)
+  - ``RERANKER_TIMEOUT`` — per-request timeout in seconds (default: 30)
+  - ``RERANKER_ENABLED`` — set "false" to disable reranking entirely
 """
 
 from __future__ import annotations
@@ -35,176 +30,20 @@ import os
 import time
 from typing import Any
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
-# BGE multilingual reranker: scores (query, chunk) pairs for crypto + code
-# content. Overridable via env for deployments that pin a different model.
-RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")
-RERANK_MAX_LENGTH = int(os.getenv("RERANK_MAX_LENGTH", "512"))
+RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
+RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
+RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 
 # Max content chars fed to the cross-encoder per chunk (truncation guard).
 _RERANK_TEXT_LIMIT = 2000
 
-
-class Reranker:
-    """Lazy cross-encoder reranker with a graceful no-op fallback.
-
-    Singleton via ``Reranker.get_reranker()``. The heavy model is loaded
-    lazily on the first ``rerank()`` call and kept in memory afterwards.
-    """
-
-    _instance: Reranker | None = None
-    _lock = asyncio.Lock()
-
-    # ── singleton ─────────────────────────────────────────────────
-
-    @classmethod
-    async def get_reranker(cls) -> Reranker:
-        if cls._instance is None:
-            async with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
-        return cls._instance
-
-    def __init__(self, model_name: str = RERANK_MODEL_NAME) -> None:
-        self._model_name = model_name
-        self._st_model: Any | None = None
-        self._st_ready = False
-        self._st_failed = False
-        self._flag_model: Any | None = None
-        self._flag_ready = False
-        self._flag_failed = False
-        self._backend_name: str | None = None
-        self._load_time_s = 0.0
-
-    # ── backend discovery / loading ───────────────────────────────
-
-    def _load_st(self) -> bool:
-        """Load the sentence-transformers CrossEncoder (BGE reranker)."""
-        try:
-            # Force full torch initialization BEFORE sentence-transformers is
-            # imported (bge-reranker-v2-m3 pulls in torch; see rugbrain.reranker
-            # for the "partially initialized module 'torch'" failure mode).
-            import torch
-
-            torch.classes  # noqa: B018 - trigger full torch init
-
-            from sentence_transformers import CrossEncoder
-
-            self._st_model = CrossEncoder(self._model_name, max_length=RERANK_MAX_LENGTH)
-            self._st_ready = True
-            return True
-        except Exception as exc:
-            self._st_failed = True
-            logger.warning("search reranker: sentence-transformers backend unavailable (%s)", exc)
-            return False
-
-    def _load_flag(self) -> bool:
-        """Load the FlagEmbedding FlagReranker as a second backend option."""
-        try:
-            from FlagEmbedding import FlagReranker
-
-            self._flag_model = FlagReranker(self._model_name)
-            self._flag_ready = True
-            return True
-        except Exception as exc:
-            self._flag_failed = True
-            logger.warning("search reranker: FlagEmbedding backend unavailable (%s)", exc)
-            return False
-
-    def _ensure_backend(self) -> str | None:
-        """Load the first available backend; returns its name or ``None``.
-
-        Cached per process: after a successful load the backend is never
-        re-probed; after both backends fail we never retry the import. A
-        backend that is already ready (e.g. injected in tests) is reused.
-        """
-        if self._backend_name is not None:
-            return self._backend_name
-        if self._st_ready:
-            self._backend_name = "sentence-transformers"
-            return self._backend_name
-        if self._flag_ready:
-            self._backend_name = "flag-embedding"
-            return self._backend_name
-        t0 = time.perf_counter()
-        if not self._st_failed and self._load_st():
-            self._backend_name = "sentence-transformers"
-        elif not self._flag_failed and self._load_flag():
-            self._backend_name = "flag-embedding"
-        if self._backend_name is not None:
-            self._load_time_s = time.perf_counter() - t0
-            logger.info(
-                "search reranker: loaded %s (backend=%s, %.1fs)",
-                self._model_name,
-                self._backend_name,
-                self._load_time_s,
-            )
-        else:
-            logger.warning("search reranker: no backend available — reranking disabled")
-        return self._backend_name
-
-    def _score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
-        """Score (query, chunk) pairs with whichever backend is loaded.
-
-        Returns an empty list when no backend is ready.
-        """
-        if self._st_ready and self._st_model is not None:
-            raw = self._st_model.predict(pairs)
-            return [float(s) for s in raw]
-        if self._flag_ready and self._flag_model is not None:
-            raw = self._flag_model.compute_score(pairs)
-            if isinstance(raw, (int, float)):
-                return [float(raw)]
-            return [float(s) for s in raw]
-        return []
-
-    # ── scoring API ───────────────────────────────────────────────
-
-    async def score_candidates(
-        self, query: str, documents: list[dict[str, Any]]
-    ) -> tuple[list[float], str]:
-        """Cross-encode ``(query, doc)`` pairs for every document.
-
-        Returns ``(scores, backend_name)`` with ``scores`` aligned to
-        ``documents`` order. When no backend is available returns
-        ``([], "none")`` — callers fall back to the original ordering.
-        """
-        if not documents:
-            return [], "none"
-        backend_name = self._backend_name
-        if backend_name is None:
-            backend_name = await asyncio.to_thread(self._ensure_backend)
-        if backend_name is None:
-            return [], "none"
-
-        texts = [
-            (doc.get("content") or doc.get("text") or "")[:_RERANK_TEXT_LIMIT] for doc in documents
-        ]
-        pairs = [(query, text) for text in texts]
-        try:
-            scores = await asyncio.to_thread(self._score_pairs, pairs)
-        except Exception as exc:
-            logger.warning("search reranker: scoring failed (%s)", exc)
-            return [], "none"
-        if not scores:
-            return [], "none"
-        return scores, backend_name
-
-    def health_check(self) -> dict[str, Any]:
-        return {
-            "backend": self._backend_name or "none",
-            "model": self._model_name,
-            "st_ready": self._st_ready,
-            "flag_ready": self._flag_ready,
-            "load_time_s": round(self._load_time_s, 2),
-            "max_length": RERANK_MAX_LENGTH,
-        }
-
-
-async def get_reranker() -> Reranker:
-    """Async convenience function to obtain the singleton Reranker."""
-    return await Reranker.get_reranker()
+# Cache health so we don't hammer a down server.
+_health: dict[str, Any] = {"ok": False, "last_check": 0.0}
+_lock = asyncio.Lock()
 
 
 def _original_score(doc: dict[str, Any]) -> float:
@@ -216,13 +55,122 @@ def _original_score(doc: dict[str, Any]) -> float:
     return 0.0
 
 
+class Reranker:
+    """Backward-compatible search-lane reranker facade.
+
+    Wraps the self-hosted Qwen3-Reranker-8B HTTP endpoint. Kept for
+    callers that import ``get_reranker`` from ``rugbrain.search.rerank``;
+    new code should call :func:`rerank_chunks` directly.
+    """
+
+    def __init__(self, url: str | None = None):
+        self._url = url or RERANKER_URL
+
+    async def rerank(
+        self,
+        query: str,
+        chunks: list[dict[str, Any]],
+        top_k: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Score chunks against query, return top-k with rerank metadata."""
+        return await rerank_chunks(query, chunks, top_n=top_k, keep=top_k)
+
+    async def score_candidates(
+        self,
+        query: str,
+        candidates: list[dict[str, Any]],
+    ) -> tuple[list[float], str]:
+        """Score candidates without truncation (legacy API)."""
+        return await _score_candidates(query, candidates)
+
+
+async def get_reranker() -> Reranker:
+    """Return a search-lane reranker instance (backward-compatible)."""
+    return Reranker()
+
+
+def _chunk_text(doc: dict[str, Any]) -> str:
+    """Extract searchable text from a chunk dict."""
+    for key in ("content", "text", "chunk_text", "title", "summary"):
+        val = doc.get(key)
+        if isinstance(val, str) and val.strip():
+            return val[:_RERANK_TEXT_LIMIT]
+    return ""
+
+
+async def _fast_health() -> bool:
+    """Fast cached health check — avoids hammering a down server."""
+    async with _lock:
+        if _health["ok"] and (time.time() - _health["last_check"]) < 30:
+            return True
+        if not _health["ok"] and (time.time() - _health["last_check"]) < 60:
+            return False
+    return True  # Allow the actual request to probe
+
+
+async def _score_candidates(
+    query: str,
+    candidates: list[dict[str, Any]],
+) -> tuple[list[float], str]:
+    """Score candidate chunks against query via the Qwen3 reranker.
+
+    Returns (scores, method). On failure returns ([], "none").
+    """
+    if not RERANKER_ENABLED or not candidates:
+        return [], "none"
+
+    if not await _fast_health():
+        return [], "none"
+
+    docs = [_chunk_text(d) for d in candidates]
+    # Skip empty docs — llama.cpp would still score them but they add noise.
+    valid = [(i, t) for i, t in enumerate(docs) if t]
+    if not valid:
+        return [], "none"
+
+    try:
+        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
+            payload = {
+                "query": query,
+                "documents": [t for _, t in valid],
+                "top_n": len(valid),
+            }
+            resp = await client.post(f"{RERANKER_URL}/rerank", json=payload)
+            if resp.status_code != 200:
+                logger.warning("reranker_status=%d", resp.status_code)
+                return [], "none"
+
+            data = resp.json()
+            results = data.get("results", [])
+
+            async with _lock:
+                _health["ok"] = True
+                _health["last_check"] = time.time()
+
+            # Map back to original candidate indices.
+            scores: list[float] = [0.0] * len(candidates)
+            for r in results:
+                pos = r.get("index")
+                if isinstance(pos, int) and 0 <= pos < len(valid):
+                    orig_idx = valid[pos][0]
+                    scores[orig_idx] = float(r.get("relevance_score", 0.0))
+            return scores, "qwen3-reranker-8b"
+
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as exc:
+        logger.debug("reranker_unavailable: %s", exc)
+        async with _lock:
+            _health["ok"] = False
+            _health["last_check"] = time.time()
+        return [], "none"
+
+
 async def rerank_chunks(
     query: str,
     chunks: list[dict[str, Any]],
     top_n: int = 20,
     keep: int = 5,
 ) -> list[dict[str, Any]]:
-    """Re-rank *chunks* against *query* with a cross-encoder, keep the best.
+    """Re-rank *chunks* against *query* with the Qwen3 cross-encoder, keep the best.
 
     Parameters
     ----------
@@ -243,10 +191,10 @@ async def rerank_chunks(
     list[dict]
         Chunks sorted by cross-encoder relevance descending, augmented with
         ``rerank_score``, ``rerank_method``, ``reranked`` and
-        ``rerank_duration_ms``. When no cross-encoder backend is available
-        (model not installed), returns the top ``keep`` chunks by their
-        original retrieval score with ``rerank_method="none"`` — search
-        behavior is preserved, never broken.
+        ``rerank_duration_ms``. When the reranker server is unavailable,
+        returns the top ``keep`` chunks by their original retrieval score
+        with ``rerank_method="none"`` — search behavior is preserved, never
+        broken.
     """
     if not chunks:
         return []
@@ -258,20 +206,19 @@ async def rerank_chunks(
     # is expensive, so only the best top_n candidates are re-scored.
     candidates = sorted(chunks, key=_original_score, reverse=True)[:top_n]
 
-    reranker = await get_reranker()
-    scores, method = await reranker.score_candidates(query, candidates)
+    t0 = time.perf_counter()
+    scores, method = await _score_candidates(query, candidates)
+    duration_ms = (time.perf_counter() - t0) * 1000
 
-    # ── graceful no-op: no model available ──
-    if not scores:
+    # ── graceful no-op: reranker unavailable ──
+    if not scores or method == "none":
         ordered = sorted(candidates, key=_original_score, reverse=True)[:keep]
         for doc in ordered:
             doc["rerank_method"] = "none"
             doc["reranked"] = False
         return ordered
 
-    t0 = time.perf_counter()
     scored = sorted(zip(candidates, scores, strict=True), key=lambda x: x[1], reverse=True)
-    duration_ms = (time.perf_counter() - t0) * 1000
 
     results: list[dict[str, Any]] = []
     for doc, cross in scored[:keep]:

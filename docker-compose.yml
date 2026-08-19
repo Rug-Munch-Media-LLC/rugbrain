@@ -35,7 +35,7 @@ services:
     networks:
       - rmi_network
     volumes:
-      # Shared HF cache: bge-reranker-v2-m3 weights persist across restarts.
+      # NOTE: reranking now uses the self-hosted Qwen3-Reranker-8B (llama.cpp:8003).
       # NOTE: served from /path/to/hf-cache (world-readable) and mounted
       # at /opt/hf-cache (NOT /root/.cache) because the image's /root is 0700
       # root-owned — the non-root container user (rmi, uid 999) cannot traverse
@@ -65,8 +65,8 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
       - INFINITY_URL=http://infinity-rag:8001
-      - RERANK_MODEL=BAAI/bge-reranker-v2-m3
-      - RERANK_MODEL_NAME=BAAI/bge-reranker-v2-m3
+      - RERANKER_URL=http://172.22.0.1:8003
+      - RERANKER_TIMEOUT=30
       - PRESIDIO_URL=http://presidio:8090
       # DuckDB query endpoint (/api/v1/rag/query) — B2 permanence snapshots.
       # B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY are required for the

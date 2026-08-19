@@ -161,7 +161,8 @@ in `src/app/` (currently being restored — see §7).
 | rugbrain API | `rugbrain-api` | 8012 | FastAPI service: search, scam-check, health |
 | Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
-| Infinity | `infinity-rag` | 8001 | Embedding/reranking inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3) |
+| Infinity | `infinity-rag` | 8001 | Embedding inference (BAAI/bge-m3, 1024-dim) |
+| Qwen3 Reranker | `qwen-reranker.service` | 8003 | Cross-encoder reranking — Qwen3-Reranker-8B Q4_K_M (llama.cpp `--rerank`, systemd on host) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
 | rmi-codebase-mcp | external | — | Code-pattern embeddings (Qdrant) |
 
@@ -474,8 +475,9 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 
 ### 6.4 Scaling
 - **Infinity:** stateless OpenAI-compatible server on port 8001; concurrency
-  bounded by Infinity's native batching over `/embeddings` and `/rerank`
-  (BAAI/bge-m3 1024-dim + BAAI/bge-reranker-v2-m3).
+  bounded by Infinity's native batching over `/embeddings` (BAAI/bge-m3
+  1024-dim). Cross-encoder reranking is served separately by the
+  self-hosted Qwen3-Reranker-8B (llama.cpp `--rerank`, :8003).
 - **Qdrant:** single node, collections created with default (unsharded)
   config; sharding/replication not configured — revisit when collections
   exceed a single node.

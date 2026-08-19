@@ -782,6 +782,26 @@ def main() -> int:
             except Exception as exc:
                 failures += 1
                 logger.error("snapshot_failed collection=%s err=%s", name, exc)
+                # Retry once after a short backoff — big collections can
+                # transiently disconnect from Qdrant mid-snapshot.
+                try:
+                    logger.info("snapshot_retry collection=%s", name)
+                    time.sleep(5)
+                    snapshot_collection(
+                        client,
+                        b2_api,
+                        bucket_name,
+                        date_str,
+                        name,
+                        workdir,
+                        args.limit,
+                        with_vectors,
+                        fmt,
+                    )
+                    failures -= 1
+                    logger.info("snapshot_retry_ok collection=%s", name)
+                except Exception as retry_exc:
+                    logger.error("snapshot_retry_failed collection=%s err=%s", name, retry_exc)
 
     try:
         if entries:
