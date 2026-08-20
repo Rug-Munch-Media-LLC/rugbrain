@@ -104,6 +104,16 @@ from rugbrain.qwen_embedders import (  # noqa: E402
     Qwen3Embedder,
     OpenRouterEmbedder,
 )
+
+# Qwen3-Embedding query template — must match the migration/search path so
+# query-side vectors land in the same semantic space as stored docs.
+try:
+    from rugbrain.embeddings import QUERY_INSTRUCT as _QUERY_INSTRUCT
+except Exception:  # pragma: no cover - fallback if import order breaks
+    _QUERY_INSTRUCT = (
+        "Instruct: Given a web search query, retrieve relevant passages that "
+        "answer the query\nQuery: {}"
+    )
 from rugbrain.feature_extractors import (  # noqa: E402
     extract_contract_features,
     extract_transaction_features,
@@ -462,10 +472,14 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         )
 
     async def embed_query(self, query: str) -> list[float]:
-        """Embed a search query for RAG retrieval."""
-        # Augment crypto-specific context
+        """Embed a search query for RAG retrieval.
+
+        Uses the official Qwen3-Embedding ``Instruct:`` query template so
+        queries are embedded in the same space as the stored documents.
+        """
         augmented = f"Cryptocurrency scam detection query: {query}"
-        return await self._semantic_embed_one(augmented, "semantic")
+        instructed = _QUERY_INSTRUCT.format(augmented)
+        return await self._semantic_embed_one(instructed, "semantic")
 
     # ─── SIMILARITY & SEARCH ────────────────────────────────────
 

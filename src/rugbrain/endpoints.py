@@ -733,7 +733,7 @@ async def search_threat_intel(
 
         curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel_v2&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5&factuality_filter=verified&require_corroboration=1"
     """
-    from rugbrain.embeddings import get_embedding
+    from rugbrain.embeddings import get_embedding, get_query_embedding
     from rugbrain.qdrant_store import QdrantVectorStore, build_search_filters
 
     if not q:
@@ -758,7 +758,7 @@ async def search_threat_intel(
         )
 
     try:
-        embedding = await get_embedding(q)
+        embedding = await get_query_embedding(q)
     except Exception as e:
         raise HTTPException(
             status_code=503,
@@ -981,7 +981,7 @@ async def search_multi(
           -H "X-API-Key: ..." \\
           -d '{"query":"flash loan attack","collections":["threat_intel_v2","scam_patterns"],"rerank":true}'
     """
-    from rugbrain.embeddings import get_embedding
+    from rugbrain.embeddings import get_embedding, get_query_embedding
     from rugbrain.qdrant_store import QdrantVectorStore
 
     q = body.query
@@ -1010,7 +1010,7 @@ async def search_multi(
         )
 
     try:
-        embedding = await get_embedding(q)
+        embedding = await get_query_embedding(q)
     except Exception as e:
         raise HTTPException(
             status_code=503,

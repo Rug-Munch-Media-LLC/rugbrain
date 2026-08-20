@@ -32,6 +32,16 @@ log = logging.getLogger(__name__)
 
 EMBEDDING_DIM: Final = 2560
 
+# Qwen3-Embedding query instruction template. The model was trained with an
+# instruction prefix on the QUERY side and plain text on the DOCUMENT side.
+# Embedding a raw query without the Instruct template measurably degrades
+# retrieval (roughly 1-5% on nDCG/recall for instruction-tuned embedding
+# models). Documents MUST stay raw; only query text gets this prefix.
+QUERY_INSTRUCT = (
+    "Instruct: Given a web search query, retrieve relevant passages that "
+    "answer the query\nQuery: {}"
+)
+
 # Embedding versioning (ADR-0007 compliance)
 # Stamped on every embedding so downstream consumers can migrate
 # when the model changes. Format: {model}:{version}:{dim}
@@ -41,8 +51,15 @@ EMBED_VERSION_STAMP = f"{EMBED_MODEL_NAME}:{EMBED_MODEL_VERSION}:{EMBEDDING_DIM}
 EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI build number
 # Backends
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+# Qwen3-Embedding-4B served by llama.cpp (OpenAI-compatible /embeddings).
+# QWEN_EMBED_URL is canonical; INFINITY_URL kept only as a legacy env fallback
+# so existing deployments upgrade without breaking.
+QWEN_EMBED_URL = os.getenv(
+    "QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+).rstrip("/")
+QWEN_EMBED_MODEL = os.getenv(
+    "RAG_EMBED_MODEL", os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+)
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 
@@ -60,8 +77,8 @@ def _int_reachable() -> bool:
     during early startup will be retried automatically. Set
     ``RAG_EMBED_NO_CACHE=1`` to force a fresh probe every time.
     """
-    probed = os.getenv("_INFINITY_PROBED")
-    probed_at = os.getenv("_INFINITY_PROBED_AT")
+    probed = os.getenv("_QWEN_PROBED")
+    probed_at = os.getenv("_QWEN_PROBED_AT")
     if (
         probed
         and not os.getenv("RAG_EMBED_NO_CACHE")
@@ -70,18 +87,18 @@ def _int_reachable() -> bool:
         and probed_at
         and (time.monotonic() - float(probed_at)) < 30.0
     ):
-        return os.getenv("_INFINITY_OK") == "1"
+        return os.getenv("_QWEN_OK") == "1"
     try:
         with httpx.Client(timeout=5.0) as c:
-            r = c.get(f"{INFINITY_URL}/health")
+            r = c.get(f"{QWEN_EMBED_URL}/health")
             ok = r.status_code == 200
     except Exception:
         ok = False
-    os.environ["_INFINITY_PROBED"] = "1"
-    os.environ["_INFINITY_PROBED_AT"] = str(time.monotonic())
-    os.environ["_INFINITY_OK"] = "1" if ok else "0"
+    os.environ["_QWEN_PROBED"] = "1"
+    os.environ["_QWEN_PROBED_AT"] = str(time.monotonic())
+    os.environ["_QWEN_OK"] = "1" if ok else "0"
     if not ok:
-        log.info("rag_int_unreachable url=%s", INFINITY_URL)
+        log.info("rag_int_unreachable url=%s", QWEN_EMBED_URL)
     return ok
 
 
@@ -99,7 +116,9 @@ def _resize(vec: list[float], dim: int) -> list[float]:
     return [float(x) for x in arr]
 
 
-async def _int_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+async def _int_embed(
+    text: str, dim: int = EMBEDDING_DIM, query: bool = False
+) -> list[float] | None:
     """Try Qwen3-Embedding-4B via the OpenAI-compatible /embeddings.
 
     Returns None on any failure.
@@ -109,10 +128,11 @@ async def _int_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
     for 38-90s, tripping the container healthcheck.
     """
     try:
+        payload_text = QUERY_INSTRUCT.format(text) if query else text
         async with httpx.AsyncClient(timeout=300.0) as c:
             r = await c.post(
-                f"{INFINITY_URL}/embeddings",
-                json={"model": INFINITY_MODEL, "input": [text[:8000]]},
+                f"{QWEN_EMBED_URL}/embeddings",
+                json={"model": QWEN_EMBED_MODEL, "input": [payload_text[:8000]]},
             )
             if r.status_code != 200:
                 return None
@@ -177,12 +197,12 @@ async def get_embedding(text: str) -> list[float]:
         embed_latency.observe(time.perf_counter() - t0)
 
 
-async def _get_embedding_impl(text: str) -> list[float]:
+async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
     """Core embedding resolution (separated for latency instrumentation)."""
 
     # Explicit backend override
     if _BACKEND == "int":
-        v = await _int_embed(text)
+        v = await _int_embed(text, query=query)
         if v is not None:
             return v
         raise RAGUnavailableError("int backend failed and hash fallback removed per T04")
@@ -196,7 +216,7 @@ async def _get_embedding_impl(text: str) -> list[float]:
     # Probe is sync (cached per process) — run off the event loop so a slow
     # first probe can never wedge the request handler.
     if await asyncio.to_thread(_int_reachable):
-        v = await _int_embed(text)
+        v = await _int_embed(text, query=query)
         if v is not None:
             return v
     v = await _openrouter_embed(text)
@@ -206,8 +226,40 @@ async def _get_embedding_impl(text: str) -> list[float]:
     raise RAGUnavailableError(
         "no embedding backend available (int unreachable, openrouter failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
-        f"Verify: INFINITY_URL={INFINITY_URL} qwen3-embedding-4b loaded?"
+        f"Verify: QWEN_EMBED_URL={QWEN_EMBED_URL} qwen3-embedding-4b loaded?"
     )
+
+
+async def get_embedding(text: str, query: bool = False) -> list[float]:
+    """Async embedding API. Returns 2560d float list.
+
+    Per T04: NO hash fallback. If both neural backends fail,
+    raises RAGUnavailableError. The RAG endpoint translates this to
+    HTTP 503 + {"status": "empty", "chunks": [], "message": ...}.
+
+    Set ``query=True`` for QUERY-side text — prepends the Qwen3
+    ``Instruct:`` template the model was trained with (documents stay raw).
+    """
+    if not text or not text.strip():
+        raise RAGUnavailableError("empty text input")
+
+    from rugbrain.metrics import embed_latency, embed_requests
+
+    embed_requests.inc()
+    t0 = time.perf_counter()
+    try:
+        return await _get_embedding_impl(text, query=query)
+    finally:
+        embed_latency.observe(time.perf_counter() - t0)
+
+
+async def get_query_embedding(query: str) -> list[float]:
+    """Embed a SEARCH QUERY with the Qwen3 ``Instruct:`` query template.
+
+    Use everywhere a user query is embedded for retrieval. Documents going
+    into collections must NOT use this — feed them raw via ``get_embedding``.
+    """
+    return await get_embedding(query, query=True)
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
