@@ -251,7 +251,16 @@ async def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    async with httpx.AsyncClient(timeout=900.0) as client:
+    # max_keepalive_connections=0 → fresh TCP connection per request.
+    # Qdrant (actix) closes idle keep-alive sockets (~75s) while our batches
+    # take 50+s per embed — reusing a half-closed socket causes CLOSE-WAIT
+    # hangs that freeze the whole migration. Fresh conns cost ~1ms each here.
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient(
+        timeout=900.0,
+        limits=_httpx.Limits(max_keepalive_connections=0, max_connections=50),
+    ) as client:
         cols = [
             c["name"]
             for c in (await client.get(f"{LEGACY}/collections")).json()["result"]["collections"]
