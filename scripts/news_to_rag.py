@@ -36,8 +36,8 @@ Run (host or inside a container with Postgres/Qdrant/reachable):
 Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
   QDRANT_URL   (default http://127.0.0.1:6334, falls back to 127.0.0.1)
-  INFINITY_URL (default http://172.22.0.1:8004/v1, falls back to 127.0.0.1)
-  RAG_INFINITY_EMBED_MODEL (default qwen3-embedding-4b)
+  EMBEDDER_URL (default http://172.22.0.1:8004/v1, falls back to 127.0.0.1)
+  RAG_EMBED_MODEL (default qwen3-embedding-4b)
 """
 
 from __future__ import annotations
@@ -258,7 +258,7 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     )
     _candidates = _resolve_base(
         "",
-        os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
+        os.getenv("EMBEDDER_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")),
         "http://172.22.0.1:8004/v1",
     )
 
@@ -617,7 +617,7 @@ def main() -> None:
         help="max chunks per run (default 4096; 0 = unlimited)",
     )
     parser.add_argument(
-        "--model", default=os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+        "--model", default=os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b"))
     )
     parser.add_argument(
         "--oldest-first",

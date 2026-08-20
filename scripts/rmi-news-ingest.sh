@@ -87,13 +87,13 @@ if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-      INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+      EMBEDDER_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
       "$RAG_PYTHON" scripts/news_to_rag.py)
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-      INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+      EMBEDDER_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
       python3 scripts/news_to_rag.py)
 fi
 

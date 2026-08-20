@@ -177,26 +177,6 @@ async def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] 
         return None
 
 
-async def get_embedding(text: str) -> list[float]:
-    """Async embedding API. Returns 2560d float list.
-
-    Per T04: NO hash fallback. If both neural backends fail,
-    raises RAGUnavailableError. The RAG endpoint translates this to
-    HTTP 503 + {"status": "empty", "chunks": [], "message": ...}.
-    """
-    if not text or not text.strip():
-        raise RAGUnavailableError("empty text input")
-
-    from rugbrain.metrics import embed_latency, embed_requests
-
-    embed_requests.inc()
-    t0 = time.perf_counter()
-    try:
-        return await _get_embedding_impl(text)
-    finally:
-        embed_latency.observe(time.perf_counter() - t0)
-
-
 async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
     """Core embedding resolution (separated for latency instrumentation)."""
 
