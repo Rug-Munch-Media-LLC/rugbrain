@@ -32,7 +32,7 @@
                                            ▼
                     ┌─────────────────────────────────────────────┐
                     │  Qdrant (rmi-qdrant:6333) · Redis (indicator │
-                    │  sets + doc cache) · Ollama BGE-M3 (1024d)   │
+                    │  sets + doc cache) · Ollama BGE-M3 (2560d)   │
                     └──────────────────────┬──────────────────────┘
                                            ▼
                     ┌─────────────────────────────────────────────┐
@@ -42,7 +42,7 @@
 ```
 
 **Non-negotiables** (inherited from ARCHITECTURE-V2.md, binding):
-1. ONE embedding stack: BGE-M3 (1024d) via Ollama `/api/embed`. No `sentence-transformers`/`torch` in any ingest path (the local model in `scripts/ingest_threats.py` is the anti-pattern; that script is superseded).
+1. ONE embedding stack: BGE-M3 (2560d) via Ollama `/api/embed`. No `sentence-transformers`/`torch` in any ingest path (the local model in `scripts/ingest_threats.py` is the anti-pattern; that script is superseded).
 2. ONE store: Qdrant. No ChromaDB, no numpy ANN, no Redis vectors.
 3. ONE search path: dense + keyword + RRF (`retrieval.py` per v2). The fake `splade_bm25.py` and fake `cross_encoder.py` must NOT be extended; they are slated for deletion by v2.
 4. Idempotent by construction: deterministic UUIDv5 doc IDs + `content_hash`; reruns insert nothing new.
@@ -58,9 +58,9 @@ The original brief targets ~130K documents. The single most important design dec
 | Layer | What | Size | Embedding needed? |
 |---|---|---|---|
 | **Indicators** | phishing domains, scam addresses (exact-match keys) | ~113K | **NO** — cosine similarity between two domains is noise. Keyword (sparse) vector only, ~1–5 non-zero terms each. |
-| **Knowledge** | SWC weaknesses, PoC writeups, hack reports, patterns | ~2K | **YES** — 1024d BGE-M3 dense + BM25 sparse |
+| **Knowledge** | SWC weaknesses, PoC writeups, hack reports, patterns | ~2K | **YES** — 2560d BGE-M3 dense + BM25 sparse |
 
-Embedding math (measured 2026-07-31 calibration, 4-CPU Ollama, bge-m3):
+Embedding math (measured 2026-07-31 calibration, 4-CPU Ollama, qwen3-embedding-4b):
 - Short text (≤600 chars): batch 20 → ~3.5s/doc
 - Long text: batch 8
 - **~2,000 knowledge docs ≈ 1–2 hours one-time.** Ongoing (weekly) adds are tens of docs.
@@ -124,7 +124,7 @@ This is what keeps "most knowledgeable in existence" and "doesn't bog down the s
 
 ### 4.2 Knowledge layer (`threat_intel`, `hacks`) — dense + sparse
 - Doc per weakness / PoC / hack report / pattern.
-- Vector: dense 1024d BGE-M3 (L2-normalized, via Ollama `/api/embed`, existing batch helper `_embed_batch`: 20 short / 8 long) **+** BM25 sparse.
+- Vector: dense 2560d BGE-M3 (L2-normalized, via Ollama `/api/embed`, existing batch helper `_embed_batch`: 20 short / 8 long) **+** BM25 sparse.
 - Chunking: reuse `_chunk_text` (2000 chars, 100 overlap) from `seed_qdrant_collections.py` for articles >2000 chars; Solidity PoCs use `src/rugbrain/solidity_chunker.py`. Chunks share `parent_doc_id` + `chunk_index` in payload.
 
 ---
@@ -185,7 +185,7 @@ System fields (all collections):
 | `content_hash` | string | yes | sha256 of normalized content → dedup key |
 | `schema_version` | int | yes | `1` for this strategy |
 | `ingested_at` | ISO-8601 | yes | |
-| `embedding_model` | string | yes | `bge-m3` |
+| `embedding_model` | string | yes | `qwen3-embedding-4b` |
 | `source` | string | yes | `rekt_news`, `defihacklabs`, `swc`, `slowmist`, `scamsniffer`, `metamask`, … |
 | `source_url` | string | no | |
 | `collection` | string | yes | existing convention |
@@ -268,7 +268,7 @@ Contract (implementer's choice of internals; must satisfy):
 5. Optional stage: LLM-based re-rank on top-5 for chat answers (already possible via API); no local cross-encoder.
 
 ### 8.3 Reranker (P2, optional, `[decision]`)
-The existing `cross_encoder.py` is a fake (bi-encoder cosine) and must NOT be used. A real reranker (`bge-reranker-v2-m3` via Ollama, ~1.2GB) is **deferred**: the Ollama container is capped at 4GB and already holds bge-m3 (1.24GB). Do not add it until (a) the news-ingest pileup is fixed and (b) memory headroom is confirmed by `ollama ps`. RRF + payload filters deliver the structured-query win without it. Revisit when hardware allows; flag in ARCHITECTURE-V2 if adopted.
+The existing `cross_encoder.py` is a fake (bi-encoder cosine) and must NOT be used. A real reranker (`bge-reranker-v2-m3` via Ollama, ~1.2GB) is **deferred**: the Ollama container is capped at 4GB and already holds qwen3-embedding-4b (1.24GB). Do not add it until (a) the news-ingest pileup is fixed and (b) memory headroom is confirmed by `ollama ps`. RRF + payload filters deliver the structured-query win without it. Revisit when hardware allows; flag in ARCHITECTURE-V2 if adopted.
 
 ---
 
@@ -357,7 +357,7 @@ Total: ~8 steps, all S–M. No new services. No new MCPs.
 
 ## 13. Verification & Acceptance
 
-1. `hacks` collection exists with named `dense`+`sparse` vectors, 1024-dim Cosine, payload indexes present (`GET /collections/hacks`).
+1. `hacks` collection exists with named `dense`+`sparse` vectors, 2560-dim Cosine, payload indexes present (`GET /collections/hacks`).
 2. Rebuild scripts are idempotent: run twice → second run inserts 0 (log shows `all N docs already present`).
 3. `hacks` ≥ 300 docs; `threat_intel` ≥ 40 docs; `scam_intel` ≥ 100K docs (full MetaMask list, not the 300 sample).
 4. DeFiHackLabs seed: ≥1 doc whose `attack_vector` matches its SWC-classified vector, and `source_url` points at the repo.
@@ -379,7 +379,7 @@ Total: ~8 steps, all S–M. No new services. No new MCPs.
 | Source fetch 404/timeout | Fail-soft: staged cache fallback; 0 docs from that source; exit 0 with warning |
 | Ollama down / embed timeout | Skip batch, log, exit non-zero but **no partial payload corruption** (batch-level skip, existing pattern); next run retries idempotently |
 | GitHub API rate limit | Never used for bulk: shallow `git clone`/`git pull` + `raw.githubusercontent.com` instead |
-| Ollama OOM | Batch sizes stay at 20 short / 8 long; single bge-m3 model; never run local `sentence-transformers` |
+| Ollama OOM | Batch sizes stay at 20 short / 8 long; single qwen3-embedding-4b model; never run local `sentence-transformers` |
 | Timer overlap | `flock -n` everywhere |
 | Duplicate/updated content | `content_hash` + deterministic doc_id upsert (newest wins) |
 | Permanence key missing | Script refuses to run (fail-closed) and alerts; never writes plaintext snapshots by default (`--no-encrypt` exists for staging only) |

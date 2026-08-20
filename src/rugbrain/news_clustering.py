@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 CLUSTER_THRESHOLD = float(os.getenv("NEWS_CLUSTER_THRESHOLD", "0.72"))
 
 #: Embedding model dimension (Qwen3-Embedding-4B). Aligned with rugbrain.embeddings.
-EMBED_DIM = 1024
+EMBED_DIM = 2560
 
 #: Max sources kept in a single story (guard against runaway clusters).
 MAX_STORY_SOURCES = int(os.getenv("NEWS_MAX_STORY_SOURCES", "25"))

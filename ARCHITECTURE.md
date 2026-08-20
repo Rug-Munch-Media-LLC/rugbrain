@@ -82,14 +82,14 @@ in `src/app/` (currently being restored — see §7).
                        ▼                       ▼
         ┌──────────────────────┐   ┌──────────────────────────┐
         │  Qdrant (vector)     │   │  Redis (doc store +      │
-        │  1024-dim BGE-M3     │   │  warm numpy-cosine scan)  │
+        │  2560-dim BGE-M3     │   │  warm numpy-cosine scan)  │
         │  Cosine distance     │   │  + semantic cache + TTLs  │
         └──────────────┬───────┘   └──────────────────────────┘
                        │
                        ▼
         ┌──────────────────────────────────────────────────────┐
         │                 EMBEDDING LAYER                       │
-        │  BGE-M3 (primary, Infinity, 1024-dim)                 │
+        │  BGE-M3 (primary, Infinity, 2560-dim)                 │
         │  nomic-embed-text (fallback, 768-dim, backend chain)  │
         │  legacy chain: OpenRouter → LocalBGE → HF (CryptoEmbedder)│
         └──────────────┬───────────────────────────────────────┘
@@ -129,14 +129,14 @@ in `src/app/` (currently being restored — see §7).
         ┌───────────┴────────┐   ┌────────┴─────────────┐
         │  Qdrant             │   │  Redis               │
         │  (vector store)     │   │  (warm store)        │
-        │  1024-dim BGE-M3    │   │  docs rag:{c}:{id}   │
+        │  2560-dim BGE-M3    │   │  docs rag:{c}:{id}   │
         │  Cosine distance    │   │  idx rag:idx:{c}     │
         │  3 collections exist│   │  numpy cosine scan   │
         └───────────┬────────┘   └────────┬─────────────┘
                     │                     │
         ┌───────────┴─────────────────────┴──────────────┐
         │              EMBEDDING LAYER                    │
-        │  PRIMARY:  bge-m3 via Infinity, 1024-dim        │
+        │  PRIMARY:  qwen3-embedding-4b via Infinity, 2560-dim        │
         │  FALLBACK: nomic-embed-text via Infinity, 768-dim │
         │  (legacy: OpenRouter → LocalBGE → HF)           │
         └───────────┬─────────────────────────────────────┘
@@ -161,13 +161,13 @@ in `src/app/` (currently being restored — see §7).
 | rugbrain API | `rugbrain-api` | 8012 | FastAPI service: search, scam-check, health |
 | Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
-| Infinity | `infinity-rag` | 8001 | Embedding inference (BAAI/bge-m3, 1024-dim) |
+| Infinity | `infinity-rag` | 8001 | Embedding inference (qwen3-embedding-4b, 2560-dim) |
 | Qwen3 Reranker | `qwen-reranker.service` | 8003 | Cross-encoder reranking — Qwen3-Reranker-8B Q4_K_M (llama.cpp `--rerank`, systemd on host) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
 | rmi-codebase-mcp | external | — | Code-pattern embeddings (Qdrant) |
 
-**Qdrant connection fallback:** `QDRANT_URL` env (default `http://rmi-qdrant:6333`)
-→ `http://127.0.0.1:6333` → `http://localhost:6333`. First responsive URL is
+**Qdrant connection fallback:** `QDRANT_URL` env (default `http://rmi-qdrant-v2:6333`)
+→ `http://127.0.0.1:6334` → `http://127.0.0.1:6334`. First responsive URL is
 cached for the process lifetime (`qdrant_store._resolve_qdrant_url`).
 
 ---
@@ -217,27 +217,27 @@ use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 
 | Setting | Value |
 |---------|-------|
-| Primary model | `BAAI/bge-m3` (1024-dim, Infinity /embeddings) |
+| Primary model | `qwen3-embedding-4b` (2560-dim, Infinity /embeddings) |
 | Fallback model | `BAAI/bge-small-en-v1.5` (384-dim) / OpenRouter — used by rmi-backend chain |
 | Container | `infinity-rag` (michaelfeil/infinity) on port 8001 |
 | Concurrency | Infinity native batching (`/embeddings` input arrays) |
-| Context | 8,000-char truncation per input; 1024-dim output |
+| Context | 8,000-char truncation per input; 2560-dim output |
 | Keep-alive | n/a (stateless HTTP server) |
 
 **Embedding chain (`embeddings.py`)** — strict two-tier, **no hash fallback**
 (per T04: hash embeddings returned confidently-wrong results and were removed;
 when both backends fail the API raises `RAGUnavailableError` → HTTP 503):
 
-1. **Infinity BAAI/bge-m3** — `POST /embeddings` (OpenAI-compatible) with
+1. **Infinity qwen3-embedding-4b** — `POST /embeddings` (OpenAI-compatible) with
    `input` truncated to 8,000 chars, L2-normalized to 1024 dims.
-2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 1024-dim resize.
+2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 2560-dim resize.
 
 `RAG_EMBED_BACKEND` env can force `infinity` or `openrouter`; default `auto`
 (probe Infinity once per process, cache result).
 
 **Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — still used
 by search/ingest code paths: Infinity → OpenRouter → LocalBGE
-(`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`BAAI/bge-m3`) → hash
+(`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`qwen3-embedding-4b`) → hash
 (last resort, deprecated). Specialized heads: `embed_token_scam`,
 `embed_wallet`, `embed_scam_pattern`, `embed_news`, `embed_contract`
 (`ContractCodeEmbedder` — 128-dim structural + 192-dim semantic = 320-dim).
@@ -283,7 +283,7 @@ Two live mechanisms + seed pipelines:
 
 **Scanner → RAG (live, currently idle):**
 - `scanner_subscriber.py` — Redis pub/sub on `rmi:rag:ingest`; reconnects with
-  5 s backoff; on message: build text → `get_embedding()` (bge-m3) →
+  5 s backoff; on message: build text → `get_embedding()` (qwen3-embedding-4b) →
   `QdrantVectorStore.insert()` → `threat_intel`.
 - `scanner_poller.py` — LPOP polling loop on `rmi:rag:findings_queue` (1 s
   sleep; non-blocking LPOP is used because DragonflyDB has known issues with
@@ -294,13 +294,13 @@ Two live mechanisms + seed pipelines:
 
 **Seed pipelines (for initially-empty collections):**
 - `scripts/seed_threat_intel.py` — canonical seeder: 13 static vulnerability
-  patterns + 6 historical hacks + Redis seed docs, embedded with **bge-m3
-  (1024-dim)**, idempotent (skips existing UUIDs). Invoked via
+  patterns + 6 historical hacks + Redis seed docs, embedded with **qwen3-embedding-4b
+  (2560-dim)**, idempotent (skips existing UUIDs). Invoked via
   `scripts/ingest_threats.py` or `docker compose run --rm rag-ingest`
   (weekly systemd timer).
 - `scripts/seed_all.py` — broader seeder (threat_intel + rmi_agent_memory +
   rmi_community + optional backend findings). **Note:** still defaults to
-  `qwen3-embed:4b` / 2560-dim — stale vs. the bge-m3 migration; being
+  `qwen3-embed:4b` / 2560-dim — stale vs. the qwen3-embedding-4b migration; being
   superseded by `seed_threat_intel.py`.
 
 **Nightly news/social (3 AM UTC, `rag_ingestion.py`):** pulls DataBus
@@ -348,7 +348,7 @@ the API runs open (dev mode — a startup warning is logged).
 | POST | `/api/v1/rag/v2/search` | Semantic/hybrid search | `SearchRequest {query, collection="scam_intel", top_k=5, min_similarity=0, filters}` → `SearchResponse` with hits + scores |
 | POST | `/api/v1/rag/v2/ingest` | Document ingestion | `IngestRequest` → `IngestResult {doc_id, collection, status}` |
 | POST | `/api/v1/rag/v2/feedback` | Scanner→RAG feedback | Records feedback, ingests known scam into `known_scams` |
-| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `infinity:BAAI/bge-m3`) |
+| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `infinity:qwen3-embedding-4b`) |
 | POST | `/api/v1/rag/v2/bulk-ingest` | Batch ingest | max 500 items/call into one collection |
 
 ### 4.2 rugbrain service (port 8012)
@@ -357,7 +357,7 @@ the API runs open (dev mode — a startup warning is logged).
 |--------|------|--------|---------|
 | GET | `/health` | LIVE | Liveness: Qdrant, Redis, subscriber/poller state |
 | GET | `/ready` | LIVE | Readiness |
-| GET | `/api/v1/search` | LIVE | Semantic search over `threat_intel` (bge-m3 1024-dim, `min_similarity=0.4`) |
+| GET | `/api/v1/search` | LIVE | Semantic search over `threat_intel` (qwen3-embedding-4b 2560-dim, `min_similarity=0.4`) |
 | GET | `/api/v1/rag/v2/scam-check` | LIVE | Address scam check. Params: `address`, `chain` (default ethereum), `limit`, `tier=free\|pro`. Three-pillar search over `threat_intel` + `rmi_community`; maps max score + critical/high signal count → `scam_risk: high\|medium\|low\|unknown` + `confidence`. Rate-limited: free 5 req/hr, pro 100/hr via `X-Device-Id` or IP (`429` + `X-RateLimit-Reset`) |
 | POST | `/api/v1/rag/investigate` | ⚠️ WIP — currently 500 | Deep investigation narratives (`src/app/investigation_narratives.py`, restore in progress) |
 | POST | `/api/v1/rag/confidence` | ⚠️ WIP — currently 500 | Confidence scoring (`src/app/confidence.py`, restore in progress) |
@@ -383,7 +383,7 @@ rmi-backend UnifiedTokenScanner (high/critical risk)
   → Redis PUBLISH rmi:rag:ingest          (subscriber path)
   → Redis LPUSH  rmi:rag:findings_queue   (poller path, Dragonfly-safe)
   → scanner_subscriber / scanner_poller
-  → get_embedding()  (bge-m3, 1024-dim)
+  → get_embedding()  (qwen3-embedding-4b, 2560-dim)
   → QdrantVectorStore.insert() → Qdrant threat_intel   (id: scanner_{chain}_{addr})
   → searchable via GET /api/v1/search and /api/v1/rag/v2/scam-check
 ```
@@ -475,8 +475,8 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 
 ### 6.4 Scaling
 - **Infinity:** stateless OpenAI-compatible server on port 8001; concurrency
-  bounded by Infinity's native batching over `/embeddings` (BAAI/bge-m3
-  1024-dim). Cross-encoder reranking is served separately by the
+  bounded by Infinity's native batching over `/embeddings` (qwen3-embedding-4b
+  2560-dim). Cross-encoder reranking is served separately by the
   self-hosted Qwen3-Reranker-8B (llama.cpp `--rerank`, :8003).
 - **Qdrant:** single node, collections created with default (unsharded)
   config; sharding/replication not configured — revisit when collections
@@ -493,7 +493,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    `rmi_community` exist with 0 points; seeding is in progress
    (`scripts/seed_threat_intel.py` — untracked WIP being run now).
 2. **Configured collections missing** — `scanner`, `wallet`, `news`,
-   `research`, `scams` don't exist in Qdrant; must be created at 1024-dim.
+   `research`, `scams` don't exist in Qdrant; must be created at 2560-dim.
 3. **Scanner ingestion idle** — subscriber/poller running but nothing
    publishes to Redis queues (`ingested_count: 0`).
 4. **rugbrain-api 500s** — `/api/v1/rag/investigate` and
@@ -503,7 +503,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    repo — packaging/PYTHONPATH must be fixed.
 5. ~~Qdrant nightly backup failing (missing R2 credentials)~~ — fixed by the
    R2→B2 migration (2026-07-31); snapshots now upload to B2.
-6. **Embedder fallback latency** — bge-m3 (1024-dim) is primary; nomic-embed-text
+6. **Embedder fallback latency** — qwen3-embedding-4b (2560-dim) is primary; nomic-embed-text
    (768-dim) is the backend fallback. Cross-model dimension mismatch is a real
    risk if a single collection mixes dims — collections are created per
    first-write dimension.
@@ -511,7 +511,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    (2560-dim); `README-RAG-API.md` still documents nomic-embed-text as primary.
 8. **Code patterns in Qdrant (migration)** — contract-code embeddings now
    migrate from the legacy ChromaDB store into rmi-codebase-mcp Qdrant
-   (bge-m3 1024-dim via Infinity, `security_patterns` collection).
+   (qwen3-embedding-4b 2560-dim via Infinity, `security_patterns` collection).
 9. **Test/quality debt** — 1 failing test (`test_qdrant_store.py`), coverage
    ~10% (60% threshold unenforced), 42 ruff errors, `make lint`/`make test`
    not green.
@@ -519,10 +519,10 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 ### 7.2 Roadmap
 
 **P0 — Make it real (in progress)**
-- [ ] Finish seeding `threat_intel` (+ agent memory, community) with bge-m3 at
-      1024-dim; verify via `/api/v1/rag/v2/stats`
+- [ ] Finish seeding `threat_intel` (+ agent memory, community) with qwen3-embedding-4b at
+      2560-dim; verify via `/api/v1/rag/v2/stats`
 - [ ] Recreate configured collections (`scanner`, `wallet`, `news`, `research`,
-      `scams`) at 1024-dim
+      `scams`) at 2560-dim
 - [ ] Wire rmi-backend scanner → Redis publish so subscriber/poller
       `ingested_count` moves
 - [x] Fix Qdrant nightly backup (R2→B2 migration); verify snapshot restore
@@ -543,7 +543,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
       formalize graph store)
 - [ ] Image pipeline: multimodal + logo-theft DB (`multimodal.py` exists)
 - [ ] Contract-code embeddings in Qdrant (`ContractCodeEmbedder` 320-dim
-      combined structural+semantic); align rmi-codebase-mcp to bge-m3
+      combined structural+semantic); align rmi-codebase-mcp to qwen3-embedding-4b
 - [ ] Metrics: query latency, hit rate, collection-size gauges in Prometheus
       + Grafana
 
@@ -553,12 +553,12 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `QDRANT_URL` | `http://rmi-qdrant:6333` | Qdrant REST endpoint |
+| `QDRANT_URL` | `http://rmi-qdrant-v2:6333` | Qdrant REST endpoint |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `rmi-redis` / `6379` | Redis (DragonflyDB) connection |
-| `INFINITY_URL` | `http://infinity-rag:8001` | Infinity embedding/rerank endpoint |
-| `RAG_INFINITY_EMBED_MODEL` | `BAAI/bge-m3` | Primary embedder |
+| `INFINITY_URL` | `http://172.22.0.1:8004/v1` | Infinity embedding/rerank endpoint |
+| `RAG_INFINITY_EMBED_MODEL` | `qwen3-embedding-4b` | Primary embedder |
 | `RAG_EMBED_BACKEND` | `auto` | `auto` \| `infinity` \| `openrouter` |
-| `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `bge-m3` / `1.1` | Embedding version stamp (ADR-0007) |
+| `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `qwen3-embedding-4b` / `1.1` | Embedding version stamp (ADR-0007) |
 | `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
 | `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |
 | `RMI_RAG_API_KEY` | (unset → open) | X-API-Key auth for the rugbrain API |

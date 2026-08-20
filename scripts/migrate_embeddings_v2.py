@@ -23,7 +23,6 @@ import logging
 import os
 import sys
 import time
-import traceback
 from pathlib import Path
 
 import httpx
@@ -35,7 +34,7 @@ logger = logging.getLogger("reembed")
 LEGACY = os.getenv("LEGACY_QDRANT", "http://127.0.0.1:6333")
 V2 = os.getenv("V2_QDRANT", "http://127.0.0.1:6334")
 EMBEDDER = os.getenv("EMBEDDER_URL", "http://172.22.0.1:8004")
-STATE_FILE = Path(os.getenv("STATE_FILE", "/tmp/opencode/reembed_state.json"))
+STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rmi-rag/reembed_state.json"))
 
 # Field priority mirroring what ingestion embeds (content first).
 TEXT_FIELDS = ("content", "text", "chunk_text", "title", "summary", "description", "name")
@@ -125,7 +124,8 @@ async def migrate_collection(
     skip_sparse: bool = False,
     concurrent: int = 1,
 ) -> dict:
-    """Re-embed one collection. Concurrency not yet implemented (sequential loop)."""
+    """Re-embed one collection. Sequential per collection; collections run
+    concurrently via asyncio.gather in main() (matches llama.cpp --parallel)."""
     info = (await client.get(f"{LEGACY}/collections/{name}")).json()["result"]
     total = info.get("points_count", 0)
     done = state.get(name, {}).get("done", 0)
@@ -162,47 +162,60 @@ async def migrate_collection(
             ids.append(p["id"])
 
         if texts:
-            try:
-                vecs = await _embed_batch(client, texts)
-                points_to_upsert = []
-                for i, vec in enumerate(vecs):
-                    point = {"id": ids[i], "payload": payloads[i]}
-                    vector: dict = {"dense": vec}
-                    if supports_sparse and not skip_sparse:
-                        sp = await _sparse_for(texts[i])
-                        if sp is not None:
-                            vector["bm25"] = sp
-                    point["vector"] = vector
-                    points_to_upsert.append(point)
-                # Batch upsert: all points in one PUT
-                retries = 3
-                for attempt in range(retries):
-                    try:
-                        put = await client.put(
-                            f"{V2}/collections/{name}/points",
-                            json={"points": points_to_upsert},
-                            timeout=120.0,
-                        )
-                        put.raise_for_status()
+            # Process batch with retry/backoff — NEVER advance past a failed
+            # batch. A migration that silently skips data is worse than a slow
+            # one: offset only moves when the batch is actually upserted.
+            while True:
+                try:
+                    vecs = await _embed_batch(client, texts)
+                    points_to_upsert = []
+                    for i, vec in enumerate(vecs):
+                        point = {"id": ids[i], "payload": payloads[i]}
+                        vector: dict = {"dense": vec}
+                        if supports_sparse and not skip_sparse:
+                            sp = await _sparse_for(texts[i])
+                            if sp is not None:
+                                vector["bm25"] = sp
+                        point["vector"] = vector
+                        points_to_upsert.append(point)
+                    # Batch upsert: all points in one PUT (3 attempts)
+                    put_ok = False
+                    for attempt in range(3):
+                        try:
+                            put = await client.put(
+                                f"{V2}/collections/{name}/points",
+                                json={"points": points_to_upsert},
+                                timeout=120.0,
+                            )
+                            put.raise_for_status()
+                            put_ok = True
+                            break
+                        except Exception as e:
+                            if attempt < 2:
+                                logger.warning(
+                                    "upsert_retry %d/3 %s offset=%d: %s",
+                                    attempt + 1,
+                                    name,
+                                    offset,
+                                    e,
+                                )
+                                await asyncio.sleep(5 * (attempt + 1))
+                            else:
+                                raise
+                    if put_ok:
                         stats["upserted"] += len(points_to_upsert)
                         offset += len(points)
-                        break
-                    except Exception as e:
-                        if attempt < retries - 1:
-                            logger.warning(
-                                "retry %d/%d offset=%d: %s\n%s",
-                                attempt + 1, retries, offset, e, traceback.format_exc()
-                            )
-                            await asyncio.sleep(5 * (attempt + 1))
-                        else:
-                            raise
-            except Exception as e:
-                logger.warning(
-                    "batch_failed %s offset=%d: %s\n%s",
-                    name, offset, e, traceback.format_exc()
-                )
-                stats["failed"] += len(texts)
-                offset += len(points)  # skip failed batch, don't loop forever
+                        break  # batch fully committed — move on
+                except Exception as e:
+                    wait = 15
+                    logger.error(
+                        "batch_retry %s offset=%d: %s — retrying SAME batch in %ds (never skipping)",
+                        name,
+                        offset,
+                        e,
+                        wait,
+                    )
+                    await asyncio.sleep(wait)
 
         state.setdefault(name, {})["done"] = offset
         state[name]["cursor"] = cursor
@@ -212,10 +225,15 @@ async def migrate_collection(
             eta = (total - offset) / max(rate, 0.01)
             logger.info(
                 "%s %d/%d (%.0f%%) upserted=%d no_text=%d failed=%d rate=%.1f/s eta=%.0fm",
-                name, offset, total,
+                name,
+                offset,
+                total,
                 100 * offset / total,
-                stats["upserted"], stats["no_text"], stats["failed"],
-                rate, eta / 60,
+                stats["upserted"],
+                stats["no_text"],
+                stats["failed"],
+                rate,
+                eta / 60,
             )
             if limit and offset >= limit:
                 logger.info("%s: hit --limit %d, stopping", name, limit)
@@ -241,7 +259,7 @@ async def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    async with httpx.AsyncClient(timeout=300.0) as client:
+    async with httpx.AsyncClient(timeout=900.0) as client:
         cols = [
             c["name"]
             for c in (await client.get(f"{LEGACY}/collections")).json()["result"]["collections"]
@@ -273,13 +291,18 @@ async def main() -> int:
             logger.error("embedder unreachable: %s", e)
             return 2
 
-        summary = []
-        for c in cols:
-            summary.append(
-                await migrate_collection(
+        # Run collections concurrently (semaphore caps in-flight embed
+        # requests at llama.cpp --parallel slots). State file is written
+        # per-collection, so parallel collections never clobber each other.
+        sem = asyncio.Semaphore(max(1, args.concurrent))
+
+        async def _run(c: str) -> dict:
+            async with sem:
+                return await migrate_collection(
                     client, c, state, args.batch, args.limit, args.skip_sparse, args.concurrent
                 )
-            )
+
+        summary = await asyncio.gather(*(_run(c) for c in cols))
         logger.info("MIGRATION COMPLETE: %s", json.dumps(summary))
     return 0
 

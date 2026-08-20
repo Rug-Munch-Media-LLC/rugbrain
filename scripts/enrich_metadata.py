@@ -25,7 +25,7 @@ Usage:
     python scripts/enrich_metadata.py --fetch-urls --limit 10   # hacks only
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
   - httpx
 """
 
@@ -54,7 +54,7 @@ async def scroll_points(
     client: httpx.AsyncClient, collection: str, limit: int | None = None
 ) -> list[dict[str, Any]]:
     """Scroll all points in a collection (payload only, no vectors)."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     points: list[dict[str, Any]] = []
     offset: str | None = None
     while True:
@@ -100,7 +100,7 @@ async def _set_payload(
     client: httpx.AsyncClient, collection: str, point_id: str, payload: dict[str, Any]
 ) -> bool:
     """Set the full payload for one point (per-point set_payload API)."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     r = await client.post(
         f"{qdrant_url}/collections/{collection}/points/payload",
         json={"payload": payload, "points": [point_id]},

@@ -11,7 +11,7 @@ returns HTTP 500 and the RSS paths are gone, so RSS-based consumers like
 DeFiLlama covers the same incident universe with a maintained, structured
 API.
 
-Each hack is embedded (1024-dim bge-m3 via Infinity) and upserted into
+Each hack is embedded (2560-dim qwen3-embedding-4b via Infinity) and upserted into
 ``threat_intel_v2`` (dense + BM25 sparse hybrid — the REAL collection;
 the legacy ``threat_intel`` name was migrated away and no alias exists, so
 writing to it would create an empty fragment) with canonical filterable
@@ -32,8 +32,8 @@ Usage:
     python scripts/ingest_defillama_hacks.py            # full 600+ history
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 
@@ -62,7 +62,7 @@ DEFILLAMA_HACKS_API = "https://api.llama.fi/hacks"
 COLLECTION = "threat_intel_v2"  # real hybrid collection (dense + BM25 sparse)
 SOURCE = "defillama_hacks"
 SOURCE_URL = "https://defillama.com/hacks"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 REQUEST_TIMEOUT = 60.0
 
 # keyword → canonical attack vector (mirrors ingest_scam_knowledge._CONTENT_VECTORS)
@@ -239,7 +239,7 @@ async def run(dry_run: bool, limit: int | None, days: int | None) -> dict[str, A
         # QdrantVectorStore lazily creates its own httpx client on first
         # use; insert() probes the collection config and writes named dense
         # + BM25 sparse automatically (hybrid threat_intel_v2).
-        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://localhost:6333"))
+        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         for doc in docs:
             vec = doc.get("vector")
             if not vec:

@@ -20,8 +20,8 @@ Usage:
     python scripts/verify_contract_knowledge.py --analyze 0xdAC17F958D2ee523a2206206994597C13D831ec7 --chain ethereum
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

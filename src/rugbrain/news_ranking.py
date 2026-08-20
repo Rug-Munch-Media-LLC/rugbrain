@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 NEWS_V2_COLLECTION = os.getenv("NEWS_V2_COLLECTION", "news_v2")
-EMBED_DIM = 1024
+EMBED_DIM = 2560
 
 #: Composite score weights (must sum to 1.0).
 RANK_WEIGHTS: dict[str, float] = {

@@ -16,7 +16,7 @@ live-fetched audit references:
 
 Every point is tagged with coding metadata (ecosystem=general,
 knowledge_type=checklist|swc_entry|hack_analysis, topic, source_url) and
-embedded with 1024-dim bge-m3. Deterministic point IDs → idempotent re-runs.
+embedded with 2560-dim qwen3-embedding-4b. Deterministic point IDs → idempotent re-runs.
 
 Usage:
     python scripts/ingest_security_guides.py --dry-run
@@ -24,8 +24,8 @@ Usage:
     python scripts/ingest_security_guides.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

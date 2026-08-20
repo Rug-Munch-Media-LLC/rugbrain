@@ -8,8 +8,8 @@ ownership centralization, and hidden fee structures.
 
 The script ships with a curated dataset (``RUGDOC_KNOWLEDGE`` below) so it
 works fully offline, and can additionally fetch RugDoc's public token
-audit pages when the site is reachable. Each entry is embedded (1024-dim
-bge-m3) and upserted into ``known_scams`` with canonical metadata
+audit pages when the site is reachable. Each entry is embedded (2560-dim
+qwen3-embedding-4b) and upserted into ``known_scams`` with canonical metadata
 (category, severity, ecosystem, source, source_url).
 
 Usage:
@@ -18,8 +18,8 @@ Usage:
     python scripts/ingest_rugdoc.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

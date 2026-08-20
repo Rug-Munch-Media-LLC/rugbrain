@@ -10,7 +10,7 @@ that reproduces a real DeFi exploit. For every ``.sol`` file we:
      the incident metadata in ``past/*/README.md``), vulnerability description
      (leading comments), and the raw code snippet.
   2. Chunk large files into 500-char windows with 50-char overlap.
-  3. Embed each chunk with bge-m3 (1024-dim, Infinity /embeddings).
+  3. Embed each chunk with qwen3-embedding-4b (2560-dim, Infinity /embeddings).
   4. Upsert into the ``threat_intel_v2`` collection with metadata:
      category, severity, ecosystem=EVM, source=defihacklabs, source_url.
 
@@ -23,8 +23,8 @@ Usage:
     python scripts/ingest_defihacklabs.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - git, httpx, numpy
 """
 
@@ -51,7 +51,7 @@ logger = logging.getLogger("ingest_defihacklabs")
 REPO_URL = "https://github.com/SunWeb3Sec/DeFiHackLabs.git"
 REPO_DIR = os.getenv("DEFI_HACKLABS_DIR", "/tmp/defihacklabs")  # noqa: S108  # nosec B108
 COLLECTION = "threat_intel_v2"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 SOURCE = "defihacklabs"
 
 # Chunking parameters per spec: 500-char windows, 50-char overlap.
@@ -328,7 +328,9 @@ async def ingest_files(
         )
         return total_chunks
 
-    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
+    embedder = InfinityBGEEmbedder(
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    )
     store = QdrantVectorStore()
     inserted = 0
     skipped = 0

@@ -3,7 +3,7 @@
 Seed all empty Qdrant collections with real free data.
 ========================================================
 
-Collections seeded (all 1024-dim Cosine, bge-m3 embedder):
+Collections seeded (all 2560-dim Cosine, qwen3-embedding-4b embedder):
   - scam_intel:       ScamSniffer + Etherscan phish CSVs + curated patterns (100+)
   - scanner:          Postgres new_pairs + scan_results + scan_reports
   - news:             Postgres news_items (1,000 most recent) (500+)
@@ -24,7 +24,7 @@ Data inputs (all FREE):
      etherscan_combined_labels.csv
   5. arXiv API (export.arxiv.org) — free, no key
 
-Embedding: bge-m3 via Infinity ``/embeddings`` (1024-dim), L2-normalized,
+Embedding: qwen3-embedding-4b via Infinity ``/embeddings`` (2560-dim), L2-normalized,
 batched (20 short / 8 long) to maximize CPU throughput. Point IDs are
 deterministic UUIDv5 (``uuid.NAMESPACE_DNS``) so reruns are idempotent and
 partial progress is preserved (existing IDs are skipped).
@@ -35,8 +35,8 @@ Usage:
     python scripts/seed_qdrant_collections.py --dry-run            # preview
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - redis-py, httpx, numpy, qdrant-client
   - Staged Postgres dumps in DATA_DIR (default /tmp/rag_seed)
 """
@@ -59,13 +59,13 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("seed_qdrant")
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
 DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108  # nosec B108
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 
 # Throughput calibration: short texts batch 20 (~3.5s/doc), long texts batch 8
 SHORT_BATCH = 20

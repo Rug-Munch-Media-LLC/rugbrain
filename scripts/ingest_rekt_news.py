@@ -10,7 +10,7 @@ tags (chains / attack vectors), and an excerpt describing the incident.
 For each hack we:
   1. Build a structured description: protocol, date, amount, attack vector,
      chain, excerpt.
-  2. Embed with bge-m3 (1024-dim dense) via Infinity (OpenAI-compatible /embeddings).
+  2. Embed with qwen3-embedding-4b (2560-dim dense) via Infinity (OpenAI-compatible /embeddings).
   3. Upsert into the ``hacks_v2`` collection (the migrated hybrid
      collection; the legacy ``hacks`` name was migrated away and no alias
      exists, so writing to it would create an empty fragment).
@@ -28,8 +28,8 @@ Usage:
     python scripts/ingest_rekt_news.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -55,7 +55,7 @@ logger = logging.getLogger("ingest_rekt")
 
 REKT_LEADERBOARD_URL = "https://rekt.news/leaderboard"
 COLLECTION = "hacks_v2"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 SOURCE = "rekt_news"
 REQUEST_TIMEOUT = 30
 
@@ -240,7 +240,9 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
+    embedder = InfinityBGEEmbedder(
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    )
     store = QdrantVectorStore()
     inserted = 0
     failed = 0
@@ -300,7 +302,7 @@ async def fallback_from_defihacklabs(limit: int | None) -> list[dict[str, Any]]:
     ``threat_intel_v2`` points with source=defihacklabs and builds one doc per
     unique protocol.
     """
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     docs: list[dict[str, Any]] = []
     offset: str | None = None
     try:

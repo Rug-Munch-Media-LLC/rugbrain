@@ -26,7 +26,7 @@ inventory; [TODO.md](TODO.md) for honest current gaps).
 (CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
 via Nitter RSS or SearXNG) and, for each new incident:
 
-1. embeds the incident description (Infinity BAAI/bge-m3, 1024-dim)
+1. embeds the incident description (Infinity qwen3-embedding-4b, 2560-dim)
 2. stores it in Qdrant `security_alerts`
 3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
 4. logs to ClickHouse `rag_security_alerts` for historical tracking
@@ -59,9 +59,9 @@ protocol or a trending scam is immediately flagged.
 
 ## Architecture
 
-- **Embedding:** BGE-M3 (primary, via Infinity, 1024-dim). No hash fallback —
+- **Embedding:** BGE-M3 (primary, via Infinity, 2560-dim). No hash fallback —
   fails loud (HTTP 503).
-- **Vector store:** Qdrant (Cosine, 1024-dim), collections created on demand.
+- **Vector store:** Qdrant (Cosine, 2560-dim), collections created on demand.
 - **Warm store:** Redis — documents, index sets, semantic cache, ingest queues.
 - **Retrieval:** three-pillar search (dense + sparse/BM25-SPLADE + entity)
   fused with Reciprocal Rank Fusion; optional MMR dedup + cross-encoder rerank.
@@ -75,7 +75,7 @@ API reference, data flows, operations, roadmap).
 ## Scope
 
 - Qdrant collection definitions and payload schema
-- Embedding model configs (bge-m3 primary) and chunking strategies
+- Embedding model configs (qwen3-embedding-4b primary) and chunking strategies
 - Ingestion scripts (threats, scams, news, wallet labels)
 - Three-pillar retrieval engine, RRF fusion, scam-check API
 - B2 permanence (backup/restore)
@@ -103,7 +103,7 @@ python -m rugbrain
 ```
 
 Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
-and Infinity with `BAAI/bge-m3` loaded (`INFINITY_URL`). See `.env.example`.
+and Infinity with `qwen3-embedding-4b` loaded (`INFINITY_URL`). See `.env.example`.
 
 ## Adding a data source
 
@@ -118,7 +118,7 @@ Interactive: `http://localhost:8012/docs` once the server is up.
 Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
 
 > ⚠️ README-RAG-API.md is partially stale — it still documents
-> nomic-embed-text as primary; the canonical embedder is now bge-m3 (1024-dim).
+> nomic-embed-text as primary; the canonical embedder is now qwen3-embedding-4b (2560-dim).
 
 ## Repo status
 

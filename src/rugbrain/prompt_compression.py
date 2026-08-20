@@ -423,7 +423,7 @@ def _get_llmlingua_compressor(model_name: str | None) -> Any | None:
         return _LLMLINGUA_COMPRESSOR
     _LLMLINGUA_PROBED = True
     try:
-        from llmlingua import (  # type: ignore[import-not-found]
+        from llmlingua import (
             PromptCompressor,
         )  # optional dependency, guarded by LLMLINGUA_AVAILABLE
 

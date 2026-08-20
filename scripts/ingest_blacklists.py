@@ -11,7 +11,7 @@ entities:
   * PhishFort phishfort-lists       — counter-phishing domain lists
   * Phishing.Database               — generic phishing domains (capped)
 
-Each entity is embedded (1024-dim bge-m3) and upserted into ``scam_intel_v2``
+Each entity is embedded (2560-dim qwen3-embedding-4b) and upserted into ``scam_intel_v2``
 (the live curated scam-intelligence collection) with canonical metadata
 (entity_type, entity, labels, source, source_url), so the bot's scam/entity
 data reflects real-time blacklists. We deliberately do NOT write to
@@ -25,8 +25,8 @@ Usage:
     python scripts/ingest_blacklists.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 
 Env knobs (no hardcoded credentials):
   - BLACKLIST_SOURCES       comma-separated feed keys to enable (default all)

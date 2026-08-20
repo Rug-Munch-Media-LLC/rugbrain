@@ -13,7 +13,7 @@ ranked list of the trending coins, plus a per-coin point
 (market cap rank, score, sparkline window). Deterministic ids make re-runs
 idempotent — the daily snapshot is refreshed in place, never duplicated.
 
-Collection config: named dense (1024-d bge-m3) + BM25 sparse hybrid, so
+Collection config: named dense (1024-d qwen3-embedding-4b) + BM25 sparse hybrid, so
 hybrid (RRF) search works from day one (same shape as regulation_enforcement).
 
 The snapshot is deliberately *one point per day* (not per coin only) so the
@@ -26,8 +26,8 @@ Usage:
     python scripts/ingest_coingecko_trending.py --days 3   # backfill
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 
@@ -52,7 +52,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_coingecko_trending")
 
 COLLECTION = "trending_snapshots"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 TRENDING_URL = "https://api.coingecko.com/api/v3/search/trending"
 SOURCE = "coingecko_trending"
 REQUEST_TIMEOUT = 30.0
@@ -162,7 +162,7 @@ async def run(days: int, dry_run: bool) -> dict[str, Any]:
         "errors": 0,
         "dry_run": dry_run,
     }
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         if not await _ensure_hybrid_collection(client, qdrant_url):

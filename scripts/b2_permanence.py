@@ -53,10 +53,9 @@ import json
 import logging
 import os
 import re
-import subprocess
 import sys
-import time
 import tempfile
+import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -86,7 +85,7 @@ from b2_common import (
 logger = logging.getLogger("b2_permanence")
 
 # Qdrant fallback chain (mirrors src/rugbrain/qdrant_store.py)
-DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333")
+DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333")
 DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")
 
 MANIFEST_NAME = "manifest.json"

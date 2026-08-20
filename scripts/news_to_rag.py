@@ -3,7 +3,7 @@
 
 Reads `news_items` from Postgres (populated by rmi-backend RSS ingest),
 chunks each article into 500-char sliding windows with 50-char overlap,
-embeds every chunk with BGE-M3 (1024-dim) via Infinity `/embeddings`,
+embeds every chunk with BGE-M3 (2560-dim) via Infinity `/embeddings`,
 and upserts the vectors into the Qdrant `news` collection with payload
 metadata: title, source, url, published_at, category, sentiment.
 
@@ -35,9 +35,9 @@ Run (host or inside a container with Postgres/Qdrant/Infinity reachable):
 
 Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
-  QDRANT_URL   (default http://localhost:6333, falls back to 127.0.0.1)
-  INFINITY_URL (default http://localhost:8001, falls back to 127.0.0.1)
-  RAG_INFINITY_EMBED_MODEL (default BAAI/bge-m3)
+  QDRANT_URL   (default http://127.0.0.1:6334, falls back to 127.0.0.1)
+  INFINITY_URL (default http://172.22.0.1:8004/v1, falls back to 127.0.0.1)
+  RAG_INFINITY_EMBED_MODEL (default qwen3-embedding-4b)
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ logger = logging.getLogger("news_to_rag")
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
-EMBED_DIM = 1024
+EMBED_DIM = 2560
 QDRANT_COLLECTION = "news_v2"
 UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rugbrain.qdrant_store._to_uuid
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "news_to_rag.lock")
@@ -145,7 +145,7 @@ def _rate_article_payload(article: dict, text: str) -> tuple[dict, int]:
 
 # ── Qdrant REST helpers ────────────────────────────────────────────────
 async def _ensure_collection(client: httpx.AsyncClient, base: str) -> bool:
-    """Create the `news` collection (1024d Cosine) if missing. Idempotent."""
+    """Create the `news` collection (2560d Cosine) if missing. Idempotent."""
     r = await client.get(f"{base}/collections/{QDRANT_COLLECTION}")
     if r.status_code == 200:
         return True
@@ -253,13 +253,13 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
 
     qdrant_candidates = _resolve_base(
         "qdrant",
-        os.getenv("QDRANT_URL", "http://localhost:6333"),
-        "http://127.0.0.1:6333",
+        os.getenv("QDRANT_URL", "http://127.0.0.1:6334"),
+        "http://127.0.0.1:6334",
     )
     infinity_candidates = _resolve_base(
         "infinity",
-        os.getenv("INFINITY_URL", "http://localhost:8001"),
-        "http://127.0.0.1:8001",
+        os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
+        "http://172.22.0.1:8004/v1",
     )
 
     # Postgres: try configured host, then loopback
@@ -616,7 +616,9 @@ def main() -> None:
         default=int(os.getenv("NEWS_TO_RAG_MAX_CHUNKS", "4096")),
         help="max chunks per run (default 4096; 0 = unlimited)",
     )
-    parser.add_argument("--model", default=os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3"))
+    parser.add_argument(
+        "--model", default=os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+    )
     parser.add_argument(
         "--oldest-first",
         action="store_true",

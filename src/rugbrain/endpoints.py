@@ -82,14 +82,14 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(
                 f"{infinity_url}/embeddings",
-                json={"input": request.text, "model": "BAAI/bge-m3"},
+                json={"input": request.text, "model": "qwen3-embedding-4b"},
             )
             if r.status_code == 200:
                 data = r.json()
                 vec = data.get("data", [{}])[0].get("embedding", [])
                 return {"embedding": vec, "dim": len(vec)}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Embedder unavailable: {e}")
+        raise HTTPException(status_code=502, detail=f"Embedder unavailable: {e}") from e
     return {"embedding": [], "dim": 0}
 
 
@@ -390,7 +390,6 @@ async def rag_confidence_score(request: Request, data: dict[str, Any]) -> dict[s
         from rugbrain.confidence_scorer import score_confidence as sc
 
         sources = data.get("results", [])
-        query = data.get("query", "")
         return sc(
             sources,
             query_similarity=sources[0].get("score", 0.0) if sources else 0.0,
@@ -1071,7 +1070,6 @@ async def search_multi(
                 docs.append(str(txt)[:2000])
             reranked = await _rerank(q, docs, top_k=min(top_n, lim))
             if reranked:
-                rev_index = {id(r): i for i, r in enumerate(fused[:top_n])}
                 for r in reranked:
                     idx = r.get("index")
                     if isinstance(idx, int) and 0 <= idx < len(docs):

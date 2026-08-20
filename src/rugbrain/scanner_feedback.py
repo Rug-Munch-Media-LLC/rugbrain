@@ -9,9 +9,9 @@ discovering similar tokens. Provides a bidirectional feedback channel:
       → POST /api/v1/feedback/scam-confirmed    (mark confirmed scam)
       ← GET  /api/v1/similar/{address}           (vector similarity search)
 
-All embeddings use the existing Infinity BAAI/bge-m3 pipeline via
+All embeddings use the existing Infinity qwen3-embedding-4b pipeline via
 ``rugbrain.embeddings.get_embedding()`` so the feedback collection shares
-the same 1024-dim vector space as the main threat_intel_v2 collection.
+the same 2560-dim vector space as the main threat_intel_v2 collection.
 """
 
 from __future__ import annotations
@@ -86,7 +86,7 @@ async def ingest_scan_result(request: Request, data: dict[str, Any]) -> dict[str
         from rugbrain.bge_embedders import InfinityBGEEmbedder
 
         embedder = InfinityBGEEmbedder(
-            infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001")
+            infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
         )
         store = QdrantVectorStore()
         doc = doc_from_article(
@@ -259,7 +259,7 @@ async def find_similar_tokens(
 ) -> dict[str, Any]:
     """Find similar tokens via vector similarity search.
 
-    Embeds the token address + chain into the 1024-dim vector space and
+    Embeds the token address + chain into the 2560-dim vector space and
     returns the nearest neighbors from the feedback collection, scoring
     by cosine similarity. Useful for discovering tokens with similar
     risk profiles, deployer patterns, or scam signals::

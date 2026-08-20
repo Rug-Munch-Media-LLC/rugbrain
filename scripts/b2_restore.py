@@ -351,7 +351,7 @@ def resolve_qdrant_client(host: str | None, port: int | None) -> qdrant_client.Q
         candidates.append(host)
     candidates.extend(
         [
-            os.getenv("QDRANT_URL", "http://rmi-qdrant:6333"),
+            os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333"),
             f"http://127.0.0.1:{port_str}",
             f"http://localhost:{port_str}",
         ]

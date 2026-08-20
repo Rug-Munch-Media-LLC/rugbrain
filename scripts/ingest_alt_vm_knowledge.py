@@ -12,7 +12,7 @@ with documentation cloned from:
 
 Every point is tagged with coding metadata (ecosystem=move|cairo,
 language=move|cairo, knowledge_type, topic, source_url) and embedded with
-1024-dim bge-m3. Deterministic point IDs → idempotent re-runs.
+2560-dim qwen3-embedding-4b. Deterministic point IDs → idempotent re-runs.
 
 Usage:
     python scripts/ingest_alt_vm_knowledge.py --dry-run
@@ -20,8 +20,8 @@ Usage:
     python scripts/ingest_alt_vm_knowledge.py --max-chunks 400
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

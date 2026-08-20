@@ -25,7 +25,7 @@ GET /api/v1/search?q=<query>&limit=10&collection=threat_intel
 ```
 
 Semantic search across ingested scanner findings. Returns similar results
-by vector similarity (Infinity BAAI/bge-m3, 1024 dimensions).
+by vector similarity (Infinity qwen3-embedding-4b, 1024 dimensions).
 
 **Parameters:**
 - `q` (required) — search query, e.g., token address or scam description

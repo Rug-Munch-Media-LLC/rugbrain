@@ -12,7 +12,7 @@ and ``audit_findings`` Qdrant collections from:
   - AUDIT_FINDINGS     — real exploit/audit case studies (Euler, Mango,
     Wormhole, Nomad, ...) for ``audit_findings``.
 
-Each pattern is embedded (1024-dim bge-m3) and upserted with canonical
+Each pattern is embedded (2560-dim qwen3-embedding-4b) and upserted with canonical
 metadata (category, severity, ecosystem, swc, source). Point IDs are
 deterministic UUIDv5 from content hashes → idempotent re-runs.
 
@@ -22,8 +22,8 @@ Usage:
     python scripts/ingest_security_patterns.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

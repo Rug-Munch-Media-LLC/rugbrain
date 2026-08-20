@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # rmi-news-ingest — RSS ingest + news → embed → Qdrant (15-min cron).
 #
-# 1. Runs rmi-backend RSS ingest (populates Postgres news_items).
+# 1. Runs RugBrain-native RSS ingest (ingest_cryptopanic_news.py → Postgres news_items).
 # 2. Runs scripts/news_to_rag.py (chunks + embeds + upserts Qdrant `news`).
 #
 # Scheduled via crontab (see below) or the rmi-news-ingest systemd timer
@@ -9,7 +9,7 @@
 #
 #   */15 * * * * /bin/bash /path/to/rugbrain/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
 #
-# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /path/to/backend.env.
+# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /srv/rmi-infra/.env.secrets.
 set -euo pipefail
 
 # ── Concurrency guard: never run two ingests at once ─────────────────
@@ -53,14 +53,10 @@ if [ -f "$LOG_FILE" ]; then
   fi
 fi
 
-BACKEND_DIR="${RMI_BACKEND_DIR:-/path/to/rmi-backend}"
-RAG_DIR="${RMI_RAG_DIR:-/path/to/rugbrain}"
-PYTHON="${RMI_BACKEND_PYTHON:-$BACKEND_DIR/.venv/bin/python}"
-# Step 2 (news_to_rag) imports rugbrain.* from the RAG repo's own venv;
-# the backend venv does not ship rugbrain. Using RAG_PYTHON keeps the
-# embed→Qdrant half of the pipeline alive.
+RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
+# news_to_rag imports rugbrain.* from the RAG repo's own venv.
 RAG_PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
-SECRETS="${RMI_SECRETS_FILE:-/path/to/backend.env}"
+SECRETS="${RMI_SECRETS_FILE:-/srv/rmi-infra/.env.secrets}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
@@ -72,12 +68,17 @@ if [ -f "$SECRETS" ]; then
   set +a
 fi
 
-# ── Step 1: RSS ingest into Postgres ────────────────────────────────
-log "step=ingest dir=$BACKEND_DIR"
-if [ -x "$PYTHON" ]; then
-  (cd "$BACKEND_DIR" && POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" "$PYTHON" -m app.domains.news.ingest)
+# ── Step 1: RugBrain-native RSS ingest into Postgres ────────────────
+# (replaces the retired rmi-backend RSS ingest — fully independent)
+log "step=ingest_cryptopanic dir=$RAG_DIR"
+if [ -x "$RAG_PYTHON" ]; then
+  (cd "$RAG_DIR" &&
+    POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
+      "$RAG_PYTHON" scripts/ingest_cryptopanic_news.py --days 7)
 else
-  (cd "$BACKEND_DIR" && POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" python3 -m app.domains.news.ingest)
+  (cd "$RAG_DIR" &&
+    POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
+      python3 scripts/ingest_cryptopanic_news.py --days 7)
 fi
 
 # ── Step 2: news → embed → Qdrant ───────────────────────────────────
@@ -85,14 +86,14 @@ log "step=news_to_rag dir=$RAG_DIR"
 if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-      INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
+      QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+      INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
       "$RAG_PYTHON" scripts/news_to_rag.py)
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-      INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
+      QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+      INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
       python3 scripts/news_to_rag.py)
 fi
 

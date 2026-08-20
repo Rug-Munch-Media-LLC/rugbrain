@@ -18,8 +18,8 @@ Usage:
   python scripts/seed_all.py --dry-run  # preview what would be seeded
 
 Requires:
-  - Qdrant running (default: http://rmi-qdrant:6333 or QDRANT_URL env)
-  - Infinity running (default: http://infinity-rag:8001 or INFINITY_URL env)
+  - Qdrant running (default: http://rmi-qdrant-v2:6333 or QDRANT_URL env)
+  - Infinity running (default: http://172.22.0.1:8004/v1 or INFINITY_URL env)
 """
 
 from __future__ import annotations
@@ -37,22 +37,22 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("seed_all")
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://rmi-backend:8000")
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 
 
 # ── Embedding ──────────────────────────────────────────────────────────
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Get embedding from Infinity BAAI/bge-m3 via /embeddings.
+    """Get embedding from Infinity qwen3-embedding-4b via /embeddings.
 
     Uses the OpenAI-compatible ``/embeddings`` endpoint with ``input``
     as a list (faster, supports batching).
-    Returns L2-normalized 1024-dim vector or None on failure.
+    Returns L2-normalized 2560-dim vector or None on failure.
     """
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:

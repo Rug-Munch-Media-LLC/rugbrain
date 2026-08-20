@@ -13,8 +13,8 @@ Part of the content-seeding expansion. Routes curated docs from
                            defensive patterns
   - ``audit_findings``   — (reserved for audit case-study docs)
 
-Each doc is chunked, embedded with the shared Infinity path (1024-dim
-bge-m3) and upserted with canonical payload metadata (topic,
+Each doc is chunked, embedded with the shared Infinity path (2560-dim
+qwen3-embedding-4b) and upserted with canonical payload metadata (topic,
 knowledge_type, collection). Point IDs are deterministic
 (source + rel_key + content hash) so re-runs overwrite the same points
 instead of duplicating them.
@@ -24,8 +24,8 @@ Usage:
     python scripts/ingest_crypto_expert_knowledge.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

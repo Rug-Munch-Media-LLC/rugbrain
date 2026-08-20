@@ -21,7 +21,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Decomposition patterns: regex → (query_type, sub_queries)
-DECOMPOSITION_PATTERNS: list[tuple[re.Pattern, str, list[list[str]]]] = [
+DECOMPOSITION_PATTERNS: list[tuple[re.Pattern[str], str, list[list[str]]]] = [
     # Fund flow tracing: "where did the stolen funds go?"
     (
         re.compile(
@@ -98,7 +98,7 @@ def classify_query(query: str) -> dict[str, Any]:
 
     Returns:
         Dict with ``query_type``, ``sub_queries`` list, ``original_query``,
-        and ``confidence`` (0.0–1.0) of the classification.
+        and ``confidence`` (0.0-1.0) of the classification.
     """
     query_lower = query.lower()
 
@@ -144,7 +144,7 @@ def decompose_query(
         optionally ``tool`` (if tools_available is provided).
     """
     classification = classify_query(query)
-    sub_queries = classification["sub_queries"]
+    sub_queries: list[dict[str, Any]] = list(classification["sub_queries"])
 
     if tools_available:
         # Filter sub-queries to only use available tools

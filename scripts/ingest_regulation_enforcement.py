@@ -19,7 +19,7 @@ Sources (all public, official, no auth):
 The SEC RSS feeds are occasionally malformed XML (unescaped ``&`` in
 titles) — this script parses them leniently.
 
-Each item is embedded (1024-dim bge-m3 via Infinity) and upserted into
+Each item is embedded (2560-dim qwen3-embedding-4b via Infinity) and upserted into
 ``regulation_enforcement`` (dense + BM25 sparse hybrid, created on first
 run) with filterable metadata: date, date_ts, agency, action_type,
 source_type, case_url, amount_usd, severity.
@@ -38,8 +38,8 @@ Usage:
     python scripts/ingest_regulation_enforcement.py --seed-only
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 
@@ -69,7 +69,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_regulation_enforcement")
 
 COLLECTION = "regulation_enforcement"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 REQUEST_TIMEOUT = 60.0
 USER_AGENT = "RugMunch RAG research agent; admin@rugmunch.io"
 
@@ -507,7 +507,7 @@ async def run(
         "errors": 0,
         "dry_run": dry_run,
     }
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         if not seed_only and not await _ensure_hybrid_collection(client, qdrant_url):

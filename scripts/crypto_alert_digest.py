@@ -14,7 +14,7 @@ Detection pipeline:
      severity, chain, amount_lost_usd, date, protocol, source_type).
   4. Dedupe with ``incident_key = sha256(protocol + date + amount)[:12]``
      against alert points already stored in ``news`` (category=alert).
-  5. Embed each new incident (bge-m3 via Infinity) and store it in ``news``
+  5. Embed each new incident (qwen3-embedding-4b via Infinity) and store it in ``news``
      with ``metadata.category = alert`` and ``source_type = alert_digest``;
      embed failures are non-fatal — the digest is still printed.
 
@@ -24,8 +24,8 @@ Usage:
     python scripts/crypto_alert_digest.py --limit 200 --min-severity high
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3 loaded
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -58,7 +58,7 @@ logger = logging.getLogger("crypto_alert_digest")
 
 COLLECTION = "news_v2"
 SOURCE_TYPE = "alert_digest"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 REQUEST_TIMEOUT = 30
 # Losses above this are almost certainly market-cap/valuation figures, not
 # single-incident thefts (the largest real crypto heists are ~$1.5-2B).
@@ -343,7 +343,7 @@ def _protocol_from_title(title: str) -> str:
 
 async def fetch_existing_alerts(client: httpx.AsyncClient) -> set[str]:
     """Return the set of incident_keys already stored as alerts in ``news``."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     keys: set[str] = set()
     offset: str | None = None
     while True:
@@ -375,7 +375,7 @@ async def scroll_recent_news(
     client: httpx.AsyncClient, days: int, limit: int | None
 ) -> list[dict[str, Any]]:
     """Scroll news points, keeping only those published within *days*."""
-    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     since = (datetime.now(UTC) - timedelta(days=days)).date().isoformat()
     points: list[dict[str, Any]] = []
     offset: str | None = None
@@ -442,7 +442,9 @@ async def store_alerts(
     if dry_run:
         return len(incidents), 0
 
-    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
+    embedder = InfinityBGEEmbedder(
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    )
     store = QdrantVectorStore()
     stored = failed = 0
 

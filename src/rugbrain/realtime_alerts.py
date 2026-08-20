@@ -91,9 +91,9 @@ CLICKHOUSE_DATABASE = os.getenv("CLICKHOUSE_DATABASE", "rmi")
 CLICKHOUSE_FALLBACK_DATABASE = os.getenv("CLICKHOUSE_FALLBACK_DATABASE", "wallet_memory")
 CRITICAL_ALERTS_TABLE = os.getenv("CLICKHOUSE_CRITICAL_TABLE", "critical_alerts")
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
 LIVE_THREATS_COLLECTION = os.getenv("LIVE_THREATS_COLLECTION", "live_threats")
 
@@ -1365,7 +1365,7 @@ class WatchlistManager:
             "added_at": datetime.now(UTC).isoformat(),
         }
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1378,7 +1378,7 @@ class WatchlistManager:
     async def remove_watch(address: str, user_id: str) -> bool:
         key = f"rag:watch:{user_id}:{address.lower()}"
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1393,7 +1393,7 @@ class WatchlistManager:
         watches = []
         pattern = f"rag:watch:{user_id}:*"
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1417,7 +1417,7 @@ class WatchlistManager:
             for addr in scam_doc["metadata"]["contract_addresses"]:
                 scam_addresses.add(addr.lower())
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1459,7 +1459,7 @@ class AlertDispatcher:
     @staticmethod
     async def _dispatch_websocket(user_id: str, alert: dict[str, Any]) -> None:
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1472,7 +1472,7 @@ class AlertDispatcher:
     @staticmethod
     async def _dispatch_telegram(user_id: str, alert: dict[str, Any]) -> None:
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
             r = await get_redis_async()
             if r:
@@ -1494,7 +1494,7 @@ async def start_alert_listener() -> None:
     log.info("rag_alert_listener: starting")
     while True:
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis
 
             r = get_redis()
             if r:

@@ -16,7 +16,7 @@
 ## 0.1 As-Built Reality (verified 2026-08-01 — final sweep)
 
 **What is live and correct:**
-- **BGE-M3 is the primary embedder** (1024d via Infinity, `embedder.py` + `embeddings.py`). The dead `:8001` container path is gone; `BAAI/bge-m3` is loaded on the Infinity server (`infinity-rag:8001`). `qwen3-embed:4b` (2560d) is retired. `[DONE]`
+- **BGE-M3 is the primary embedder** (2560d via Infinity, `embedder.py` + `embeddings.py`). The dead `:8001` container path is gone; `qwen3-embedding-4b` is loaded on the Infinity server (`infinity-rag:8001`). `qwen3-embed:4b` (2560d) is retired. `[DONE]`
 - **Qdrant is the single store** (`rmi-qdrant:6333`, 20 collections, live). **BM25 sparse hybrid shipped**: `scripts/migrate_to_sparse.py` creates `{name}_v2` collections carrying named `dense` + `bm25` sparse vectors; 9 `_v2` collections live with points (scam_intel_v2 600, news_v2 623, scanner_v2 191, research_v2 60, threat_intel_v2 26; hacks_v2 0 — empty, see §10 gaps). `[DONE]`
 - **Parquet permanence shipped**: `scripts/b2_permanence.py` writes parquet snapshots (zstd) of all collections to B2 bucket `rmi-rag-permanence`; `scripts/migrate_to_parquet.py` converts legacy NDJSON; `scripts/b2_restore.py` restores. Verified dry-run: 20 collections, `format=parquet`, `encrypt=False`. `[DONE]`
 - **Client-side B2 encryption REMOVED**: `B2_ENCRYPTION_KEY` is deprecated; all objects are encrypted at rest by **B2 SSE-B2 (AES256)** — no client-side AES-GCM on new uploads. `[DONE]`
@@ -33,10 +33,10 @@
 - **Module deletions in §3.1 are PARTIAL**: 11 files deleted (search_similar, embed_tiers, embed_utils, embedding_router, query_classifier, metrics_api, agentic, tool, chunking, legacy_supabase, rag_provider, src/app/), but the `search/` package, `search_service.py`, `cross_encoder.py`, `crypto_embeddings.py`, `bge_embedders.py`, `embeddings.py`, `splade_bm25.py`, `sparse_search.py`, `permanence.py`, `rag_ingestion.py`, `query_rewriter.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/` still exist. `[PARTIAL]` (`graph_rag.py` removed from this list — deleted 2026-08-16, `aadf85f`.)
 - **`endpoints.py` was NOT split** into `api/*` — it remains one file with all routes incl. the new `/rag/query` and `/eval/run`. `[NOT DONE]`
 - **`hacks` collection now seeded** (50 points) — the previously-blocking empty-collection issue is resolved; `hacks_v2` sparse variant still 0 points (verified 2026-08-01). `[DONE, v2 gap]`
-- **Live search is slow when the embedder is cold**: first call after model expiry reloads bge-m3 (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
+- **Live search is slow when the embedder is cold**: first call after model expiry reloads qwen3-embedding-4b (~38–45s) and the synchronous `httpx.Client(timeout=120)` inside async code blocks the event loop — under concurrent load the API can wedge (observed: `/ready` timeout). Fix is a work item, not blocking single-request correctness. `[KNOWN ISSUE]`
 
 **Session-close changes (2026-08-01):**
-- **Infinity is the embedding engine; reranking moved to self-hosted Qwen3** — `infinity-rag` serves `BAAI/bge-m3` embeddings on port 8001; cross-encoder reranking now runs on `qwen-reranker.service` (Qwen3-Reranker-8B Q4_K_M via llama.cpp `--rerank`, :8003). Ollama is retained for LLM generation only. `[DONE]`
+- **Infinity is the embedding engine; reranking moved to self-hosted Qwen3** — `infinity-rag` serves `qwen3-embedding-4b` embeddings on port 8001; cross-encoder reranking now runs on `qwen-reranker.service` (Qwen3-Reranker-8B Q4_K_M via llama.cpp `--rerank`, :8003). Ollama is retained for LLM generation only. `[DONE]`
 - **Stale containers/clones cleaned** — `rugbrain-eval-test` container removed; nested clone `/path/to/rmi-backend/rugbrain/` removed + gitlink dropped; `/tmp/opencode/rugbrain-main-verify` + `/tmp/opencode/rugbrain-reranker` worktrees removed. Remaining: `rugbrain-wt-ragas` worktree (branch merged) — remove with `git worktree remove`. `[PARTIAL]`
 - **News ingest flock guard** — `c17dc59` adds `flock -n` to `rmi-news-ingest.sh`; concurrent cron ticks skip instead of piling up. `[DONE]`
 - **BM25 alias swap NOT yet complete** — `hybrid_search` implemented in endpoints/qdrant_store (uncommitted WIP) but canonical-name → `_v2` aliases are NOT created (Qdrant aliases empty 2026-08-01). `[NOT DONE]`
@@ -79,7 +79,7 @@
                     ┌─────────────────────────────────────────────┐
                     │              rugbrain-api  (:8012)            │
                     │  THE single RAG service                      │
-                    │  embedder.py (BGE-M3 1024d, Infinity)        │
+                    │  embedder.py (BGE-M3 2560d, Infinity)        │
                     │  qdrant_store.py → Qdrant (dense+BM25)      │
                     │  endpoints.py (all routes, NOT split)       │
                     │  evaluation.py / eval_ragas.py (RAGAS)      │
@@ -91,7 +91,7 @@
               ▼              ▼                      ▼
     ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐
     │ Qdrant          │  │ Infinity BGE-M3 │  │ B2 rugbrain-      │
-    │ rmi-qdrant:6333 │  │ 1024d (primary) │  │ permanence       │
+    │ rmi-qdrant:6333 │  │ 2560d (primary) │  │ permanence       │
     │ 20 collections  │  │ Qwen3-Reranker- │  │ parquet snapshots│
     │ dense + bm25    │  │ 8B Q4_K_M :8003 │  │ SSE-B2 (AES256)  │
     │ (9 _v2 hybrid)  │  │                 │  │ DuckDB queryable │
@@ -99,7 +99,7 @@
 ```
 
 **Non-negotiables (as-built status in brackets)**
-1. ONE embedding stack: BGE-M3 (1024d) via Infinity, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — bge-m3 live via Infinity]**
+1. ONE embedding stack: BGE-M3 (2560d) via Infinity, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — qwen3-embedding-4b live via Infinity]**
 2. ONE store: Qdrant, `store.py` (wraps `qdrant_store.py`). No numpy ANN, no ChromaDB, no Redis vectors. **[DONE — Qdrant 20 collections; BM25 sparse `_v2` variants live]**
 3. ONE search path: dense + keyword filter + RRF, `retrieval.py`. No three-pillar facade. **[PARTIAL — search/ package + search_service.py still exist; retrieval is endpoint-driven hybrid]**
 4. Backend never embeds, never queries vectors. It proxies HTTP. **[NOT DONE — backend still imports `app.rag` in-process; RagApiClient never created]**
@@ -140,7 +140,7 @@
 src/rugbrain/
 ├── config.py              # NEW [decision]: settings (QDRANT_URL, INFINITY_URL, collection names, timeouts).
 │                          #   Only module embedder/store/retrieval/ingestion/api may import.
-├── embedder.py            # Single embedder: BGE-M3 via Infinity (/embeddings). 1024d.
+├── embedder.py            # Single embedder: BGE-M3 via Infinity (/embeddings). 2560d.
 │                          #   KEEP (verified working) — delete qwen3 legacy enum entries.
 ├── store.py               # NEW thin public wrapper over qdrant_store.py: get_collection(name),
 │                          #   upsert(points), search(query, filter, limit). Collection list is config.
@@ -325,7 +325,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 ## 4. What Gets KEPT and FIXED
 
 ### 4.1 `rugbrain/embedder.py` — KEEP, 3 fixes
-1. Remove the retired `QWEN3_4B` enum entry + `_BACKEND_DIMS` dead path (BGE-M3 1024d only). [verified it is already the documented primary]
+1. Remove the retired `QWEN3_4B` enum entry + `_BACKEND_DIMS` dead path (BGE-M3 2560d only). [verified it is already the documented primary]
 2. Carry the "fail loudly, no hash fallback" semantics already in `embeddings.py` into `embed()` (raise `EmbeddingError` on HTTP error/timeout; never synthesize vectors).
 3. Expose one canonical `async def embed(texts: list[str]) -> list[list[float]]`; add `embed_one()` convenience. Update `scanner_subscriber/poller`, `scripts/*`, `endpoints.py` to use it.
 
@@ -342,7 +342,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 C1 = the module queries ChromaDB directly with a pattern-match fallback [verified: docstring says "ChromaDB primary, pattern-match fallback"]. Fix: replace the ChromaDB path with `POST http://rugbrain-api:8012/api/v1/rag/v2/scam-check` via `RagApiClient`. Keep the pattern-match + neutral fallbacks ONLY as behavior at the backend orchestration layer (LLM reasoning), never as a vector-substitute.
 
 ### 4.5 `rugbrain/scanner_subscriber.py` / `scanner_poller.py` — KEEP (working) [verified]
-- Subscriber: Redis `rmi:rag:ingest` → embed → upsert Qdrant. Fix stale docstring (says 2560-dim; embedder is 1024d BGE-M3) and rewire `get_embedding()` → `embedder.embed()`. Then relocate into `ingestion/scanner.py`.
+- Subscriber: Redis `rmi:rag:ingest` → embed → upsert Qdrant. Fix stale docstring (says 2560-dim; embedder is 2560d BGE-M3) and rewire `get_embedding()` → `embedder.embed()`. Then relocate into `ingestion/scanner.py`.
 - Poller: keep loop; same rewiring.
 
 ### 4.6 Backend routers — KEEP, redirect
@@ -366,7 +366,7 @@ All 31 files referencing `rag_service` [verified count] move to `RagApiClient` c
 - One file: `app/rag_client.py`. `httpx.AsyncClient` with base URL from env `RMI_RAG_API_URL` (default `http://rugbrain-api:8012`), timeout 30s connect / 60s read, 2 retries with backoff on 5xx/network, `raise_for_status`.
 - Methods mirror the rugbrain-api surface: `search()`, `scam_check()`, `ingest()`, `investigate()`, `confidence()`, `stats()`, `health()`.
 - Fail-closed: any infra failure raises `RagUnavailableError`; backend routes convert to 503. Never returns empty/fallback payloads (see §7).
-- Deployment: backend and rugbrain-api MUST share the `rmi_network` Docker network; set `RMI_RAG_API_URL=http://rugbrain-api:8012` in backend env. [verified compose: rag-api is on `rmi_network`, ports `127.0.0.1:8012:8012`, `QDRANT_URL=http://rmi-qdrant:6333`]
+- Deployment: backend and rugbrain-api MUST share the `rmi_network` Docker network; set `RMI_RAG_API_URL=http://rugbrain-api:8012` in backend env. [verified compose: rag-api is on `rmi_network`, ports `127.0.0.1:8012:8012`, `QDRANT_URL=http://rmi-qdrant-v2:6333`]
 - Optional defense-in-depth: shared `X-RMI-SERVICE-TOKEN` from env on both sides; optional, disabled by default [decision].
 
 ---
@@ -501,7 +501,7 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 6. `RMI_RAG_API_URL=http://rugbrain-api:8012` documented in backend `.env.example`; compose on shared `rmi_network`. **[backend commit e4685e84 re-points RAG clients to :8012 with API-key auth — partially met]**
 7. This document's §3.3/§3.4 disposition tables fully executed; `git log` shows conventional commits per phase (`feat(rag):`, `refactor(rag):`, `chore(rag):`, `delete(rag):`). **[PARTIAL — see §10 phase status]**
 8. **[ADDED] Rebuild `rugbrain-api` from HEAD so `/api/v1/rag/query`, `/api/v1/eval/run`, `/metrics` are live; stop the stale `rugbrain-eval-test` container (:8013); remove nested clone `rmi-backend/rugbrain/` and merged-branch worktrees.**
-9. **[ADDED] Fix cold-embed latency: keep bge-m3 resident on Infinity and move the sync `httpx.Client(timeout=120)` embed call off the event loop (thread/async httpx) so concurrent searches can't wedge the API.**
+9. **[ADDED] Fix cold-embed latency: keep qwen3-embedding-4b resident on Infinity and move the sync `httpx.Client(timeout=120)` embed call off the event loop (thread/async httpx) so concurrent searches can't wedge the API.**
 
 ---
 

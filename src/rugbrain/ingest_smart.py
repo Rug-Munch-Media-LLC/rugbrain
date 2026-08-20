@@ -204,7 +204,7 @@ async def dedup_vectors(
     collection: str,
     client: httpx.AsyncClient,
     threshold: float = 0.95,
-    qdrant_url: str = "http://localhost:6333",
+    qdrant_url: str = "http://127.0.0.1:6334",
 ) -> list[bool]:
     """Return a boolean mask: True when the chunk already exists in Qdrant.
 
@@ -247,7 +247,7 @@ async def is_duplicate_vector(
     collection: str,
     client: httpx.AsyncClient,
     threshold: float = 0.95,
-    qdrant_url: str = "http://localhost:6333",
+    qdrant_url: str = "http://127.0.0.1:6334",
 ) -> bool:
     """Return True when *embedding* already has a >= threshold match."""
     return (await dedup_vectors([embedding], collection, client, threshold, qdrant_url))[0]

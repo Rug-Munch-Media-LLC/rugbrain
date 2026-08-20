@@ -412,7 +412,9 @@ async def collect_social_intel(
             "trending": trending,
         }
 
-    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
+    embedder = InfinityBGEEmbedder(
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    )
     store = QdrantVectorStore()
     try:
         result = await store_documents(unique, embedder, store)

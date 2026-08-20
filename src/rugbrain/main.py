@@ -42,6 +42,10 @@ from rugbrain.system_health import router as health_router  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+# Retained references to background tasks (RUF006: ensure_future results
+# must be stored so the event loop keeps them alive).
+_background_tasks: list[asyncio.Task] = []
+
 # ── Env ──────────────────────────────────────────────────────────────
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
 OTEL_ENABLED = os.getenv("OTEL_ENABLED", "").lower() in ("1", "true", "yes")
@@ -159,7 +163,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # ── Warm health state ─────────────────────────────────────────
     _health_state["status"] = "starting"
-    _health_state["qdrant_url"] = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
+    _health_state["qdrant_url"] = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
     _health_state["redis_host"] = os.getenv("REDIS_HOST", "localhost")
 
     # Probe Qdrant once at startup
@@ -304,7 +308,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.mempool_scanner import mempool_scan_loop
 
-        asyncio.ensure_future(mempool_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(mempool_scan_loop()))
         _mempool_ok = True
         _health_state["mempool_scanner"] = True
         logger.info("mempool_scanner status=ok")
@@ -317,7 +321,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.mev_detector import mev_scan_loop
 
-        asyncio.ensure_future(mev_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(mev_scan_loop()))
         _health_state["mev_detector"] = True
         logger.info("mev_detector status=ok")
     except Exception as exc:
@@ -328,7 +332,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.governance_aggregator import governance_scan_loop
 
-        asyncio.ensure_future(governance_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(governance_scan_loop()))
         _health_state["governance_aggregator"] = True
         logger.info("governance_aggregator status=ok")
     except Exception as exc:
@@ -339,7 +343,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.podcast_ingester import podcast_scan_loop
 
-        asyncio.ensure_future(podcast_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(podcast_scan_loop()))
         _health_state["podcast_ingester"] = True
         logger.info("podcast_ingester status=ok")
     except Exception as exc:
@@ -350,7 +354,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.smart_money_tracker import smart_money_scan_loop
 
-        asyncio.ensure_future(smart_money_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(smart_money_scan_loop()))
         _health_state["smart_money_tracker"] = True
         logger.info("smart_money_tracker status=ok")
     except Exception as exc:
@@ -361,7 +365,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.youtube_ingester import youtube_scan_loop
 
-        asyncio.ensure_future(youtube_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(youtube_scan_loop()))
         _health_state["youtube_ingester"] = True
         logger.info("youtube_ingester status=ok")
     except Exception as exc:
@@ -372,7 +376,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.newsletter_ingester import newsletter_scan_loop
 
-        asyncio.ensure_future(newsletter_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(newsletter_scan_loop()))
         _health_state["newsletter_ingester"] = True
         logger.info("newsletter_ingester status=ok")
     except Exception as exc:
@@ -381,11 +385,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # ── Auto-create Qdrant collections ──────────────────────────────
     try:
-        import httpx
-
         from rugbrain.qdrant_store import _ensure_collection
 
-        qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant:6333").rstrip("/")
+        qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
         async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as c:
             for col in [
                 "youtube_videos",
@@ -412,7 +414,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.exchange_flow import exchange_flow_loop
 
-        asyncio.ensure_future(exchange_flow_loop())
+        _background_tasks.append(asyncio.ensure_future(exchange_flow_loop()))
         _health_state["exchange_flow"] = True
         logger.info("exchange_flow status=ok")
     except Exception as exc:
@@ -423,7 +425,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.liquidation_heatmap import liquidation_scan_loop
 
-        asyncio.ensure_future(liquidation_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(liquidation_scan_loop()))
         _health_state["liquidation_heatmap"] = True
         logger.info("liquidation_heatmap status=ok")
     except Exception as exc:
@@ -434,7 +436,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.token_unlock_monitor import unlock_scan_loop
 
-        asyncio.ensure_future(unlock_scan_loop())
+        _background_tasks.append(asyncio.ensure_future(unlock_scan_loop()))
         _health_state["token_unlock_monitor"] = True
         logger.info("token_unlock_monitor status=ok")
     except Exception as exc:
@@ -445,7 +447,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.market_health import market_health_loop
 
-        asyncio.ensure_future(market_health_loop())
+        _background_tasks.append(asyncio.ensure_future(market_health_loop()))
         _health_state["market_health"] = True
         logger.info("market_health status=ok")
     except Exception as exc:
@@ -456,7 +458,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.hyperliquid_monitor import hyperliquid_loop
 
-        asyncio.ensure_future(hyperliquid_loop())
+        _background_tasks.append(asyncio.ensure_future(hyperliquid_loop()))
         _health_state["hyperliquid_monitor"] = True
         logger.info("hyperliquid_monitor status=ok")
     except Exception as exc:
@@ -467,7 +469,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.social_sentiment import social_sentiment_loop
 
-        asyncio.ensure_future(social_sentiment_loop())
+        _background_tasks.append(asyncio.ensure_future(social_sentiment_loop()))
         _health_state["social_sentiment"] = True
         logger.info("social_sentiment status=ok")
     except Exception as exc:
@@ -478,7 +480,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.twitter_tracker import twitter_tracker_loop
 
-        asyncio.ensure_future(twitter_tracker_loop())
+        _background_tasks.append(asyncio.ensure_future(twitter_tracker_loop()))
         _health_state["twitter_tracker"] = True
         logger.info("twitter_tracker status=ok")
     except Exception as exc:
@@ -489,7 +491,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.defi_lending import defi_lending_loop
 
-        asyncio.ensure_future(defi_lending_loop())
+        _background_tasks.append(asyncio.ensure_future(defi_lending_loop()))
         _health_state["defi_lending"] = True
         logger.info("defi_lending status=ok")
     except Exception as exc:
@@ -500,7 +502,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.token_distribution import token_distribution_loop
 
-        asyncio.ensure_future(token_distribution_loop())
+        _background_tasks.append(asyncio.ensure_future(token_distribution_loop()))
         _health_state["token_distribution"] = True
         logger.info("token_distribution status=ok")
     except Exception as exc:
@@ -511,7 +513,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.content_digest import content_digest_loop
 
-        asyncio.ensure_future(content_digest_loop())
+        _background_tasks.append(asyncio.ensure_future(content_digest_loop()))
         _health_state["content_digest"] = True
         logger.info("content_digest status=ok")
     except Exception as exc:
@@ -522,7 +524,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.exchange_reserves import exchange_reserves_loop
 
-        asyncio.ensure_future(exchange_reserves_loop())
+        _background_tasks.append(asyncio.ensure_future(exchange_reserves_loop()))
         _health_state["exchange_reserves"] = True
         logger.info("exchange_reserves status=ok")
     except Exception as exc:
@@ -533,7 +535,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.exchange_wallets import exchange_wallet_loop
 
-        asyncio.ensure_future(exchange_wallet_loop())
+        _background_tasks.append(asyncio.ensure_future(exchange_wallet_loop()))
         _health_state["exchange_wallets"] = True
         logger.info("exchange_wallets status=ok")
     except Exception as exc:
@@ -544,7 +546,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.oracle_monitor import oracle_monitor_loop
 
-        asyncio.ensure_future(oracle_monitor_loop())
+        _background_tasks.append(asyncio.ensure_future(oracle_monitor_loop()))
         _health_state["oracle_monitor"] = True
         logger.info("oracle_monitor status=ok")
     except Exception as exc:
@@ -555,7 +557,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.monitors.bucketshop_tracker import bucketshop_tracker_loop
 
-        asyncio.ensure_future(bucketshop_tracker_loop())
+        _background_tasks.append(asyncio.ensure_future(bucketshop_tracker_loop()))
         _health_state["bucketshop_tracker"] = True
         logger.info("bucketshop_tracker status=ok")
     except Exception as exc:

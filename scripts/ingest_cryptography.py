@@ -16,7 +16,7 @@ collection from ``cryptography_knowledge_data.py``, covering:
   * Post-quantum                — lattice-based (Kyber/Dilithium),
                                    hash-based (XMSS/LMS/SPHINCS+), Shor
 
-Each entry is embedded (1024-dim bge-m3) and upserted with canonical
+Each entry is embedded (2560-dim qwen3-embedding-4b) and upserted with canonical
 metadata (category, knowledge_type, source, references). Point IDs are
 deterministic UUIDv5 from content hashes → idempotent re-runs.
 
@@ -26,8 +26,8 @@ Usage:
     python scripts/ingest_cryptography.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations

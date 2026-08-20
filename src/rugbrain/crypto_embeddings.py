@@ -50,7 +50,7 @@ if _DIMS_ENV:
 if not DIMS:
     # Sensible defaults showing the pattern
     DIMS = {
-        "bge-m3": 1024,
+        "qwen3-embedding-4b": 2560,
         "fallback-model": 384,
         "behavioral": 64,
         "code_hash": 128,
@@ -203,7 +203,7 @@ class CryptoEmbedder:
     async def _semantic_embed(self, texts: list[str], head: str = "semantic") -> list[list[float]]:
         """
         Semantic embedding pipeline with tiered fallback:
-        PRIMARY:   Primary embedder (Infinity BAAI/bge-m3)
+        PRIMARY:   Primary embedder (Infinity qwen3-embedding-4b)
         FALLBACK:  OpenRouter or API-based embedder
         FALLBACK:  Local embedder (always available)
         FALLBACK:  HuggingFace embedder
@@ -258,7 +258,7 @@ class CryptoEmbedder:
         await self._cache_set(cache_key, vector, ttl=86400)
         return vector
 
-    def _hash_embed(self, text: str, dims: int = 1024) -> list[float]:
+    def _hash_embed(self, text: str, dims: int = 2560) -> list[float]:
         """Deterministic hash-based embedding (emergency fallback)."""
         vec = np.zeros(dims, dtype=np.float32)
         words = re.findall(r"\w+", text.lower())

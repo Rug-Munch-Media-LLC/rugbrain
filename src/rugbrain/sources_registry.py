@@ -260,7 +260,9 @@ async def ingest_all_sources(
     In dry-run mode documents are fetched but not stored.
     """
     c = crawler or WebCrawler()
-    embedder = InfinityBGEEmbedder(infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001"))
+    embedder = InfinityBGEEmbedder(
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    )
     store = QdrantVectorStore()
     totals: dict[str, Any] = {}
     try:
@@ -322,7 +324,7 @@ def _main() -> None:
             print(f"{cfg.name}: fetched {len(docs)} docs")
             if not args.dry_run and docs:
                 embedder = InfinityBGEEmbedder(
-                    infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001")
+                    infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
                 )
                 store = QdrantVectorStore()
                 try:

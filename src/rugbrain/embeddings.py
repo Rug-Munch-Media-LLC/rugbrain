@@ -5,12 +5,12 @@ confidently-wrong results (non-semantic vectors). When all neural
 backends fail, the RAG system now fails LOUDLY instead of returning
 gibberish.
 
-Tier 1: Infinity BAAI/bge-m3 (1024d, self-hosted, zero cost) - strong quality
+Tier 1: Infinity qwen3-embedding-4b (2560d, self-hosted, zero cost) - strong quality
 Tier 2: OpenRouter NVIDIA Nemotron (2048d, free tier) - if API key set
 
 Design (per DESIGN.md M4):
 - Single async API: `await get_embedding(text) -> list[float]`
-- bge-m3 preferred when available (via Infinity /embeddings)
+- qwen3-embedding-4b preferred when available (via Infinity /embeddings)
 - Embedding dim is reported via EMBEDDING_DIM; collections use same dim
 - All embeddings are float lists (JSON-serializable) for Redis storage
 - FAIL LOUD: if both backends fail, raise RAGUnavailableError
@@ -41,8 +41,8 @@ EMBED_VERSION_STAMP = f"{EMBED_MODEL_NAME}:{EMBED_MODEL_VERSION}:{EMBEDDING_DIM}
 EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI build number
 # Backends
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
-INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 
@@ -62,11 +62,15 @@ def _infinity_reachable() -> bool:
     """
     probed = os.getenv("_INFINITY_PROBED")
     probed_at = os.getenv("_INFINITY_PROBED_AT")
-    if probed and not os.getenv("RAG_EMBED_NO_CACHE"):
+    if (
+        probed
+        and not os.getenv("RAG_EMBED_NO_CACHE")
         # Cache is valid for 30s — retry after that in case Infinity was
         # still cold-starting during the initial probe.
-        if probed_at and (time.monotonic() - float(probed_at)) < 30.0:
-            return os.getenv("_INFINITY_OK") == "1"
+        and probed_at
+        and (time.monotonic() - float(probed_at)) < 30.0
+    ):
+        return os.getenv("_INFINITY_OK") == "1"
     try:
         with httpx.Client(timeout=5.0) as c:
             r = c.get(f"{INFINITY_URL}/health")
@@ -96,7 +100,7 @@ def _resize(vec: list[float], dim: int) -> list[float]:
 
 
 async def _infinity_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try Infinity BAAI/bge-m3 via the OpenAI-compatible /embeddings.
+    """Try Infinity qwen3-embedding-4b via the OpenAI-compatible /embeddings.
 
     Returns None on any failure.
 
@@ -154,7 +158,7 @@ async def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] 
 
 
 async def get_embedding(text: str) -> list[float]:
-    """Async embedding API. Returns 1024d float list.
+    """Async embedding API. Returns 2560d float list.
 
     Per T04: NO hash fallback. If both neural backends fail,
     raises RAGUnavailableError. The RAG endpoint translates this to
@@ -202,7 +206,7 @@ async def _get_embedding_impl(text: str) -> list[float]:
     raise RAGUnavailableError(
         "no embedding backend available (infinity unreachable, openrouter failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
-        f"Verify: INFINITY_URL={INFINITY_URL} BAAI/bge-m3 loaded?"
+        f"Verify: INFINITY_URL={INFINITY_URL} qwen3-embedding-4b loaded?"
     )
 
 

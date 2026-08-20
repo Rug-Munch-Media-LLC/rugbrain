@@ -20,8 +20,8 @@
 #   15 3 * * *  /path/to/rugbrain/scripts/sync_code_knowledge.sh >> /var/log/rugbrain/sync_code_knowledge.log 2>&1
 #
 # Requires (host):
-#   - Qdrant at QDRANT_URL (default http://localhost:6333)
-#   - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+#   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+#   - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 #   - RMI Codebase MCP server dir at RMI_MCP_DIR (default /path/to/rmi-codebase-mcp)
 #   - RMI_MCP_PYTHON with fastmcp+chromadb (default x402 venv)
 
@@ -36,8 +36,8 @@ if [ ! -x "$PYTHON" ]; then
 fi
 
 # ── Environment (respect existing env, else local defaults) ─────────────
-export QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
-export INFINITY_URL="${INFINITY_URL:-http://localhost:8001}"
+export QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}"
+export INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}"
 export RAG_CODEBASE_DIR="${RAG_CODEBASE_DIR:-/tmp/rag_codebases}"
 export RMI_MCP_DIR="${RMI_MCP_DIR:-/path/to/rmi-codebase-mcp}"
 export RMI_MCP_PYTHON="${RMI_MCP_PYTHON:-/path/to/rmi-mcp-x402/.venv/bin/python}"

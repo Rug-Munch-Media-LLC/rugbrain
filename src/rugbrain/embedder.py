@@ -2,7 +2,7 @@
 
 Qwen3-Embedding-4B (2560d) is the primary embedding model, served by llama.cpp's
 OpenAI-compatible ``/embeddings`` endpoint (port 8085/8086).
-bge-m3 (1024d) is retired. All Qdrant collections are 2560d Cosine.
+qwen3-embedding-4b (2560d) is retired. All Qdrant collections are 2560d Cosine.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 class EmbedderBackend(Enum):
     """Available embedding backends."""
 
-    BGE_M3 = "bge-m3"  # 1024d, current primary (lightweight, CPU-friendly)
+    BGE_M3 = "qwen3-embedding-4b"  # 2560d, current primary (lightweight, CPU-friendly)
     QWEN3_4B = "qwen3-embed:4b"  # 2560d, legacy (retired)
 
 
@@ -26,7 +26,7 @@ _BACKEND_DIMS: dict[EmbedderBackend, int] = {
 }
 
 # Infinity model id for the BGE-M3 backend.
-INFINITY_MODEL: str = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+INFINITY_MODEL: str = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 
 
 def backend_dim(backend: EmbedderBackend) -> int:
@@ -41,7 +41,7 @@ class DualDimEmbedder:
     def __init__(
         self,
         backend: EmbedderBackend,
-        infinity_url: str = "http://infinity-rag:8001",
+        infinity_url: str = "http://172.22.0.1:8004/v1",
     ) -> None:
         self.backend = backend
         self.infinity_url = infinity_url.rstrip("/")
@@ -51,7 +51,7 @@ class DualDimEmbedder:
         """Embed a batch of texts. Returns one vector per text.
 
         Uses the Infinity /embeddings endpoint (OpenAI-compatible) with
-        the configured model (BAAI/bge-m3).
+        the configured model (qwen3-embedding-4b).
         """
         import httpx
 
@@ -88,13 +88,13 @@ class DualDimEmbedder:
 
 # ── Factory ────────────────────────────────────────────────────────────
 def get_embedder() -> DualDimEmbedder:
-    """Return the canonical embedder (bge-m3, 1024d, via Infinity).
+    """Return the canonical embedder (qwen3-embedding-4b, 2560d, via Infinity).
 
     Async interface: ``await embedder.embed([texts])`` or ``await embedder.embed_one(text)``.
     """
     return DualDimEmbedder(
         EmbedderBackend.BGE_M3,
-        infinity_url=os.getenv("INFINITY_URL", "http://infinity-rag:8001"),
+        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
     )
 
 
@@ -111,7 +111,7 @@ async def reindex_collection(
 
     Args:
         name: collection name
-        source: existing backend (e.g. bge-m3)
+        source: existing backend (e.g. qwen3-embedding-4b)
         target: new backend (e.g. qwen3-embedding:4b)
         fetch_docs: async () -> list[(id, text)] callable
         write_collection: async (name, vectors) -> None callable

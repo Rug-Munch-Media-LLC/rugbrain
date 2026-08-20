@@ -12,7 +12,7 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from sentence_transformers import SentenceTransformer
 
 COLLECTION = "rag_threats"
-MODEL_NAME = "BAAI/bge-m3"
+MODEL_NAME = "qwen3-embedding-4b"
 VECTOR_SIZE = 1024
 
 

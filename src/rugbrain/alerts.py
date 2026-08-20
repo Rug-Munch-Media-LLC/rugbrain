@@ -57,9 +57,9 @@ log = logging.getLogger("rugbrain.alerts")
 
 # ── Configuration ────────────────────────────────────────────────────────
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")

@@ -26,7 +26,7 @@ class LocalBGEEmbedder:
     Local BAAI BGE-small-en-v1.5 embedder.
     Runs on CPU, ~80MB RAM, 384-dim vectors.
     Loaded lazily - first call initializes the model.
-    FALLBACK only. Primary is Infinity BAAI/bge-m3.
+    FALLBACK only. Primary is Infinity qwen3-embedding-4b.
     """
 
     MODEL_NAME = "BAAI/bge-small-en-v1.5"
@@ -56,8 +56,8 @@ class LocalBGEEmbedder:
 class InfinityBGEEmbedder:
     """Infinity embedding provider (OpenAI-compatible /embeddings)."""
 
-    INFINITY_URL = os.getenv("INFINITY_URL", "http://infinity-rag:8001")
-    MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
+    INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
     DIMS = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
 
     def __init__(self, infinity_url: str | None = None):
@@ -93,7 +93,7 @@ class InfinityBGEEmbedder:
 
 
 class OpenRouterEmbedder:
-    """OpenRouter embedding API - NVIDIA Nemotron primary, BAAI/bge-m3 fallback."""
+    """OpenRouter embedding API - NVIDIA Nemotron primary, qwen3-embedding-4b fallback."""
 
     BASE = "https://openrouter.ai/api/v1/embeddings"
     MODEL = OR_PRIMARY_EMBED
@@ -140,7 +140,7 @@ class HuggingFaceEmbedder:
     """HuggingFace Inference API - free tier fallback."""
 
     BASE = "https://api-inference.huggingface.co/models"
-    MODEL = "BAAI/bge-m3"
+    MODEL = "qwen3-embedding-4b"
     DIMS = int(os.getenv("HF_EMBED_DIMS", "1024"))
 
     def __init__(self, token: str | None = None):

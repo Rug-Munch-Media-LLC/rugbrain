@@ -8,7 +8,7 @@ degrades gracefully to plain HTTP fetching + lightweight HTML-to-text
 extraction, so the pipeline keeps working in minimal environments.
 
 Pipeline for every source: fetch → extract clean text → chunk → embed
-(Infinity BAAI/bge-m3 via ``InfinityBGEEmbedder``) → upsert into Qdrant
+(Infinity qwen3-embedding-4b via ``InfinityBGEEmbedder``) → upsert into Qdrant
 with deterministic IDs (idempotent).
 
 Politeness features:
@@ -248,7 +248,7 @@ class WebCrawler:
         """Lazily build the embedder + store singletons."""
         if self._embedder is None:
             self._embedder = InfinityBGEEmbedder(
-                infinity_url=os.getenv("INFINITY_URL", "http://localhost:8001")
+                infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
             )
         if self._store is None:
             self._store = QdrantVectorStore()

@@ -11,7 +11,7 @@ subset used by ``ingest_scam_knowledge.py``:
   - ``data/urls.yaml``       — scam URLs (websites, phishing links)
   - ``data/uris.yaml``       — scam URIs (Telegram, Twitter, onion, etc.)
 
-Each entry is embedded (1024-dim bge-m3) and upserted into ``known_scams``
+Each entry is embedded (2560-dim qwen3-embedding-4b) and upserted into ``known_scams``
 with canonical metadata (category, chain, severity, source, source_url).
 
 Usage:
@@ -20,8 +20,8 @@ Usage:
     python scripts/ingest_cryptoscamdb.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - git, PyYAML (optional; falls back to a lightweight parser)
 """
 

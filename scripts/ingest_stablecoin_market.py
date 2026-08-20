@@ -8,8 +8,8 @@ This gives the bot's market context a canonical "how big is the stablecoin
 ecosystem / where is liquidity" signal that complements the existing news +
 threat-intel RAG collections.
 
-Each stablecoin is embedded (1024-dim bge-m3 via Infinity) and upserted
-into ``stablecoin_market`` (bare 1024-dim Cosine — created on first run).
+Each stablecoin is embedded (2560-dim qwen3-embedding-4b via Infinity) and upserted
+into ``stablecoin_market`` (bare 2560-dim Cosine — created on first run).
 A single aggregate document ("stablecoin ecosystem summary") is also stored
 with the total market cap and top assets so generic market queries hit a
 compact digest.
@@ -27,8 +27,8 @@ Usage:
     python scripts/ingest_stablecoin_market.py            # full 400+ assets
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 
@@ -56,7 +56,7 @@ STABLECOINS_API = "https://stablecoins.llama.fi/stablecoins?includePrices=true"
 COLLECTION = "stablecoin_market"
 SOURCE = "defillama_stablecoins"
 SOURCE_URL = "https://stablecoins.llama.fi"
-EMBEDDING_DIM = 1024
+EMBEDDING_DIM = 2560
 REQUEST_TIMEOUT = 60.0
 SUMMARY_TOP = 15  # top assets included in the aggregate summary doc
 
@@ -247,7 +247,7 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
 
         # QdrantVectorStore lazily creates its own httpx client on first
         # use; insert() creates the bare-vector collection when missing.
-        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://localhost:6333"))
+        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         for doc in docs:
             vec = doc.get("vector")
             if not vec:

@@ -35,7 +35,7 @@ from rugbrain.eval.metrics import (
 )
 from rugbrain.eval.ndcg import hit_rate_at_k, mrr, ndcg_at_k, precision_at_k, recall_at_k
 
-__all__ = [  # type: ignore[reportUnsupportedDunderAll]
+__all__ = [
     "EvalSummary",
     "QueryEvalResult",
     "QueryExample",

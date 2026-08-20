@@ -38,14 +38,14 @@ fi
 
 log "step=defillama_hacks"
 (cd "$RAG_DIR" &&
-  QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-    INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
+  QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+    INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
     "$PYTHON" scripts/ingest_defillama_hacks.py --days 90)
 
 log "step=regulation_enforcement"
 (cd "$RAG_DIR" &&
-  QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6333}" \
-    INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8001}" \
+  QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+    INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
     "$PYTHON" scripts/ingest_regulation_enforcement.py --days 90)
 
 log "step=done"

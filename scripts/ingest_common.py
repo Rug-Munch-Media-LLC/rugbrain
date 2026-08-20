@@ -3,7 +3,7 @@
 
 Used by ``ingest_codebase_knowledge.py``, ``ingest_security_patterns.py`` and
 ``ingest_good_bad_contracts.py`` so every script uses the same Infinity batch
-embedding path (1024-dim bge-m3), deterministic UUIDv5 point IDs, and
+embedding path (2560-dim qwen3-embedding-4b), deterministic UUIDv5 point IDs, and
 canonical Qdrant payload shape.
 
 Scripts import this module directly:
@@ -29,9 +29,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-INFINITY_URL = os.getenv("INFINITY_URL", "http://localhost:8001").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "BAAI/bge-m3")
-EMBEDDING_DIM = 1024
+INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+EMBEDDING_DIM = 2560
 
 # Long code texts embed slowly; batch 8 long texts (matches seed_qdrant).
 EMBED_BATCH = 8
@@ -70,7 +70,7 @@ def chunk_text(text: str, size: int = 2000, overlap: int = 100) -> list[str]:
 async def embed_batch(client: httpx.AsyncClient, texts: Sequence[str]) -> list[list[float]]:
     """Embed *texts* via Infinity /embeddings, one request per batch.
 
-    Returns one 1024-dim vector per text; failed/short vectors become an
+    Returns one 2560-dim vector per text; failed/short vectors become an
     empty list entry so callers can skip them deterministically.
     """
     if not texts:
