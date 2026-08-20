@@ -119,7 +119,7 @@ async def ingest_yaml():
                 addr = (
                     stripped.split('"')[-2] if '"' in stripped else stripped.split("-")[-1].strip()
                 )
-                current.setdefault("addresses", []).append(addr)
+                current.setdefault("addresses", []).append(addr)  # type: ignore[arg-type,attr-defined]
             elif stripped.startswith("    BTC:"):
                 current["chain"] = "bitcoin"
             elif stripped.startswith(("    BSC:", "    BNB:")):

@@ -1037,7 +1037,8 @@ async def search_multi(
         if isinstance(results, Exception):
             logger.debug("search_multi collection=%s failed: %s", cols[idx], results)
             continue
-        for rank, hit in enumerate(results):
+        results_list: list[dict[str, Any]] = results  # type: ignore[assignment]
+        for rank, hit in enumerate(results_list):
             doc_id = hit.get("doc_id") or hit.get("id") or str(hit.get("payload", {}).get("id", ""))
             if not doc_id:
                 continue
