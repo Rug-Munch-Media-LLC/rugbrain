@@ -313,6 +313,18 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "security_feeds",
         "security_alerts",
         "regulation_enforcement",
+        # Legacy collections still written by continuous ingest jobs.
+        "news_articles",
+        "education",
+        "coding_knowledge",
+        "contract_security",
+        "solidity_patterns",
+        "solana_patterns",
+        "stablecoin_market",
+        "security_patterns",
+        "cryptography",
+        "github_audits",
+        "live_threats",
         # RAG-owned auxiliary / graph collections.
         "rag_threats",
         "rag_docs",

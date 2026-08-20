@@ -136,6 +136,7 @@ async def migrate_collection(
     stats = {"name": name, "total": total, "done": done, "upserted": 0, "failed": 0, "no_text": 0}
 
     t0 = time.time()
+    last_log = t0
     cursor: str | None = state.get(name, {}).get("cursor")
     offset = done
     while offset < total:
@@ -161,67 +162,57 @@ async def migrate_collection(
             payloads.append(payload)
             ids.append(p["id"])
 
-        if texts:
-            # Process batch with retry/backoff — NEVER advance past a failed
-            # batch. A migration that silently skips data is worse than a slow
-            # one: offset only moves when the batch is actually upserted.
-            while True:
-                try:
-                    vecs = await _embed_batch(client, texts)
-                    points_to_upsert = []
-                    for i, vec in enumerate(vecs):
-                        point = {"id": ids[i], "payload": payloads[i]}
-                        vector: dict = {"dense": vec}
-                        if supports_sparse and not skip_sparse:
-                            sp = await _sparse_for(texts[i])
-                            if sp is not None:
-                                vector["bm25"] = sp
-                        point["vector"] = vector
-                        points_to_upsert.append(point)
-                    # Batch upsert: all points in one PUT (3 attempts)
-                    put_ok = False
-                    for attempt in range(3):
-                        try:
-                            put = await client.put(
-                                f"{V2}/collections/{name}/points",
-                                json={"points": points_to_upsert},
-                                timeout=120.0,
+        if not texts:
+            offset += len(points)
+            continue
+
+        # Embed the entire batch in one call (embedder handles 128+ texts fine).
+        # The embedder's internal batch_size=2048 handles this efficiently.
+        while True:
+            try:
+                vecs = await _embed_batch(client, texts)
+                points_to_upsert = []
+                for i, vec in enumerate(vecs):
+                    point = {"id": ids[i], "payload": payloads[i]}
+                    vector: dict = {"dense": vec}
+                    if supports_sparse and not skip_sparse:
+                        sp = await _sparse_for(texts[i])
+                        if sp is not None:
+                            vector["bm25"] = sp
+                    point["vector"] = vector
+                    points_to_upsert.append(point)
+                # Batch upsert with retry
+                for attempt in range(3):
+                    try:
+                        put = await client.put(
+                            f"{V2}/collections/{name}/points",
+                            json={"points": points_to_upsert},
+                            timeout=120.0,
+                        )
+                        put.raise_for_status()
+                        break
+                    except Exception as e:
+                        if attempt < 2:
+                            logger.warning(
+                                "upsert_retry %d/3 %s offset=%d: %s", attempt + 1, name, offset, e
                             )
-                            put.raise_for_status()
-                            put_ok = True
-                            break
-                        except Exception as e:
-                            if attempt < 2:
-                                logger.warning(
-                                    "upsert_retry %d/3 %s offset=%d: %s",
-                                    attempt + 1,
-                                    name,
-                                    offset,
-                                    e,
-                                )
-                                await asyncio.sleep(5 * (attempt + 1))
-                            else:
-                                raise
-                    if put_ok:
-                        stats["upserted"] += len(points_to_upsert)
-                        offset += len(points)
-                        break  # batch fully committed — move on
-                except Exception as e:
-                    wait = 15
-                    logger.error(
-                        "batch_retry %s offset=%d: %s — retrying SAME batch in %ds (never skipping)",
-                        name,
-                        offset,
-                        e,
-                        wait,
-                    )
-                    await asyncio.sleep(wait)
+                            await asyncio.sleep(5 * (attempt + 1))
+                        else:
+                            raise
+                stats["upserted"] += len(points_to_upsert)
+                offset += len(points)
+                break  # success — move to next scroll
+            except Exception as e:
+                logger.error("batch_retry %s offset=%d: %s — retrying in 15s", name, offset, e)
+                await asyncio.sleep(15)
 
         state.setdefault(name, {})["done"] = offset
         state[name]["cursor"] = cursor
-        if offset % (batch * 8) < batch:
+        now = time.time()
+        if now - last_log >= 60:
+            last_log = now
             _save_state(state)
-            rate = offset / max(time.time() - t0, 1)
+            rate = offset / max(now - t0, 1)
             eta = (total - offset) / max(rate, 0.01)
             logger.info(
                 "%s %d/%d (%.0f%%) upserted=%d no_text=%d failed=%d rate=%.1f/s eta=%.0fm",
@@ -235,9 +226,10 @@ async def migrate_collection(
                 rate,
                 eta / 60,
             )
-            if limit and offset >= limit:
-                logger.info("%s: hit --limit %d, stopping", name, limit)
-                break
+        if limit and offset >= limit:
+            logger.info("%s: hit --limit %d, stopping", name, limit)
+            break
+
     logger.info("collection done: %s %d/%d in %.0fs", name, offset, total, time.time() - t0)
     return stats
 
@@ -249,8 +241,8 @@ async def main() -> int:
     ap.add_argument(
         "--concurrent",
         type=int,
-        default=4,
-        help="concurrent embed requests (matches llama.cpp --parallel)",
+        default=3,
+        help="concurrent collections (scroll/upsert overlap while embed is sequential)",
     )
     ap.add_argument("--limit", type=int, default=0, help="max points per collection")
     ap.add_argument(
