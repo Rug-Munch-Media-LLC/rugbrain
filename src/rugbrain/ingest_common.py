@@ -53,7 +53,7 @@ class CrawlDocument(BaseModel):
 
 
 class Embedder(Protocol):
-    """Minimal embedder contract (matches InfinityBGEEmbedder)."""
+    """Minimal embedder contract (matches Qwen3Embedder)."""
 
     async def embed_one(self, text: str) -> list[float]: ...
 

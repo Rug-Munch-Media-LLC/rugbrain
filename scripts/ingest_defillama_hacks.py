@@ -11,7 +11,7 @@ returns HTTP 500 and the RSS paths are gone, so RSS-based consumers like
 DeFiLlama covers the same incident universe with a maintained, structured
 API.
 
-Each hack is embedded (2560-dim qwen3-embedding-4b via Infinity) and upserted into
+Each hack is embedded (2560-dim qwen3-embedding-4b via ) and upserted into
 ``threat_intel_v2`` (dense + BM25 sparse hybrid — the REAL collection;
 the legacy ``threat_intel`` name was migrated away and no alias exists, so
 writing to it would create an empty fragment) with canonical filterable
@@ -33,7 +33,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 

@@ -21,7 +21,7 @@
 #
 # Requires (host):
 #   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-#   - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+#   - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 #   - RMI Codebase MCP server dir at RMI_MCP_DIR (default /path/to/rmi-codebase-mcp)
 #   - RMI_MCP_PYTHON with fastmcp+chromadb (default x402 venv)
 
@@ -51,15 +51,15 @@ fi
 
 log() { echo "[sync $(date -u +%FT%TZ)] $*"; }
 
-# Wait for Infinity to be ready (it can restart / warm up on CPU).
-wait_infinity() {
+# Wait for to be ready (it can restart / warm up on CPU).
+wait_() {
   for _ in $(seq 1 40); do
     if curl -fsS -m 10 "$INFINITY_URL/health" >/dev/null 2>&1; then
       return 0
     fi
     sleep 15
   done
-  log "WARN: Infinity not reachable after wait — continuing (embedding may fail)"
+  log "WARN: not reachable after wait — continuing (embedding may fail)"
   return 0
 }
 
@@ -90,12 +90,12 @@ fi
 
 # ── 2. Pull MCP security patterns into RAG coding_knowledge ─────────────
 step "pull MCP security patterns into coding_knowledge"
-wait_infinity
+wait_
 "$PYTHON" -m rugbrain.mcp_bridge sync || log "WARN: mcp pattern sync returned non-zero"
 
 # ── 3. Re-run coding-knowledge ingesters (idempotent) ────────────────────
 step "re-run coding-knowledge ingesters"
-wait_infinity
+wait_
 
 # Unified ingest CLI — coding subcommand delegates to individual lang ingesters
 if [ "$MODE" = "--full" ]; then

@@ -325,7 +325,7 @@ async def get_scam_patterns(force_refresh: bool = False) -> list[dict[str, Any]]
 async def store_scam_patterns(patterns: list[dict[str, Any]]) -> dict[str, Any]:
     """Store structured scam patterns into the ``scam_patterns`` collection.
 
-    Uses the standard semantic embedding (2560-dim qwen3-embedding-4b via Infinity) so
+    Uses the standard semantic embedding (2560-dim qwen3-embedding-4b via Qwen3) so
     the collection stays queryable by the same embedder as the rest of the
     RAG. Returns ``{"stored": N, "skipped": M}``.
     """

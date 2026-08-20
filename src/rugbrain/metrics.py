@@ -61,8 +61,8 @@ qdrant_healthy = Gauge(
     "rag_qdrant_healthy",
     "Qdrant health status",
 )
-infinity_healthy = Gauge(
-    "rag_infinity_healthy",
+int_healthy = Gauge(
+    "rag_int_healthy",
     "llama.cpp (embedding/reranking) health status",
 )
 

@@ -15,17 +15,17 @@ from typing import Any
 class EmbedderBackend(Enum):
     """Available embedding backends."""
 
-    BGE_M3 = "qwen3-embedding-4b"  # 2560d, current primary (lightweight, CPU-friendly)
+    Qwen3_M3 = "qwen3-embedding-4b"  # 2560d, current primary via llama.cpp
     QWEN3_4B = "qwen3-embed:4b"  # 2560d, legacy (retired)
 
 
 # ── Per-backend configuration ──────────────────────────────────────────
 _BACKEND_DIMS: dict[EmbedderBackend, int] = {
-    EmbedderBackend.BGE_M3: 1024,
+    EmbedderBackend.Qwen3_M3: 2560,
     EmbedderBackend.QWEN3_4B: 2560,
 }
 
-# Infinity model id for the BGE-M3 backend.
+# Qwen3-Embedding-4B model id for the llama.cpp backend.
 INFINITY_MODEL: str = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 
 
@@ -36,21 +36,21 @@ def backend_dim(backend: EmbedderBackend) -> int:
 
 # ── Dual-dim wrapper ────────────────────────────────────────────────────
 class DualDimEmbedder:
-    """Wraps Infinity embedding for any backend. Same interface regardless of dim."""
+    """Wraps Qwen3 embedding for any backend. Same interface regardless of dim."""
 
     def __init__(
         self,
         backend: EmbedderBackend,
-        infinity_url: str = "http://172.22.0.1:8004/v1",
+        int_url: str = "http://172.22.0.1:8004/v1",
     ) -> None:
         self.backend = backend
-        self.infinity_url = infinity_url.rstrip("/")
+        self.int_url = int_url.rstrip("/")
         self.dim = backend_dim(backend)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts. Returns one vector per text.
 
-        Uses the Infinity /embeddings endpoint (OpenAI-compatible) with
+        Uses the llama.cpp /embeddings endpoint (OpenAI-compatible) with
         the configured model (qwen3-embedding-4b).
         """
         import httpx
@@ -60,7 +60,7 @@ class DualDimEmbedder:
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{self.infinity_url}/embeddings",
+                f"{self.int_url}/embeddings",
                 json={"model": INFINITY_MODEL, "input": texts},
             )
             resp.raise_for_status()
@@ -76,7 +76,7 @@ class DualDimEmbedder:
                 raise RuntimeError(
                     f"Embedder {self.backend.value} returned {len(vec)}d vector "
                     f"for text[{i}], expected {self.dim}d. "
-                    f"Check that Infinity has {INFINITY_MODEL} loaded."
+                    f"Check that llama.cpp has {INFINITY_MODEL} loaded."
                 )
         return vectors
 
@@ -88,13 +88,13 @@ class DualDimEmbedder:
 
 # ── Factory ────────────────────────────────────────────────────────────
 def get_embedder() -> DualDimEmbedder:
-    """Return the canonical embedder (qwen3-embedding-4b, 2560d, via Infinity).
+    """Return the canonical embedder (qwen3-embedding-4b, 2560d, via Qwen3).
 
     Async interface: ``await embedder.embed([texts])`` or ``await embedder.embed_one(text)``.
     """
     return DualDimEmbedder(
-        EmbedderBackend.BGE_M3,
-        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
+        EmbedderBackend.Qwen3_M3,
+        embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
     )
 
 

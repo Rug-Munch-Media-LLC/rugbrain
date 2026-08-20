@@ -36,7 +36,7 @@ class EmbeddingTrainingData:
             try:
                 results = await store.search(
                     collection=col,
-                    query_embedding=[0.0] * 1024,
+                    query_embedding=[0.0] * 2560,
                     limit=1000,
                 )
                 for r in results:
@@ -66,7 +66,7 @@ class EmbeddingTrainingData:
             try:
                 results = await store.search(
                     collection=col,
-                    query_embedding=[0.0] * 1024,
+                    query_embedding=[0.0] * 2560,
                     limit=limit,
                 )
                 for r in results:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-BGE / embedding provider classes — local, Infinity, OpenRouter, HuggingFace, and
-specialized contract-code embedder.
+Embedding provider classes — Qwen3-Embedding-4B via llama.cpp (primary),
+OpenRouter/HuggingFace (external fallbacks), and specialized contract embedder.
 """
 
 import asyncio
@@ -21,47 +21,20 @@ OR_PRIMARY_EMBED = os.getenv("RAG_PRIMARY_EMBED_MODEL", "openrouter/your-model-h
 OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
 
 
-class LocalBGEEmbedder:
-    """
-    Local BAAI BGE-small-en-v1.5 embedder.
-    Runs on CPU, ~80MB RAM, 384-dim vectors.
-    Loaded lazily - first call initializes the model.
-    FALLBACK only. Primary is Infinity qwen3-embedding-4b.
+class Qwen3Embedder:
+    """llama.cpp Qwen3-Embedding-4B provider (OpenAI-compatible /embeddings).
+
+    Serves 2560-dim vectors for all RAG ingestion/search paths.
     """
 
-    MODEL_NAME = "BAAI/bge-small-en-v1.5"
-    _model = None
-
-    @classmethod
-    def _get_model(cls) -> Any:
-        if cls._model is None:
-            from sentence_transformers import SentenceTransformer
-
-            cls._model = SentenceTransformer(cls.MODEL_NAME)
-            logger.info("LocalBGEEmbedder loaded: %s (384d)", cls.MODEL_NAME)
-        return cls._model
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        model = self._get_model()
-        embeddings = await asyncio.to_thread(
-            lambda: model.encode(texts, normalize_embeddings=True).tolist()
-        )
-        return cast(list[list[float]], embeddings)
-
-    async def embed_one(self, text: str) -> list[float]:
-        results = await self.embed([text])
-        return results[0]
-
-
-class InfinityBGEEmbedder:
-    """Infinity embedding provider (OpenAI-compatible /embeddings)."""
-
-    INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    EMBED_URL = os.getenv("QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
     MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-    DIMS = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
+    DIMS = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("INFINITY_EMBED_DIMS", "2560")))
 
-    def __init__(self, infinity_url: str | None = None):
-        self.url = infinity_url or os.getenv("INFINITY_URL", self.INFINITY_URL)
+    def __init__(self, embed_url: str | None = None):
+        self.url = embed_url or os.getenv(
+            "QWEN_EMBED_URL", os.getenv("INFINITY_URL", self.EMBED_URL)
+        )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         import httpx
@@ -87,9 +60,10 @@ class InfinityBGEEmbedder:
                 results.append([0.0] * self.DIMS)
         return results
 
-    async def embed_one(self, text: str) -> list[float]:
-        results = await self.embed([text])
-        return results[0]
+
+async def embed_one(self, text: str) -> list[float]:
+    results = await self.embed([text])
+    return results[0]
 
 
 class OpenRouterEmbedder:
@@ -141,7 +115,7 @@ class HuggingFaceEmbedder:
 
     BASE = "https://api-inference.huggingface.co/models"
     MODEL = "qwen3-embedding-4b"
-    DIMS = int(os.getenv("HF_EMBED_DIMS", "1024"))
+    DIMS = int(os.getenv("HF_EMBED_DIMS", "2560"))
 
     def __init__(self, token: str | None = None):
         self.token = token or HF_TOKEN

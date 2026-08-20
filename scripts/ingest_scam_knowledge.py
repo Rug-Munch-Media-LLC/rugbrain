@@ -28,7 +28,7 @@ Pipeline guarantees:
   * Checkpointed — progress is tracked in a JSON checkpoint file
     (``RAG_KNOWLEDGE_CHECKPOINT``, default /tmp/rag-knowledge/checkpoint.json)
     keyed by source → file → sha256, so already-ingested files are skipped.
-  * Batched — embeddings are computed 50 at a time through Infinity
+  * Batched — embeddings are computed 50 at a time through 
     (OpenAI-compatible /embeddings) and upserts are sent 50 points per call.
 
 Usage:
@@ -39,7 +39,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with the embed
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with the embed
     model from RAG_INFINITY_EMBED_MODEL (default qwen3-embedding-4b, 2560-dim)
   - git, httpx, numpy, yaml (PyYAML)
 """
@@ -394,7 +394,7 @@ class Checkpoint:
 
 
 async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
-    """Embed texts through Infinity /embeddings in one request.
+    """Embed texts through /embeddings in one request.
 
     Returns L2-normalized vectors aligned with input order (None on failure).
     """

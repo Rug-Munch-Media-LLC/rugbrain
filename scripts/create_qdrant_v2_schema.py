@@ -2,7 +2,7 @@
 
 Mirrors the legacy rmi-qdrant (:6333) collection list — same names, same
 payload settings — but with dense vectors at 2560 dims (Qwen3-Embedding-4B)
-instead of 1024 (bge-m3). Sparse bm25 vectors and HNSW settings are carried
+instead of 1024 (qwen3-4b, now 2560 Qwen3-4B). Sparse bm25 vectors and HNSW settings are carried
 over from the legacy config where present.
 
 Usage:

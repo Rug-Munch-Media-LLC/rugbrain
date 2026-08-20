@@ -3,7 +3,7 @@
 
 Part 1 of the contract-knowledge expansion. Clones public reference
 codebases and ingests their source (split by contract/function, embedded with
-qwen3-embedding-4b via Infinity) into the RAG so RugBrain can answer "what does a secure
+qwen3-embedding-4b via ) into the RAG so RugBrain can answer "what does a secure
 ERC20 / Uniswap pool / SPL program look like?".
 
 Protocols (see ``codebase_protocols_data.py``):
@@ -32,7 +32,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - git, solc (optional — falls back to regex chunking)
 """
 

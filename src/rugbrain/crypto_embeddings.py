@@ -51,7 +51,7 @@ if not DIMS:
     # Sensible defaults showing the pattern
     DIMS = {
         "qwen3-embedding-4b": 2560,
-        "fallback-model": 384,
+        "fallback-model": 2560,
         "behavioral": 64,
         "code_hash": 128,
     }
@@ -98,11 +98,10 @@ else:
         "rmi_community",
     ]
 
-from rugbrain.bge_embedders import (  # noqa: E402
+from rugbrain.qwen_embedders import (  # noqa: E402
     ContractCodeEmbedder,
     HuggingFaceEmbedder,
-    InfinityBGEEmbedder,
-    LocalBGEEmbedder,
+    Qwen3Embedder,
     OpenRouterEmbedder,
 )
 from rugbrain.feature_extractors import (  # noqa: E402
@@ -155,8 +154,7 @@ class CryptoEmbedder:
     """
 
     def __init__(self) -> None:
-        self._local: LocalBGEEmbedder | None = None
-        self._infinity: InfinityBGEEmbedder | None = None
+        self._qwen: Qwen3Embedder | None = None
         self._openrouter: OpenRouterEmbedder | None = None
         self._huggingface: HuggingFaceEmbedder | None = None
         self._redis: Any = None
@@ -170,10 +168,9 @@ class CryptoEmbedder:
         hf_token = os.environ.get("HUGGINGFACE_TOKEN", "") or HF_TOKEN
 
         # PRIMARY embedding provider
-        self._infinity = InfinityBGEEmbedder()
-        logger.info("CryptoEmbedder: primary infinity embedder ready")
+        self._qwen = Qwen3Embedder()
+        logger.info("CryptoEmbedder: primary qwen3 embedder ready")
 
-        self._local = LocalBGEEmbedder()
         logger.info("CryptoEmbedder: local fallback embedder ready")
 
         if or_key:
@@ -203,9 +200,9 @@ class CryptoEmbedder:
     async def _semantic_embed(self, texts: list[str], head: str = "semantic") -> list[list[float]]:
         """
         Semantic embedding pipeline with tiered fallback:
-        PRIMARY:   Primary embedder (Infinity qwen3-embedding-4b)
+        PRIMARY:   Primary embedder (Qwen3-Embedding-4B (llama.cpp))
         FALLBACK:  OpenRouter or API-based embedder
-        FALLBACK:  Local embedder (always available)
+        FALLBACK:  OpenRouter/HF embedder (external fallback)
         FALLBACK:  HuggingFace embedder
         LAST:      Hash-based (low quality, deterministic)
         """
@@ -213,11 +210,11 @@ class CryptoEmbedder:
             return []
 
         # PRIMARY embedder
-        if self._infinity:
+        if self._qwen:
             try:
-                return await self._infinity.embed(texts)
+                return await self._qwen.embed(texts)
             except Exception as e:
-                logger.warning("Primary infinity embedding failed: %s", e)
+                logger.warning("Primary int embedding failed: %s", e)
 
         # Fallback: OpenRouter
         if self._openrouter:
@@ -226,12 +223,12 @@ class CryptoEmbedder:
             except Exception as e:
                 logger.warning("OpenRouter embedding failed: %s", e)
 
-        # Fallback: Local embedder
-        if self._local:
+        # Fallback: OpenRouter embedder
+        if self._openrouter:
             try:
-                return await self._local.embed(texts)
+                return await self._openrouter.embed(texts)
             except Exception as e:
-                logger.warning("Local embedding failed: %s", e)
+                logger.warning("OpenRouter fallback embedding failed: %s", e)
 
         # Fallback: HuggingFace
         if self._huggingface:
@@ -638,9 +635,9 @@ Code patterns: {"; ".join(code_snippets or [])[:3000]}"""
         return {
             "initialized": self._initialized,
             "providers": {
-                "primary": self._infinity is not None,
+                "primary": self._qwen is not None,
                 "fallback_api": self._openrouter is not None,
-                "local": self._local is not None,
+                "qwen": self._qwen is not None,
                 "huggingface": self._huggingface is not None,
             },
             "cache": {

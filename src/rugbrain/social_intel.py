@@ -33,7 +33,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.ingest_common import CrawlDocument, doc_from_article, store_documents
 from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -412,8 +412,8 @@ async def collect_social_intel(
             "trending": trending,
         }
 
-    embedder = InfinityBGEEmbedder(
-        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    embedder = Qwen3Embedder(
+        embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
     )
     store = QdrantVectorStore()
     try:

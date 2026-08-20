@@ -20,7 +20,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import os
 import sys
 from typing import Any
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(
@@ -79,7 +79,7 @@ QUERIES: list[tuple[str, tuple[str, ...], tuple[str, ...], str]] = [
 
 async def run_query(
     store: QdrantVectorStore,
-    embedder: InfinityBGEEmbedder,
+    embedder: Qwen3Embedder,
     query: str,
     collections: tuple[str, ...],
     limit: int = 5,
@@ -114,7 +114,7 @@ async def run_query(
 
 async def verify_queries(collections: tuple[str, ...]) -> list[dict[str, Any]]:
     store = QdrantVectorStore()
-    embedder = InfinityBGEEmbedder()
+    embedder = Qwen3Embedder()
     results: list[dict[str, Any]] = []
     try:
         for query, query_collections, keywords, label in QUERIES:

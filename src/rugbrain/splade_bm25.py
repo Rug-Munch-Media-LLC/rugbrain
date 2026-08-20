@@ -6,7 +6,7 @@ Implements proper learned sparse representations (SPLADE-style) and BM25
 with IDF weighting, replacing the naive token-overlap sparse search.
 
 Architecture:
-  - SPLADE: Term-level importance weighting using the existing BGE-small + ReLU + log(1+abs())
+  - SPLADE: Term-level importance weighting using Qwen3-4B features + ReLU + log(1+abs())
   - BM25: Standard Okapi BM25 with IDF, k1=1.2, b=0.75, stopword removal
   - Integration: Drop-in replacement for _sparse_text_search in rag_service.py
 
@@ -15,7 +15,7 @@ vocabulary term, weighted by importance. This replaces naive token counting with
 learned term expansion and importance weighting.
 
 For production SPLADE, you'd use naver/splade-v3-doc or prithivida/Splade_PP_en_v2.
-This module provides a lightweight approximation using BGE-small features + expansion,
+This module provides a lightweight approximation using Qwen3-4B features + expansion,
 with a clear upgrade path to a full SPLADE model.
 """
 

@@ -29,7 +29,7 @@ Usage::
     python -m rugbrain.alerts               # long-running poller (every 60s tick)
 
 Requires (all optional, degrade gracefully when absent):
-  - Qdrant (QDRANT_URL) + Infinity (INFINITY_URL) for embedding/storage
+  - Qdrant (QDRANT_URL) + Qwen3-4B (QWEN_EMBED_URL) for embedding/storage
   - Redis (REDIS_HOST) for rate-limit + dedup state
   - NATS (NATS_URL) — optional; Redis pub/sub is the fallback bus
   - ClickHouse (CLICKHOUSE_HOST/PORT/USER/PASSWORD/DATABASE) — optional;
@@ -60,7 +60,7 @@ log = logging.getLogger("rugbrain.alerts")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
 INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("INFINITY_EMBED_DIMS", "2560")))
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -246,7 +246,7 @@ def _rate_limited(state: AlertState, source: str, now: float, interval: float) -
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Embed *text* through Infinity (L2-normalized). Returns None on failure."""
+    """Embed *text* through Qwen3-4B (llama.cpp) (L2-normalized). Returns None on failure."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(

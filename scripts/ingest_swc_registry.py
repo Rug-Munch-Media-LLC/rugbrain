@@ -21,7 +21,7 @@ For each entry we:
   2. Map the SWC ID to a canonical ``attack_vector`` and default ``severity``
      (see ``rugbrain.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
   3. Build a structured weakness document and embed with qwen3-embedding-4b (2560-dim,
-     Infinity /embeddings).
+     /embeddings).
   4. Upsert into ``crypto_vulnerabilities`` with ``source=swc_registry`` and canonical
      metadata (attack_vector, severity, chain=ethereum, protocol=SWC ID,
      source_type=swc_registry).
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -52,7 +52,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.crypto_schema import SWC_SEVERITY, SWC_VECTORS
 from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -210,8 +210,8 @@ async def ingest_docs(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d SWC entries into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = InfinityBGEEmbedder(
-        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    embedder = Qwen3Embedder(
+        _url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
     )
     store = QdrantVectorStore()
     inserted = failed = 0

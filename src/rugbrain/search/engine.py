@@ -1004,7 +1004,7 @@ async def three_pillar_search(
       pure diversity). Default 0.6 leans relevance so gold-relevant docs are
       not over-deduped; env ``RAG_MMR_LAMBDA``.
     * ``rerank`` — **default True**: the top ``rerank_top_k`` fused
-      candidates are re-ranked with the search-lane cross-encoder (BGE via
+      candidates are re-ranked with the search-lane cross-encoder ( Qwen3 via
       ``rugbrain.search.rerank.rerank_chunks``) and the best ``rerank_keep``
       (defaults to *limit*) are kept. Graceful no-op when the model is not
       installed (results keep their original order; ``search_reranker_applied
@@ -1014,7 +1014,7 @@ async def three_pillar_search(
     * ``rerank_timeout`` — seconds before the search-lane reranker falls back
       to raw ranking (default 2.0; env ``RAG_RERANK_TIMEOUT``; ``<=0``
       disables).
-    * ``use_reranker`` — the news-lane cross-encoder reranker (BGE via
+    * ``use_reranker`` — the news-lane cross-encoder reranker ( Qwen3 via
       self-hosted Qwen3-Reranker-8B), applied after fusion. Defaults True
       with a graceful no-op fallback: environments without a reranker model
       return results by their original score (``rerank_method="none"``), so

@@ -8,7 +8,7 @@ degrades gracefully to plain HTTP fetching + lightweight HTML-to-text
 extraction, so the pipeline keeps working in minimal environments.
 
 Pipeline for every source: fetch → extract clean text → chunk → embed
-(Infinity qwen3-embedding-4b via ``InfinityBGEEmbedder``) → upsert into Qdrant
+(Qwen3-Embedding-4B via ``Qwen3Embedder``) → upsert into Qdrant
 with deterministic IDs (idempotent).
 
 Politeness features:
@@ -45,7 +45,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.ingest_common import CrawlDocument, doc_from_article, store_documents
 from rugbrain.qdrant_store import QdrantVectorStore
 from rugbrain.rss_parser import parse_feed
@@ -247,8 +247,8 @@ class WebCrawler:
     async def _services(self) -> tuple[Any, Any]:
         """Lazily build the embedder + store singletons."""
         if self._embedder is None:
-            self._embedder = InfinityBGEEmbedder(
-                infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+            self._embedder = Qwen3Embedder(
+                embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
             )
         if self._store is None:
             self._store = QdrantVectorStore()

@@ -1,7 +1,7 @@
 """Threat intelligence ingestion pipeline.
 
 Pulls from GoPlus, PhishTank, Chainabuse, and community submissions.
-Embeds with BGE-M3 and stores in Qdrant rag_threats collection.
+Embeds with Qwen3-4B (2560d) and stores in Qdrant rag_threats collection.
 """
 
 import asyncio

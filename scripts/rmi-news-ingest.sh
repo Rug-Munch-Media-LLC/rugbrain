@@ -13,8 +13,8 @@
 set -euo pipefail
 
 # ── Concurrency guard: never run two ingests at once ─────────────────
-# Cron fires every 15 min but a run can exceed 15 min (Infinity cold
-# starts, slow RSS). Without a lock, runs pile up and saturate Infinity.
+# Cron fires every 15 min but a run can exceed 15 min (cold
+# starts, slow RSS). Without a lock, runs pile up and saturate .
 # flock -n fails fast: if another run holds the lock we exit 0 (skip,
 # the next scheduled run will pick up). The lock is auto-released when
 # this process exits (fd 200 closed), plus an explicit EXIT trap.

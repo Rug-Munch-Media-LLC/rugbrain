@@ -3,7 +3,7 @@
 
 Used by the Part-1 scam/hack database ingesters (rugdoc, tokensniffer,
 honeypot, defisafety, revokecash, chainabuse, cryptoscamdb, peckshield)
-so every script embeds with the same Infinity batch path (2560-dim qwen3-embedding-4b),
+so every script embeds with the same batch path (2560-dim qwen3-embedding-4b),
 uses deterministic UUIDv5 point IDs, and writes the canonical Qdrant payload
 shape. Extends ``ingest_common.py`` with a batched store write.
 

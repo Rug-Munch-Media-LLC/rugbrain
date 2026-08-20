@@ -2,7 +2,7 @@
 """Shared helpers for the RugBrain contract-knowledge ingesters.
 
 Used by ``ingest_codebase_knowledge.py``, ``ingest_security_patterns.py`` and
-``ingest_good_bad_contracts.py`` so every script uses the same Infinity batch
+``ingest_good_bad_contracts.py`` so every script uses the same batch
 embedding path (2560-dim qwen3-embedding-4b), deterministic UUIDv5 point IDs, and
 canonical Qdrant payload shape.
 
@@ -11,7 +11,7 @@ Scripts import this module directly:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from ingest_common import embed_batch, content_hash, to_uuid
 
-No secrets: all defaults point at local services (Qdrant / Infinity) and are
+No secrets: all defaults point at local services (Qdrant / ) and are
 overridable via the standard RAG env vars (QDRANT_URL, INFINITY_URL,
 RAG_INFINITY_EMBED_MODEL).
 """
@@ -68,7 +68,7 @@ def chunk_text(text: str, size: int = 2000, overlap: int = 100) -> list[str]:
 
 
 async def embed_batch(client: httpx.AsyncClient, texts: Sequence[str]) -> list[list[float]]:
-    """Embed *texts* via Infinity /embeddings, one request per batch.
+    """Embed *texts* via /embeddings, one request per batch.
 
     Returns one 2560-dim vector per text; failed/short vectors become an
     empty list entry so callers can skip them deterministically.

@@ -22,7 +22,7 @@ free sources and, when an exploit is detected, pushes it through a
     1. publish to NATS ``alerts.crypto.critical`` (Redis pub/sub fallback)
     2. store in ClickHouse ``critical_alerts``
     3. push to Telegram (``TELEGRAM_BOT_TOKEN`` + ``TELEGRAM_CHAT_ID``)
-    4. upsert into Qdrant ``live_threats`` (embedded via Infinity)
+    4. upsert into Qdrant ``live_threats`` (embedded via Qwen3)
     5. POST to every registered community webhook (HMAC-SHA256 signed)
 
 The existing watchlist classes (``WatchlistManager`` / ``AlertDispatcher``)
@@ -94,7 +94,7 @@ CRITICAL_ALERTS_TABLE = os.getenv("CLICKHOUSE_CRITICAL_TABLE", "critical_alerts"
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
 INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("INFINITY_EMBED_DIMS", "2560")))
 LIVE_THREATS_COLLECTION = os.getenv("LIVE_THREATS_COLLECTION", "live_threats")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -575,7 +575,7 @@ _critical_logger = CriticalAlertLogger()
 
 
 async def _embed_critical(text: str) -> list[float] | None:
-    """Embed through Infinity (L2-normalized). None on failure."""
+    """Embed through Qwen3-4B (L2-normalized). None on failure."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(
@@ -623,7 +623,7 @@ async def store_qdrant_live_threat(alert: CriticalAlert) -> bool:
     try:
         embedding = await _embed_critical(alert.text())
         if not embedding:
-            # Keep the point in the collection even when Infinity is down —
+            # Keep the point in the collection even when llama.cpp is down —
             # the payload still carries full threat context.
             embedding = [0.0] * EMBEDDING_DIM
         async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=30.0) as client:

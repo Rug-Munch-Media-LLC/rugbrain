@@ -10,7 +10,7 @@ tags (chains / attack vectors), and an excerpt describing the incident.
 For each hack we:
   1. Build a structured description: protocol, date, amount, attack vector,
      chain, excerpt.
-  2. Embed with qwen3-embedding-4b (2560-dim dense) via Infinity (OpenAI-compatible /embeddings).
+  2. Embed with qwen3-embedding-4b (2560-dim dense) via (OpenAI-compatible /embeddings).
   3. Upsert into the ``hacks_v2`` collection (the migrated hybrid
      collection; the legacy ``hacks`` name was migrated away and no alias
      exists, so writing to it would create an empty fragment).
@@ -29,7 +29,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -47,7 +47,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -240,8 +240,8 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = InfinityBGEEmbedder(
-        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    embedder = Qwen3Embedder(
+        _url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
     )
     store = QdrantVectorStore()
     inserted = 0

@@ -5,12 +5,12 @@ confidently-wrong results (non-semantic vectors). When all neural
 backends fail, the RAG system now fails LOUDLY instead of returning
 gibberish.
 
-Tier 1: Infinity qwen3-embedding-4b (2560d, self-hosted, zero cost) - strong quality
+Tier 1: Qwen3-Embedding-4B (2560d, self-hosted, zero cost) - strong quality
 Tier 2: OpenRouter NVIDIA Nemotron (2048d, free tier) - if API key set
 
 Design (per DESIGN.md M4):
 - Single async API: `await get_embedding(text) -> list[float]`
-- qwen3-embedding-4b preferred when available (via Infinity /embeddings)
+- qwen3-embedding-4b preferred (via llama.cpp /embeddings)
 - Embedding dim is reported via EMBEDDING_DIM; collections use same dim
 - All embeddings are float lists (JSON-serializable) for Redis storage
 - FAIL LOUD: if both backends fail, raise RAGUnavailableError
@@ -53,10 +53,10 @@ class RAGUnavailableError(Exception):
     See T04 in MINIMAX_M3_TASKS.md."""
 
 
-def _infinity_reachable() -> bool:
-    """Quick probe: is Infinity listening? Cached per process via env.
+def _int_reachable() -> bool:
+    """Quick probe: is Qwen3-4B listening? Cached per process via env.
 
-    Cache expires after 30s so a cold-start Infinity that was unreachable
+    Cache expires after 30s so a cold-start llama.cpp that was unreachable
     during early startup will be retried automatically. Set
     ``RAG_EMBED_NO_CACHE=1`` to force a fresh probe every time.
     """
@@ -65,7 +65,7 @@ def _infinity_reachable() -> bool:
     if (
         probed
         and not os.getenv("RAG_EMBED_NO_CACHE")
-        # Cache is valid for 30s — retry after that in case Infinity was
+        # Cache is valid for 30s — retry after that in case llama.cpp was
         # still cold-starting during the initial probe.
         and probed_at
         and (time.monotonic() - float(probed_at)) < 30.0
@@ -81,7 +81,7 @@ def _infinity_reachable() -> bool:
     os.environ["_INFINITY_PROBED_AT"] = str(time.monotonic())
     os.environ["_INFINITY_OK"] = "1" if ok else "0"
     if not ok:
-        log.info("rag_infinity_unreachable url=%s", INFINITY_URL)
+        log.info("rag_int_unreachable url=%s", INFINITY_URL)
     return ok
 
 
@@ -99,12 +99,12 @@ def _resize(vec: list[float], dim: int) -> list[float]:
     return [float(x) for x in arr]
 
 
-async def _infinity_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try Infinity qwen3-embedding-4b via the OpenAI-compatible /embeddings.
+async def _int_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+    """Try Qwen3-Embedding-4B via the OpenAI-compatible /embeddings.
 
     Returns None on any failure.
 
-    Async (httpx.AsyncClient) so a slow Infinity never blocks the event
+    Async (httpx.AsyncClient) so a slow llama.cpp never blocks the event
     loop — previously the sync client wedged the FastAPI search handler
     for 38-90s, tripping the container healthcheck.
     """
@@ -124,7 +124,7 @@ async def _infinity_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | 
                 return None
             return _resize(vec, dim)
     except Exception as e:
-        log.debug("infinity_embed_failed: %s", e)
+        log.debug("int_embed_failed: %s", e)
         return None
 
 
@@ -181,22 +181,22 @@ async def _get_embedding_impl(text: str) -> list[float]:
     """Core embedding resolution (separated for latency instrumentation)."""
 
     # Explicit backend override
-    if _BACKEND == "infinity":
-        v = await _infinity_embed(text)
+    if _BACKEND == "int":
+        v = await _int_embed(text)
         if v is not None:
             return v
-        raise RAGUnavailableError("infinity backend failed and hash fallback removed per T04")
+        raise RAGUnavailableError("int backend failed and hash fallback removed per T04")
     if _BACKEND == "openrouter":
         v = await _openrouter_embed(text)
         if v is not None:
             return v
         raise RAGUnavailableError("openrouter backend failed and hash fallback removed per T04")
 
-    # auto: try infinity -> openrouter, fail loud if both fail
+    # auto: try int -> openrouter, fail loud if both fail
     # Probe is sync (cached per process) — run off the event loop so a slow
     # first probe can never wedge the request handler.
-    if await asyncio.to_thread(_infinity_reachable):
-        v = await _infinity_embed(text)
+    if await asyncio.to_thread(_int_reachable):
+        v = await _int_embed(text)
         if v is not None:
             return v
     v = await _openrouter_embed(text)
@@ -204,14 +204,14 @@ async def _get_embedding_impl(text: str) -> list[float]:
         return v
 
     raise RAGUnavailableError(
-        "no embedding backend available (infinity unreachable, openrouter failed). "
+        "no embedding backend available (int unreachable, openrouter failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
         f"Verify: INFINITY_URL={INFINITY_URL} qwen3-embedding-4b loaded?"
     )
 
 
 async def get_embeddings(texts: list[str]) -> list[list[float]]:
-    """Batch embedding. Sequential calls - Infinity and OpenRouter handle
+    """Batch embedding. Sequential calls - llama.cpp and OpenRouter handle
     larger requests poorly and we'd rather keep memory bounded."""
     return [await get_embedding(t) for t in texts]
 
@@ -220,8 +220,8 @@ def current_backend() -> str:
     """Which tier is currently active? For observability."""
     if _BACKEND != "auto":
         return _BACKEND
-    if _infinity_reachable():
-        return "infinity"
+    if _int_reachable():
+        return "int"
     if os.getenv("OPENROUTER_API_KEY"):
         return "openrouter"
     return "unavailable"

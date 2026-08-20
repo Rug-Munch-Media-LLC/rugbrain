@@ -209,7 +209,7 @@ def answer_relevance(
 
     With ``embed``: cosine similarity between ``embed(query)`` and
     ``embed(answer)``, mapped from [-1, 1] to [0, 1]. The embed callable is
-    called synchronously; wrap an async embedder (e.g. the BGE embedder) with
+    called synchronously; wrap an async embedder (e.g. the  Qwen3 embedder) with
     ``asyncio.run`` or a thread executor if needed.
 
     Returns 0.0 for an empty answer or query.

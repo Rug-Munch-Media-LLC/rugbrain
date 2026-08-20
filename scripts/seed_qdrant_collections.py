@@ -24,7 +24,7 @@ Data inputs (all FREE):
      etherscan_combined_labels.csv
   5. arXiv API (export.arxiv.org) — free, no key
 
-Embedding: qwen3-embedding-4b via Infinity ``/embeddings`` (2560-dim), L2-normalized,
+Embedding: qwen3-embedding-4b via ``/embeddings`` (2560-dim), L2-normalized,
 batched (20 short / 8 long) to maximize CPU throughput. Point IDs are
 deterministic UUIDv5 (``uuid.NAMESPACE_DNS``) so reruns are idempotent and
 partial progress is preserved (existing IDs are skipped).
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - redis-py, httpx, numpy, qdrant-client
   - Staged Postgres dumps in DATA_DIR (default /tmp/rag_seed)
 """
@@ -107,7 +107,7 @@ def _normalize(vec: list[float]) -> list[float]:
 
 
 async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
-    """Embed texts via Infinity /embeddings, returning normalized vectors."""
+    """Embed texts via /embeddings, returning normalized vectors."""
     if not texts:
         return []
     try:
@@ -914,7 +914,7 @@ async def main() -> None:
 
     os.makedirs(DATA_DIR, exist_ok=True)
     logger.info(
-        "Qdrant=%s Infinity=%s model=%s data=%s", QDRANT_URL, INFINITY_URL, INFINITY_MODEL, DATA_DIR
+        "Qdrant=%s =%s model=%s data=%s", QDRANT_URL, INFINITY_URL, INFINITY_MODEL, DATA_DIR
     )
 
     # Inject limits via env for loaders that accept them

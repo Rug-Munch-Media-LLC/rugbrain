@@ -3,7 +3,7 @@
 
 Reads `news_items` from Postgres (populated by rmi-backend RSS ingest),
 chunks each article into 500-char sliding windows with 50-char overlap,
-embeds every chunk with BGE-M3 (2560-dim) via Infinity `/embeddings`,
+embeds every chunk with Qwen3-4B (2560-dim) via llama.cpp `/embeddings`,
 and upserts the vectors into the Qdrant `news` collection with payload
 metadata: title, source, url, published_at, category, sentiment.
 
@@ -28,7 +28,7 @@ Bounded runs: by default each run embeds at most 300 articles
 (newest-first) so the 15-minute cron makes steady progress without
 overlapping the next run. A lockfile prevents concurrent executions.
 
-Run (host or inside a container with Postgres/Qdrant/Infinity reachable):
+Run (host or inside a container with Postgres/Qdrant/reachable):
 
     python3 scripts/news_to_rag.py --limit 300
     python3 scripts/news_to_rag.py --purge-orphans   # delete points with no news_items row
@@ -208,11 +208,11 @@ async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict]
     return True
 
 
-# ── Infinity embed helpers ─────────────────────────────────────────────
+# ── Qwen3 embed helpers ─────────────────────────────────────────────
 async def _embed_batch(
     client: httpx.AsyncClient, base: str, model: str, texts: list[str]
 ) -> list[list[float]] | None:
-    """Embed a list of texts via Infinity `/embeddings`. Returns None on failure."""
+    """Embed a list of texts via `/embeddings`. Returns None on failure."""
     if not texts:
         return []
     try:
@@ -222,7 +222,7 @@ async def _embed_batch(
             timeout=httpx.Timeout(300.0),
         )
         if r.status_code != 200:
-            logger.warning("infinity_embed_failed status=%d body=%s", r.status_code, r.text[:200])
+            logger.warning("_embed_failed status=%d body=%s", r.status_code, r.text[:200])
             return None
         items = r.json().get("data") or []
         embeddings = [
@@ -230,16 +230,16 @@ async def _embed_batch(
         ]
         if not embeddings or len(embeddings) != len(texts):
             logger.warning(
-                "infinity_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts)
+                "_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts)
             )
             return None
         for vec in embeddings:
             if len(vec) != EMBED_DIM:
-                logger.warning("infinity_embed_dim got=%d want=%d", len(vec), EMBED_DIM)
+                logger.warning("_embed_dim got=%d want=%d", len(vec), EMBED_DIM)
                 return None
         return embeddings
     except (httpx.HTTPError, httpx.TimeoutException) as e:
-        logger.warning("infinity_embed_error err=%s", e)
+        logger.warning("_embed_error err=%s", e)
         return None
 
 
@@ -256,8 +256,8 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
         os.getenv("QDRANT_URL", "http://127.0.0.1:6334"),
         "http://127.0.0.1:6334",
     )
-    infinity_candidates = _resolve_base(
-        "infinity",
+    _candidates = _resolve_base(
+        "",
         os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
         "http://172.22.0.1:8004/v1",
     )
@@ -286,7 +286,7 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     if conn is None:
         raise RuntimeError(f"postgres_unreachable: {last_err}")
 
-    return conn, qdrant_candidates[0], infinity_candidates[0]
+    return conn, qdrant_candidates[0], _candidates[0]
 
 
 async def purge_orphans() -> dict:
@@ -309,7 +309,7 @@ async def purge_orphans() -> dict:
         logger.warning("lock_held_skipping (another news_to_rag run in progress)")
         return {"status": "skipped", "reason": "lock_held"}
 
-    conn, qdrant_base, _infinity_base = await _resolve_and_connect()
+    conn, qdrant_base, __base = await _resolve_and_connect()
     stats: dict = {
         "points_scanned": 0,
         "legacy_no_news_id": 0,
@@ -430,8 +430,8 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
         logger.warning("lock_held_skipping (another news_to_rag run in progress)")
         return {"status": "skipped", "reason": "lock_held"}
 
-    conn, qdrant_base, infinity_base = await _resolve_and_connect()
-    logger.info("connected pg=ok qdrant=%s infinity=%s", qdrant_base, infinity_base)
+    conn, qdrant_base, _base = await _resolve_and_connect()
+    logger.info("connected pg=ok qdrant=%s =%s", qdrant_base, _base)
 
     stats = {
         "articles_scanned": 0,
@@ -465,7 +465,7 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
                 raise RuntimeError("qdrant_collection_unavailable")
 
             # Pre-chunk every candidate article up to the run budget so we can
-            # embed batches spanning multiple articles (Infinity input arrays
+            # embed batches spanning multiple articles (input arrays
             # amortize per-call overhead — 16 chunks/call is ~4x faster than
             # one tiny call per article).
             articles: list[tuple[dict, list[str]]] = []
@@ -513,7 +513,7 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
             for i in range(0, len(work), batch_size):
                 batch = work[i : i + batch_size]
                 texts = [item[2] for item in batch]
-                vecs = await _embed_batch(client, infinity_base, embed_model, texts)
+                vecs = await _embed_batch(client, _base, embed_model, texts)
                 if vecs is None:
                     stats["errors"] += len(batch)
                     continue

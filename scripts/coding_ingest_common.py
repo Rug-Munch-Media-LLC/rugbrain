@@ -3,7 +3,7 @@
 
 Used by ``ingest_solidity_knowledge.py``, ``ingest_rust_solana_knowledge.py``,
 ``ingest_alt_vm_knowledge.py`` and ``ingest_security_guides.py`` so every
-script embeds with the same Infinity batch path (2560-dim qwen3-embedding-4b), writes the
+script embeds with the same batch path (2560-dim qwen3-embedding-4b), writes the
 canonical Qdrant payload shape (via ``ingest_common2``) and tags every point
 with coding metadata (ecosystem, language, knowledge_type, topic).
 
@@ -22,7 +22,7 @@ Scripts import this module directly:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from coding_ingest_common import build_coding_doc, ingest_coding_docs
 
-No secrets: all defaults point at local services (Qdrant / Infinity) and are
+No secrets: all defaults point at local services (Qdrant / ) and are
 overridable via the standard RAG env vars (QDRANT_URL, INFINITY_URL,
 RAG_INFINITY_EMBED_MODEL).
 """

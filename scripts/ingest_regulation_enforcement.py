@@ -19,7 +19,7 @@ Sources (all public, official, no auth):
 The SEC RSS feeds are occasionally malformed XML (unescaped ``&`` in
 titles) — this script parses them leniently.
 
-Each item is embedded (2560-dim qwen3-embedding-4b via Infinity) and upserted into
+Each item is embedded (2560-dim qwen3-embedding-4b via ) and upserted into
 ``regulation_enforcement`` (dense + BM25 sparse hybrid, created on first
 run) with filterable metadata: date, date_ts, agency, action_type,
 source_type, case_url, amount_usd, severity.
@@ -39,7 +39,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - httpx
 """
 

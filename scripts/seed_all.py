@@ -19,7 +19,7 @@ Usage:
 
 Requires:
   - Qdrant running (default: http://rmi-qdrant-v2:6333 or QDRANT_URL env)
-  - Infinity running (default: http://172.22.0.1:8004/v1 or INFINITY_URL env)
+  - running (default: http://172.22.0.1:8004/v1 or INFINITY_URL env)
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ EMBEDDING_DIM = 2560
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Get embedding from Infinity qwen3-embedding-4b via /embeddings.
+    """Get embedding from qwen3-embedding-4b via /embeddings.
 
     Uses the OpenAI-compatible ``/embeddings`` endpoint with ``input``
     as a list (faster, supports batching).
@@ -82,7 +82,7 @@ async def _embed(text: str) -> list[float] | None:
 async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
     """Embed multiple texts in a single batch call for efficiency.
 
-    Infinity's ``/embeddings`` endpoint supports multiple inputs in one
+    's ``/embeddings`` endpoint supports multiple inputs in one
     request, which avoids repeated model-load overhead.
     """
     if not texts:
@@ -338,8 +338,8 @@ HISTORICAL_HACKS = [
         "tags": ["exchange", "fraud", "cefi", "regulatory"],
     },
     {
-        "name": "Ronin Bridge Hack (Axie Infinity)",
-        "description": "Lazarus Group hacked Ronin bridge (Axie Infinity sidechain) by compromising 5 of 9 validator nodes using social engineering and fake job offers. $620M in USDC and ETH stolen.",
+        "name": "Ronin Bridge Hack (Axie )",
+        "description": "Lazarus Group hacked Ronin bridge (Axie sidechain) by compromising 5 of 9 validator nodes using social engineering and fake job offers. $620M in USDC and ETH stolen.",
         "year": "2022",
         "amount_usd": 620000000,
         "chain": "ronin",

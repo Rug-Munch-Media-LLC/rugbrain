@@ -14,7 +14,7 @@ Detection pipeline:
      severity, chain, amount_lost_usd, date, protocol, source_type).
   4. Dedupe with ``incident_key = sha256(protocol + date + amount)[:12]``
      against alert points already stored in ``news`` (category=alert).
-  5. Embed each new incident (qwen3-embedding-4b via Infinity) and store it in ``news``
+  5. Embed each new incident (qwen3-embedding-4b via ) and store it in ``news``
      with ``metadata.category = alert`` and ``source_type = alert_digest``;
      embed failures are non-fatal — the digest is still printed.
 
@@ -25,7 +25,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - Infinity at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -42,7 +42,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.crypto_schema import (
     detect_attack_vector,
     detect_chain,
@@ -442,8 +442,8 @@ async def store_alerts(
     if dry_run:
         return len(incidents), 0
 
-    embedder = InfinityBGEEmbedder(
-        infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    embedder = Qwen3Embedder(
+        _url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
     )
     store = QdrantVectorStore()
     stored = failed = 0

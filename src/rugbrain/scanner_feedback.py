@@ -9,7 +9,7 @@ discovering similar tokens. Provides a bidirectional feedback channel:
       → POST /api/v1/feedback/scam-confirmed    (mark confirmed scam)
       ← GET  /api/v1/similar/{address}           (vector similarity search)
 
-All embeddings use the existing Infinity qwen3-embedding-4b pipeline via
+All embeddings use the existing Qwen3-Embedding-4B pipeline via
 ``rugbrain.embeddings.get_embedding()`` so the feedback collection shares
 the same 2560-dim vector space as the main threat_intel_v2 collection.
 """
@@ -83,10 +83,10 @@ async def ingest_scan_result(request: Request, data: dict[str, Any]) -> dict[str
     )[:5000]
 
     try:
-        from rugbrain.bge_embedders import InfinityBGEEmbedder
+        from rugbrain.qwen_embedders import Qwen3Embedder
 
-        embedder = InfinityBGEEmbedder(
-            infinity_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+        embedder = Qwen3Embedder(
+            embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
         )
         store = QdrantVectorStore()
         doc = doc_from_article(

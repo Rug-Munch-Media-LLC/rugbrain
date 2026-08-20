@@ -9,7 +9,7 @@ Capabilities:
 Uses:
   - Perceptual hashing (pHash) for image similarity - zero API cost
   - DeepSeek v4 Flash vision for description/captioning (via LLM_API_KEY)
-  - Text embedding via existing BGE-small for cross-modal retrieval
+  - Text embedding via Qwen3-4B for cross-modal retrieval
 
 Designed to work with existing RAG pipeline: images → descriptions → embed → search.
 """

@@ -77,11 +77,11 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
     """Embed text via Qwen3-Embedding-4B and return vector."""
     import httpx
 
-    infinity_url = os.getenv("INFINITY_URL", "http://[INTERNAL]:8004/v1")
+    int_url = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(
-                f"{infinity_url}/embeddings",
+                f"{int_url}/embeddings",
                 json={"input": request.text, "model": "qwen3-embedding-4b"},
             )
             if r.status_code == 200:

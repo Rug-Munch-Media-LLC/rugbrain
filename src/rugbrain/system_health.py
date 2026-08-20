@@ -2,7 +2,7 @@
 
 ``GET /api/v1/health/full`` returns one JSON document covering:
 
-  * ``rugbrain``   — Qdrant, Redis, Infinity embedding, B2 permanence
+  * ``rugbrain``   — Qdrant, Redis, Qwen3 embedding, B2 permanence
   * ``indexer``    — LiteChainIndexer: ClickHouse connectivity + per-chain
                      block advancement (read from the indexer hot store)
   * ``scanner``    — SENTINEL scanner modules + DataBus provider activity
@@ -93,7 +93,7 @@ async def _probe_redis() -> dict[str, Any]:
         return {"ok": False, "host": REDIS_HOST, "error": str(e)[:120]}
 
 
-async def _probe_infinity() -> dict[str, Any]:
+async def _probe_int() -> dict[str, Any]:
     ok = await _http_ok(f"{INFINITY_URL}/health")
     return {"ok": ok, "url": INFINITY_URL}
 
@@ -107,20 +107,20 @@ async def _probe_b2() -> dict[str, Any]:
 
 
 async def _rugbrain_section() -> dict[str, Any]:
-    qdrant, redis_, infinity, b2 = await asyncio.gather(
+    qdrant, redis_, int, b2 = await asyncio.gather(
         _probe_qdrant(),
         _probe_redis(),
-        _probe_infinity(),
+        _probe_int(),
         _probe_b2(),
     )
-    overall = all(item.get("ok") is True for item in (qdrant, redis_, infinity)) or any(
+    overall = all(item.get("ok") is True for item in (qdrant, redis_, int)) or any(
         item.get("ok") is True for item in (qdrant, redis_)
     )
     return {
         "ok": overall,
         "qdrant": qdrant,
         "redis": redis_,
-        "infinity": infinity,
+        "int": int,
         "b2": b2,
     }
 

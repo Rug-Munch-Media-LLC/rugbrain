@@ -29,7 +29,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain.bge_embedders import InfinityBGEEmbedder
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
 
 logger = logging.getLogger(__name__)
@@ -475,7 +475,7 @@ async def _knowledge_compare(
     from ``solidity_patterns`` (metadata.verdict) and vuln_matches come from
     ``contract_security`` / ``audit_findings``.
     """
-    embedder = InfinityBGEEmbedder()
+    embedder = Qwen3Embedder()
     store = QdrantVectorStore()
     try:
         try:
