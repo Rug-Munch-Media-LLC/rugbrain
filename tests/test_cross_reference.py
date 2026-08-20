@@ -78,7 +78,7 @@ async def test_find_similar_historical_tokens_qdrant_fallback(monkeypatch):
     # whether lancedb happens to be installed in the current environment.
     monkeypatch.setattr("rugbrain.cross_reference._import_lance_store", lambda: None)
 
-    # Mock the embedding backend so no Infinity/OpenRouter call escapes.
+    # Mock the embedding backend so no Qwen3/OpenRouter call escapes.
     async def fake_embedding(text: str) -> list[float]:
         return [0.1] * 1024
 

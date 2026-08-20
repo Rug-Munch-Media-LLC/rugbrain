@@ -25,7 +25,7 @@ GET /api/v1/search?q=<query>&limit=10&collection=threat_intel
 ```
 
 Semantic search across ingested scanner findings. Returns similar results
-by vector similarity (Infinity qwen3-embedding-4b, 1024 dimensions).
+by vector similarity (Qwen3-Embedding-4B via llama.cpp, 2560 dimensions).
 
 **Parameters:**
 - `q` (required) — search query, e.g., token address or scam description
@@ -158,7 +158,7 @@ console.log(data.scam_risk);
 │  Client  │ ────────▶ │  rugbrain (FastAPI, port 8012)       │
 │  App     │           │                                      │
 └──────────┘           │  ┌────────┐  ┌──────────────────┐   │
-                       │  │ Qdrant │  │ Infinity Embed │   │
+                       │  │ Qdrant │  │ Qwen3 Embed   │   │
                        │  │ Vector │  │ nomic-embed-text │   │
                        │  │ Store  │  │ 768d             │   │
                        │  └────────┘  └──────────────────┘   │

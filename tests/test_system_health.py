@@ -113,7 +113,7 @@ async def test_rugbrain_section_all_down(monkeypatch):
     monkeypatch.setattr(sh, "_http_ok", down)
     section = await sh._rugbrain_section()
     assert section["qdrant"]["ok"] is False
-    assert section["infinity"]["ok"] is False
+    assert section["embed"]["ok"] is False
     # B2 unset → ok is None (not configured), not False.
     assert section["b2"]["ok"] is None
 

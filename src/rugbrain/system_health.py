@@ -38,7 +38,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")).rstrip("/")
 B2_S3_ENDPOINT = os.getenv("B2_S3_ENDPOINT", "").rstrip("/")
 B2_BUCKET_NAME = os.getenv("B2_BUCKET_NAME", "")
 BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://localhost:8000/health")
@@ -93,9 +93,9 @@ async def _probe_redis() -> dict[str, Any]:
         return {"ok": False, "host": REDIS_HOST, "error": str(e)[:120]}
 
 
-async def _probe_int() -> dict[str, Any]:
-    ok = await _http_ok(f"{INFINITY_URL}/health")
-    return {"ok": ok, "url": INFINITY_URL}
+async def _probe_embed() -> dict[str, Any]:
+    ok = await _http_ok(f"{QWEN_EMBED_URL}/health")
+    return {"ok": ok, "url": QWEN_EMBED_URL}
 
 
 async def _probe_b2() -> dict[str, Any]:
@@ -107,20 +107,20 @@ async def _probe_b2() -> dict[str, Any]:
 
 
 async def _rugbrain_section() -> dict[str, Any]:
-    qdrant, redis_, int, b2 = await asyncio.gather(
+    qdrant, redis_, embed, b2 = await asyncio.gather(
         _probe_qdrant(),
         _probe_redis(),
-        _probe_int(),
+        _probe_embed(),
         _probe_b2(),
     )
-    overall = all(item.get("ok") is True for item in (qdrant, redis_, int)) or any(
+    overall = all(item.get("ok") is True for item in (qdrant, redis_, embed)) or any(
         item.get("ok") is True for item in (qdrant, redis_)
     )
     return {
         "ok": overall,
         "qdrant": qdrant,
         "redis": redis_,
-        "int": int,
+        "embed": embed,
         "b2": b2,
     }
 

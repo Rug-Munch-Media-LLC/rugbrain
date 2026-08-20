@@ -2,7 +2,7 @@
 
 Covers the deterministic, pure parts — code-intent query detection, collection
 routing, doc parsing/builders — so they can be verified without live
-Qdrant/Infinity. End-to-end verification runs via scripts/verify_coding_
+Qdrant/Qwen3. End-to-end verification runs via scripts/verify_coding_
 knowledge.py.
 """
 

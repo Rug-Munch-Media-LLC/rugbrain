@@ -64,7 +64,7 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
-      - INFINITY_URL=http://[INTERNAL]:8004/v1
+      - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
       - RERANKER_URL=http://172.22.0.1:8003
       - RERANKER_TIMEOUT=30
       - PRESIDIO_URL=http://presidio:8090
@@ -122,7 +122,7 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
-      - INFINITY_URL=http://[INTERNAL]:8004/v1
+      - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
     volumes:
       - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py

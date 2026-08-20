@@ -2,7 +2,7 @@
 
 Verifies the three acceptance code questions route to the right collections
 and that the RAG answers them with code-first, security-aware content —
-without requiring live Qdrant/Infinity (search results are injected via a
+without requiring live Qdrant/Qwen3 (search results are injected via a
 mocked ``search_multi_collection``).
 
 The three acceptance queries (Part 3 of the coding-knowledge expansion):
@@ -10,7 +10,7 @@ The three acceptance queries (Part 3 of the coding-knowledge expansion):
   2. "Solana PDA security best practices"
   3. "what is a flash loan attack pattern"
 
-Live end-to-end verification (with real Qdrant + Infinity) is provided by
+Live end-to-end verification (with real Qdrant + Qwen3) is provided by
 ``scripts/verify_coding_knowledge.py``.
 """
 

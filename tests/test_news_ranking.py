@@ -148,7 +148,7 @@ async def test_rerank_story_sources_qwen3(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_rerank_story_sources_fallback(monkeypatch):
-    """When Infinity fails, sources sort by credibility (best-effort)."""
+    """When the embedder fails, sources sort by credibility (best-effort)."""
 
     class Boom:
         def __init__(self, timeout=30.0):
@@ -161,7 +161,7 @@ async def test_rerank_story_sources_fallback(monkeypatch):
             return False
 
         async def post(self, url, json):
-            raise RuntimeError("infinity down")
+            raise RuntimeError("embedder down")
 
     import httpx
 

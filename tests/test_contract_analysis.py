@@ -2,7 +2,7 @@
 Tests for contract_analysis.py — the Part 4 contract-security pipeline.
 
 Covers the deterministic, pure parts (static heuristics, source parsing,
-assessment aggregation) so they can be verified without live Qdrant/Infinity.
+assessment aggregation) so they can be verified without live Qdrant/Qwen3.
 """
 
 from __future__ import annotations
