@@ -34,6 +34,12 @@ logger = logging.getLogger("reembed")
 LEGACY = os.getenv("LEGACY_QDRANT", "http://127.0.0.1:6333")
 V2 = os.getenv("V2_QDRANT", "http://127.0.0.1:6334")
 EMBEDDER = os.getenv("EMBEDDER_URL", "http://172.22.0.1:8004")
+# API-embedder support: when EMBEDDER_MODEL is set the payload carries
+# model/dimensions (DashScope compatible-mode); EMBEDDER_API_KEY adds the
+# Authorization header. Unset → local llama.cpp (ignores both fields).
+EMBEDDER_MODEL = os.getenv("EMBEDDER_MODEL", "")
+EMBEDDER_API_KEY = os.getenv("EMBEDDER_API_KEY", "")
+EMBEDDER_DIMS = int(os.getenv("EMBEDDER_DIMS", "2560"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rmi-rag/reembed_state.json"))
 
 # Field priority mirroring what ingestion embeds (content first).
@@ -87,18 +93,40 @@ async def _supports_sparse(client: httpx.AsyncClient, collection: str) -> bool:
     return isinstance(vectors, dict) and "bm25" in vectors
 
 
+def _embed_payload(texts: list[str]) -> dict:
+    """Build /v1/embeddings body. API embedders need model+dimensions;
+    local llama.cpp ignores unknown fields."""
+    payload: dict = {"input": texts}
+    if EMBEDDER_MODEL:
+        payload["model"] = EMBEDDER_MODEL
+        payload["dimensions"] = EMBEDDER_DIMS
+    return payload
+
+
+class _EmbedHTTPError(Exception):
+    """Embedder HTTP failure with status for retry policy."""
+
+    def __init__(self, status: int, body: str):
+        super().__init__(f"HTTP {status}: {body[:200]}")
+        self.status = status
+
+
 async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
     """Embed a batch of documents (no instruction prefix — docs are raw)."""
-    resp = await client.post(f"{EMBEDDER}/v1/embeddings", json={"input": texts})
-    resp.raise_for_status()
+    resp = await client.post(f"{EMBEDDER}/v1/embeddings", json=_embed_payload(texts))
+    if resp.status_code != 200:
+        raise _EmbedHTTPError(resp.status_code, resp.text)
     data = resp.json()["data"]
     data.sort(key=lambda x: x["index"])
     return [d["embedding"] for d in data]
 
 
 async def _embed_query(client: httpx.AsyncClient, query: str) -> list[float]:
-    resp = await client.post(f"{EMBEDDER}/v1/embeddings", json={"input": [INSTRUCT.format(query)]})
-    resp.raise_for_status()
+    resp = await client.post(
+        f"{EMBEDDER}/v1/embeddings", json=_embed_payload([INSTRUCT.format(query)])
+    )
+    if resp.status_code != 200:
+        raise _EmbedHTTPError(resp.status_code, resp.text)
     return resp.json()["data"][0]["embedding"]
 
 
@@ -168,6 +196,7 @@ async def migrate_collection(
 
         # Embed the entire batch in one call (embedder handles 128+ texts fine).
         # The embedder's internal batch_size=2048 handles this efficiently.
+        consecutive_failures = 0
         while True:
             try:
                 vecs = await _embed_batch(client, texts)
@@ -201,9 +230,40 @@ async def migrate_collection(
                             raise
                 stats["upserted"] += len(points_to_upsert)
                 offset += len(points)
+                consecutive_failures = 0
                 break  # success — move to next scroll
+            except _EmbedHTTPError as e:
+                # Fail fast on permanent errors (bad model/dims/auth);
+                # back off harder on rate limits.
+                if 400 <= e.status < 500 and e.status != 429:
+                    logger.error("batch_FATAL %s offset=%d: %s", name, offset, e)
+                    raise
+                consecutive_failures += 1
+                wait = 30 if e.status == 429 else 15
+                logger.error(
+                    "batch_retry %s offset=%d (%d consec): %s — retrying in %ds",
+                    name,
+                    offset,
+                    consecutive_failures,
+                    e,
+                    wait,
+                )
+                if consecutive_failures >= 20:
+                    logger.error("batch_ABORT %s offset=%d: 20 consecutive failures", name, offset)
+                    raise
+                await asyncio.sleep(wait)
             except Exception as e:
-                logger.error("batch_retry %s offset=%d: %s — retrying in 15s", name, offset, e)
+                consecutive_failures += 1
+                logger.error(
+                    "batch_retry %s offset=%d (%d consec): %r — retrying in 15s",
+                    name,
+                    offset,
+                    consecutive_failures,
+                    e,
+                )
+                if consecutive_failures >= 20:
+                    logger.error("batch_ABORT %s offset=%d: 20 consecutive failures", name, offset)
+                    raise
                 await asyncio.sleep(15)
 
         state.setdefault(name, {})["done"] = offset
@@ -257,8 +317,13 @@ async def main() -> int:
     # hangs that freeze the whole migration. Fresh conns cost ~1ms each here.
     import httpx as _httpx
 
+    headers = {}
+    if EMBEDDER_API_KEY:
+        headers["Authorization"] = f"Bearer {EMBEDDER_API_KEY}"
+
     async with _httpx.AsyncClient(
         timeout=900.0,
+        headers=headers,
         limits=_httpx.Limits(max_keepalive_connections=0, max_connections=50),
     ) as client:
         cols = [
@@ -285,8 +350,8 @@ async def main() -> int:
         # sanity: embedder reachable
         try:
             probe = await _embed_batch(client, ["sanity probe"])
-            if len(probe[0]) != 2560:
-                logger.error("embedder dim != 2560 (got %d) — aborting", len(probe[0]))
+            if len(probe[0]) != EMBEDDER_DIMS:
+                logger.error("embedder dim != %d (got %d) — aborting", EMBEDDER_DIMS, len(probe[0]))
                 return 2
         except Exception as e:
             logger.error("embedder unreachable: %s", e)
