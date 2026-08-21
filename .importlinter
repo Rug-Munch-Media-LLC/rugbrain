@@ -1,0 +1,68 @@
+[importlinter]
+root_package = rugbrain
+include_external_packages = True
+
+[importlinter:contract:routes-thin]
+name = Route modules never touch storage/clients directly (thin routers)
+type = forbidden
+source_modules =
+    rugbrain.routes
+forbidden_modules =
+    qdrant_client
+    httpx
+    clickhouse_connect
+    duckdb
+ignore_imports =
+    # KNOWN DEBT (2026-08-21): routes reach storage/http via service modules.
+    # TODO(phase-4): push client usage down out of route-reachable services.
+    rugbrain.routes.rag_tools -> rugbrain.parquet_analytics
+    rugbrain.routes.analyze -> rugbrain.market_context
+    rugbrain.routes.analyze -> rugbrain.scanner_feedback
+    rugbrain.routes.core -> httpx
+    rugbrain.routes.rag_tools -> rugbrain.chain_parquet
+    rugbrain.routes.ingest -> rugbrain.embeddings
+    rugbrain.routes.search -> rugbrain.chain_parquet
+    rugbrain.routes.analyze -> rugbrain.endpoints
+    rugbrain.routes.ingest -> rugbrain.endpoints
+    rugbrain.routes.ingest -> rugbrain.qdrant_store
+    rugbrain.routes.intel -> rugbrain.endpoints
+    rugbrain.routes.intel -> rugbrain.evaluation
+    rugbrain.routes.intel -> rugbrain.fear_index
+    rugbrain.routes.intel -> rugbrain.market_context
+    rugbrain.routes.monitors -> rugbrain.exchange_flow
+    rugbrain.routes.monitors -> rugbrain.liquidation_heatmap
+    rugbrain.routes.monitors -> rugbrain.market_health
+    rugbrain.routes.monitors -> rugbrain.monitors.content_digest
+    rugbrain.routes.monitors -> rugbrain.monitors.defi_lending
+    rugbrain.routes.monitors -> rugbrain.monitors.hyperliquid_monitor
+    rugbrain.routes.monitors -> rugbrain.monitors.social_sentiment
+    rugbrain.routes.monitors -> rugbrain.monitors.token_distribution
+    rugbrain.routes.monitors -> rugbrain.monitors.twitter_tracker
+    rugbrain.routes.rag_tools -> httpx
+    rugbrain.routes.rag_tools -> rugbrain.compat
+    rugbrain.routes.rag_tools -> rugbrain.multimodal
+    rugbrain.routes.search -> rugbrain.embeddings
+    rugbrain.routes.search -> rugbrain.pre_generation_reflection
+    rugbrain.routes.search -> rugbrain.reranker
+    rugbrain.routes.search -> rugbrain.search_service
+    rugbrain.routes.analyze -> rugbrain.sentiment_engine
+    rugbrain.routes.rag_tools -> rugbrain.streaming
+    rugbrain.routes.search -> rugbrain.endpoints
+    rugbrain.routes.search -> rugbrain.qdrant_store
+    rugbrain.routes.intel -> rugbrain.journalism
+    rugbrain.routes.intel -> rugbrain.qdrant_store
+    rugbrain.routes.analyze -> rugbrain.qdrant_store
+
+[importlinter:contract:routes-isolation]
+name = Routes package is independent (no cross-route imports)
+type = independence
+modules =
+    rugbrain.routes
+
+[importlinter:contract:legacy-quarantine]
+name = Nobody imports _legacy (quarantined code)
+type = forbidden
+source_modules =
+    rugbrain
+forbidden_modules =
+    rugbrain._legacy
