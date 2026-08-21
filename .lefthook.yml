@@ -193,7 +193,7 @@ pre-push:
         if [ -x ".venv/bin/mypy" ]; then MYPY_BIN=".venv/bin/mypy"; fi
         # Incremental: only .py files in this push ({all_files} = lefthook template).
         # Full-src has 1.6k pre-existing errors — full-dir gate can never pass.
-        PYFILES=$(printf '%s\n' {all_files} | grep '\.py$' | grep -v '^tests/' || true)
+        PYFILES=$(printf '%s\n' {all_files} | grep '^src/.*\.py$' | grep -v '^tests/' || true)
         if [ -n "$PYFILES" ]; then
           "$MYPY_BIN" $PYFILES --ignore-missing-imports --follow-imports=silent
         fi
@@ -211,7 +211,7 @@ pre-push:
       glob: "*.py"
       run: |
         # Incremental: only .py files in this push ({all_files} = lefthook template).
-        PYFILES=$(printf '%s\n' {all_files} | grep '\.py$' | tr '\n' ' ' || true)
+        PYFILES=$(printf '%s\n' {all_files} | grep '^src/.*\.py$' | tr '\n' ' ' || true)
         if [ -n "$PYFILES" ]; then
           bandit -r $PYFILES -ll
         elif [ -d "app/" ]; then

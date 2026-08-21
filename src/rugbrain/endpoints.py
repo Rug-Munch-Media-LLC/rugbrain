@@ -237,7 +237,13 @@ from rugbrain.routes.rag_tools import (  # noqa: E402,F401
 from rugbrain.routes.search import (  # noqa: E402,F401
     MultiSearchRequest,
     scam_check,
-    scam_check_router,
     search_multi,
     search_threat_intel,
 )
+from rugbrain.routes.search import (  # noqa: E402
+    scam_check_router as scam_check_router,
+)
+
+# Explicit re-exports for `from rugbrain.endpoints import ...` consumers
+# (rugbrain/__init__.py, main.py) under no_implicit_reexport.
+__all__ = ["router", "scam_check_router"]
