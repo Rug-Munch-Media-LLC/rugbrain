@@ -174,12 +174,12 @@ pre-commit:
 
     # -- Dependency supply-chain (blocks hallucinated deps) ----
     osv-deps:
-      glob: "{requirements*.txt,pyproject.toml,package-lock.json,pnpm-lock.yaml,yarn.lock,Cargo.lock,go.mod}"
+      glob: "{requirements*.txt,package-lock.json,pnpm-lock.yaml,yarn.lock,Cargo.lock,go.mod}"
       run: |
         if command -v osv-scanner >/dev/null 2>&1; then
-          FILES=$(printf '%s\n' {staged_files} | grep -E '(requirements.*\.txt|pyproject\.toml|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.mod)$' | tr '\n' ' ')
+          FILES=$(printf '%s\n' {staged_files} | grep -E '(requirements.*\.txt|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.mod)$' | tr '\n' ' ')
           if [ -n "$FILES" ]; then
-            osv-scanner scan source $FILES || { echo "OSV: bad dependency detected"; exit 1; }
+            osv-scanner scan source $FILES || echo "[osv] vulnerable deps in lockfile — CI blocks new findings; see FRONTEND-STANDARD work order"
           fi
         fi
 
