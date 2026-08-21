@@ -375,6 +375,10 @@ class QdrantVectorStore:
 
     def __init__(self, url: str | None = None):
         self._url = (url or QDRANT_URL).rstrip("/")
+        # An explicitly provided URL wins over the env-based fallback
+        # resolution (which probes QDRANT_FALLBACK_URLS). Without this, the
+        # constructor argument was silently ignored by _get_client().
+        self._explicit_url = url is not None
         self._client: httpx.AsyncClient | None = None
         # Per-instance cache of whether a collection carries a sparse
         # vector config (avoids a GET per insert/search in production).
@@ -390,7 +394,7 @@ class QdrantVectorStore:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            resolved = await _resolve_qdrant_url()
+            resolved = self._url if self._explicit_url else await _resolve_qdrant_url()
             logger.debug("qdrant_client_init url=%s", resolved)
             self._client = httpx.AsyncClient(base_url=resolved, timeout=30.0)
         return self._client

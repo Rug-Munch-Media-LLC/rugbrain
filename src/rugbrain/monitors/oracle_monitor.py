@@ -21,7 +21,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from statistics import median
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -77,7 +77,7 @@ async def _fetch(url: str) -> dict[str, Any] | None:
     try:
         r = await _http.get(url)
         if r.status_code == 200:
-            return r.json()
+            return cast(dict[str, Any], r.json())
     except Exception as exc:
         logger.debug("fetch_failed url=%s err=%s", url[:60], str(exc)[:50])
     return None
@@ -274,7 +274,7 @@ async def oracle_scan_cycle() -> dict[str, Any]:
         if len(prices) < 2:
             continue
 
-        snap = {
+        snap: dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "ts": time.time(),
             "prices": prices,

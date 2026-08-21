@@ -67,7 +67,9 @@ ignore = ["E501", "B008", "S101", "N818"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-ignore_missing_imports = false
+# Keep in sync with the lefthook pre-push gate (`mypy src/ --ignore-missing-imports`):
+# third-party stubs (streamlit, feedparser, ...) are not all typed.
+ignore_missing_imports = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unreachable = true

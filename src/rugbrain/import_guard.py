@@ -122,7 +122,7 @@ class _StubModule(types.ModuleType):
 
     def __init__(self, name: str) -> None:
         super().__init__(name)
-        self.__path__: list[str] = []  # type: ignore[misc]
+        self.__path__: list[str] = []
         # Give the stub a real __file__ so stdlib ``inspect.getfile`` /
         # torch's custom-op registration can resolve it. Without this,
         # loading a sentence-transformers model inside the container raises

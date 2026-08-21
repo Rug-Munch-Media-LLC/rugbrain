@@ -243,7 +243,7 @@ async def get_token_price(token: str) -> float:
                 f"https://api.coingecko.com/api/v3/simple/price?ids={cg_id}&vs_currencies=usd"
             )
             if r.status_code == 200:
-                return r.json().get(cg_id, {}).get("usd", 0.0)
+                return float(r.json().get(cg_id, {}).get("usd", 0.0))
     except Exception:
         pass
     return 0.0

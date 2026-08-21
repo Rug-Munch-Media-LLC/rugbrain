@@ -106,7 +106,7 @@ class RedisStorage:
 
             # Update wallet history
             self._update_wallet_history(
-                tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address,  # type: ignore[attr-defined]
+                tx.wallet_address if hasattr(tx, "wallet_address") else tx.from_address,
                 tx,  # pyright: ignore[reportAttributeAccessIssue]
             )
 

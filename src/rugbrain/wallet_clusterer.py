@@ -91,7 +91,7 @@ async def resolve_wallet(address: str) -> dict[str, Any]:
         return _label_cache[addr]
 
     # Try Etherscan to find related transactions
-    result = {
+    result: dict[str, Any] = {
         "address": addr,
         "label": None,
         "type": "unknown",

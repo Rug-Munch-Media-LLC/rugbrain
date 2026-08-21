@@ -200,7 +200,7 @@ class MarketSnapshotStore:
             )
             for db in (CLICKHOUSE_DATABASE, CLICKHOUSE_FALLBACK_DATABASE):
                 try:
-                    client.command(self.DDL.format(db=db, table=CLICKHOUSE_TABLE))  # type: ignore[union-attr]
+                    client.command(self.DDL.format(db=db, table=CLICKHOUSE_TABLE))
                     self._db = db
                     break
                 except Exception:

@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import datetime
+from typing import Any, cast
 
 import httpx
 import streamlit as st
@@ -18,36 +19,36 @@ st.set_page_config(
 )
 
 
-async def _get_health() -> dict:
+async def _get_health() -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=5) as c:
         r = await c.get(f"{RAG_API}/health")
-        return r.json()
+        return cast(dict[str, Any], r.json())
 
 
-async def _search(query: str, collection: str, limit: int = 10) -> list:
+async def _search(query: str, collection: str, limit: int = 10) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.post(
             f"{RAG_API}/rag/search", json={"query": query, "collection": collection, "limit": limit}
         )
-        return r.json().get("results", [])
+        return cast(list[dict[str, Any]], r.json().get("results", []))
 
 
-async def _confidence(sources: list, query: str) -> dict:
+async def _confidence(sources: list[dict[str, Any]], query: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10) as c:
         r = await c.post(f"{RAG_API}/rag/confidence", json={"results": sources, "query": query})
-        return r.json()
+        return cast(dict[str, Any], r.json())
 
 
-async def _redact(text: str) -> dict:
+async def _redact(text: str) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=5) as c:
         r = await c.post(f"{PRESIDIO_URL}/redact", json={"text": text, "language": "en"})
-        return r.json()
+        return cast(dict[str, Any], r.json())
 
 
-async def _analyze(text: str) -> list:
+async def _analyze(text: str) -> list[dict[str, Any]]:
     async with httpx.AsyncClient(timeout=5) as c:
         r = await c.post(f"{PRESIDIO_URL}/analyze", json={"text": text, "language": "en"})
-        return r.json()
+        return cast(list[dict[str, Any]], r.json())
 
 
 st.title("🧠 rugbrain Intelligence Dashboard")
@@ -145,10 +146,10 @@ with tab3:
                     st.code(redacted.get("redacted", "?"), language="text")
                 if entities:
                     st.subheader("Entities Found")
-                    for e in entities:
-                        et = e.get("entity_type") or e.get("type", "?")
+                    for ent in entities:
+                        et = ent.get("entity_type") or ent.get("type", "?")
                         st.write(
-                            f"- {et}: pos {e.get('start')}-{e.get('end')} score={e.get('score', 0):.2f}"
+                            f"- {et}: pos {ent.get('start')}-{ent.get('end')} score={ent.get('score', 0):.2f}"
                         )
                 else:
                     st.success("No PII detected")
@@ -227,18 +228,24 @@ with tab6:
 
                 params = {"limit": 20}
                 if feed_source != "all":
-                    params["sources"] = feed_source  # type: ignore[assignment]
+                    params["sources"] = feed_source
 
-                async def _fetch_feed():
+                async def _fetch_feed() -> dict[str, Any]:
                     async with httpx.AsyncClient(timeout=15) as c:
                         r = await c.get(
                             "http://localhost:8012/api/v1/feed/all",
                             params=params,
                             headers={
-                                "X-API-Key": "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M"
+                                "X-API-Key": os.getenv(
+                                    "RAG_DASHBOARD_API_KEY",
+                                    "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M",
+                                )
                             },
                         )
-                        return r.json() if r.status_code == 200 else {"results": []}
+                        return cast(
+                            dict[str, Any],
+                            r.json() if r.status_code == 200 else {"results": []},
+                        )
 
                 data = asyncio.run(_fetch_feed())
                 results = data.get("results", [])

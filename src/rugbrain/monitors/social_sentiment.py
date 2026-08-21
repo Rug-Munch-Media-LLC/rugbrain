@@ -189,8 +189,8 @@ def detect_social_volume_spike(
     Returns spike info dict if volume > VOLUME_SPIKE_MILD_THRESHOLD * rolling avg,
     or None if no spike.
     """
-    history = _volume_history.get(symbol, [])
-    if len(history) < 3:
+    history = _volume_history.get(symbol)
+    if not history or len(history) < 3:
         return None  # Not enough data yet
 
     # Calculate rolling average (exclude latest)
@@ -224,8 +224,8 @@ def detect_sentiment_reversal(symbol: str, current_sentiment: float) -> dict[str
 
     Returns reversal info if |current - avg| > SENTIMENT_REVERSAL_THRESHOLD.
     """
-    history = _sentiment_history.get(symbol, [])
-    if len(history) < 3:
+    history = _sentiment_history.get(symbol)
+    if not history or len(history) < 3:
         return None
 
     sentiments = [h["sentiment"] for h in history]

@@ -46,22 +46,22 @@ async def dispatch_alert(
     alert_type: str = "general",
     severity: str = "high",
     channels: list[str] | None = None,
-) -> dict[str, bool]:
+) -> dict[str, Any]:
     """Dispatch an alert to configured channels."""
     if not _should_alert(severity):
-        return {"sent": False, "reason": "below_threshold"}  # type: ignore[return-value]
+        return {"sent": False, "reason": "below_threshold"}
 
     # Rate limit
     now = time.monotonic()
     rate_key = f"{alert_type}:{severity}"
     if rate_key in _last_alert and now - _last_alert[rate_key] < RATE_LIMIT_SECONDS:
-        return {"sent": False, "reason": "rate_limited"}  # type: ignore[return-value]
+        return {"sent": False, "reason": "rate_limited"}
     _last_alert[rate_key] = now
 
     if channels is None:
         channels = ["telegram"]
 
-    results = {}
+    results: dict[str, bool] = {}
     async with _alert_semaphore:
         for channel in channels:
             url = WEBHOOKS.get(channel)
@@ -71,6 +71,7 @@ async def dispatch_alert(
 
             try:
                 text = f"🚨 *{severity.upper()}*: {title}\n\n{message}"
+                payload: dict[str, Any]
                 if channel == "telegram":
                     payload = {"text": text, "parse_mode": "Markdown"}
                 elif channel == "slack":
@@ -120,7 +121,7 @@ async def dispatch_alert(
     return results
 
 
-async def alert_mev_sandwich(details: dict[str, Any]) -> dict[str, bool]:
+async def alert_mev_sandwich(details: dict[str, Any]) -> dict[str, Any]:
     """Dispatch alert for detected MEV sandwich attack."""
     title = "MEV Sandwich Attack Detected"
     msg = (
@@ -135,7 +136,7 @@ async def alert_mev_sandwich(details: dict[str, Any]) -> dict[str, bool]:
     )
 
 
-async def alert_whale_movement(details: dict[str, Any]) -> dict[str, bool]:
+async def alert_whale_movement(details: dict[str, Any]) -> dict[str, Any]:
     """Dispatch alert for significant whale movement."""
     title = f"Whale Movement: {details.get('value_eth', 0)} ETH"
     msg = (
@@ -150,7 +151,7 @@ async def alert_whale_movement(details: dict[str, Any]) -> dict[str, bool]:
     )
 
 
-async def alert_scam_detection(details: dict[str, Any]) -> dict[str, bool]:
+async def alert_scam_detection(details: dict[str, Any]) -> dict[str, Any]:
     """Dispatch alert for scam detection from YouTube/podcast/newsletter."""
     title = f"Scam Signal: {details.get('channel', 'Unknown')}"
     msg = (
@@ -164,7 +165,7 @@ async def alert_scam_detection(details: dict[str, Any]) -> dict[str, bool]:
     return await dispatch_alert(title, msg, alert_type="scam", severity="high")
 
 
-async def alert_newsletter_high_risk(details: dict[str, Any]) -> dict[str, bool]:
+async def alert_newsletter_high_risk(details: dict[str, Any]) -> dict[str, Any]:
     """Dispatch alert for high-risk newsletter content."""
     title = f"High-Risk Newsletter: {details.get('name', 'Unknown')}"
     msg = (

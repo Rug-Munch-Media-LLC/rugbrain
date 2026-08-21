@@ -20,7 +20,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -89,7 +89,7 @@ async def _fetch_defillama_pools() -> list[dict[str, Any]]:
     return []
 
 
-def _match_defillama_pools(all_pools: list[dict], pkey: str) -> list[dict]:
+def _match_defillama_pools(all_pools: list[dict[str, Any]], pkey: str) -> list[dict[str, Any]]:
     """Filter pools by exact DefiLlama project slug."""
     cfg = PROTOCOLS[pkey]
     return [p for p in all_pools if p.get("project", "").lower() == cfg["slug"]]
@@ -105,7 +105,7 @@ async def _fetch_thegraph_pools(subgraph_id: str) -> list[dict[str, Any]]:
             r = await c.post(url, json={"query": SUBGRAPH_POOLS_QUERY})
             if r.status_code == 200:
                 data = r.json()
-                return (data.get("data") or {}).get("pools", [])
+                return cast(list[dict[str, Any]], (data.get("data") or {}).get("pools", []))
     except Exception as exc:
         logger.debug("thegraph_failed subgraph=%s err=%s", subgraph_id, str(exc)[:80])
     return []
@@ -114,7 +114,7 @@ async def _fetch_thegraph_pools(subgraph_id: str) -> list[dict[str, Any]]:
 # ── Metric Computation ──────────────────────────────────────────────────────
 
 
-def _compute_protocol_metrics(pools: list[dict], pkey: str) -> dict[str, Any]:
+def _compute_protocol_metrics(pools: list[dict[str, Any]], pkey: str) -> dict[str, Any]:
     """Aggregate per-protocol metrics. DefiLlama provides supply-side;
     full borrow/utilization data only available via The Graph subgraph (API key)."""
     label = PROTOCOLS[pkey]["label"]
@@ -155,8 +155,10 @@ def _compute_protocol_metrics(pools: list[dict], pkey: str) -> dict[str, Any]:
         wb += borrow_apy_val * supply
         pool_count += 1
 
-    avg = lambda x: x / ts if ts > 0 else 0.0
-    available = max(0, ts - tb) if has_borrow_data else None
+    def avg(x: float) -> float:
+        return x / ts if ts > 0 else 0.0
+
+    available: float | None = max(0, ts - tb) if has_borrow_data else None
 
     return {
         "protocol": label,
@@ -172,7 +174,7 @@ def _compute_protocol_metrics(pools: list[dict], pkey: str) -> dict[str, Any]:
     }
 
 
-def _compute_risk_metrics(pkey: str, snap: dict) -> dict[str, Any]:
+def _compute_risk_metrics(pkey: str, snap: dict[str, Any]) -> dict[str, Any]:
     """Compute risk indicators from available metrics."""
     util = snap.get("utilization_rate") or 0
     ba = snap.get("borrow_apy") or 0
@@ -211,8 +213,8 @@ def _compute_risk_metrics(pkey: str, snap: dict) -> dict[str, Any]:
 # ── Alert Generation ────────────────────────────────────────────────────────
 
 
-async def _check_alerts(pkey: str, snap: dict, risk: dict) -> list[dict]:
-    alerts: list[dict] = []
+async def _check_alerts(pkey: str, snap: dict[str, Any], risk: dict[str, Any]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
     label = snap.get("protocol", pkey)
     util = snap.get("utilization_rate") or 0
     ba = snap.get("borrow_apy") or 0
@@ -266,7 +268,7 @@ async def _check_alerts(pkey: str, snap: dict, risk: dict) -> list[dict]:
     return alerts
 
 
-async def _dispatch_alerts(alerts: list[dict]) -> None:
+async def _dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
     for alert in alerts:
         _recent_alerts.append(alert)
         try:
@@ -293,7 +295,7 @@ async def defi_lending_full_cycle() -> dict[str, Any]:
     via The Graph subgraph queries.
     """
     now = time.time()
-    all_alerts: list[dict] = []
+    all_alerts: list[dict[str, Any]] = []
     all_pools = await _fetch_defillama_pools()
 
     for pkey in PROTOCOLS:

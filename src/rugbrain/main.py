@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 # Retained references to background tasks (RUF006: ensure_future results
 # must be stored so the event loop keeps them alive).
-_background_tasks: list[asyncio.Task] = []
+_background_tasks: list[asyncio.Task[Any]] = []
 
 # ── Env ──────────────────────────────────────────────────────────────
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
@@ -168,7 +168,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # Probe Qdrant once at startup
     try:
-        async with httpx.AsyncClient(base_url=_health_state["qdrant_url"], timeout=5.0) as client:  # type: ignore[var-annotated]
+        async with httpx.AsyncClient(base_url=_health_state["qdrant_url"], timeout=5.0) as client:
             r = await client.get("/")
             _health_state["qdrant"] = r.status_code == 200
             logger.info("qdrant_probe status=%s", "ok" if _health_state["qdrant"] else "fail")

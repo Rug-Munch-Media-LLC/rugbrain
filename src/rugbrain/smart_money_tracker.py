@@ -17,7 +17,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -56,7 +56,7 @@ async def get_token_holders(token_address: str, chain: str = "ethereum") -> list
             data = r.json()
             if data.get("status") != "1":
                 return []
-            return data.get("result", [])
+            return cast(list[dict[str, Any]], data.get("result", []))
     except Exception:
         return []
 

@@ -440,7 +440,7 @@ class FeedSources:
                 rows = list(
                     await asyncio.get_running_loop().run_in_executor(
                         None,
-                        csv.DictReader,  # type: ignore[arg-type]  # csv.DictReader accepts any file-like
+                        csv.DictReader,  # csv.DictReader accepts any file-like
                         f,
                     )
                 )

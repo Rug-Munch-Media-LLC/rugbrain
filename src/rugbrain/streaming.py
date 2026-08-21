@@ -150,9 +150,9 @@ async def _run_watch_scans(watch_id: str) -> None:
         try:
             from rugbrain.compat import score_deployer_risk  # external dependency
 
-            reputation = score_deployer_risk(  # type: ignore[call-arg]
+            reputation = score_deployer_risk(
                 address=token_address,
-                deployment_count=0,  # type: ignore[call-arg]
+                deployment_count=0,
             )
             _push_update(
                 watch_id,

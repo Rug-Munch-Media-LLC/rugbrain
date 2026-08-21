@@ -25,7 +25,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from xml.etree import ElementTree
 
 import httpx
@@ -37,7 +37,7 @@ OFAC_ADVANCED_URL = "https://sanctionssearch.ofac.treas.gov/"
 OFAC_ADDITIONAL_URL = "https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml"
 
 # Crypto address patterns
-CRYPTO_PATTERNS: list[tuple[re.Pattern, str]] = [
+CRYPTO_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b1[1-9A-HJ-NP-Za-km-z]{25,34}\b"), "BTC"),
     (re.compile(r"\b3[1-9A-HJ-NP-Za-km-z]{25,34}\b"), "BTC"),
     (re.compile(r"\bbc1[02-9ac-hj-np-z]{6,87}\b"), "BTC"),
@@ -126,7 +126,7 @@ async def sync_ofac_list() -> dict[str, Any]:
     """
     now = time.time()
     if _ofac_cache.get("cached_at") and (now - _ofac_cache["cached_at"]) < CACHE_TTL:
-        return _ofac_cache["data"]
+        return cast(dict[str, Any], _ofac_cache["data"])
 
     xml_text = await fetch_ofac_sdn_list()
     if not xml_text:

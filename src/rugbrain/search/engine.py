@@ -1187,7 +1187,7 @@ async def three_pillar_search(
             lookup = EntityLookup()
             for entity in entity_extraction:
                 try:
-                    matches = await lookup.lookup(entity["entity"])  # type: ignore[operator]
+                    matches = await lookup.lookup(entity["entity"])
                     for m in matches:
                         m["pillar"] = "entity"
                     pillar3_results.extend(matches)
@@ -1203,7 +1203,7 @@ async def three_pillar_search(
                 try:
                     from rugbrain.compat import get_knowledge_graph  # external dependency
 
-                    kg = await get_knowledge_graph()  # type: ignore[operator]
+                    kg = await get_knowledge_graph()
                 except ImportError:
                     logger.debug("Knowledge Graph module not available, skipping KG expansion")
                     kg = None
@@ -1338,7 +1338,7 @@ async def three_pillar_search(
         try:
             from rugbrain.compat import mmr_dedup_results  # external dependency
 
-            fused = await mmr_dedup_results(  # type: ignore[operator]
+            fused = await mmr_dedup_results(
                 fused,
                 query_score_field="rrf_score",
                 content_field="content",
@@ -1427,12 +1427,14 @@ async def three_pillar_search(
 
     # ── Parent document context expansion (ParentRetriever) ──
     try:
-        from rugbrain.compat import get_parent_retriever  # external dependency
+        from rugbrain.parent_retriever import get_parent_retriever
 
-        pr = await get_parent_retriever()  # type: ignore[operator]
-        fused = await pr.expand_context(fused)  # type: ignore[union-attr]
-        if fused:
-            parent_child_applied = True
+        pr = await get_parent_retriever()
+        if pr is not None:
+            expanded = await pr.expand_context(fused)
+            if expanded:
+                fused = expanded
+                parent_child_applied = True
     except ImportError:
         logger.debug("ParentRetriever module not available")
     except Exception as e:
@@ -1531,10 +1533,12 @@ async def three_pillar_search(
     except ImportError:
         # Fallback to external rmi-backend confidence module
         try:
-            from rugbrain.compat import score_confidence  # external dependency
+            from rugbrain.compat import score_confidence as score_confidence_compat
 
             entity_list = list(entity_doc_ids)[:5] if entity_doc_ids else []
-            confidence = score_confidence(final_results, query=query, entity_matches=entity_list)
+            confidence = score_confidence_compat(
+                final_results, query=query, entity_matches=entity_list
+            )
         except ImportError:
             logger.debug("Confidence scoring not available (both modules missing)")
     except Exception as e:
@@ -1582,7 +1586,7 @@ async def three_pillar_search(
             "recency_applied": recency_applied,
             "recency_half_life_days": recency_half_life_days if recency_applied else None,
         },
-        "entity_extraction": entity_extraction.to_dict() if entity_extraction else None,  # type: ignore[union-attr]
+        "entity_extraction": entity_extraction if entity_extraction else None,
         "query": query,
         "query_type": query_type,
         "fusion_weights": {"dense": w_dense, "sparse": w_sparse, "entity": w_entity},
@@ -1700,7 +1704,7 @@ async def search_with_transform(
     """
     from rugbrain.compat import transform_query  # external dependency
 
-    transformed = await transform_query(query, strategy=strategy)  # type: ignore[operator]
+    transformed = await transform_query(query, strategy=strategy)
 
     all_result_lists = []
     for tq in transformed.transformed_queries:

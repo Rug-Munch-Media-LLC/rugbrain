@@ -513,21 +513,21 @@ async def get_hyperliquid_liquidations() -> list[dict[str, Any]]:
         if liqs:
             for liq in liqs:
                 try:
-                    c = classify_liquidation(liq)
-                    coin = c.get("coin", "?")
+                    cls = classify_liquidation(liq)
+                    coin = cls.get("coin", "?")
                     if coin not in coins:
                         coins.append(coin)
                     liq_id = f"hl_{liq.get('coin', '')}_{liq.get('time', '')}"
                     if liq_id not in _seen_liquidations:
                         _seen_liquidations.add(liq_id)
-                        usd_value = float(c.get("usd_value", 0))
+                        usd_value = float(cls.get("usd_value", 0))
                         events.append(
                             {
                                 "exchange": "Hyperliquid",
                                 "symbol": coin,
-                                "side": "LONG" if c.get("is_long") else "SHORT",
-                                "qty": float(c.get("size", 0)),
-                                "price": float(c.get("price", 0)),
+                                "side": "LONG" if cls.get("is_long") else "SHORT",
+                                "qty": float(cls.get("size", 0)),
+                                "price": float(cls.get("price", 0)),
                                 "value_usd": round(usd_value, 2),
                                 "timestamp": datetime.now(timezone.utc).isoformat(),
                                 "severity": "critical"
@@ -756,7 +756,6 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         hyperliquid,
         kucoin,
         phemex,
-        market,
     ) = await asyncio.gather(
         get_binance_liquidations(),
         get_bybit_liquidations(),
@@ -771,11 +770,11 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         get_hyperliquid_liquidations(),
         get_kucoin_futures_liquidations(),
         get_phemex_liquidations(),
-        get_total_market_liq_24h(),
     )
+    market = await get_total_market_liq_24h()
 
     all_events = (
-        binance  # type: ignore[operator]
+        binance
         + bybit
         + okx
         + protocols
@@ -794,8 +793,8 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         _liquidation_history[:] = _liquidation_history[-25000:]
 
     # Update 24h volume
-    if market.get("estimated_total_24h", 0) > 0:  # type: ignore[union-attr]
-        _24h_volume = market["estimated_total_24h"]  # type: ignore[index]
+    if market.get("estimated_total_24h", 0) > 0:
+        _24h_volume = market["estimated_total_24h"]
         if _24h_volume > _peak_24h:
             _peak_24h = _24h_volume
 
@@ -805,7 +804,9 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
             _biggest_single = e
 
     # Aggregate by exchange
-    by_exchange = defaultdict(lambda: {"count": 0, "volume_usd": 0.0})
+    by_exchange: defaultdict[str, dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "volume_usd": 0.0}
+    )
     for e in all_events:
         ex = e.get("exchange", "unknown")
         by_exchange[ex]["count"] += 1

@@ -397,7 +397,7 @@ async def rag_confidence_score(request: Request, data: dict[str, Any]) -> dict[s
     except ImportError:
         from rugbrain.compat import score_confidence  # external dependency
 
-        return score_confidence(  # type: ignore[no-any-return]
+        return score_confidence(
             data.get("results", []),
             query=data.get("query", ""),
             entity_matches=data.get("entity_matches", []),
@@ -419,26 +419,26 @@ async def rag_chunk_solidity(request: Request, data: dict[str, Any]) -> dict[str
 async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[str, Any]:
     from rugbrain.compat import score_deployer_risk  # external dependency
 
-    return score_deployer_risk(  # type: ignore[no-any-return, call-arg]  # app.deployer_reputation is an untyped external module
+    return score_deployer_risk(
         address=data.get("address", ""),
-        deployment_count=data.get("deployment_count", 0),  # type: ignore[call-arg]
-        mixer_funded=data.get("mixer_funded", False),  # type: ignore[call-arg]
-        source_verified=data.get("source_verified", False),  # type: ignore[call-arg]
-        code_similarity=data.get("code_similarity", 0.0),  # type: ignore[call-arg]
-        rapid_deploy=data.get("rapid_deploy", False),  # type: ignore[call-arg]
-        funded_by_scammer=data.get("funded_by_scammer", False),  # type: ignore[call-arg]
+        deployment_count=data.get("deployment_count", 0),
+        mixer_funded=data.get("mixer_funded", False),
+        source_verified=data.get("source_verified", False),
+        code_similarity=data.get("code_similarity", 0.0),
+        rapid_deploy=data.get("rapid_deploy", False),
+        funded_by_scammer=data.get("funded_by_scammer", False),
     )
 
 
 @router.post("/rag/cross-chain")
-async def rag_cross_chain(request: Request, data: dict[str, Any]) -> dict[str, Any]:
+async def rag_cross_chain(request: Request, data: dict[str, Any]) -> list[dict[str, Any]]:
     from rugbrain.compat import resolve_cross_chain_identity  # external dependency
 
-    return resolve_cross_chain_identity(  # type: ignore[no-any-return, call-arg]  # app.cross_chain is an untyped external module
+    return resolve_cross_chain_identity(
         address=data.get("address", ""),
-        chain=data.get("chain", "ethereum"),  # type: ignore[call-arg]
-        funding_sources=data.get("funding_sources", []),  # type: ignore[call-arg]
-        label_hints=data.get("label_hints", []),  # type: ignore[call-arg]
+        chain=data.get("chain", "ethereum"),
+        funding_sources=data.get("funding_sources", []),
+        label_hints=data.get("label_hints", []),
     )
 
 
@@ -475,10 +475,10 @@ async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> di
         return {"error": "query is required"}
     from rugbrain.compat import investigate  # external dependency
 
-    return await investigate(  # type: ignore[no-any-return, call-arg]  # app.investigation_narratives is an untyped external module
-        query=q,  # type: ignore[call-arg]
-        investigation_type=data.get("type", "auto"),  # type: ignore[call-arg]
-        max_hops=data.get("max_hops", 5),  # type: ignore[call-arg]
+    return await investigate(
+        query=q,
+        investigation_type=data.get("type", "auto"),
+        max_hops=data.get("max_hops", 5),
     )
 
 
@@ -1072,11 +1072,11 @@ async def search_multi(
             reranked = await _rerank(q, docs, top_k=min(top_n, lim))
             if reranked:
                 for r in reranked:
-                    idx = r.get("index")
-                    if isinstance(idx, int) and 0 <= idx < len(docs):
-                        fused[idx]["rerank_score"] = r.get("relevance_score", 0.0)
-                        fused[idx]["reranked"] = True
-                        fused[idx]["rerank_method"] = "qwen3-reranker-4b"
+                    r_idx = r.get("index")
+                    if isinstance(r_idx, int) and 0 <= r_idx < len(docs):
+                        fused[r_idx]["rerank_score"] = r.get("relevance_score", 0.0)
+                        fused[r_idx]["reranked"] = True
+                        fused[r_idx]["rerank_method"] = "qwen3-reranker-4b"
                 fused[:top_n] = sorted(
                     fused[:top_n], key=lambda r: r.get("rerank_score", 0.0), reverse=True
                 )

@@ -254,7 +254,7 @@ async def rerank(
                 return []
 
             data = resp.json()
-            results = data.get("results", [])
+            results: list[dict[str, Any]] = data.get("results", [])
 
             # Cache health
             async with _lock:

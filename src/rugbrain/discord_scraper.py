@@ -17,7 +17,7 @@ import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -119,7 +119,7 @@ async def fetch_discord_messages(channel_id: str) -> list[dict[str, Any]]:
                 "User-Agent": "rugbrain/1.0",
             })
             if r.status_code == 200:
-                return r.json()
+                return cast(list[dict[str, Any]], r.json())
             logger.debug("discord_fetch_failed channel=%s status=%d", channel_id, r.status_code)
             return []
     except Exception as exc:
@@ -145,7 +145,7 @@ async def process_discord_message(msg: dict[str, Any], channel_name: str, catego
 
     # Extract coin mentions
     matches = COIN_PATERN.findall(content)
-    coins = Counter()
+    coins: Counter[str] = Counter()
     for m in matches:
         coin = (m[0] or m[1]).upper()
         if len(coin) >= 2:

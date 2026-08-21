@@ -106,7 +106,7 @@ async def get_exchange_txns(wallet: str, limit: int = 10) -> list[dict[str, Any]
 
 async def exchange_flow_cycle() -> dict[str, Any]:
     """Run one exchange flow monitoring cycle."""
-    results = []
+    results: list[dict[str, Any]] = []
     for exchange, wallets in EXCHANGE_WALLETS.items():
         total_balance = 0
         large_txns = 0

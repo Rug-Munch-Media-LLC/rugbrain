@@ -597,8 +597,8 @@ def main(argv: list[str] | None = None) -> int:
                 "mrr": round(rerank_report.mean_mrr - base.mean_mrr, 4),
                 "hit_at_k": round(rerank_report.mean_hit_at_k - base.mean_hit_at_k, 4),
             },
-            "reranker_applied": bool(meta_sink.get("reranker_applied")),  # type: ignore[possibly-unbound]
-            "reranker_method": meta_sink.get("reranker_method"),  # type: ignore[possibly-unbound]
+            "reranker_applied": bool(meta_sink.get("reranker_applied")),
+            "reranker_method": meta_sink.get("reranker_method"),
         }
         print(json.dumps(payload, indent=2))
         return 1 if rerank_report.errors == rerank_report.total else 0
@@ -617,9 +617,9 @@ def main(argv: list[str] | None = None) -> int:
     print_run("rerank=false", base)
     print_run("rerank=true", rerank_report)
     rerank_status = (
-        f"reranker engaged: {meta_sink.get('reranker_applied')}"  # type: ignore[possibly-unbound]
-        f" ({meta_sink.get('reranker_method')})"  # type: ignore[possibly-unbound]
-        if meta_sink.get("reranker_applied")  # type: ignore[possibly-unbound]
+        f"reranker engaged: {meta_sink.get('reranker_applied')}"
+        f" ({meta_sink.get('reranker_method')})"
+        if meta_sink.get("reranker_applied")
         else "reranker NOT engaged — endpoint fell back to raw vector ranking (degraded path)"
     )
     print(_delta_block(base, rerank_report, args.top_k))

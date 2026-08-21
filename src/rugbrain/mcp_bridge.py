@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 # ── Security guardrails (additive) ─────────────────────────────────────
 try:
-    from rugbrain.guardrails import redact_output, sanitize_query  # type: ignore[has-type]
+    from rugbrain.guardrails import redact_output, sanitize_query
 
     _GUARDRAILS_OK = True
 except ImportError:  # pragma: no cover - guardrails ships with the package
@@ -73,7 +73,7 @@ def _guard_query(query: str) -> tuple[str, dict[str, Any]]:
     if not _GUARDRAILS_OK:
         return query, {"flagged": False, "reasons": [], "sanitized": False, "refused": False}
     try:
-        sq = sanitize_query(query)  # type: ignore[possibly-unbound]
+        sq = sanitize_query(query)
         safe = sq.query
         # Fail-closed: refuse when the flagged query strips to nothing OR a
         # trivial stub (<=3 chars) — forwarding a bare "and" would return
@@ -94,7 +94,7 @@ def _redact_text(value: Any) -> Any:
     """Apply ``redact_output`` to a string (passthrough on failure)."""
     if isinstance(value, str) and _GUARDRAILS_OK:
         try:
-            return redact_output(value)  # type: ignore[possibly-unbound]
+            return redact_output(value)
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("guardrails redact failed: %s", str(exc)[:120])
     return value
@@ -152,7 +152,7 @@ async def _call_direct(tool: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         sys.path.insert(0, str(MCP_DIR))
 
     if tool in _ASYNC_TOOLS:
-        import codebase_server as cs  # type: ignore[import-not-found]
+        import codebase_server as cs
 
         fn = {
             "search": cs.rmi_search,
@@ -163,7 +163,7 @@ async def _call_direct(tool: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         async with cs.lifespan(None):
             return cast(dict[str, Any], await fn(**kwargs))
     if tool in _SYNC_CODEBASE_TOOLS:
-        import codebase_server as cs  # type: ignore[import-not-found]
+        import codebase_server as cs
 
         fn = {
             "resolve_library": cs.resolve_library,
@@ -960,7 +960,7 @@ async def sync_security_patterns(limit: int = 100, dry_run: bool = False) -> dic
         if str(_SCRIPTS_DIR) not in sys.path:
             sys.path.insert(0, str(_SCRIPTS_DIR))
         import httpx
-        from coding_ingest_common import build_coding_doc, ingest_coding_docs  # type: ignore[import-not-found]
+        from coding_ingest_common import build_coding_doc, ingest_coding_docs
 
         from rugbrain.qdrant_store import QdrantVectorStore
 

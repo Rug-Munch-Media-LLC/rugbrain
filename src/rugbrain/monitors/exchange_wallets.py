@@ -14,7 +14,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -89,21 +89,21 @@ class WalletSnapshot:
     usdc_balance: float = 0.0
     dai_balance: float = 0.0
     total_stable_value: float = 0.0
-    large_outflows_24h: list[dict] = field(default_factory=list)
-    large_outflows_7d: list[dict] = field(default_factory=list)
+    large_outflows_24h: list[dict[str, Any]] = field(default_factory=list)
+    large_outflows_7d: list[dict[str, Any]] = field(default_factory=list)
     net_flow_24h_eth: float = 0.0
     net_flow_7d_eth: float = 0.0
     scanned_at: str = ""
 
 
 _state: dict[str, WalletSnapshot] = {}
-_history: dict[str, list[dict]] = {}
+_history: dict[str, list[dict[str, Any]]] = {}
 _last_scan: dict[str, float] = {}
 _scan_lock = asyncio.Lock()
 
 
 async def _fetch_eth_balance(client: httpx.AsyncClient, address: str) -> float:
-    params = {
+    params: dict[str, str | int] = {
         "chainid": 1,
         "module": "account",
         "action": "balance",
@@ -120,7 +120,7 @@ async def _fetch_eth_balance(client: httpx.AsyncClient, address: str) -> float:
 
 
 async def _fetch_token_balance(client: httpx.AsyncClient, address: str, token: str) -> float:
-    params = {
+    params: dict[str, str | int] = {
         "chainid": 1,
         "module": "account",
         "action": "tokenbalance",
@@ -134,11 +134,12 @@ async def _fetch_token_balance(client: httpx.AsyncClient, address: str, token: s
     if data.get("status") != "1":
         return 0.0
     decimals = 6 if token in (USDT, USDC) else 18
-    return int(data["result"]) / (10**decimals)
+    value: float = int(data["result"]) / (10**decimals)
+    return value
 
 
-async def _fetch_recent_txns(client: httpx.AsyncClient, address: str) -> list[dict]:
-    params = {
+async def _fetch_recent_txns(client: httpx.AsyncClient, address: str) -> list[dict[str, Any]]:
+    params: dict[str, str | int] = {
         "chainid": 1,
         "module": "account",
         "action": "txlist",
@@ -153,10 +154,10 @@ async def _fetch_recent_txns(client: httpx.AsyncClient, address: str) -> list[di
     data = r.json()
     if data.get("status") != "1":
         return []
-    return data["result"]
+    return cast(list[dict[str, Any]], data["result"])
 
 
-def _classify_tx(tx: dict, wallet_address: str) -> dict | None:
+def _classify_tx(tx: dict[str, Any], wallet_address: str) -> dict[str, Any] | None:
     value_eth = int(tx.get("value", 0)) / 1e18
     if value_eth < 0.01:
         return None
@@ -172,13 +173,13 @@ def _classify_tx(tx: dict, wallet_address: str) -> dict | None:
 
 
 def _analyze_txns(
-    txns: list[dict], wallet_address: str
-) -> tuple[list[dict], list[dict], float, float]:
+    txns: list[dict[str, Any]], wallet_address: str
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], float, float]:
     now = time.time()
     cutoff_24h = now - 86400
     cutoff_7d = now - 604800
-    large_24h: list[dict] = []
-    large_7d: list[dict] = []
+    large_24h: list[dict[str, Any]] = []
+    large_7d: list[dict[str, Any]] = []
     net_24h = net_7d = 0.0
     for tx in txns:
         enriched = _classify_tx(tx, wallet_address)

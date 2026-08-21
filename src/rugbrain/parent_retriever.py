@@ -33,9 +33,9 @@ class ParentRetriever:
             metadata: Document-level metadata dict.
         """
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
-            r = get_redis_async()
+            r = await get_redis_async()
             if r is None:
                 log.warning(
                     "parent_retriever: no Redis client, skipping store_parent for %s", doc_id
@@ -47,7 +47,7 @@ class ParentRetriever:
                 "content": content,
                 "metadata": metadata,
             }
-            await r.set(key, json.dumps(doc))  # type: ignore[operator]
+            await r.set(key, json.dumps(doc))
             log.debug("parent_retriever: stored parent doc %s", doc_id)
         except Exception as e:
             log.debug("parent_retriever: store_parent failed for %s: %s", doc_id, e)
@@ -62,13 +62,13 @@ class ParentRetriever:
             dict with keys doc_id, content, metadata, or None if not found.
         """
         try:
-            from rugbrain.compat import get_redis_async, get_redis
+            from rugbrain.compat import get_redis_async
 
-            r = get_redis_async()
+            r = await get_redis_async()
             if r is None:
                 return None
             key = f"rag:parent:{doc_id}"
-            data = await r.get(key)  # type: ignore[operator]
+            data = await r.get(key)
             if data:
                 return cast(dict[str, Any], json.loads(data))
         except Exception as e:

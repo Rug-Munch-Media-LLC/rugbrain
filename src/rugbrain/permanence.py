@@ -52,7 +52,7 @@ def _get_b2_api() -> Any:
             )
         from b2sdk.v2 import B2Api, InMemoryAccountInfo
 
-        api = B2Api(InMemoryAccountInfo())  # type: ignore[arg-type]
+        api = B2Api(InMemoryAccountInfo())
         api.authorize_account("production", B2_KEY_ID, B2_APP_KEY)
         _b2_api = api
     return _b2_api
@@ -224,7 +224,7 @@ async def snapshot_all() -> dict[str, Any]:
                 results[name] = {"collection": name, "status": "skipped", "count": 0}
                 continue
 
-            doc_ids = await redis.smembers(f"rag:idx:{name}")  # type: ignore[union-attr]
+            doc_ids = await redis.smembers(f"rag:idx:{name}")
             count = len(doc_ids) if doc_ids else 0
             if count == 0:
                 results[name] = {"collection": name, "status": "empty", "count": 0}
@@ -235,7 +235,7 @@ async def snapshot_all() -> dict[str, Any]:
             items = []
             for doc_id in doc_ids:
                 try:
-                    raw = await redis.get(f"rag:{name}:{doc_id}")  # type: ignore[union-attr]
+                    raw = await redis.get(f"rag:{name}:{doc_id}")
                     if raw:
                         doc = json.loads(raw) if isinstance(raw, str) else raw
                         items.append(doc)
@@ -495,7 +495,7 @@ async def b2_stats() -> dict[str, Any]:
     if has_redis:
         for name in COLLECTIONS:
             try:
-                count = await redis.scard(f"rag:idx:{name}")  # type: ignore[union-attr]
+                count = await redis.scard(f"rag:idx:{name}")
                 coll_info[name] = count
             except Exception:
                 coll_info[name] = 0

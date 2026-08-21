@@ -60,10 +60,9 @@ class Qwen3Embedder:
                 results.append([0.0] * self.DIMS)
         return results
 
-
-async def embed_one(self, text: str) -> list[float]:
-    results = await self.embed([text])
-    return results[0]
+    async def embed_one(self, text: str) -> list[float]:
+        results = await self.embed([text])
+        return results[0]
 
 
 class OpenRouterEmbedder:

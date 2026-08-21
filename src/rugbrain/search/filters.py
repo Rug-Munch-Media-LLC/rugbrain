@@ -175,6 +175,7 @@ async def ingest_document(
     doc_id: str | None = None,
     *,
     parent_child: bool = False,
+    _store_parent_doc: bool = True,
     parent_token_target: int = 3000,
     parent_max_chars: int = 16000,
 ) -> dict[str, Any]:
@@ -229,7 +230,7 @@ async def ingest_document(
         from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
         ann = get_ann_index()
-        await ann.bump_version(collection)  # type: ignore[operator]
+        await ann.bump_version(collection)
     except Exception as e:
         logger.debug("ANN version bump skipped: %s", e)
 
@@ -246,16 +247,16 @@ async def ingest_document(
         from rugbrain.compat import EntityLookup, extract_entities  # external dependency
 
         entities = extract_entities(content)
-        if entities.has_entities:  # type: ignore[union-attr]
-            lookup = EntityLookup.get_instance()  # type: ignore[union-attr]
-            for entity in entities.all_entities():  # type: ignore[union-attr]
+        if entities:
+            lookup = EntityLookup.get_instance()
+            for entity in entities:
                 await lookup.index_entity(
-                    entity["type"],
-                    entity["value"],
+                    entity.get("type", ""),
+                    entity.get("entity", ""),
                     doc_id,
                     metadata={**metadata, "collection": collection},
                 )
-            logger.debug("Entity indexing: %s entities", len(entities.all_entities()))  # type: ignore[union-attr]
+            logger.debug("Entity indexing: %s entities", len(entities))
     except Exception as e:
         logger.debug("Entity indexing skipped: %s", e)
 
@@ -263,7 +264,7 @@ async def ingest_document(
     try:
         from rugbrain.compat import get_knowledge_graph  # external dependency
 
-        kg = await get_knowledge_graph()  # type: ignore[operator]
+        kg = await get_knowledge_graph()
     except ImportError:
         logger.debug("Knowledge Graph module not available, skipping KG edge creation")
         kg = None
@@ -273,20 +274,21 @@ async def ingest_document(
 
     if kg is not None:
         try:
-            await kg.ingest_rag_document(collection, doc_id, content, metadata)  # type: ignore[operator]
+            await kg.ingest_rag_document(collection, doc_id, content, metadata)
             logger.debug("KG edge creation complete")
         except Exception as e:
             logger.debug("KG edge creation failed: %s", e)
 
     logger.debug("pgvector upsert skipped (FAISS primary)")
 
-    try:
-        from rugbrain.compat import get_parent_retriever  # external dependency
+    if _store_parent_doc:
+        try:
+            from rugbrain.parent_retriever import get_parent_retriever
 
-        pr = await get_parent_retriever()  # type: ignore[operator]
-        await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)  # type: ignore[union-attr]
-    except Exception as e:
-        logger.debug("ParentRetriever.store_parent skipped: %s", e)
+            pr = await get_parent_retriever()
+            await pr.store_parent(doc_id=doc_id, content=content, metadata=metadata)
+        except Exception as e:
+            logger.debug("ParentRetriever.store_parent skipped: %s", e)
 
     logger.info("Ingested %s/%s: %s...", collection, doc_id, content[:60])
     return {"id": doc_id, "dims": result.dims, "collection": collection}
@@ -405,7 +407,9 @@ async def ingest_document_parent_child(
             if not child_text.strip():
                 continue
             child_meta = {**metadata, **{k: v for k, v in child.items() if k != "text"}}
-            child_result = await ingest_document(collection, child_text, child_meta)
+            child_result = await ingest_document(
+                collection, child_text, child_meta, _store_parent_doc=False
+            )
             child_ids.append(child_result["id"])
 
     logger.info(
@@ -439,7 +443,7 @@ async def get_stats() -> dict[str, Any]:
         from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
 
         ann = get_ann_index()
-        ann_stats = ann.stats()  # type: ignore[operator]
+        ann_stats = await ann.stats()
     except Exception:
         logger.warning("swallowed exception", exc_info=True)
 
@@ -462,7 +466,7 @@ async def get_stats() -> dict[str, Any]:
         from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
 
         cache = get_semantic_cache()
-        cache_stats = await cache.stats()  # type: ignore[operator]
+        cache_stats = await cache.stats()
     except Exception:
         logger.warning("swallowed exception", exc_info=True)
 
@@ -489,7 +493,7 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
     """
     from rugbrain.compat import GoPlusConnector  # external dependency
 
-    result = await GoPlusConnector.check_token(chain, token_address)  # type: ignore[operator]
+    result = await GoPlusConnector.check_token(chain, token_address)
     if not result:
         return {"error": "GoPlus check returned no data", "address": token_address, "chain": chain}
 
@@ -516,4 +520,4 @@ async def get_goplus_analysis(token_address: str, chain: str = "1") -> dict[str,
     except Exception as e:
         logger.warning("Failed to ingest GoPlus result for %s: %s", token_address, e)
 
-    return cast(dict[str, Any], result)
+    return result

@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from typing import Any
 
 import httpx
 
@@ -41,7 +42,7 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "item"
 
 
-def rss_item_to_doc(source: str, item: dict, doc_type: str, collection: str) -> IngestDoc:
+def rss_item_to_doc(source: str, item: dict[str, Any], doc_type: str, collection: str) -> IngestDoc:
     """Normalize one parsed RSS item into an IngestDoc."""
     title = str(item.get("title") or "").strip()
     url = str(item.get("url") or "").strip()

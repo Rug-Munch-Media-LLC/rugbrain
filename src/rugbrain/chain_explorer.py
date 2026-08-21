@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -69,7 +69,7 @@ async def _rate_limited_call(url: str, chain: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=10) as c:
             r = await c.get(url, headers={"User-Agent": "rugbrain/1.0"})
             if r.status_code == 200:
-                return r.json()
+                return cast(dict[str, Any], r.json())
             return None
     except Exception:
         return None

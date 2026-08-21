@@ -6,15 +6,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the per-diff coverage gate (diff-cover) needs
+          # origin/main as the diff base.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: pip install ruff mypy pytest pytest-cov
+      # Install the package itself so --cov=rugbrain resolves deterministically.
+      - run: pip install -e .
+      - run: pip install ruff mypy pytest pytest-cov diff-cover
       - run: ruff check src/ tests/
+      # mypy gate is owned by a separate workstream — kept non-blocking here
+      # until the strict-strict cleanup lands (do not change without owner).
       - run: mypy src/rugbrain/ --ignore-missing-imports || true
-      - run: pytest tests/ -v --tb=short --cov=rugbrain --cov-report=term-missing || true
+      - name: Unit tests with coverage (BLOCKING)
+        # Tests MUST pass and global coverage must meet the 60% floor
+        # declared in pyproject.toml [tool.coverage.report] fail_under.
+        # Integration-marked tests need live external services — excluded.
+        run: |
+          pytest tests/ -v --tb=short -m "not integration" \
+            --cov=rugbrain \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=lcov:coverage.lcov \
+            --cov-fail-under=60
+      - name: Per-diff coverage gate (diff-cover — covgate-equivalent for Python)
+        # Ratchet: lines CHANGED vs origin/main must be >=60% covered.
+        # covgate (the Rust CLI used by frontend repos) does not parse Python
+        # coverage output; diff-cover provides the same per-diff gate here.
+        # On pushes to main the diff is empty and this passes trivially.
+        run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=60
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            coverage.lcov
 
   security:
     runs-on: ubuntu-latest

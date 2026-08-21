@@ -277,10 +277,10 @@ async def bucketshop_tracker_cycle() -> dict[str, Any]:
         cg = await asyncio.gather(
             *[_cg_trust(client, s) for s in cg_s.values()], return_exceptions=True
         )
-        for n, r in zip(cg_s, cg):
-            if isinstance(r, dict) and r and (ls := live.get(n)):
-                ls.trust_score = r.get("trust_score")
-                ls.btc_vol_24h = r.get("btc_vol_24h")
+        for n, cg_res in zip(cg_s, cg):
+            if isinstance(cg_res, dict) and cg_res and (ls := live.get(n)):
+                ls.trust_score = cg_res.get("trust_score")
+                ls.btc_vol_24h = cg_res.get("btc_vol_24h")
         wt_n = [
             n
             for n in _LIVE_NAMES

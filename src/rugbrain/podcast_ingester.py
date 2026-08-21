@@ -251,14 +251,14 @@ _seen_episodes: set[str] = set()
 _whisper_model = None
 
 # ── Presidio PII scrubber integration ──
-_pii_cache = {"available": False, "checked_at": 0}
+_pii_cache: dict[str, Any] = {"available": False, "checked_at": 0.0}
 
 
 async def _check_presidio() -> bool:
     """Check if Presidio is available for PII scrubbing of transcripts."""
     now = time.monotonic()
     if now - _pii_cache["checked_at"] < 30.0:
-        return _pii_cache["available"]
+        return bool(_pii_cache["available"])
     try:
         async with httpx.AsyncClient(timeout=2) as c:
             r = await c.get("http://presidio:8090/health")
@@ -266,7 +266,7 @@ async def _check_presidio() -> bool:
     except Exception:
         _pii_cache["available"] = False
     _pii_cache["checked_at"] = now
-    return _pii_cache["available"]
+    return bool(_pii_cache["available"])
 
 
 async def fetch_rss_feed(url: str) -> str | None:
@@ -286,7 +286,7 @@ def parse_rss_episodes(
     xml_text: str, podcast_name: str, max_episodes: int = 3
 ) -> list[dict[str, Any]]:
     """Parse RSS XML and extract podcast episodes."""
-    episodes = []
+    episodes: list[dict[str, Any]] = []
     try:
         root = ElementTree.fromstring(xml_text)
         # Try RSS 2.0 format
@@ -487,103 +487,3 @@ async def podcast_scan_loop() -> None:
         except Exception as exc:
             logger.warning("podcast_cycle_failed %s", str(exc)[:80])
         await asyncio.sleep(POLL_INTERVAL)
-    {"name": "CryptoNewsPodcast", "rss": "https://cryptonews.com/feed/podcast", "yt": ""},
-    {"name": "CryptoPotato", "rss": "https://cryptopotato.com/feed/podcast", "yt": ""},
-    {"name": "BeInCrypto", "rss": "https://beincrypto.com/feed/podcast", "yt": ""},
-    {"name": "CryptoSlate", "rss": "https://cryptoslate.com/feed/podcast", "yt": ""},
-    {"name": "ZyCrypto", "rss": "https://zycrypto.com/feed/podcast", "yt": ""},
-    {"name": "NewsBTC", "rss": "https://newsbtc.com/feed/podcast", "yt": ""},
-    {"name": "Bitcoinist", "rss": "https://bitcoinist.com/feed/podcast", "yt": ""},
-    {"name": "Blockchain Innovation", "rss": "https://blockchain-innovation.net/feed/podcast", "yt": ""},
-    {"name": "CryptoWeekly", "rss": "", "yt": "https://www.youtube.com/@CryptoWeekly"},
-    {"name": "CryptoCoinShow", "rss": "", "yt": "https://www.youtube.com/@CryptoCoinShow"},
-    {"name": "CryptoGains", "rss": "", "yt": "https://www.youtube.com/@CryptoGains"},
-    {"name": "CryptoNewsBites", "rss": "", "yt": "https://www.youtube.com/@CryptoNewsBites"},
-    {"name": "CryptoMarketWatch", "rss": "", "yt": "https://www.youtube.com/@CryptoMarketWatch"},
-    {"name": "CryptoDailyReport", "rss": "", "yt": "https://www.youtube.com/@CryptoDailyReport"},
-    {"name": "CryptoLiveNews", "rss": "", "yt": "https://www.youtube.com/@CryptoLiveNews"},
-    {"name": "CryptoHeadlines", "rss": "", "yt": "https://www.youtube.com/@CryptoHeadlines"},
-    {"name": "CryptoToday", "rss": "", "yt": "https://www.youtube.com/@CryptoToday"},
-    {"name": "CryptoWeek", "rss": "", "yt": "https://www.youtube.com/@CryptoWeek"},
-    {"name": "CryptoBreakdown", "rss": "", "yt": "https://www.youtube.com/@CryptoBreakdown"},
-    {"name": "CryptoDeepDive", "rss": "", "yt": "https://www.youtube.com/@CryptoDeepDive"},
-    {"name": "CryptoAnalysis", "rss": "", "yt": "https://www.youtube.com/@CryptoAnalysis"},
-    {"name": "CryptoResearch", "rss": "", "yt": "https://www.youtube.com/@CryptoResearch"},
-    {"name": "BlockchainWeekly", "rss": "", "yt": "https://www.youtube.com/@BlockchainWeekly"},
-    {"name": "BlockchainDaily", "rss": "", "yt": "https://www.youtube.com/@BlockchainDaily"},
-    {"name": "BlockchainToday", "rss": "", "yt": "https://www.youtube.com/@BlockchainToday"},
-    {"name": "BlockchainNews", "rss": "", "yt": "https://www.youtube.com/@BlockchainNews"},
-    {"name": "DeFiNews", "rss": "", "yt": "https://www.youtube.com/@DeFiNews"},
-    {"name": "DeFiDaily", "rss": "", "yt": "https://www.youtube.com/@DeFiDaily"},
-    {"name": "DeFiWorld", "rss": "", "yt": "https://www.youtube.com/@DeFiWorld"},
-    {"name": "NFTNews", "rss": "", "yt": "https://www.youtube.com/@NFTNews"},
-    {"name": "NFTDaily", "rss": "", "yt": "https://www.youtube.com/@NFTDaily"},
-    {"name": "MetaverseNews", "rss": "", "yt": "https://www.youtube.com/@MetaverseNews"},
-    {"name": "Web3News", "rss": "", "yt": "https://www.youtube.com/@Web3News"},
-    {"name": "Web3Daily", "rss": "", "yt": "https://www.youtube.com/@Web3Daily"},
-    {"name": "SolanaNews", "rss": "", "yt": "https://www.youtube.com/@SolanaNews"},
-    {"name": "SolanaDaily", "rss": "", "yt": "https://www.youtube.com/@SolanaDaily"},
-    {"name": "EthereumNews", "rss": "", "yt": "https://www.youtube.com/@EthereumNews"},
-    {"name": "EthereumDaily", "rss": "", "yt": "https://www.youtube.com/@EthereumDaily"},
-    {"name": "BitcoinNews", "rss": "", "yt": "https://www.youtube.com/@BitcoinNews"},
-    {"name": "BitcoinDaily", "rss": "", "yt": "https://www.youtube.com/@BitcoinDaily"},
-    {"name": "TokenNews", "rss": "", "yt": "https://www.youtube.com/@TokenNews"},
-    {"name": "AltcoinNews", "rss": "", "yt": "https://www.youtube.com/@AltcoinNews"},
-    {"name": "YieldFarmingNews", "rss": "", "yt": "https://www.youtube.com/@YieldFarmingNews"},
-    {"name": "StakingNews", "rss": "", "yt": "https://www.youtube.com/@StakingNews"},
-    {"name": "Layer2News", "rss": "", "yt": "https://www.youtube.com/@Layer2News"},
-    {"name": "CryptoRegulation", "rss": "", "yt": "https://www.youtube.com/@CryptoRegulation"},
-    {"name": "CryptoLaw", "rss": "", "yt": "https://www.youtube.com/@CryptoLaw"},
-    {"name": "CryptoCompliance", "rss": "", "yt": "https://www.youtube.com/@CryptoCompliance"},
-    {"name": "CryptoTax", "rss": "", "yt": "https://www.youtube.com/@CryptoTax"},
-    {"name": "CryptoAccounting", "rss": "", "yt": "https://www.youtube.com/@CryptoAccounting"},
-    {"name": "CryptoScams", "rss": "", "yt": "https://www.youtube.com/@CryptoScams"},
-    {"name": "CryptoFraud", "rss": "", "yt": "https://www.youtube.com/@CryptoFraud"},
-    {"name": "CryptoHacks", "rss": "", "yt": "https://www.youtube.com/@CryptoHacks"},
-    {"name": "CryptoAudit", "rss": "", "yt": "https://www.youtube.com/@CryptoAudit"},
-    {"name": "CryptoForensics", "rss": "", "yt": "https://www.youtube.com/@CryptoForensics"},
-    {"name": "CryptoAML", "rss": "", "yt": "https://www.youtube.com/@CryptoAML"},
-    {"name": "CryptoKYC", "rss": "", "yt": "https://www.youtube.com/@CryptoKYC"},
-    {"name": "CryptoGaming", "rss": "", "yt": "https://www.youtube.com/@CryptoGaming"},
-    {"name": "CryptoGambling", "rss": "", "yt": "https://www.youtube.com/@CryptoGambling"},
-    {"name": "CryptoSports", "rss": "", "yt": "https://www.youtube.com/@CryptoSports"},
-    {"name": "CryptoEntertainment", "rss": "", "yt": "https://www.youtube.com/@CryptoEntertainment"},
-    {"name": "CryptoMusic", "rss": "", "yt": "https://www.youtube.com/@CryptoMusic"},
-    {"name": "CryptoArt", "rss": "", "yt": "https://www.youtube.com/@CryptoArt"},
-    {"name": "CryptoCollectibles", "rss": "", "yt": "https://www.youtube.com/@CryptoCollectibles"},
-    {"name": "CryptoDerivatives", "rss": "", "yt": "https://www.youtube.com/@CryptoDerivatives"},
-    {"name": "CryptoOptions", "rss": "", "yt": "https://www.youtube.com/@CryptoOptions"},
-    {"name": "CryptoFutures", "rss": "", "yt": "https://www.youtube.com/@CryptoFutures"},
-    {"name": "CryptoLeverage", "rss": "", "yt": "https://www.youtube.com/@CryptoLeverage"},
-    {"name": "CryptoMargin", "rss": "", "yt": "https://www.youtube.com/@CryptoMargin"},
-    {"name": "CryptoPerpetuals", "rss": "", "yt": "https://www.youtube.com/@CryptoPerpetuals"},
-    {"name": "CryptoCEX", "rss": "", "yt": "https://www.youtube.com/@CryptoCEX"},
-    {"name": "CryptoDEX", "rss": "", "yt": "https://www.youtube.com/@CryptoDEX"},
-    {"name": "CryptoAMM", "rss": "", "yt": "https://www.youtube.com/@CryptoAMM"},
-    {"name": "CryptoLiquidity", "rss": "", "yt": "https://www.youtube.com/@CryptoLiquidity"},
-    {"name": "CryptoBridges", "rss": "", "yt": "https://www.youtube.com/@CryptoBridges"},
-    {"name": "CryptoOracles", "rss": "", "yt": "https://www.youtube.com/@CryptoOracles"},
-    {"name": "CryptoZK", "rss": "", "yt": "https://www.youtube.com/@CryptoZK"},
-    {"name": "CryptoPrivacy", "rss": "", "yt": "https://www.youtube.com/@CryptoPrivacy"},
-    {"name": "CryptoAnonymity", "rss": "", "yt": "https://www.youtube.com/@CryptoAnonymity"},
-    {"name": "CryptoMixers", "rss": "", "yt": "https://www.youtube.com/@CryptoMixers"},
-    {"name": "CryptoTumblers", "rss": "", "yt": "https://www.youtube.com/@CryptoTumblers"},
-    {"name": "CryptoDarknet", "rss": "", "yt": "https://www.youtube.com/@CryptoDarknet"},
-    {"name": "CryptoMemes", "rss": "", "yt": "https://www.youtube.com/@CryptoMemes"},
-    {"name": "CryptoCommunity", "rss": "", "yt": "https://www.youtube.com/@CryptoCommunity"},
-    {"name": "CryptoDAO", "rss": "", "yt": "https://www.youtube.com/@CryptoDAO"},
-    {"name": "CryptoGovernance", "rss": "", "yt": "https://www.youtube.com/@CryptoGovernance"},
-    {"name": "CryptoVoting", "rss": "", "yt": "https://www.youtube.com/@CryptoVoting"},
-    {"name": "CryptoAirdrops", "rss": "", "yt": "https://www.youtube.com/@CryptoAirdrops"},
-    {"name": "CryptoFaucets", "rss": "", "yt": "https://www.youtube.com/@CryptoFaucets"},
-    {"name": "CryptoBounties", "rss": "", "yt": "https://www.youtube.com/@CryptoBounties"},
-    {"name": "CryptoRewards", "rss": "", "yt": "https://www.youtube.com/@CryptoRewards"},
-    {"name": "CryptoCashback", "rss": "", "yt": "https://www.youtube.com/@CryptoCashback"},
-    {"name": "CryptoReferrals", "rss": "", "yt": "https://www.youtube.com/@CryptoReferrals"},
-    {"name": "CryptoAffiliate", "rss": "", "yt": "https://www.youtube.com/@CryptoAffiliate"},
-    {"name": "CryptoInfluencer", "rss": "", "yt": "https://www.youtube.com/@CryptoInfluencer"},
-    {"name": "CryptoKOL", "rss": "", "yt": "https://www.youtube.com/@CryptoKOL"},
-    {"name": "CryptoWhale", "rss": "", "yt": "https://www.youtube.com/@CryptoWhale"},
-    {"name": "CryptoShark", "rss": "", "yt": "https://www.youtube.com/@CryptoShark"},
-    {"name": "CryptoDolphin", "rss": "", "yt": "https://www.youtube.com/@CryptoDolphin"},
-    {"name": "CryptoFish", "rss": "", "yt": "https://www.youtube.com/@CryptoFish"},

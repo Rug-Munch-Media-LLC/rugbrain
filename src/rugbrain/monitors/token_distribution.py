@@ -10,7 +10,7 @@ import logging
 import os
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -145,7 +145,7 @@ UPCOMING_AIRDROPS = [
 _token_state: dict[str, dict[str, Any]] = {}
 _token_history: dict[str, list[dict[str, Any]]] = defaultdict(list)
 MAX_HISTORY = 90
-_airdrop_state = {
+_airdrop_state: dict[str, Any] = {
     "registry": list(UPCOMING_AIRDROPS),
     "last_checked": None,
     "coingecko_trending": [],
@@ -164,7 +164,7 @@ async def _etherscan(params: dict[str, str]) -> dict[str, Any] | None:
             data = r.json()
             if data.get("status") != "1":
                 return None
-            return data
+            return cast(dict[str, Any], data)
     except Exception as exc:
         logger.debug("etherscan_fail %s err=%s", params.get("action"), str(exc)[:60])
         return None
@@ -285,11 +285,11 @@ async def analyze_token(symbol: str, contract: str) -> dict[str, Any]:
     top10_pct = sum(h["percentage"] for h in parsed[:10])
     top50_pct = sum(h["percentage"] for h in parsed[:50])
     score = compute_concentration_score(top10_pct, top50_pct)
-    whale_balances = {}
+    whale_balances: dict[str, float] = {}
     for w in TOKEN_WHALES.get(symbol, []):
-        bal = await _get_token_balance(contract, w)
-        if bal is not None:
-            whale_balances[w] = bal
+        w_bal = await _get_token_balance(contract, w)
+        if w_bal is not None:
+            whale_balances[w] = w_bal
     total_whale_raw = sum(whale_balances.values())
     whale_pct = (total_whale_raw / supply_raw) * 100 if supply_raw > 0 else 0
     cg_id = TOKEN_CG_IDS.get(symbol)
@@ -326,7 +326,10 @@ def compute_whale_trends(symbol: str) -> dict[str, Any]:
             "conc_24h_change": 0,
             "conc_7d_change": 0,
         }
-    latest, d = hist[-1], lambda k, i: round(latest.get(k, 0) - hist[-i].get(k, 0), 2)
+    latest = hist[-1]
+
+    def d(k: str, i: int) -> float:
+        return float(round(latest.get(k, 0) - hist[-i].get(k, 0), 2))
     return {
         "whale_24h_change": d("whale_supply_pct", 2),
         "whale_7d_change": d("whale_supply_pct", 168) if len(hist) >= 168 else 0,

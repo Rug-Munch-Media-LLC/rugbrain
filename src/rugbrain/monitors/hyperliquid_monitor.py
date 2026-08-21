@@ -36,7 +36,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -68,7 +68,7 @@ _seen_trades: set[str] = set()
 _COIN_NAMES: dict[str, str] = {}
 
 
-async def _api_call(payload: dict) -> Any:
+async def _api_call(payload: dict[str, Any]) -> Any:
     """Make a POST to the Hyperliquid info endpoint."""
     try:
         async with httpx.AsyncClient(timeout=10) as c:
@@ -139,7 +139,7 @@ async def fetch_open_interests() -> dict[str, float]:
     data = await _api_call({"type": "metaAndAssetCtxs"})
     if isinstance(data, list) and len(data) == 2:
         ctx_list = data[1]  # Second element is asset contexts with OI/funding
-        oi_data = {}
+        oi_data: dict[str, Any] = {}
         for ctx in ctx_list:
             # ctx is per-coin, need to match by index
             pass
@@ -170,7 +170,8 @@ async def fetch_candle_snapshot(
 
 async def fetch_user_portfolio(user: str) -> dict[str, Any] | None:
     """Get user portfolio by address."""
-    return await _api_call({"type": "portfolio", "user": user})
+    data = await _api_call({"type": "portfolio", "user": user})
+    return cast(dict[str, Any] | None, data)
 
 
 async def fetch_all_perp_info() -> dict[str, Any]:
@@ -185,8 +186,8 @@ async def fetch_all_perp_info() -> dict[str, Any]:
             _COIN_NAMES[u["name"]] = u.get("szDecimals", 5)
 
         # Extract funding rates, open interest, mark prices
-        fundings = {}
-        oi_data = {}
+        fundings: dict[str, Any] = {}
+        oi_data: dict[str, Any] = {}
         for ctx in ctx_part:
             # ctx corresponds to universe index
             pass  # We need to match by index

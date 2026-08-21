@@ -275,7 +275,7 @@ async def exchange_reserves_cycle() -> dict[str, Any]:
 
         for idx, name in enumerate(POR_ENDPOINTS):
             raw = por_results[idx]
-            if isinstance(raw, Exception):
+            if isinstance(raw, BaseException):
                 logger.warning("por_err %s %s", name, str(raw)[:80])
                 continue
             if raw is None:
@@ -285,14 +285,14 @@ async def exchange_reserves_cycle() -> dict[str, Any]:
                     continue
                 raw = cg_raw
 
-            raw.scanned_at = now_iso  # type: ignore[union-attr]
+            raw.scanned_at = now_iso
             prev = _reserves.get(name)
             if prev is not None:
                 _previous[name] = prev
-            _reserves[name] = raw  # type: ignore[arg-type]
+            _reserves[name] = raw
             _last_check[name] = now_ts
 
-            msgs = _check_alerts(name, raw, _previous.get(name))  # type: ignore[arg-type]
+            msgs = _check_alerts(name, raw, _previous.get(name))
             all_alerts.extend(msgs)
 
     for msg in all_alerts:

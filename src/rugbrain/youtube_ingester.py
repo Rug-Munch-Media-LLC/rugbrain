@@ -396,7 +396,7 @@ _seen_videos: set[str] = set()
 def extract_coin_mentions(text: str) -> dict[str, Any]:
     """Extract coin/token mentions from text and score for scam indicators."""
     matches = COIN_PATTERN.findall(text)
-    coins = Counter()
+    coins: Counter[str] = Counter()
     for m in matches:
         coin = (m[0] or m[1]).upper()
         if len(coin) >= 2 and coin not in ("THE", "FOR", "AND", "THIS", "THAT", "YOU", "NOT"):

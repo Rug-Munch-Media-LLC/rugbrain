@@ -615,7 +615,7 @@ async def build_bm25_from_redis(
             logger.warning("BM25 indexing for %s failed: %s", coll, e)
 
     index.build()
-    await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub
+    await r.aclose()  # redis.asyncio stub
 
     logger.info(
         f"BM25 index built: {total_indexed} docs, {len(index.df)} unique terms, avg doc length {index.avg_dl:.1f}"

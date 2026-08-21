@@ -94,7 +94,7 @@ def get_embedder() -> DualDimEmbedder:
     """
     return DualDimEmbedder(
         EmbedderBackend.Qwen3_M3,
-        embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"),
+        int_url=os.getenv("QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")),
     )
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -66,7 +66,7 @@ async def scrub_text(text: str, language: str = "en") -> str:
             )
             if r.status_code == 200:
                 data = r.json()
-                redacted = data.get("redacted", text)
+                redacted = str(data.get("redacted", text))
                 if data.get("pii_found", 0) > 0:
                     log.debug(
                         "pii_redacted count=%d text_len=%d",
@@ -98,7 +98,7 @@ async def scrub_batch(texts: list[str], language: str = "en") -> list[str]:
             )
             if r.status_code == 200:
                 data = r.json()
-                return data.get("results", texts)
+                return cast(list[str], data.get("results", texts))
             return texts
     except Exception:
         return texts
@@ -124,7 +124,7 @@ async def analyze_text(text: str, language: str = "en") -> list[dict[str, Any]]:
                 json={"text": text, "language": language},
             )
             if r.status_code == 200:
-                entities = r.json()
+                entities = cast(list[dict[str, Any]], r.json())
                 # Normalize: some Presidio versions return "type" instead of "entity_type"
                 for e in entities:
                     et = e.get("entity_type") or e.get("type")

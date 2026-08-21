@@ -78,7 +78,7 @@ async def _call_llm(article_text: str) -> dict[str, Any] | None:
     try:
         from rugbrain.compat import generate_content, AI_BASE, LLM_API_KEY
 
-        raw = await generate_content(prompt, max_tokens=2048, temperature=0.3)  # type: ignore[call-arg]
+        raw = await generate_content(prompt, max_tokens=2048, temperature=0.3)
         raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]

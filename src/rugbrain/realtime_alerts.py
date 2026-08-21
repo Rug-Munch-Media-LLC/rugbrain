@@ -995,7 +995,7 @@ async def poll_onchain_anomalies(
         }
         settings = {"max_execution_time": 20}
 
-        rows = ch.query(_dex_whale_sql(db), parameters=params, settings=settings).result_rows  # type: ignore[union-attr]  # type: ignore[union-attr]
+        rows = ch.query(_dex_whale_sql(db), parameters=params, settings=settings).result_rows
         for row in rows:
             chain, _ts, tx_hash, dex, pair, t0, t1, sender, recipient, vol = row
             candidates.append(
@@ -1014,7 +1014,7 @@ async def poll_onchain_anomalies(
                 )
             )
 
-        rows = ch.query(_new_address_sql(db), parameters=params, settings=settings).result_rows  # type: ignore[union-attr]
+        rows = ch.query(_new_address_sql(db), parameters=params, settings=settings).result_rows
         for row in rows:
             chain, _ts, tx_hash, dex, pair, t0, t1, sender, recipient, vol = row
             candidates.append(
@@ -1033,7 +1033,7 @@ async def poll_onchain_anomalies(
                 )
             )
 
-        rows = ch.query(_oracle_pattern_sql(db), parameters=params, settings=settings).result_rows  # type: ignore[union-attr]
+        rows = ch.query(_oracle_pattern_sql(db), parameters=params, settings=settings).result_rows
         for row in rows:
             chain, pair, t0, t1, swaps, cum, _last = row
             candidates.append(
