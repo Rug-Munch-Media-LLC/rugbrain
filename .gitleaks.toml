@@ -95,6 +95,8 @@ paths = [
   '''\.mypy_cache/''',
   '''vendor/''',
   '''scripts/''',
+  # Public CryptoScamDB dataset — URLs contain hex strings that resemble keys
+  '''data/cryptoscamdb_urls\.yaml''',
   '''AGENTS\.md''',
   # Redaction tests intentionally embed fake private IPs / BIP39 word lists
   # as INPUT to verify redact_output() — not real secrets.
@@ -109,3 +111,4 @@ stopwords = [
   "your-api-key-here",
   "TODO: add real key",
 ]
+

@@ -19,7 +19,7 @@ from rugbrain.endpoints import _is_token_address
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 
 @router.get("/rag/journalism/research")

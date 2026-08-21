@@ -25,7 +25,7 @@ from rugbrain import endpoints as _ep
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 
 @router.get("/search")
@@ -501,7 +501,7 @@ async def search_multi(
 # ── Scam check (separate router: /api/v1/rag/v2) ─────────────────────────
 
 
-scam_check_router = APIRouter(prefix="/api/v1/rag/v2", tags=["scam-check"])
+scam_check_router: APIRouter = APIRouter(prefix="/api/v1/rag/v2", tags=["scam-check"])
 
 
 @scam_check_router.get("/scam-check")
