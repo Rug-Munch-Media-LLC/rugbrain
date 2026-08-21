@@ -236,7 +236,7 @@ def _env_bool(name: str, default: bool) -> bool:
 
 # Reranking is ON by default on the main search entry points: the top
 # ``rerank_top_k`` fused candidates are re-scored with the self-hosted Qwen3 cross-encoder
-# (Qwen3-Reranker-8B) before truncation. The search-lane reranker degrades
+# (Qwen3-Reranker-4B) before truncation. The search-lane reranker degrades
 # gracefully — when no model backend is installed, or scoring takes longer
 # than ``rerank_timeout``, results fall back to their original retrieval
 # order with ``rerank_method="none"`` / ``reranked=false`` — a request never
@@ -451,7 +451,7 @@ async def search_similar(
     # 1. Check semantic cache
     cache_hit = False
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
+        from rugbrain.compat import get_semantic_cache  # external dependency
 
         cache = get_semantic_cache()
         cached = await cache.check(query_vec)
@@ -471,7 +471,7 @@ async def search_similar(
     # 2. Try FAISS ANN index search
     results = []
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
+        from rugbrain.compat import get_ann_index  # external dependency
 
         ann = get_ann_index()
         if ann.is_built(collection):
@@ -509,7 +509,7 @@ async def search_similar(
     # 3. Store in semantic cache
     if results:
         try:
-            from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
+            from rugbrain.compat import get_semantic_cache  # external dependency
 
             cache = get_semantic_cache()
             await cache.store(query_vec, results)
@@ -522,8 +522,8 @@ async def search_similar(
             from rugbrain.search.temporal_decay import apply_temporal_decay
 
             results = apply_temporal_decay(results)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("temporal decay skipped: %s", exc)
 
     # Trace observability
     try:
@@ -795,7 +795,7 @@ async def search_multi_collection(
     Search-quality parameters:
 
     * ``rerank`` — **default True**: the top ``rerank_top_k`` candidate
-      chunks are re-ranked with a cross-encoder (Qwen3-Reranker-8B) and the best
+      chunks are re-ranked with a cross-encoder (Qwen3-Reranker-4B) and the best
       ``rerank_keep`` (defaults to *limit*) are kept before truncation.
       Degrades gracefully: when the model backend is unavailable (or scoring
       exceeds ``rerank_timeout``), results fall back to their original
@@ -1015,7 +1015,7 @@ async def three_pillar_search(
       to raw ranking (default 2.0; env ``RAG_RERANK_TIMEOUT``; ``<=0``
       disables).
     * ``use_reranker`` — the news-lane cross-encoder reranker ( Qwen3 via
-      self-hosted Qwen3-Reranker-8B), applied after fusion. Defaults True
+      self-hosted Qwen3-Reranker-4B), applied after fusion. Defaults True
       with a graceful no-op fallback: environments without a reranker model
       return results by their original score (``rerank_method="none"``), so
       search never breaks when the model is missing.
@@ -1064,7 +1064,7 @@ async def three_pillar_search(
     except Exception as e:
         logger.warning("Pillar 1 (dense) primary failed: %s — trying ANN fallback", e)
         try:
-            from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
+            from rugbrain.compat import get_semantic_cache  # external dependency
 
             cache = get_semantic_cache()
             cached = await cache.check(query_vec)
@@ -1090,7 +1090,7 @@ async def three_pillar_search(
 
                 for coll in collections:
                     try:
-                        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
+                        from rugbrain.compat import get_ann_index  # external dependency
 
                         ann = get_ann_index()
                         if expanded:
@@ -1362,7 +1362,7 @@ async def three_pillar_search(
             r["similarity"] = r.get("rrf_score", 0.0)
         pre_rerank = len(fused)
 
-        # Self-hosted Qwen3-Reranker-8B (llama.cpp:8003) — true cross-encoder.
+        # Self-hosted Qwen3-Reranker-4B (llama.cpp:8003) — true cross-encoder.
         # Graceful no-op: falls back to raw retrieval order when the server
         # is unreachable (rerank_method="none", reranked=false).
         try:
@@ -1377,9 +1377,9 @@ async def three_pillar_search(
             if reranked and reranked[0].get("rerank_method", "none") != "none":
                 fused = reranked
                 reranker_applied = True
-                reranker_method = reranked[0].get("rerank_method", "qwen3-reranker-8b")
+                reranker_method = reranked[0].get("rerank_method", "qwen3-reranker-4b")
                 logger.info(
-                    "Cross-encoder (Qwen3-Reranker-8B) reranked: %d → %d results",
+                    "Cross-encoder (Qwen3-Reranker-4B) reranked: %d → %d results",
                     pre_rerank,
                     len(fused),
                 )
@@ -1515,8 +1515,6 @@ async def three_pillar_search(
         for r in final_results:
             src = {"type": r.get("type", "unknown"), "score": r.get("score", 0.0)}
             if r.get("metadata", {}).get("ingested_at"):
-                import time
-
                 try:
                     from datetime import datetime
 

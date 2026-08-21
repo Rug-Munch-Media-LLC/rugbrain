@@ -3,11 +3,11 @@ RAG Search — cross-encoder reranking (search lane).
 
 Cross-encoder rerank step for retrieval: after candidate chunks are
 retrieved, score each (query, chunk) pair with the self-hosted Qwen3
-Reranker 8B (llama.cpp, port 8003) and keep only the most relevant chunks
+Reranker 4B (llama.cpp, port 8003) and keep only the most relevant chunks
 before truncation.
 
 Backend:
-  * Qwen3-Reranker-8B Q4_K_M served by llama.cpp ``--rerank`` on Talos
+  * Qwen3-Reranker-4B Q6_K served by llama.cpp ``--rerank`` on Talos
     (http://172.22.0.1:8003 from inside the container, 127.0.0.1:8003 on
     the host). HTTP-only — no torch, no sentence-transformers, no local
     model weights in the container.
@@ -58,7 +58,7 @@ def _original_score(doc: dict[str, Any]) -> float:
 class Reranker:
     """Backward-compatible search-lane reranker facade.
 
-    Wraps the self-hosted Qwen3-Reranker-8B HTTP endpoint. Kept for
+    Wraps the self-hosted Qwen3-Reranker-4B HTTP endpoint. Kept for
     callers that import ``get_reranker`` from ``rugbrain.search.rerank``;
     new code should call :func:`rerank_chunks` directly.
     """
@@ -154,7 +154,7 @@ async def _score_candidates(
                 if isinstance(pos, int) and 0 <= pos < len(valid):
                     orig_idx = valid[pos][0]
                     scores[orig_idx] = float(r.get("relevance_score", 0.0))
-            return scores, "qwen3-reranker-8b"
+            return scores, "qwen3-reranker-4b"
 
     except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as exc:
         logger.debug("reranker_unavailable: %s", exc)

@@ -1,4 +1,4 @@
-"""Decoupled Qwen3 Reranker 8B client — stand-alone, zero rugbrain imports.
+"""Decoupled Qwen3 Reranker 4B client — stand-alone, zero rugbrain imports.
 
 Self-hosts a llama.cpp --rerank server on Talos port 8003.
 Degrades gracefully when server is down.

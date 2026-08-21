@@ -208,7 +208,7 @@ async def search_via_endpoint(
 ) -> list[dict[str, Any]]:
     """Call the live ``/api/v1/search`` route (read-only GET).
 
-    ``rerank=true`` mirrors the endpoint's self-hosted Qwen3-Reranker-8B cross-encoder
+    ``rerank=true`` mirrors the endpoint's self-hosted Qwen3-Reranker-4B cross-encoder
     path (top-20 candidates scored and re-sorted). When *meta* is provided the
     endpoint's ``reranker_applied`` / ``reranker_method`` / ``total`` fields
     are recorded there so the runner can report whether rerank actually
@@ -527,6 +527,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    meta_sink: dict[str, Any] = {}
+
     if args.inprocess:
 
         def make_search(rerank: bool) -> Callable[..., Any]:
@@ -544,7 +546,6 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        meta_sink: dict[str, Any] = {}
 
         def make_search(rerank: bool) -> Callable[..., Any]:
             async def endpoint_search(
