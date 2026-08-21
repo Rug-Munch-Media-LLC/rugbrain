@@ -12,7 +12,7 @@ dependency-light and runs anywhere, including CI. Formulas:
 * ``hit_rate_at_k`` — 1.0 if at least one relevant id is in the top-k, else 0.
 * ``mrr`` — Mean Reciprocal Rank: 1/rank of the first relevant id.
 
-Conventions (matching the archived ``_legacy/eval_ragas.py``):
+Conventions (matching the deleted legacy eval_ragas implementation):
 
 * ``ndcg_at_k`` returns ``0.0`` when there is no labeled relevant set (nothing
   to gain credit for).
