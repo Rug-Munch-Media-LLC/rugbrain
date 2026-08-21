@@ -16,7 +16,7 @@ from fastapi import APIRouter, Request
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 
 @router.post("/rag/status/all")

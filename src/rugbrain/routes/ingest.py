@@ -18,7 +18,7 @@ from rugbrain.endpoints import RATE_LIMITS, _check_rate_limit
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 
 class IngestDocument(BaseModel):

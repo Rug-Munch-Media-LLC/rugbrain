@@ -23,7 +23,7 @@ from rugbrain import endpoints as _ep
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 
 @router.get("/analyze/{address}")
