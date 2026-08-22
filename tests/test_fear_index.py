@@ -1,6 +1,7 @@
 """Tests for the crypto panic/fear index module."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -13,7 +14,7 @@ import rugbrain.fear_index as fi
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_classify_fear_boundaries():
+def test_classify_fear_boundaries() -> None:
     assert fi.classify_fear(0) == "extreme_fear"
     assert fi.classify_fear(24) == "extreme_fear"
     assert fi.classify_fear(25) == "fear"
@@ -26,29 +27,29 @@ def test_classify_fear_boundaries():
     assert fi.classify_fear(100) == "extreme_greed"
 
 
-def test_compute_fear_index_weighted_all_components():
+def test_compute_fear_index_weighted_all_components() -> None:
     components = {"fng": 80, "social": 60, "onchain": 40, "news": 50}
     expected = round((0.35 * 80 + 0.20 * 60 + 0.25 * 40 + 0.20 * 50) / (0.35 + 0.20 + 0.25 + 0.20))
-    assert fi.compute_fear_index(components) == expected  # type: ignore[arg-type]
+    assert fi.compute_fear_index(components) == expected
 
 
-def test_compute_fear_index_renormalizes_missing():
+def test_compute_fear_index_renormalizes_missing() -> None:
     assert fi.compute_fear_index({"fng": 80}) == 80
     assert fi.compute_fear_index({"fng": None, "news": 20}) == 20
 
 
-def test_compute_fear_index_empty_neutral():
+def test_compute_fear_index_empty_neutral() -> None:
     assert fi.compute_fear_index({}) == 50
     assert fi.compute_fear_index({"fng": None, "social": None}) == 50
 
 
-def test_aggregate_news_sentiment():
+def test_aggregate_news_sentiment() -> None:
     assert fi.aggregate_news_sentiment([1.0, -1.0, 0.0]) == 50
     assert fi.aggregate_news_sentiment([1.0, 1.0]) == 100
     assert fi.aggregate_news_sentiment([]) is None
 
 
-def test_fear_snapshot_shape():
+def test_fear_snapshot_shape() -> None:
     snapshot = fi.fear_snapshot({"fng": 30, "social": None})
     assert snapshot["value"] == 30
     assert snapshot["classification"] == "fear"
@@ -63,7 +64,7 @@ def test_fear_snapshot_shape():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_fng_returns_value():
+async def test_fetch_fng_returns_value() -> None:
     respx.get(fi.FNG_URL).mock(
         return_value=httpx.Response(
             200, json={"data": [{"value": "45", "value_classification": "Fear"}]}
@@ -75,7 +76,7 @@ async def test_fetch_fng_returns_value():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_fng_failure_returns_none():
+async def test_fetch_fng_failure_returns_none() -> None:
     respx.get(fi.FNG_URL).mock(return_value=httpx.Response(500))
     async with httpx.AsyncClient() as client:
         assert await fi.fetch_fng(client) is None
@@ -83,7 +84,7 @@ async def test_fetch_fng_failure_returns_none():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_social_sentiment_positive():
+async def test_fetch_social_sentiment_positive() -> None:
     respx.get(fi.SEARXNG_URL).mock(
         return_value=httpx.Response(
             200,
@@ -107,14 +108,14 @@ async def test_fetch_social_sentiment_positive():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_social_sentiment_failure_returns_none():
+async def test_fetch_social_sentiment_failure_returns_none() -> None:
     respx.get(fi.SEARXNG_URL).mock(return_value=httpx.Response(500))
     async with httpx.AsyncClient() as client:
         assert await fi.fetch_social_sentiment(client) is None
 
 
 @pytest.mark.asyncio
-async def test_fetch_onchain_unconfigured_returns_none(monkeypatch):
+async def test_fetch_onchain_unconfigured_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fi, "ONCHAIN_SIGNALS_URL", "")
     async with httpx.AsyncClient() as client:
         assert await fi.fetch_onchain_signals(client) is None
@@ -122,7 +123,7 @@ async def test_fetch_onchain_unconfigured_returns_none(monkeypatch):
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_onchain_configured(monkeypatch):
+async def test_fetch_onchain_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fi, "ONCHAIN_SIGNALS_URL", "http://onchain.test/feed")
     # Positive netflow = inflows = fear → invert toward 0 (fear).
     respx.get("http://onchain.test/feed").mock(
@@ -138,11 +139,11 @@ async def test_fetch_onchain_configured(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_news_sentiment_aggregates(monkeypatch):
+async def test_fetch_news_sentiment_aggregates(monkeypatch: pytest.MonkeyPatch) -> Any:
     """fetch_news_sentiment uses Qdrant scroll; monkeypatch to a fake store."""
 
     class FakeStore:
-        async def scroll(self, collection, limit):
+        async def scroll(self, collection: Any, limit: Any) -> Any:
             return (
                 [
                     {"metadata": {"sentiment": 0.8}},
@@ -165,7 +166,7 @@ async def test_fetch_news_sentiment_aggregates(monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_adjust_risk_extreme_fear_escalates():
+def test_adjust_risk_extreme_fear_escalates() -> None:
     verdict = {"risk": "low", "confidence": 0.5, "top_pattern": "x"}
     out = fi.adjust_risk_for_market(verdict, 20)
     assert out["risk"] == "medium"
@@ -174,18 +175,18 @@ def test_adjust_risk_extreme_fear_escalates():
     assert out["fear_index"] == 20
 
 
-def test_adjust_risk_fear_escalates_only_low():
+def test_adjust_risk_fear_escalates_only_low() -> None:
     assert fi.adjust_risk_for_market({"risk": "low"}, 30)["risk"] == "medium"
     assert fi.adjust_risk_for_market({"risk": "medium"}, 30)["risk"] == "medium"
 
 
-def test_adjust_risk_neutral_no_change():
+def test_adjust_risk_neutral_no_change() -> None:
     out = fi.adjust_risk_for_market({"risk": "low"}, 55)
     assert out["risk"] == "low"
     assert out["fear_adjusted"] is False
 
 
-def test_adjust_risk_none_no_change():
+def test_adjust_risk_none_no_change() -> None:
     out = fi.adjust_risk_for_market({"risk": "high"}, None)
     assert out["risk"] == "high"
     assert out["fear_index"] is None
@@ -199,7 +200,7 @@ def test_adjust_risk_none_no_change():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_poll_fear_index_full(monkeypatch):
+async def test_poll_fear_index_full(monkeypatch: pytest.MonkeyPatch) -> Any:
     respx.get(fi.FNG_URL).mock(return_value=httpx.Response(200, json={"data": [{"value": "45"}]}))
     respx.get(fi.SEARXNG_URL).mock(
         return_value=httpx.Response(
@@ -208,7 +209,7 @@ async def test_poll_fear_index_full(monkeypatch):
     )
     monkeypatch.setattr(fi, "ONCHAIN_SIGNALS_URL", "")
 
-    async def fake_news(_client=None):
+    async def fake_news(_client: Any = None) -> Any:
         return 55
 
     monkeypatch.setattr(fi, "fetch_news_sentiment", fake_news)
@@ -224,7 +225,7 @@ async def test_poll_fear_index_full(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_fear_index_memory_fallback(monkeypatch):
+async def test_get_fear_index_memory_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fi, "_cache_get", _noop_async_none)
     snapshot = fi.fear_snapshot({"fng": 30})
     fi._record(snapshot)
@@ -238,7 +239,7 @@ async def test_get_fear_index_memory_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_history_memory_fallback(monkeypatch):
+async def test_fear_index_history_memory_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fi._storage, "query_history", lambda days: [])
     snapshot = fi.fear_snapshot({"fng": 80})
     fi._record(snapshot)
@@ -253,7 +254,7 @@ async def test_fear_index_history_memory_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_history_empty():
+async def test_fear_index_history_empty() -> None:
     fi._history.clear()
     fi._last_snapshot = None
     result = await fi.fear_index_history(days=30)
@@ -262,7 +263,7 @@ async def test_fear_index_history_empty():
 
 
 @pytest.mark.asyncio
-async def test_poller_start_stop():
+async def test_poller_start_stop() -> None:
     await fi.stop_fear_index_poller()
     assert fi.is_fear_index_poller_running() is False
     await fi.start_fear_index_poller()
@@ -281,23 +282,23 @@ async def test_poller_start_stop():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-async def _noop_async(*args, **kwargs):
+async def _noop_async(*args: Any, **kwargs: Any) -> None:
     return None
 
 
-async def _noop_async_none(*args, **kwargs):
+async def _noop_async_none(*args: Any, **kwargs: Any) -> None:
     return None
 
 
 class _FakeStorage:
-    def insert(self, snapshot):
+    def insert(self, snapshot: Any) -> Any:
         return True
 
-    def query_history(self, days):
+    def query_history(self, days: Any) -> Any:
         return []
 
 
-def test_window_samples_respects_window():
+def test_window_samples_respects_window() -> None:
     fi._history.clear()
     now = datetime.now(UTC)
     fi._record(

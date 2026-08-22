@@ -6,17 +6,17 @@ import pytest
 
 from rugbrain.exchange_flow import (
     EXCHANGE_WALLETS,
+    LARGE_TX_THRESHOLD_ETH,
+    exchange_flow_cycle,
     get_exchange_balance,
     get_exchange_txns,
-    exchange_flow_cycle,
-    LARGE_TX_THRESHOLD_ETH,
 )
 
 
 class TestExchangeFlowConfig:
     """Verify exchange flow configuration."""
 
-    def test_exchange_wallets_defined(self):
+    def test_exchange_wallets_defined(self) -> None:
         assert len(EXCHANGE_WALLETS) >= 5
         assert "Binance" in EXCHANGE_WALLETS
         assert "Coinbase" in EXCHANGE_WALLETS
@@ -24,21 +24,21 @@ class TestExchangeFlowConfig:
         assert "Bybit" in EXCHANGE_WALLETS
         assert "OKX" in EXCHANGE_WALLETS
 
-    def test_binance_has_multiple_wallets(self):
+    def test_binance_has_multiple_wallets(self) -> None:
         assert len(EXCHANGE_WALLETS["Binance"]) >= 3
 
-    def test_wallet_addresses_valid(self):
+    def test_wallet_addresses_valid(self) -> None:
         for exchange, wallets in EXCHANGE_WALLETS.items():
             for w in wallets:
                 assert w.startswith("0x")
                 assert len(w) == 42, f"{exchange} wallet {w} invalid"
 
-    def test_large_tx_threshold(self):
+    def test_large_tx_threshold(self) -> None:
         assert LARGE_TX_THRESHOLD_ETH > 0
         assert LARGE_TX_THRESHOLD_ETH >= 100
 
     @pytest.mark.asyncio
-    async def test_get_exchange_balance_returns_dict(self):
+    async def test_get_exchange_balance_returns_dict(self) -> None:
         for exchange, wallets in EXCHANGE_WALLETS.items():
             bal = await get_exchange_balance(exchange, wallets[0])
             assert "balance_eth" in bal
@@ -47,14 +47,14 @@ class TestExchangeFlowConfig:
             break  # Just test first exchange
 
     @pytest.mark.asyncio
-    async def test_get_exchange_txns_returns_list(self):
+    async def test_get_exchange_txns_returns_list(self) -> None:
         for wallets in EXCHANGE_WALLETS.values():
             txs = await get_exchange_txns(wallets[0], limit=3)
             assert isinstance(txs, list)
             break
 
     @pytest.mark.asyncio
-    async def test_exchange_flow_cycle_shape(self):
+    async def test_exchange_flow_cycle_shape(self) -> None:
         result = await exchange_flow_cycle()
         assert "scanned_at" in result
         assert "exchanges" in result

@@ -37,7 +37,7 @@ def _doc(paragraphs: int = 10, per_para: int = 30) -> str:
 # ── structure ──
 
 
-def test_parent_child_structure():
+def test_parent_child_structure() -> None:
     parents = split_doc_parent_child(_doc())
     assert parents
     parent = parents[0]
@@ -50,7 +50,7 @@ def test_parent_child_structure():
     assert parent.metadata["doc_type"] == "default"
 
 
-def test_empty_input_returns_empty_list():
+def test_empty_input_returns_empty_list() -> None:
     assert split_doc_parent_child("") == []
     assert split_doc_parent_child("   \n  ") == []
 
@@ -58,7 +58,7 @@ def test_empty_input_returns_empty_list():
 # ── child → parent reference ──
 
 
-def test_children_reference_their_parent():
+def test_children_reference_their_parent() -> None:
     parents = split_doc_parent_child(_doc())
     for parent in parents:
         assert parent.child_chunks, "parent without children"
@@ -71,7 +71,7 @@ def test_children_reference_their_parent():
             assert 0 <= child["parent_index"] < child["parent_total"]
 
 
-def test_children_carry_heading_and_metadata():
+def test_children_carry_heading_and_metadata() -> None:
     parents = split_doc_parent_child(
         _doc(), "scam_report", doc_meta={"source": "auditor", "title": "RugVault audit"}
     )
@@ -83,7 +83,7 @@ def test_children_carry_heading_and_metadata():
     assert child["estimated_tokens"] >= 1
 
 
-def test_children_are_subdivisions_of_parent():
+def test_children_are_subdivisions_of_parent() -> None:
     parents = split_doc_parent_child(_doc())
     for parent in parents:
         parent_core = (
@@ -101,7 +101,7 @@ def test_children_are_subdivisions_of_parent():
 # ── oversized sections split into parent windows ──
 
 
-def test_oversized_section_splits_into_parent_windows():
+def test_oversized_section_splits_into_parent_windows() -> None:
     parents = split_doc_parent_child(
         _doc(paragraphs=30, per_para=40), parent_token_target=200, parent_max_chars=1500
     )
@@ -116,7 +116,7 @@ def test_oversized_section_splits_into_parent_windows():
             assert child["parent_id"] == parent.metadata["parent_id"]
 
 
-def test_multiple_sections_produce_parents_per_section():
+def test_multiple_sections_produce_parents_per_section() -> None:
     doc = "# Section One\n\n" + ("alpha " * 300) + "\n\n# Section Two\n\n" + ("beta " * 300)
     parents = split_doc_parent_child(doc)
     sections = {p.metadata["section"] for p in parents}
@@ -129,7 +129,7 @@ def test_multiple_sections_produce_parents_per_section():
 # ── additive guarantee ──
 
 
-def test_existing_api_unchanged():
+def test_existing_api_unchanged() -> None:
     doc = _doc(paragraphs=4, per_para=10)
     flat = split_doc_into_chunks(doc, "default")
     assert flat

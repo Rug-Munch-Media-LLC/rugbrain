@@ -6,6 +6,8 @@ middleware), matching the existing endpoints.py test pattern.
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 import pytest
 
@@ -14,7 +16,7 @@ from rugbrain.alert_routes import router
 
 
 @pytest.fixture
-def client():
+def client() -> Any:
     from fastapi import FastAPI
 
     app = FastAPI()
@@ -23,19 +25,19 @@ def client():
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
-async def _no_redis():
+async def _no_redis() -> None:
     return None
 
 
 @pytest.fixture
-def clean_store(monkeypatch):
+def clean_store(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Hermetic store: no Redis, no Qdrant — everything process-local."""
     import rugbrain.alert_routes as ar
 
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     # Qdrant scroll is patched at the router level so /live falls back to
     # the process-local store instead of hitting a real Qdrant.
-    async def no_scroll(limit: int = 100):
+    async def no_scroll(limit: int = 100) -> Any:
         return []
 
     monkeypatch.setattr(ar, "scroll_live_threats", no_scroll)
@@ -45,7 +47,7 @@ def clean_store(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_alerts_live_empty(client, clean_store):
+async def test_alerts_live_empty(client: Any, clean_store: Any) -> None:
     resp = await client.get("/api/v1/alerts/live")
     assert resp.status_code == 200
     data = resp.json()
@@ -55,7 +57,7 @@ async def test_alerts_live_empty(client, clean_store):
 
 
 @pytest.mark.asyncio
-async def test_alerts_live_reflects_store(client, clean_store, monkeypatch):
+async def test_alerts_live_reflects_store(client: Any, clean_store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     await ra._store.record(
         ra.CriticalAlert(title="Live hack", source="test", chain="ethereum", amount_usd=5e6)
@@ -68,7 +70,7 @@ async def test_alerts_live_reflects_store(client, clean_store, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_alerts_recent_minutes_param(client, clean_store, monkeypatch):
+async def test_alerts_recent_minutes_param(client: Any, clean_store: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     from datetime import UTC, datetime, timedelta
 
@@ -95,13 +97,13 @@ async def test_alerts_recent_minutes_param(client, clean_store, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_alerts_recent_validation(client):
+async def test_alerts_recent_validation(client: Any) -> None:
     resp = await client.get("/api/v1/alerts/recent?minutes=99999")
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_webhook_register_returns_secret_once(client, clean_store):
+async def test_webhook_register_returns_secret_once(client: Any, clean_store: Any) -> None:
     resp = await client.post(
         "/api/v1/alerts/webhook/register",
         json={"url": "https://example.com/hook", "name": "community"},
@@ -115,7 +117,7 @@ async def test_webhook_register_returns_secret_once(client, clean_store):
 
 
 @pytest.mark.asyncio
-async def test_webhook_register_rejects_bad_url(client):
+async def test_webhook_register_rejects_bad_url(client: Any) -> None:
     resp = await client.post(
         "/api/v1/alerts/webhook/register",
         json={"url": "ftp://bad.example/hook"},
@@ -129,7 +131,7 @@ async def test_webhook_register_rejects_bad_url(client):
 
 
 @pytest.mark.asyncio
-async def test_webhook_register_custom_secret(client, clean_store):
+async def test_webhook_register_custom_secret(client: Any, clean_store: Any) -> None:
     resp = await client.post(
         "/api/v1/alerts/webhook/register",
         json={"url": "https://example.com/hook", "secret": "my-secret-abc"},
@@ -139,7 +141,7 @@ async def test_webhook_register_custom_secret(client, clean_store):
 
 
 @pytest.mark.asyncio
-async def test_webhook_unregister(client, clean_store):
+async def test_webhook_unregister(client: Any, clean_store: Any) -> None:
     reg = ra.get_webhook_registry()
     rec = await reg.register("https://example.com/hook")
     resp = await client.post(
@@ -157,27 +159,32 @@ async def test_webhook_unregister(client, clean_store):
 
 
 @pytest.mark.asyncio
-async def test_webhook_test_ping_signed(client, clean_store, monkeypatch):
+async def test_webhook_test_ping_signed(client: Any, clean_store: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     reg = ra.get_webhook_registry()
     rec = await reg.register("https://example.com/hook")
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
-    async def fake_post(url, content=None, headers=None, **kwargs):
+    async def fake_post(
+            url: Any,
+            content: Any = None,
+            headers: Any = None,
+            **kwargs: Any,
+        ) -> Any:
         captured["content"] = content
         captured["headers"] = headers
         return httpx.Response(200)
 
     class FakeClient:
-        def __init__(self, *a, **k):
+        def __init__(self, *a: Any, **k: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *a):
+        async def __aexit__(self, *a: Any) -> Any:
             return None
 
-        async def post(self, *args, **kwargs):
+        async def post(self, *args: Any, **kwargs: Any) -> Any:
             return await fake_post(*args, **kwargs)
 
     monkeypatch.setattr(ra.httpx, "AsyncClient", FakeClient)
@@ -194,7 +201,7 @@ async def test_webhook_test_ping_signed(client, clean_store, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_webhook_test_404(client):
+async def test_webhook_test_404(client: Any) -> None:
     resp = await client.post(
         "/api/v1/alerts/webhook/test",
         json={"webhook_id": "does-not-exist"},

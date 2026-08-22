@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 # scripts/ dir on sys.path so the coding-knowledge modules import cleanly.
 _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-from coding_ingest_common import (  # type: ignore[import-not-found]  # noqa: E402
+from coding_ingest_common import (  # noqa: E402
     build_coding_doc,
     html_to_text,
     markdown_sections,
@@ -34,7 +35,7 @@ from rugbrain.search_service import search_coding_knowledge  # noqa: E402
 # ── Code-intent detection ─────────────────────────────────────────────
 
 
-def test_detect_coding_query_acceptance_queries():
+def test_detect_coding_query_acceptance_queries() -> None:
     assert detect_coding_query("how to implement reentrancy guard in Solidity")
     assert detect_coding_query("Solana PDA security best practices")
     assert detect_coding_query("Move vs Solidity resource model")
@@ -42,7 +43,7 @@ def test_detect_coding_query_acceptance_queries():
     assert detect_coding_query("Rust Solana program example with Anchor")
 
 
-def test_detect_coding_query_negatives():
+def test_detect_coding_query_negatives() -> None:
     assert not detect_coding_query("")
     assert not detect_coding_query("bitcoin price today")
     assert not detect_coding_query("ethereum whale activity")
@@ -50,7 +51,7 @@ def test_detect_coding_query_negatives():
     assert not detect_coding_query("reentrancy hack 2023")
 
 
-def test_detect_coding_query_case_insensitive():
+def test_detect_coding_query_case_insensitive() -> None:
     assert detect_coding_query("SOLIDITY STORAGE LAYOUT")
     assert detect_coding_query("How To Implement A Vault In Solidity")
 
@@ -58,30 +59,30 @@ def test_detect_coding_query_case_insensitive():
 # ── Collection routing ────────────────────────────────────────────────
 
 
-def test_resolve_collections_explicit_wins():
+def test_resolve_collections_explicit_wins() -> None:
     assert resolve_search_collections(["threat_intel"], "solidity") == ["threat_intel"]
 
 
-def test_resolve_collections_coding_priority():
+def test_resolve_collections_coding_priority() -> None:
     routed = resolve_search_collections(None, "how to implement reentrancy guard in Solidity")
     assert routed[0] == "coding_knowledge"
     assert routed[: len(CODING_COLLECTIONS)] == list(CODING_COLLECTIONS)
 
 
-def test_resolve_collections_scam_still_routes():
+def test_resolve_collections_scam_still_routes() -> None:
     routed = resolve_search_collections(None, "how was Euler hacked")
     assert routed[0] == "defi_exploits"
     assert routed[: len(SCAM_COLLECTIONS)] == list(SCAM_COLLECTIONS)
 
 
-def test_resolve_collections_default():
+def test_resolve_collections_default() -> None:
     from rugbrain.search.engine import COLLECTIONS
 
     routed = resolve_search_collections(None, "general market question")
     assert routed == list(COLLECTIONS)
 
 
-def test_coding_collections_defined():
+def test_coding_collections_defined() -> None:
     assert "coding_knowledge" in CODING_COLLECTIONS
     assert "solidity_patterns" in CODING_COLLECTIONS
     assert "solana_patterns" in CODING_COLLECTIONS
@@ -90,7 +91,7 @@ def test_coding_collections_defined():
 # ── Search function surface ───────────────────────────────────────────
 
 
-def test_search_coding_knowledge_exists():
+def test_search_coding_knowledge_exists() -> None:
     import inspect
 
     sig = inspect.signature(search_coding_knowledge)
@@ -98,7 +99,7 @@ def test_search_coding_knowledge_exists():
     assert "collections" in sig.parameters
 
 
-def test_search_coding_knowledge_flags_code():
+def test_search_coding_knowledge_flags_code() -> Any:
     results = [
         {
             "content": "contract Vault { function withdraw() external { } }",
@@ -109,7 +110,7 @@ def test_search_coding_knowledge_flags_code():
     # Patch the underlying search so no live Qdrant is required.
     import rugbrain.search.engine as engine_mod
 
-    async def fake_search(query, collections, limit=10, min_similarity=0.4):
+    async def fake_search(query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4) -> Any:
         return list(results)
 
     original = engine_mod.search_multi_collection
@@ -129,7 +130,7 @@ def test_search_coding_knowledge_flags_code():
 # ── Doc builders ──────────────────────────────────────────────────────
 
 
-def test_build_coding_doc_shape():
+def test_build_coding_doc_shape() -> None:
     doc = build_coding_doc(
         source="test-source",
         rel_key="topic/abc",
@@ -154,7 +155,7 @@ def test_build_coding_doc_shape():
 # ── Parsing helpers ───────────────────────────────────────────────────
 
 
-def test_markdown_sections_heading_split():
+def test_markdown_sections_heading_split() -> None:
     text = "# Reentrancy\n\nUse CEI ordering.\n\n## Withdrawal\n\nUse pull payments."
     sections = markdown_sections(text, min_len=1)
     assert len(sections) == 2
@@ -163,19 +164,19 @@ def test_markdown_sections_heading_split():
     assert sections[1]["heading"] == "Withdrawal"
 
 
-def test_markdown_sections_empty():
+def test_markdown_sections_empty() -> None:
     assert markdown_sections("") == []
     assert markdown_sections("   ") == []
 
 
-def test_markdown_sections_long_split():
+def test_markdown_sections_long_split() -> None:
     text = "# Big\n\n" + "\n\n".join(f"paragraph {i} " + "x" * 100 for i in range(50))
     sections = markdown_sections(text, max_len=1000)
     assert len(sections) > 1
     assert all(len(s["text"]) <= 1050 for s in sections)
 
 
-def test_html_to_text_strips_tags():
+def test_html_to_text_strips_tags() -> None:
     html = (
         "<html><head><script>var x = 1;</script></head><body>"
         "<h1>Reentrancy Guard</h1><p>The <code>nonReentrant</code> modifier "
@@ -188,7 +189,7 @@ def test_html_to_text_strips_tags():
     assert "<h1>" not in text
 
 
-def test_rst_to_text_strips_directives():
+def test_rst_to_text_strips_directives() -> None:
     rst = (
         "Security Considerations\n"
         "=======================\n"

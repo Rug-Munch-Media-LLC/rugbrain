@@ -26,6 +26,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import requests
 from qdrant_client import QdrantClient
@@ -56,7 +57,7 @@ logger = logging.getLogger("backup_qdrant")
 # ---------------------------------------------------------------------------
 # Credential resolution
 # ---------------------------------------------------------------------------
-def _read_rclone_creds(profile: str = "rugmunch-b2") -> dict:
+def _read_rclone_creds(profile: str = "rugmunch-b2") -> dict[str, Any]:
     """Read B2 credentials from rclone.conf (account → key ID, key → app key)."""
     path = Path(RCLONE_CONF_PATH)
     if not path.exists():
@@ -77,7 +78,7 @@ def _read_rclone_creds(profile: str = "rugmunch-b2") -> dict:
         return {}
 
 
-def _resolve_b2_config() -> dict:
+def _resolve_b2_config() -> dict[str, Any]:
     """Resolve B2 connection config from env → env-file → rclone.conf."""
     # 1. Env overrides
     config = {
@@ -114,7 +115,7 @@ def _resolve_b2_config() -> dict:
 # ---------------------------------------------------------------------------
 # Qdrant helpers
 # ---------------------------------------------------------------------------
-def list_collections(client: QdrantClient) -> list:
+def list_collections(client: QdrantClient) -> list[str]:
     """Return sorted list of collection names."""
     return sorted(c.name for c in client.get_collections().collections)
 
@@ -130,7 +131,9 @@ def snapshot_collection(
     date_str = datetime.now().strftime("%Y-%m-%d")
     try:
         snap = client.create_snapshot(collection_name=name)
-        snap_name = snap.name  # type: ignore[union-attr]
+        snap_name = snap.name if snap else ""
+        if not snap_name:
+            return None
         local_path = os.path.join(dest_dir, f"{name}_{date_str}.snapshot")
 
         # Download via REST API (download_snapshot not available in this client version)
@@ -182,7 +185,7 @@ def cleanup_local_snapshots(dest_dir: str, keep: int = LOCAL_RETENTION_COUNT) ->
 # ---------------------------------------------------------------------------
 def upload_to_b2(
     local_path: str,
-    b2_config: dict,
+    b2_config: dict[str, Any],
     bucket: str,
     key_prefix: str,
 ) -> bool:
@@ -204,7 +207,7 @@ def upload_to_b2(
         return False
 
 
-def test_b2(b2_config: dict) -> int:
+def test_b2(b2_config: dict[str, Any]) -> int:
     """Connect to B2 and list bucket contents (no Qdrant required)."""
     try:
         api = get_b2_api()

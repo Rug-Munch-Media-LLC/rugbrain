@@ -8,6 +8,7 @@ and the RAGAuthMiddleware for API key authentication.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -18,13 +19,13 @@ from httpx import ASGITransport, AsyncClient
 class TestScannerSubscriber:
     """Tests for scanner_subscriber core functions."""
 
-    def test_is_subscriber_running_initially_false(self):
+    def test_is_subscriber_running_initially_false(self) -> None:
         """is_subscriber_running should return False by default."""
         from rugbrain.scanner_subscriber import is_subscriber_running
 
         assert is_subscriber_running() is False
 
-    def test_subscriber_stats_shape(self):
+    def test_subscriber_stats_shape(self) -> None:
         """subscriber_stats should return expected fields."""
         from rugbrain.scanner_subscriber import subscriber_stats
 
@@ -37,7 +38,7 @@ class TestScannerSubscriber:
         assert isinstance(stats["ingested_count"], int)
 
     @pytest.mark.asyncio
-    async def test_start_subscriber_twice_no_duplicate(self):
+    async def test_start_subscriber_twice_no_duplicate(self) -> None:
         """Starting subscriber twice should not create duplicate tasks."""
         # Reset state
         import rugbrain.scanner_subscriber as ss
@@ -60,7 +61,7 @@ class TestScannerSubscriber:
         await stop_subscriber()
 
     @pytest.mark.asyncio
-    async def test_stop_subscriber_cleans_up(self):
+    async def test_stop_subscriber_cleans_up(self) -> None:
         """Stop subscriber should reset running state."""
         import rugbrain.scanner_subscriber as ss
         from rugbrain.scanner_subscriber import (
@@ -78,7 +79,7 @@ class TestScannerSubscriber:
         assert is_subscriber_running() is False
 
     @pytest.mark.asyncio
-    async def test_process_finding_logs_errors(self):
+    async def test_process_finding_logs_errors(self) -> None:
         """_process_finding should handle errors without crashing."""
         from rugbrain.scanner_subscriber import _process_finding
 
@@ -94,7 +95,7 @@ class TestRAGAuthMiddleware:
     """Tests for the RAG API key auth middleware."""
 
     @pytest.fixture
-    def app_with_auth(self):
+    def app_with_auth(self) -> Any:
         """Create a FastAPI app with auth middleware enabled."""
 
         os.environ["RMI_RAG_API_KEY"] = "test-api-key-12345"
@@ -115,19 +116,19 @@ class TestRAGAuthMiddleware:
 
         # Add a test endpoint
         @app.get("/api/v1/test-secure")
-        async def secure_endpoint():
+        async def secure_endpoint() -> dict[str, Any]:
             return {"status": "ok", "data": "secure"}
 
         # Add a health endpoint (exempt from auth)
         @app.get("/health")
-        async def health_endpoint():
+        async def health_endpoint() -> dict[str, Any]:
             return {"status": "ok"}
 
         app.add_middleware(RAGAuthMiddleware)
         return app
 
     @pytest.fixture
-    def app_without_auth(self):
+    def app_without_auth(self) -> Any:
         """Create app with auth open (DEV_MODE=true, key not set)."""
 
         # KEY NOT SET + DEV_MODE=true - auth open for development only
@@ -148,14 +149,14 @@ class TestRAGAuthMiddleware:
         app = FastAPI(lifespan=lifespan)
 
         @app.get("/api/v1/test-open")
-        async def open_endpoint():
+        async def open_endpoint() -> dict[str, Any]:
             return {"status": "ok", "data": "open"}
 
         app.add_middleware(RAGAuthMiddleware)
         return app
 
     @pytest.mark.asyncio
-    async def test_auth_requires_api_key(self, app_with_auth):
+    async def test_auth_requires_api_key(self, app_with_auth: Any) -> None:
         """Requests without X-API-Key should get 401."""
         transport = ASGITransport(app=app_with_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -166,7 +167,7 @@ class TestRAGAuthMiddleware:
             assert "X-API-Key" in data["detail"]
 
     @pytest.mark.asyncio
-    async def test_auth_wrong_key_returns_401(self, app_with_auth):
+    async def test_auth_wrong_key_returns_401(self, app_with_auth: Any) -> None:
         """Invalid X-API-Key should return 401."""
         transport = ASGITransport(app=app_with_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -179,7 +180,7 @@ class TestRAGAuthMiddleware:
             assert "invalid" in data["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_auth_valid_key_succeeds(self, app_with_auth):
+    async def test_auth_valid_key_succeeds(self, app_with_auth: Any) -> None:
         """Valid X-API-Key should return 200."""
         transport = ASGITransport(app=app_with_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -192,7 +193,7 @@ class TestRAGAuthMiddleware:
             assert data["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_auth_health_exempt(self, app_with_auth):
+    async def test_auth_health_exempt(self, app_with_auth: Any) -> None:
         """Health endpoints should bypass auth."""
         transport = ASGITransport(app=app_with_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -200,7 +201,7 @@ class TestRAGAuthMiddleware:
             assert resp.status_code in (200, 500)  # May 500 if deps missing
 
     @pytest.mark.asyncio
-    async def test_no_auth_when_key_not_set_and_dev_mode(self, app_without_auth):
+    async def test_no_auth_when_key_not_set_and_dev_mode(self, app_without_auth: Any) -> None:
         """When RMI_RAG_API_KEY is not set and DEV_MODE=true, requests pass (dev only)."""
         transport = ASGITransport(app=app_without_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -210,7 +211,7 @@ class TestRAGAuthMiddleware:
             assert data["status"] == "ok"
 
     @pytest.mark.asyncio
-    async def test_auth_fails_closed_when_key_not_set(self):
+    async def test_auth_fails_closed_when_key_not_set(self) -> Any:
         """Fail-closed: no key and no DEV_MODE => every request gets 503."""
         import importlib
 
@@ -228,7 +229,7 @@ class TestRAGAuthMiddleware:
         app = FastAPI(lifespan=lifespan)
 
         @app.get("/api/v1/test-secure")
-        async def secure_endpoint():
+        async def secure_endpoint() -> dict[str, Any]:
             return {"status": "ok"}
 
         app.add_middleware(RAGAuthMiddleware)
@@ -240,7 +241,7 @@ class TestRAGAuthMiddleware:
             assert data["code"] == "auth.not_configured"
 
     @pytest.mark.asyncio
-    async def test_auth_missing_key_header(self, app_with_auth):
+    async def test_auth_missing_key_header(self, app_with_auth: Any) -> None:
         """Request without any X-API-Key header should get 401."""
         transport = ASGITransport(app=app_with_auth)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -257,7 +258,7 @@ class TestHealthEndpoints:
     """Tests for /health and /ready endpoints."""
 
     @pytest.mark.asyncio
-    async def test_health_endpoint_shape(self):
+    async def test_health_endpoint_shape(self) -> None:
         """GET /health should return status dict."""
         from rugbrain.main import app
 
@@ -272,7 +273,7 @@ class TestHealthEndpoints:
                 assert "redis" in data
 
     @pytest.mark.asyncio
-    async def test_ready_endpoint(self):
+    async def test_ready_endpoint(self) -> None:
         """GET /ready should return ready status."""
         from rugbrain.main import app
 

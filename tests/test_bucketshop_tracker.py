@@ -11,7 +11,7 @@ from rugbrain.monitors.bucketshop_tracker import (
 
 
 class TestBucketshopTracker:
-    def test_bucketshop_exchanges_defined(self):
+    def test_bucketshop_exchanges_defined(self) -> None:
         assert len(BUCKETSHOP_EXCHANGES) >= 20
         assert "FTX" in BUCKETSHOP_EXCHANGES
         assert "Mt. Gox" in BUCKETSHOP_EXCHANGES
@@ -19,22 +19,22 @@ class TestBucketshopTracker:
             BUCKETSHOP_EXCHANGES
         )
 
-    def test_get_all_bucketshops_returns_dict(self):
+    def test_get_all_bucketshops_returns_dict(self) -> None:
         result = get_all_bucketshops()
         assert isinstance(result, dict)
 
-    def test_get_bucketshop_known(self):
+    def test_get_bucketshop_known(self) -> None:
         result = get_bucketshop("FTX")
         # May return None if cycle hasn't run — check it doesn't crash
         if result is not None:
             assert isinstance(result, dict)
 
-    def test_get_bucketshop_unknown(self):
+    def test_get_bucketshop_unknown(self) -> None:
         # Should handle gracefully without crash
         result = get_bucketshop("NonExistentExchange123")
         if result is not None:
             assert isinstance(result, dict)
 
-    def test_get_scam_signals_returns_list(self):
+    def test_get_scam_signals_returns_list(self) -> None:
         signals = get_scam_signals()
         assert isinstance(signals, list)

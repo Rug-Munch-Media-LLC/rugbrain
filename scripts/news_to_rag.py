@@ -51,6 +51,7 @@ import os
 import sys
 import tempfile
 import uuid
+from typing import Any
 
 import asyncpg
 import httpx
@@ -105,14 +106,15 @@ def _chunk_point_id(news_id: str, idx: int) -> str:
     return str(uuid.uuid5(UUID_NS, f"news:{news_id}:{idx}"))
 
 
-def _derive_category(article: dict) -> str:
+def _derive_category(article: dict[str, Any]) -> str:
     chains = article.get("chains_mentioned") or []
     if chains:
-        return chains[0]
+        first: str = str(chains[0])
+        return first
     return "crypto"
 
 
-def _rate_article_payload(article: dict, text: str) -> tuple[dict, int]:
+def _rate_article_payload(article: dict[str, Any], text: str) -> tuple[dict[str, Any], int]:
     """Run the multi-axis news rating engine over one article.
 
     Returns ``(rating_payload, quality_score)``. The payload carries the
@@ -185,7 +187,7 @@ async def _collection_uses_named_vectors(client: httpx.AsyncClient, base: str) -
     return named
 
 
-async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict]) -> bool:
+async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict[str, Any]]) -> bool:
     if not points:
         return True
     named = await _collection_uses_named_vectors(client, base)
@@ -289,7 +291,7 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     return conn, qdrant_candidates[0], _candidates[0]
 
 
-async def purge_orphans() -> dict:
+async def purge_orphans() -> dict[str, Any]:
     """Delete Qdrant ``news`` (alias of ``news_v2``) points with no news_items row.
 
     Two orphan classes are removed:
@@ -310,7 +312,7 @@ async def purge_orphans() -> dict:
         return {"status": "skipped", "reason": "lock_held"}
 
     conn, qdrant_base, __base = await _resolve_and_connect()
-    stats: dict = {
+    stats: dict[str, Any] = {
         "points_scanned": 0,
         "legacy_no_news_id": 0,
         "missing_from_db": 0,
@@ -325,7 +327,7 @@ async def purge_orphans() -> dict:
             news_id_by_point: dict[str, str | None] = {}
             next_offset: object = None
             while True:
-                scroll_payload: dict = {
+                scroll_payload: dict[str, Any] = {
                     "limit": 1000,
                     "with_payload": ["metadata"],
                     "with_vector": False,
@@ -422,7 +424,7 @@ async def purge_orphans() -> dict:
     return stats
 
 
-async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool = True) -> dict:
+async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool = True) -> dict[str, Any]:
     lock = await asyncio.to_thread(open, LOCK_PATH, "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -468,7 +470,7 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
             # embed batches spanning multiple articles (input arrays
             # amortize per-call overhead — 16 chunks/call is ~4x faster than
             # one tiny call per article).
-            articles: list[tuple[dict, list[str]]] = []
+            articles: list[tuple[dict[str, Any], list[str]]] = []
             total_chunks = 0
             for row in rows:
                 article = dict(row)
@@ -503,7 +505,7 @@ async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool 
             # using the global flat index here corrupts point IDs (chunk 0 of
             # article N would get uuid5 "news:{id}:{global_idx}", never
             # matching the first-chunk marker "news:{id}:0").
-            work: list[list] = [
+            work: list[list[Any]] = [
                 [article, chunk_idx, chunk, None]
                 for article, chunks in articles
                 for chunk_idx, chunk in enumerate(chunks)

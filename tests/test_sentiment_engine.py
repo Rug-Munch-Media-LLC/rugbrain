@@ -8,7 +8,7 @@ from rugbrain.sentiment_engine import (
 )
 
 
-def test_analyze_bearish_rug_pull():
+def test_analyze_bearish_rug_pull() -> None:
     """Strong bearish keywords produce bearish sentiment."""
     result = analyze_text_sentiment("This token is definitely a rug pull scam ponzi!")
     assert result.sentiment == "bearish"
@@ -18,7 +18,7 @@ def test_analyze_bearish_rug_pull():
     assert result.scores["bearish"] > result.scores["bullish"]
 
 
-def test_analyze_bullish_moon():
+def test_analyze_bullish_moon() -> None:
     """Bullish crypto slang produces bullish sentiment."""
     result = analyze_text_sentiment("based af, this token is going to the moon! 🚀 parbolic!")
     assert result.sentiment == "bullish"
@@ -27,14 +27,14 @@ def test_analyze_bullish_moon():
     assert result.scores["bullish"] > result.scores["bearish"]
 
 
-def test_analyze_neutral():
+def test_analyze_neutral() -> None:
     """Neutral text returns neutral sentiment."""
     result = analyze_text_sentiment("The Ethereum network processes transactions.")
     assert result.sentiment == "neutral"
     assert result.confidence > 0
 
 
-def test_analyze_empty_text():
+def test_analyze_empty_text() -> None:
     """Empty text returns neutral with zero confidence."""
     result = analyze_text_sentiment("")
     assert result.sentiment == "neutral"
@@ -42,7 +42,7 @@ def test_analyze_empty_text():
     assert result.signals == []
 
 
-def test_analyze_mixed_signals():
+def test_analyze_mixed_signals() -> None:
     """Dominant signal category wins."""
     # More bearish keywords than bullish
     result = analyze_text_sentiment("rug pull scam moon based")
@@ -51,13 +51,13 @@ def test_analyze_mixed_signals():
     assert result.confidence > 0
 
 
-def test_analyze_text_length_tracked():
+def test_analyze_text_length_tracked() -> None:
     """Text length is recorded."""
     result = analyze_text_sentiment("scam token")
     assert result.text_length == len("scam token")
 
 
-def test_analyze_scores_structure():
+def test_analyze_scores_structure() -> None:
     """Scores dict has all three categories."""
     result = analyze_text_sentiment("scam rug pull")
     assert "bearish" in result.scores
@@ -67,27 +67,27 @@ def test_analyze_scores_structure():
     assert result.scores["bearish"] > 0
 
 
-def test_analyze_no_false_positives():
+def test_analyze_no_false_positives() -> None:
     """Normal text doesn't falsely trigger sentiment."""
     result = analyze_text_sentiment("hello world foo bar")
     assert result.sentiment == "neutral"
     assert result.confidence < 0.3
 
 
-def test_intensity_boosts():
+def test_intensity_boosts() -> None:
     """Intensity markers boost confidence for the same keywords."""
     plain = analyze_text_sentiment("scam")
     intensified = analyze_text_sentiment("scam !! BEWARE")
     assert intensified.confidence >= plain.confidence
 
 
-def test_deduplication():
+def test_deduplication() -> None:
     """Signals list has no duplicates."""
     result = analyze_text_sentiment("rug rug rug scam scam")
     assert len(result.signals) == len(set(result.signals))
 
 
-def test_sentiment_result_types():
+def test_sentiment_result_types() -> None:
     """SentimentResult is properly typed."""
     r = analyze_text_sentiment("rug pull")
     assert isinstance(r, SentimentResult)

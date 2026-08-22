@@ -269,7 +269,8 @@ async def _fetch_live_verdict(client: httpx.AsyncClient, address: str) -> dict[s
             timeout=30.0,
         )
         if r.status_code == 200:
-            return r.json()
+            _payload: dict[str, Any] | None = r.json()
+            return _payload
     except Exception as e:
         logger.debug("tokensniffer_live_fetch_failed addr=%s err=%s", address[:8], str(e)[:120])
     return None

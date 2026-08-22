@@ -14,7 +14,9 @@ All of these are unit tests: no external services required.
 
 from __future__ import annotations
 
-from rugbrain import ingest_common
+import importlib
+
+ingest_common = importlib.import_module("rugbrain.ingest_common")
 from rugbrain.app_chunking import (
     chunk_batch,
     chunk_document,
@@ -88,47 +90,47 @@ def _assert_atom_intact(chunks: list[str], atom: str) -> None:
 # ── 1. address / hash / URL preservation ──
 
 
-def test_recursive_chunk_keeps_evm_address_intact():
+def test_recursive_chunk_keeps_evm_address_intact() -> None:
     chunks = recursive_chunk(_doc_with(EVM_ADDR), chunk_size=180, overlap=0.15)
     _assert_atom_intact(chunks, EVM_ADDR)
 
 
-def test_recursive_chunk_keeps_evm_tx_hash_intact():
+def test_recursive_chunk_keeps_evm_tx_hash_intact() -> None:
     chunks = recursive_chunk(_doc_with(EVM_TX), chunk_size=160, overlap=0.1)
     _assert_atom_intact(chunks, EVM_TX)
 
 
-def test_recursive_chunk_keeps_solana_address_intact():
+def test_recursive_chunk_keeps_solana_address_intact() -> None:
     chunks = recursive_chunk(_doc_with(SOLANA_ADDR), chunk_size=180, overlap=0.15)
     _assert_atom_intact(chunks, SOLANA_ADDR)
 
 
-def test_recursive_chunk_keeps_solana_signature_intact():
+def test_recursive_chunk_keeps_solana_signature_intact() -> None:
     chunks = recursive_chunk(_doc_with(SOLANA_SIG), chunk_size=200, overlap=0.15)
     _assert_atom_intact(chunks, SOLANA_SIG)
 
 
-def test_recursive_chunk_keeps_url_intact():
+def test_recursive_chunk_keeps_url_intact() -> None:
     chunks = recursive_chunk(_doc_with(LONG_URL), chunk_size=200, overlap=0.15)
     _assert_atom_intact(chunks, LONG_URL)
 
 
-def test_recursive_chunk_keeps_btc_address_intact():
+def test_recursive_chunk_keeps_btc_address_intact() -> None:
     chunks = recursive_chunk(_doc_with(BTC_ADDR), chunk_size=170, overlap=0.15)
     _assert_atom_intact(chunks, BTC_ADDR)
 
 
-def test_recursive_chunk_keeps_ipfs_cid_intact():
+def test_recursive_chunk_keeps_ipfs_cid_intact() -> None:
     chunks = recursive_chunk(_doc_with(IPFS_CID), chunk_size=150, overlap=0.15)
     _assert_atom_intact(chunks, IPFS_CID)
 
 
-def test_fixed_chunk_keeps_address_intact():
+def test_fixed_chunk_keeps_address_intact() -> None:
     chunks = fixed_chunk(_doc_with(EVM_ADDR), chunk_size=150, overlap=0.0)
     _assert_atom_intact(chunks, EVM_ADDR)
 
 
-def test_sentence_chunk_keeps_url_intact():
+def test_sentence_chunk_keeps_url_intact() -> None:
     # URLs contain '.' which the sentence splitter would otherwise cut on.
     text = (
         f"Review the explorer page at {LONG_URL}. Then check the deployer wallet. "
@@ -140,7 +142,7 @@ def test_sentence_chunk_keeps_url_intact():
     _assert_atom_intact(chunks, LONG_URL)
 
 
-def test_ingest_common_chunk_text_keeps_address_intact():
+def test_ingest_common_chunk_text_keeps_address_intact() -> None:
     chunks = ingest_common.chunk_text(_doc_with(EVM_ADDR), size=200, overlap=50)
     _assert_atom_intact(chunks, EVM_ADDR)
 
@@ -148,7 +150,7 @@ def test_ingest_common_chunk_text_keeps_address_intact():
 # ── 2. code-block / ABI atomicity ──
 
 
-def test_code_chunk_keeps_function_bodies_atomic():
+def test_code_chunk_keeps_function_bodies_atomic() -> None:
     chunks = code_chunk(SOLIDITY, chunk_size=120, overlap=0.2)
     for func in (
         "function deposit() external payable {",
@@ -159,7 +161,7 @@ def test_code_chunk_keeps_function_bodies_atomic():
         assert not any(func[: len(func) // 2] in c and func not in c for c in chunks)
 
 
-def test_code_chunk_keeps_abi_json_atomic():
+def test_code_chunk_keeps_abi_json_atomic() -> None:
     abi = (
         '[{"type":"function","name":"withdraw","inputs":['
         '{"name":"amount","type":"uint256"}],"outputs":[],'
@@ -175,7 +177,7 @@ def test_code_chunk_keeps_abi_json_atomic():
         assert c.count("{") == c.count("}"), "ABI braces unbalanced inside a chunk"
 
 
-def test_recursive_chunk_keeps_fenced_code_block_together():
+def test_recursive_chunk_keeps_fenced_code_block_together() -> None:
     block = (
         "```solidity\nfunction rescue() external { owner.transfer(address(this).balance); }\n```"
     )
@@ -188,7 +190,7 @@ def test_recursive_chunk_keeps_fenced_code_block_together():
     assert any(block in c for c in chunks), "fenced block was split"
 
 
-def test_code_chunk_keeps_single_line_signatures():
+def test_code_chunk_keeps_single_line_signatures() -> None:
     src = (
         "pragma solidity ^0.8.20;\n"
         "interface IERC20 {\n"
@@ -208,7 +210,7 @@ def test_code_chunk_keeps_single_line_signatures():
 # ── 3. heading-aware sectioning + metadata ──
 
 
-def test_split_doc_into_chunks_carries_section_metadata():
+def test_split_doc_into_chunks_carries_section_metadata() -> None:
     doc = (
         "# Audit Findings\n\n"
         f"The contract at {EVM_ADDR} has a critical vulnerability in withdraw.\n\n"
@@ -230,7 +232,7 @@ def test_split_doc_into_chunks_carries_section_metadata():
     assert all(c["estimated_tokens"] >= 1 for c in chunks)
 
 
-def test_split_doc_into_chunks_rest_heading():
+def test_split_doc_into_chunks_rest_heading() -> None:
     doc = (
         "Audit Findings\n"
         "==============\n\n"
@@ -245,7 +247,7 @@ def test_split_doc_into_chunks_rest_heading():
     assert "Recommendations" in labels
 
 
-def test_heading_sections_are_not_mixed_in_one_chunk():
+def test_heading_sections_are_not_mixed_in_one_chunk() -> None:
     doc = (
         "# Section One\n\n"
         + ("alpha content " * 60)
@@ -263,7 +265,7 @@ def test_heading_sections_are_not_mixed_in_one_chunk():
 # ── 4. token target + hard cap ──
 
 
-def test_presets_target_tokens_and_cap():
+def test_presets_target_tokens_and_cap() -> None:
     from rugbrain.app_chunking import STRATEGY_PRESETS
 
     for name, cfg in STRATEGY_PRESETS.items():
@@ -272,20 +274,20 @@ def test_presets_target_tokens_and_cap():
         assert cfg["max_chars"] <= 8000, f"{name}: cap above embedder truncation"
 
 
-def test_recursive_chunk_hard_cap_respected():
+def test_recursive_chunk_hard_cap_respected() -> None:
     text = "long boring filler text " * 400  # ~8800 chars, no crypto atoms
     chunks = recursive_chunk(text, chunk_size=512, overlap=0.15, max_chars=640)
     assert all(len(c) <= 640 for c in chunks)
 
 
-def test_chunk_document_returns_strings_and_is_stable():
+def test_chunk_document_returns_strings_and_is_stable() -> None:
     out = chunk_document(_doc_with(EVM_ADDR, n=6), "scam_report")
     assert isinstance(out, list)
     assert all(isinstance(c, str) for c in out)
     assert any(EVM_ADDR in c for c in out)
 
 
-def test_chunk_batch_adds_section_metadata():
+def test_chunk_batch_adds_section_metadata() -> None:
     docs = [
         {
             "text": f"# Update\n\nRug detected at {EVM_ADDR}.\n\n# Details\n\nLP removed.",

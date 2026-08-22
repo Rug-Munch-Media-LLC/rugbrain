@@ -34,8 +34,8 @@ import os
 import sys
 from typing import Any
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -135,7 +135,8 @@ async def verify_queries() -> list[dict[str, Any]]:
 async def analyze_address(address: str, chain: str) -> dict[str, Any]:
     from rugbrain.contract_analysis import analyze_contract_security
 
-    return await analyze_contract_security(address, chain=chain, limit=5)
+    result: dict[str, Any] = await analyze_contract_security(address, chain=chain, limit=5)
+    return result
 
 
 async def main_async(args: argparse.Namespace) -> int:

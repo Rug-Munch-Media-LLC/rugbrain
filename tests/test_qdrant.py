@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_qdrant_store_importable():
+async def test_qdrant_store_importable() -> None:
     from rugbrain.qdrant_store import get_qdrant_store
     store = await get_qdrant_store()
     assert hasattr(store, "search")
@@ -10,7 +10,7 @@ async def test_qdrant_store_importable():
     assert hasattr(store, "hybrid_search")
 
 @pytest.mark.asyncio
-async def test_qdrant_store_singleton():
+async def test_qdrant_store_singleton() -> None:
     from rugbrain.qdrant_store import get_qdrant_store
     s1 = await get_qdrant_store()
     s2 = await get_qdrant_store()

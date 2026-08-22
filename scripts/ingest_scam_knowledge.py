@@ -777,7 +777,7 @@ def _cryptoscamdb_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any
     if not data_dir.exists():
         return []
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
     except ImportError:
         yaml = None
     if yaml is None:

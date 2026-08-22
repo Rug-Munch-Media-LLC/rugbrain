@@ -48,7 +48,7 @@ def _fake_score_factory(
     *,
     method: str = "qwen3-reranker-8b",
     seen: list[list[dict[str, Any]]] | None = None,
-):
+) -> Any:
     """Build an async ``_score_candidates`` stand-in returning *scores*."""
 
     async def fake_score(query: str, candidates: list[dict[str, Any]]) -> tuple[list[float], str]:
@@ -62,12 +62,12 @@ def _fake_score_factory(
 # ── 1. reranker: module import + graceful no-op fallback ─────────────
 
 
-def test_rerank_module_imports_cleanly():
+def test_rerank_module_imports_cleanly() -> None:
     """No hard deps at import time (no torch/sentence-transformers)."""
     import rugbrain.search.rerank  # noqa: F401
 
 
-def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytest.MonkeyPatch):
+def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Scorer unavailable -> docs keep original ordering, tagged 'none'."""
     monkeypatch.setattr(rerank_mod, "_score_candidates", _fake_score_factory([], method="none"))
 
@@ -77,7 +77,7 @@ def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytes
         {"id": "mid", "content": "mid", "similarity": 0.6},
     ]
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await rerank_chunks("some query", chunks, top_n=3, keep=2)
 
     out = asyncio.run(run())
@@ -86,8 +86,8 @@ def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytes
     assert all(r["reranked"] is False for r in out)
 
 
-def test_rerank_chunks_returns_empty_for_empty_chunks(monkeypatch: pytest.MonkeyPatch):
-    async def run() -> list[dict[str, Any]]:
+def test_rerank_chunks_returns_empty_for_empty_chunks(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def run() -> Any:
         return await rerank_chunks("query", [])
 
     assert asyncio.run(run()) == []
@@ -96,7 +96,7 @@ def test_rerank_chunks_returns_empty_for_empty_chunks(monkeypatch: pytest.Monkey
 # ── 2. reranker: cross-encoder ordering ───────────────────────────────
 
 
-def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyPatch):
+def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Cross-encoder scores drive final ordering, not original similarity."""
     monkeypatch.setattr(
         rerank_mod, "_score_candidates", _fake_score_factory([0.1, 0.9, 0.5])
@@ -108,7 +108,7 @@ def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyP
         {"id": "c", "content": "c", "similarity": 0.97},
     ]
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await rerank_chunks("query", chunks, top_n=3, keep=2)
 
     out = asyncio.run(run())
@@ -118,7 +118,7 @@ def test_rerank_chunks_orders_by_cross_encoder_score(monkeypatch: pytest.MonkeyP
     assert out[0]["rerank_method"] == "qwen3-reranker-8b"
 
 
-def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch):
+def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Only the top_n candidates (by original score) reach the scorer."""
     seen: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(
@@ -129,7 +129,7 @@ def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch
 
     chunks = _chunks(25)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await rerank_chunks("query", chunks, top_n=20, keep=5)
 
     out = asyncio.run(run())
@@ -139,19 +139,19 @@ def test_rerank_chunks_respects_top_n_candidates(monkeypatch: pytest.MonkeyPatch
     assert [c["id"] for c in seen[0]] == [f"chunk-{i}" for i in range(20)]
 
 
-def test_rerank_chunks_keep_clamped_to_top_n(monkeypatch: pytest.MonkeyPatch):
+def test_rerank_chunks_keep_clamped_to_top_n(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(rerank_mod, "_score_candidates", _fake_score_factory([0.9, 0.6, 0.3]))
 
     chunks = _chunks(5)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await rerank_chunks("query", chunks, top_n=3, keep=10)
 
     out = asyncio.run(run())
     assert len(out) == 3  # clamped to top_n
 
 
-def test_rerank_chunks_scores_all_when_top_n_nonpositive(monkeypatch: pytest.MonkeyPatch):
+def test_rerank_chunks_scores_all_when_top_n_nonpositive(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(
         rerank_mod,
         "_score_candidates",
@@ -160,7 +160,7 @@ def test_rerank_chunks_scores_all_when_top_n_nonpositive(monkeypatch: pytest.Mon
 
     chunks = _chunks(7)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await rerank_chunks("query", chunks, top_n=0, keep=0)
 
     out = asyncio.run(run())
@@ -170,7 +170,7 @@ def test_rerank_chunks_scores_all_when_top_n_nonpositive(monkeypatch: pytest.Mon
 # ── 3. hybrid: RRF fusion of vector + keyword lanes ───────────────────
 
 
-def test_hybrid_fuse_combines_vector_and_keyword_lanes():
+def test_hybrid_fuse_combines_vector_and_keyword_lanes() -> None:
     """RRF fusion merges per-collection vector lists + keyword hits by id."""
     v1 = [
         {"id": "d1", "similarity": 0.9},
@@ -199,7 +199,7 @@ def test_hybrid_fuse_combines_vector_and_keyword_lanes():
     assert d1["similarity"] == 0.9
 
 
-def test_hybrid_fuse_merges_duplicates_across_lanes():
+def test_hybrid_fuse_merges_duplicates_across_lanes() -> None:
     v1 = [{"id": "d1", "similarity": 0.9}, {"id": "d2", "similarity": 0.8}]
     kw = [{"id": "d1", "bm25_score": 5.0}]
     fused = _hybrid_fuse([v1], kw)
@@ -215,7 +215,7 @@ async def _fake_search_similar(
     limit: int = 10,
     min_similarity: float = 0.0,
     content_limit: int = 500,
-) -> list[dict[str, Any]]:
+) -> Any:
     if collection == "coll_a":
         return [{"id": "va", "similarity": 0.9, "content": "vector a", "collection": "coll_a"}]
     if collection == "coll_b":
@@ -228,7 +228,7 @@ async def _fake_keyword_search(
     collections: list[str],
     limit: int = 20,
     max_docs_per_collection: int = 1000,
-) -> list[dict[str, Any]]:
+) -> Any:
     return [
         {
             "id": "kw1",
@@ -242,12 +242,12 @@ async def _fake_keyword_search(
     ]
 
 
-def test_search_multi_collection_hybrid_surfaces_keyword_only_hits(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_hybrid_surfaces_keyword_only_hits(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hybrid=True fuses the keyword lane; keyword-only hits survive truncation."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
     monkeypatch.setattr(engine_mod, "_hybrid_keyword_search", _fake_keyword_search)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "some query", collections=["coll_a", "coll_b"], limit=3, hybrid=True
         )
@@ -261,7 +261,7 @@ def test_search_multi_collection_hybrid_surfaces_keyword_only_hits(monkeypatch: 
     assert any("rrf_score" in r for r in out)
 
 
-def test_search_multi_collection_default_pure_vector(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_default_pure_vector(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hybrid defaults OFF: keyword lane never runs, pure-vector behavior kept."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
 
@@ -270,7 +270,7 @@ def test_search_multi_collection_default_pure_vector(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(engine_mod, "_hybrid_keyword_search", _explode)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "some query",
             collections=["coll_a", "coll_b"],
@@ -288,7 +288,7 @@ def test_search_multi_collection_default_pure_vector(monkeypatch: pytest.MonkeyP
 # ── reranker: default ON + graceful timeout fallback ───────────────────
 
 
-def test_search_multi_collection_rerank_defaults_on():
+def test_search_multi_collection_rerank_defaults_on() -> None:
     """rerank defaults True on the main entry points (env-overridable)."""
     import inspect
 
@@ -298,7 +298,7 @@ def test_search_multi_collection_rerank_defaults_on():
     assert sig3.parameters["rerank"].default is True
 
 
-def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.MonkeyPatch) -> Any:
     """rerank=True default routes fused candidates through rerank_chunks."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
 
@@ -309,13 +309,13 @@ def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.Monk
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         calls.append({"top_n": top_n, "keep": keep, "count": len(chunks)})
         return [dict(c) for c in chunks][:keep]
 
     monkeypatch.setattr(rerank_mod, "rerank_chunks", fake_rerank_chunks)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "some query", collections=["coll_a", "coll_b"], limit=2
         )
@@ -325,7 +325,7 @@ def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.Monk
     assert calls[0] == {"top_n": 20, "keep": 2, "count": 2}
 
 
-def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Slow reranker (past timeout) → raw ranking kept, request never fails."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
 
@@ -340,7 +340,7 @@ def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.M
 
     monkeypatch.setattr(rerank_mod, "rerank_chunks", slow_rerank_chunks)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "some query",
             collections=["coll_a", "coll_b"],
@@ -356,7 +356,7 @@ def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.M
     assert all(r.get("reranked") is False for r in out)
 
 
-def test_three_pillar_search_mmr_lambda_knob_default():
+def test_three_pillar_search_mmr_lambda_knob_default() -> None:
     """MMR default lambda is 0.6 (relevance-leaning, not over-deduping)."""
     import inspect
 
@@ -367,7 +367,7 @@ def test_three_pillar_search_mmr_lambda_knob_default():
     assert "mmr_lambda" in sig.parameters
 
 
-def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.MonkeyPatch) -> Any:
     """rerank=True passes fused candidates to the search-lane reranker."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
 
@@ -378,7 +378,7 @@ def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.Monke
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         calls.append({"top_n": top_n, "keep": keep, "count": len(chunks)})
         out = []
         for i, c in enumerate(chunks):
@@ -391,7 +391,7 @@ def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(rerank_mod, "rerank_chunks", fake_rerank_chunks)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "some query",
             collections=["coll_a", "coll_b"],
@@ -409,7 +409,7 @@ def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.Monke
 # ── 5. hybrid: three_pillar_search wiring ─────────────────────────────
 
 
-def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> None:
+def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Patch every external dependency three_pillar_search touches."""
 
     async def fake_get_embedder() -> Any:
@@ -422,7 +422,7 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> None:
         min_similarity: float = 0.5,
         content_limit: int = 500,
         **kwargs: Any,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return [
             {"id": "va", "similarity": 0.9, "content": "vector a", "collection": "coll_a"},
             {"id": "vb", "similarity": 0.85, "content": "vector b", "collection": "coll_b"},
@@ -430,7 +430,7 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def fake_splade(
         query: str, collections: list[str] | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return []
 
     monkeypatch.setattr(engine_mod, "get_embedder", fake_get_embedder)
@@ -438,11 +438,11 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("rugbrain.splade_bm25.splade_search", fake_splade)
 
 
-def test_three_pillar_search_hybrid_fuses_keyword_lane(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_hybrid_fuses_keyword_lane(monkeypatch: pytest.MonkeyPatch) -> Any:
     _patch_three_pillar_externals(monkeypatch)
     monkeypatch.setattr(engine_mod, "_hybrid_keyword_search", _fake_keyword_search)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "bitcoin price today",
             collections=["coll_a", "coll_b"],
@@ -461,7 +461,7 @@ def test_three_pillar_search_hybrid_fuses_keyword_lane(monkeypatch: pytest.Monke
     assert out["fusion_weights"]["sparse"] > 0
 
 
-def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.MonkeyPatch) -> Any:
     _patch_three_pillar_externals(monkeypatch)
 
     def _explode(*args: Any, **kwargs: Any) -> Any:
@@ -469,7 +469,7 @@ def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.M
 
     monkeypatch.setattr(engine_mod, "_hybrid_keyword_search", _explode)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "bitcoin price today",
             collections=["coll_a", "coll_b"],
@@ -484,7 +484,7 @@ def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.M
     assert {r["id"] for r in out["results"]} == {"va", "vb"}
 
 
-def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytest.MonkeyPatch) -> Any:
     _patch_three_pillar_externals(monkeypatch)
 
     async def fake_rerank_chunks(
@@ -492,7 +492,7 @@ def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytes
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         assert top_n == 20
         out = []
         for i, c in enumerate(chunks):
@@ -505,7 +505,7 @@ def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytes
 
     monkeypatch.setattr(rerank_mod, "rerank_chunks", fake_rerank_chunks)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "bitcoin price today",
             collections=["coll_a", "coll_b"],

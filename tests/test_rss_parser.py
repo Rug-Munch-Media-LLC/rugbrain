@@ -39,7 +39,7 @@ ATOM_XML = """<?xml version="1.0"?>
 </feed>"""
 
 
-def test_parse_rss_items_and_entities():
+def test_parse_rss_items_and_entities() -> None:
     items = parse_rss(RSS_XML)
     assert len(items) == 2
     assert items[0]["title"] == "Bitcoin hits new high & breaks record"
@@ -50,18 +50,18 @@ def test_parse_rss_items_and_entities():
     assert items[0]["is_atom"] is False
 
 
-def test_parse_rss_plain_description():
+def test_parse_rss_plain_description() -> None:
     items = parse_rss(RSS_XML)
     assert items[1]["summary"] == "Plain text summary."
 
 
-def test_parse_feed_title():
+def test_parse_feed_title() -> None:
     feed_title, items = parse_feed(RSS_XML)
     assert feed_title == "Example Feed"
     assert len(items) == 2
 
 
-def test_parse_atom_entries():
+def test_parse_atom_entries() -> None:
     feed_title, items = parse_feed(ATOM_XML)
     assert feed_title == "Atom Feed"
     assert len(items) == 2
@@ -71,7 +71,7 @@ def test_parse_atom_entries():
     assert items[0]["published"].startswith("2026-08-04")
 
 
-def test_parse_rss_empty_and_garbage():
+def test_parse_rss_empty_and_garbage() -> None:
     assert parse_rss("") == []
     assert parse_rss("<html><body>not a feed</body></html>") == []
     feed_title, items = parse_feed("<not-a-feed/>")
@@ -79,6 +79,6 @@ def test_parse_rss_empty_and_garbage():
     assert items == []
 
 
-def test_parse_rss_limit():
+def test_parse_rss_limit() -> None:
     items = parse_rss(RSS_XML, limit=1)
     assert len(items) == 1

@@ -6,16 +6,20 @@ HTTP providers so no external service is contacted.
 
 from __future__ import annotations
 
+import importlib as _il
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
-from rugbrain import market_context as mod
+market_context = _il.import_module("rugbrain.market_context")
+
+mod = market_context
 
 
 def _transport(
-    fear: dict, chains: list[dict], new: list[dict], hacks: list[dict]
+    fear: dict[str, Any], chains: list[dict[str, Any]], new: list[dict[str, Any]], hacks: list[dict[str, Any]]
 ) -> httpx.MockTransport:
     """Build a MockTransport that routes by URL suffix."""
 
@@ -52,7 +56,7 @@ def _transport(
 _ORIG_ASYNC_CLIENT = httpx.AsyncClient
 
 
-def _fresh_client(*a, **k):
+def _fresh_client(*a: Any, **k: Any) -> Any:
     """Build a fresh AsyncClient from the real class (avoids patch recursion)."""
     return _ORIG_ASYNC_CLIENT(*a, **k)
 
@@ -155,7 +159,7 @@ async def test_build_token_market_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_token_market_context_deployer_freshness_new() -> None:
+async def test_build_token_market_context_deployer_freshness_new() -> Any:
     address = "0x" + "b" * 40
 
     def handler(request: httpx.Request) -> httpx.Response:

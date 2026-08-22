@@ -1,8 +1,13 @@
 """Tests for the Ground News-style multi-axis news rating engine."""
 
+import importlib as _il
+
 import pytest
 
-from rugbrain import news_rating as nr
+news_rating = _il.import_module("rugbrain.news_rating")
+nr = news_rating
+
+mod = news_rating
 from rugbrain.ratings import quality_multiplier, rating_multiplier
 
 
@@ -40,26 +45,26 @@ def _neutral_text() -> str:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_source_reputation_established_scores_high():
+def test_source_reputation_established_scores_high() -> None:
     assert nr.source_reputation_score("", "https://coindesk.com/article/1") >= 90
     assert nr.source_reputation_score("", "https://www.theblock.co/x") >= 90
     assert nr.source_reputation_score("", "https://decrypt.co/1") >= 85
 
 
-def test_source_reputation_unknown_scores_low():
+def test_source_reputation_unknown_scores_low() -> None:
     assert nr.source_reputation_score("", "https://random-blog.example/post") == 45
 
 
-def test_source_reputation_name_alias():
+def test_source_reputation_name_alias() -> None:
     assert nr.source_reputation_score("CoinDesk") == 95
     assert nr.source_reputation_score("coinjournal") == 62
 
 
-def test_source_reputation_override_wins():
+def test_source_reputation_override_wins() -> None:
     assert nr.source_reputation_score("random", "https://x.example", override=80) == 80
 
 
-def test_source_reputation_label():
+def test_source_reputation_label() -> None:
     assert nr.source_reputation_label(80) == "established"
     assert nr.source_reputation_label(55) == "independent"
     assert nr.source_reputation_label(30) == "unknown"
@@ -70,11 +75,11 @@ def test_source_reputation_label():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_factual_density_dense_article_scores_high():
+def test_factual_density_dense_article_scores_high() -> None:
     assert nr.factual_density_score(_factual_text()) >= 60
 
 
-def test_factual_density_opinion_fluff_scores_low():
+def test_factual_density_opinion_fluff_scores_low() -> None:
     fluff = (
         "This is a wonderful project with an incredible vision. The team is "
         "amazing and the future is bright. Everyone should feel great about "
@@ -83,12 +88,12 @@ def test_factual_density_opinion_fluff_scores_low():
     assert nr.factual_density_score(fluff) < 40
 
 
-def test_factual_density_empty_text():
+def test_factual_density_empty_text() -> None:
     assert nr.factual_density_score("") == 0
     assert nr.factual_density_score("short") == 0
 
 
-def test_factual_density_claims_are_deduplicated():
+def test_factual_density_claims_are_deduplicated() -> None:
     claims = nr._find_claims(_factual_text())
     assert "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in claims["addresses"]
     assert "uniswap" in claims["protocols"]
@@ -100,7 +105,7 @@ def test_factual_density_claims_are_deduplicated():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_timeliness_fresh_scores_high():
+def test_timeliness_fresh_scores_high() -> None:
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC)
@@ -108,18 +113,18 @@ def test_timeliness_fresh_scores_high():
     assert nr.timeliness_score(now - timedelta(hours=2), now=now) >= 88
 
 
-def test_timeliness_old_scores_low():
+def test_timeliness_old_scores_low() -> None:
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC)
     assert nr.timeliness_score(now - timedelta(days=40), now=now) < 50
 
 
-def test_timeliness_missing_is_neutral():
+def test_timeliness_missing_is_neutral() -> None:
     assert nr.timeliness_score(None) == 50
 
 
-def test_timeliness_event_lag_penalty():
+def test_timeliness_event_lag_penalty() -> None:
     from datetime import UTC, datetime, timedelta
 
     now = datetime.now(UTC)
@@ -135,15 +140,15 @@ def test_timeliness_event_lag_penalty():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_bias_neutral_scores_high():
+def test_bias_neutral_scores_high() -> None:
     assert nr.bias_score(_neutral_text()) >= 75
 
 
-def test_bias_hype_scores_low():
+def test_bias_hype_scores_low() -> None:
     assert nr.bias_score(_hype_text()) < 45
 
 
-def test_bias_short_text_neutral_default():
+def test_bias_short_text_neutral_default() -> None:
     assert nr.bias_score("hi") == 50
 
 
@@ -152,7 +157,7 @@ def test_bias_short_text_neutral_default():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_corroboration_score_mapping():
+def test_corroboration_score_mapping() -> None:
     assert nr.corroboration_score(None) == 30
     assert nr.corroboration_score(0) == 30
     assert nr.corroboration_score(1) == 45
@@ -166,11 +171,11 @@ def test_corroboration_score_mapping():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_technical_depth_mechanics_scores_high():
+def test_technical_depth_mechanics_scores_high() -> None:
     assert nr.technical_depth_score(_factual_text()) >= 60
 
 
-def test_technical_depth_surface_level_low():
+def test_technical_depth_surface_level_low() -> None:
     surface = "Token went up. It is a good coin. Many people bought it."
     assert nr.technical_depth_score(surface) < 40
 
@@ -180,14 +185,14 @@ def test_technical_depth_surface_level_low():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_source_diversity_single_vs_multi():
+def test_source_diversity_single_vs_multi() -> None:
     assert nr.source_diversity_score({}) == 50
     assert nr.source_diversity_score({"source_urls": ["https://a.example"]}) == 40
     multi = {"source_urls": ["https://a.example", "https://b.example", "https://c.example"]}
     assert nr.source_diversity_score(multi) == 75
 
 
-def test_source_diversity_aggregated_counts_as_multi():
+def test_source_diversity_aggregated_counts_as_multi() -> None:
     assert nr.source_diversity_score({"aggregated": True}) >= 75
 
 
@@ -196,7 +201,7 @@ def test_source_diversity_aggregated_counts_as_multi():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_composite_is_weighted_average():
+def test_composite_is_weighted_average() -> None:
     article = {
         "url": "https://coindesk.com/article/1",
         "source": "CoinDesk",
@@ -212,7 +217,7 @@ def test_composite_is_weighted_average():
     assert 0 <= rating.composite <= 100
 
 
-def test_rate_article_axes_shape():
+def test_rate_article_axes_shape() -> None:
     rating = nr.rate_article(
         {
             "url": "https://coindesk.com/article/2",
@@ -229,7 +234,7 @@ def test_rate_article_axes_shape():
     assert rating.source_reputation in ("established", "independent", "unknown")
 
 
-def test_rate_article_poor_opinion_piece():
+def test_rate_article_poor_opinion_piece() -> None:
     rating = nr.rate_article(
         {
             "url": "https://random-blog.example/post",
@@ -245,7 +250,7 @@ def test_rate_article_poor_opinion_piece():
     assert rating.composite < 50
 
 
-def test_to_payload_includes_legacy_and_quality():
+def test_to_payload_includes_legacy_and_quality() -> None:
     rating = nr.rate_article(
         {
             "url": "https://coindesk.com/article/3",
@@ -262,14 +267,14 @@ def test_to_payload_includes_legacy_and_quality():
     assert "on_chain_evidence" in payload
 
 
-def test_rate_article_from_rating_dict_round_trip():
+def test_rate_article_from_rating_dict_round_trip() -> None:
     rating = nr.rate_article({"url": "https://coindesk.com/x", "content": _factual_text()})
     payload = nr.rate_article_from_rating_dict(rating.to_payload())
     assert payload["composite"] == rating.composite
     assert payload["quality_score"] == rating.composite
 
 
-def test_on_chain_evidence_detected_from_addresses():
+def test_on_chain_evidence_detected_from_addresses() -> None:
     rating = nr.rate_article(
         {
             "url": "https://coindesk.com/x",
@@ -288,7 +293,7 @@ def test_on_chain_evidence_detected_from_addresses():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_quality_multiplier_bands():
+def test_quality_multiplier_bands() -> None:
     assert quality_multiplier(None) == 1.0
     assert quality_multiplier(90) == 1.15
     assert quality_multiplier(75) == 1.08
@@ -297,13 +302,13 @@ def test_quality_multiplier_bands():
     assert quality_multiplier(20) == 0.75
 
 
-def test_rating_multiplier_applies_quality():
+def test_rating_multiplier_applies_quality() -> None:
     assert rating_multiplier({"quality_score": 90}) == pytest.approx(1.15, rel=1e-6)
     assert rating_multiplier({"quality_score": 20}) == pytest.approx(0.75, rel=1e-6)
     assert rating_multiplier({}) == 1.0
 
 
-def test_apply_rating_boosts_uses_quality():
+def test_apply_rating_boosts_uses_quality() -> None:
     from rugbrain.ratings import apply_rating_boosts
 
     doc = {

@@ -15,6 +15,7 @@ import hashlib
 import logging
 import os
 import sys
+from typing import Any
 
 import httpx
 
@@ -38,7 +39,7 @@ def make_doc_id(content: str, source: str) -> str:
     return hashlib.sha256(f"known_scams:{content.lower()}:{source}".encode()).hexdigest()[:16]
 
 
-async def ingest_via_api(content: str, metadata: dict) -> bool:
+async def ingest_via_api(content: str, metadata: dict[str, Any]) -> bool:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -55,7 +56,7 @@ async def ingest_via_api(content: str, metadata: dict) -> bool:
         return False
 
 
-async def ingest_metamask_blacklist():
+async def ingest_metamask_blacklist() -> tuple[int, int, bool]:
     """Ingest MetaMask phishing domain blacklist (~198K domains)."""
     logger.info("Fetching MetaMask phishing blacklist...")
 
@@ -121,7 +122,7 @@ async def ingest_metamask_blacklist():
     return ingested, errors, True
 
 
-async def try_cryptoscamdb():
+async def try_cryptoscamdb() -> list[dict[str, Any]] | None:
     """Try CryptoScamDB API if accessible."""
     for url in CRYPTOSCAMDB_URLS:
         try:
@@ -139,11 +140,13 @@ async def try_cryptoscamdb():
         except Exception as e:
             logger.debug(f"CryptoScamDB {url} failed: {e}")
 
+    # mypy considers this unreachable (narrowing quirk across the try/except
+    # loop); it is reachable when every URL fails.
     logger.warning("CryptoScamDB API unavailable (502)")
     return None
 
 
-async def ingest_cryptoscamdb(scams: list):
+async def ingest_cryptoscamdb(scams: list[Any]) -> tuple[int, int]:
     """Ingest CryptoScamDB entries."""
     ingested = 0
     errors = 0
@@ -199,7 +202,7 @@ async def ingest_cryptoscamdb(scams: list):
     return ingested, errors
 
 
-async def main():
+async def main() -> None:
     total_ingested = 0
     total_errors = 0
 

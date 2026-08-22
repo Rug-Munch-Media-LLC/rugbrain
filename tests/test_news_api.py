@@ -1,11 +1,13 @@
 """Tests for the news rating + fear index API endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
-def client():
+def client() -> Any:
     """Create a test client for the RAG routers."""
     from fastapi import FastAPI
 
@@ -24,7 +26,7 @@ def client():
 
 
 @pytest.mark.asyncio
-async def test_news_rate_returns_full_breakdown(client):
+async def test_news_rate_returns_full_breakdown(client: Any) -> None:
     resp = await client.get(
         "/api/v1/news/rate",
         params={
@@ -59,7 +61,7 @@ async def test_news_rate_returns_full_breakdown(client):
 
 
 @pytest.mark.asyncio
-async def test_news_rate_coindesk_high_credibility(client):
+async def test_news_rate_coindesk_high_credibility(client: Any) -> None:
     resp = await client.get(
         "/api/v1/news/rate",
         params={"url": "https://coindesk.com/article/2"},
@@ -71,17 +73,17 @@ async def test_news_rate_coindesk_high_credibility(client):
 
 
 @pytest.mark.asyncio
-async def test_news_rate_missing_url_rejected(client):
+async def test_news_rate_missing_url_rejected(client: Any) -> None:
     resp = await client.get("/api/v1/news/rate")
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_news_rate_never_fetches_url(client, monkeypatch):
+async def test_news_rate_never_fetches_url(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """The endpoint must not make an outbound request for the URL (SSRF-safe)."""
     import httpx
 
-    async def boom(*args, **kwargs):
+    async def boom(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("endpoint attempted a server-side fetch")
 
     monkeypatch.setattr(httpx, "AsyncClient", boom)
@@ -98,7 +100,7 @@ async def test_news_rate_never_fetches_url(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_top_fails_open_without_qdrant(client):
+async def test_news_top_fails_open_without_qdrant(client: Any) -> None:
     """Qdrant unreachable → 200 with empty articles (fail-open)."""
     resp = await client.get("/api/v1/news/top", params={"min_quality": 70})
     assert resp.status_code == 200
@@ -108,11 +110,16 @@ async def test_news_top_fails_open_without_qdrant(client):
 
 
 @pytest.mark.asyncio
-async def test_news_top_sorts_by_quality(client, monkeypatch):
+async def test_news_top_sorts_by_quality(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """With a fake store, returns rated articles sorted by quality desc."""
 
     class FakeStore:
-        async def scroll(self, collection, limit=100, offset=None):
+        async def scroll(
+            self,
+            collection: Any,
+            limit: int = 100,
+            offset: Any = None,
+        ) -> Any:
             if offset == "done":
                 return [], None
             return (
@@ -175,11 +182,16 @@ async def test_news_top_sorts_by_quality(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_top_category_filter(client, monkeypatch):
+async def test_news_top_category_filter(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """Category filter excludes mismatched articles."""
 
     class FakeStore:
-        async def scroll(self, collection, limit=100, offset=None):
+        async def scroll(
+            self,
+            collection: Any,
+            limit: int = 100,
+            offset: Any = None,
+        ) -> Any:
             return (
                 [
                     {
@@ -229,10 +241,12 @@ async def test_news_top_category_filter(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_current(client, monkeypatch):
+async def test_fear_index_current(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     import rugbrain.fear_index as fi
 
-    async def fake_get_fear_index(window="24h", force=False):
+    async def fake_get_fear_index(
+            window: str = "24h", force: bool = False
+        ) -> Any:
         return {
             "value": 35,
             "classification": "fear",
@@ -253,7 +267,7 @@ async def test_fear_index_current(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_invalid_window_rejected(client):
+async def test_fear_index_invalid_window_rejected(client: Any) -> None:
     resp = await client.get("/api/v1/fear-index", params={"window": "99m"})
     assert resp.status_code == 422
 
@@ -264,10 +278,10 @@ async def test_fear_index_invalid_window_rejected(client):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_history(client, monkeypatch):
+async def test_fear_index_history(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     import rugbrain.fear_index as fi
 
-    async def fake_history(days=30):
+    async def fake_history(days: int = 30) -> Any:
         return {
             "days": days,
             "points": [
@@ -286,6 +300,6 @@ async def test_fear_index_history(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fear_index_history_rejects_huge_days(client):
+async def test_fear_index_history_rejects_huge_days(client: Any) -> None:
     resp = await client.get("/api/v1/fear-index/history", params={"days": 4000})
     assert resp.status_code == 422

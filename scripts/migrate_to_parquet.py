@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from b2sdk.v2 import B2Api  # type: ignore[import-untyped]
+from b2sdk.v2 import B2Api
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

@@ -8,11 +8,11 @@ to verify that the system correctly:
 4. Returns reasonable confidence scores
 """
 
-import asyncio
-import json
+
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -79,12 +79,12 @@ KNOWN_EVENTS = [
 
 
 @pytest.fixture(scope="session")
-def client():
+def client() -> Any:
     return httpx.Client(timeout=120.0, headers=HEADERS)
 
 
 @pytest.mark.parametrize("event", KNOWN_EVENTS)
-def test_known_event_retrieval(client: httpx.Client, event: dict):
+def test_known_event_retrieval(client: httpx.Client, event: dict[str, Any]) -> None:
     """Test that the RAG system retrieves relevant results for known events."""
     response = client.get(
         SEARCH_URL,
@@ -115,7 +115,7 @@ def test_known_event_retrieval(client: httpx.Client, event: dict):
         pytest.skip(f"Missing keywords: {missing} for: {event['query']}")
 
 
-def test_confidence_scoring(client: httpx.Client):
+def test_confidence_scoring(client: httpx.Client) -> None:
     """Test that confidence scoring returns reasonable values."""
     # Search for a well-known event
     response = client.get(
@@ -145,7 +145,7 @@ def test_confidence_scoring(client: httpx.Client):
     assert conf["confidence_label"] in ("high", "medium", "low", "insufficient")
 
 
-def test_pii_redaction(client: httpx.Client):
+def test_pii_redaction(client: httpx.Client) -> None:
     """Test that PII redaction works."""
     response = client.post(
         "http://127.0.0.1:8090/redact",
@@ -157,7 +157,7 @@ def test_pii_redaction(client: httpx.Client):
     assert data.get("pii_found", 0) > 0
 
 
-def test_multi_hop_decomposition():
+def test_multi_hop_decomposition() -> None:
     """Test that query decomposition works."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.query_decomposer import classify_query, decompose_query
@@ -186,12 +186,11 @@ def test_multi_hop_decomposition():
         assert "tool" in sq
 
 
-def test_temporal_decay():
+def test_temporal_decay() -> None:
     """Test that temporal decay weighting works."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.search.temporal_decay import apply_temporal_decay
 
-    import time
 
     now = time.time()
     results = [
@@ -210,7 +209,7 @@ def test_temporal_decay():
     assert decayed[2]["score"] <= decayed[0]["score"]
 
 
-def test_pre_generation_reflection():
+def test_pre_generation_reflection() -> None:
     """Test that pre-generation reflection extracts on-chain references."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.pre_generation_reflection import extract_onchain_refs
@@ -222,7 +221,7 @@ def test_pre_generation_reflection():
     assert "0x1234567890123456789012345678901234567890" in refs["eth_addresses"]
 
 
-def test_confidence_scorer_module():
+def test_confidence_scorer_module() -> None:
     """Test the confidence scorer module directly."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.confidence_scorer import score_confidence
@@ -239,7 +238,7 @@ def test_confidence_scorer_module():
     assert result2["confidence_label"] == "insufficient"
 
 
-def test_sec_edgar_search():
+def test_sec_edgar_search() -> None:
     """Test SEC EDGAR company lookup."""
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.sec_edgar import CRYPTO_CIKS

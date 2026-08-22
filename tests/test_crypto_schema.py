@@ -15,35 +15,35 @@ from rugbrain.crypto_schema import (
 
 
 class TestDetectAttackVector:
-    def test_reentrancy(self):
+    def test_reentrancy(self) -> None:
         assert detect_attack_vector("reentrancy guard bypassed in withdraw") == "reentrancy"
 
-    def test_flash_loan(self):
+    def test_flash_loan(self) -> None:
         assert detect_attack_vector("used a flash loan to manipulate the pool") == "flash-loan"
 
-    def test_oracle(self):
+    def test_oracle(self) -> None:
         assert (
             detect_attack_vector("price oracle manipulated to drain funds") == "oracle-manipulation"
         )
 
-    def test_unknown_fallback(self):
+    def test_unknown_fallback(self) -> None:
         assert detect_attack_vector("some benign text") == "unknown"
         assert detect_attack_vector("") == "unknown"
         assert detect_attack_vector("nope", fallback="n/a") == "n/a"
 
 
 class TestNormalizeSeverity:
-    def test_synonyms(self):
+    def test_synonyms(self) -> None:
         assert normalize_severity("CRITICAL") == "critical"
         assert normalize_severity("severe") == "critical"
         assert normalize_severity("moderate") == "medium"
         assert normalize_severity("informational") == "info"
 
-    def test_empty_and_none(self):
+    def test_empty_and_none(self) -> None:
         assert normalize_severity(None) == "unknown"
         assert normalize_severity("") == "unknown"
 
-    def test_infer_from_amount(self):
+    def test_infer_from_amount(self) -> None:
         assert infer_severity_from_amount(50_000_000) == "critical"
         assert infer_severity_from_amount(5_000_000) == "high"
         assert infer_severity_from_amount(500_000) == "medium"
@@ -52,55 +52,55 @@ class TestNormalizeSeverity:
 
 
 class TestDetectChain:
-    def test_named_chain(self):
+    def test_named_chain(self) -> None:
         assert detect_chain("exploit on bsc") == "bsc"
         assert detect_chain("solana SPL token scam") == "solana"
 
-    def test_multi(self):
+    def test_multi(self) -> None:
         assert detect_chain("bridged from ethereum to solana") == "multi"
 
-    def test_evm_address(self):
+    def test_evm_address(self) -> None:
         assert detect_chain("wallet 0xf92d55d70d60d3b331a781d9861b767e6bfb82ad") == "ethereum"
 
-    def test_unknown(self):
+    def test_unknown(self) -> None:
         assert detect_chain("no chain mentioned") == "unknown"
 
 
 class TestParseAmount:
-    def test_numeric(self):
+    def test_numeric(self) -> None:
         assert parse_amount_usd(197_000_000) == 197_000_000
 
-    def test_text_units(self):
+    def test_text_units(self) -> None:
         assert parse_amount_usd(None, "lost $197M in exploit") == 197_000_000
         assert parse_amount_usd(None, "stolen $1.2B total") == 1_200_000_000
         assert parse_amount_usd(None, "drained $50K") == 50_000
 
-    def test_comma_separated(self):
+    def test_comma_separated(self) -> None:
         assert parse_amount_usd(None, "lost $12,500,000") == 12_500_000
 
-    def test_none(self):
+    def test_none(self) -> None:
         assert parse_amount_usd(None, "no amount here") == 0.0
 
 
 class TestParseDate:
-    def test_iso(self):
+    def test_iso(self) -> None:
         assert parse_date("2023-03-13") == "2023-03-13"
 
-    def test_md_yyyy(self):
+    def test_md_yyyy(self) -> None:
         assert parse_date("3/13/2023") == "2023-03-13"
 
-    def test_word_month(self):
+    def test_word_month(self) -> None:
         assert parse_date("", "exploit on 28 Jan 2022") == "2022-01-28"
 
-    def test_year_only(self):
+    def test_year_only(self) -> None:
         assert parse_date("2023") == "2023-01-01"
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert parse_date(None, "") == ""
 
 
 class TestNormalizeSourceType:
-    def test_mappings(self):
+    def test_mappings(self) -> None:
         assert normalize_source_type("rekt_news") == "rekt_news"
         assert normalize_source_type("defihacklabs") == "defihacklabs"
         assert normalize_source_type("swc_registry") == "swc_registry"
@@ -109,12 +109,12 @@ class TestNormalizeSourceType:
         assert normalize_source_type("news:The Defiant") == "news"
         assert normalize_source_type("seed") == "seed"
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert normalize_source_type(None) == "unknown"
 
 
 class TestEnrichPayload:
-    def test_fills_all_canonical_fields(self):
+    def test_fills_all_canonical_fields(self) -> None:
         payload = {
             "content": (
                 "Euler Finance 2023: flash loan + reentrancy exploit drained "
@@ -137,7 +137,7 @@ class TestEnrichPayload:
         assert enriched["metadata"]["attack_vector"] == "reentrancy"
         assert enriched["metadata"]["amount_lost_usd"] == 197_000_000
 
-    def test_keeps_existing_values(self):
+    def test_keeps_existing_values(self) -> None:
         payload = {
             "content": "unrelated text",
             "metadata": {"attack_vector": "oracle-manipulation", "protocol": "Benqi"},
@@ -149,7 +149,7 @@ class TestEnrichPayload:
         assert enriched["protocol"] == "Benqi"
         assert enriched["chain"] == "avalanche"
 
-    def test_severity_inferred_from_amount(self):
+    def test_severity_inferred_from_amount(self) -> None:
         payload = {
             "content": "drained $50,000,000 from protocol",
             "metadata": {},
@@ -158,7 +158,7 @@ class TestEnrichPayload:
         enriched = enrich_payload(payload)
         assert enriched["severity"] == "critical"
 
-    def test_original_payload_untouched(self):
+    def test_original_payload_untouched(self) -> None:
         payload = {"content": "some content", "metadata": {}, "source": "seed"}
         enrich_payload(payload)
         assert "attack_vector" not in payload

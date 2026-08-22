@@ -73,7 +73,8 @@ async def _embed(text: str) -> list[float] | None:
             n = float(np.linalg.norm(arr))
             if n > 0:
                 arr = arr / n
-            return arr.tolist()
+            result: list[float] = arr.tolist()
+            return result
     except Exception as e:
         logger.warning("embed_fail: %s", e)
         return None
@@ -187,7 +188,7 @@ async def _upsert_point(
 # ── Seed Data ──────────────────────────────────────────────────────────
 
 
-KNOWN_SCAM_PATTERNS = [
+KNOWN_SCAM_PATTERNS: list[dict[str, Any]] = [
     {
         "name": "Honeypot - Sell Disabled",
         "description": "Token where only the creator can sell. Buyers are trapped. Implemented via maxSellAmount=0, tradingEnabled=false, or blacklist of all non-owner addresses.",
@@ -296,7 +297,7 @@ KNOWN_SCAM_PATTERNS = [
     },
 ]
 
-HISTORICAL_HACKS = [
+HISTORICAL_HACKS: list[dict[str, Any]] = [
     {
         "name": "Bybit Hack 2025",
         "description": "Largest crypto hack in history. $1.5B stolen from Bybit cold wallet. Attacker used sophisticated social engineering + multi-sig exploit on Ethereum. Funds laundered through THORChain, eXch, and CryptoMixer.",
@@ -363,7 +364,7 @@ HISTORICAL_HACKS = [
     },
 ]
 
-ENTITY_PROFILES = [
+ENTITY_PROFILES: list[dict[str, Any]] = [
     {
         "name": "Lazarus Group",
         "description": "North Korean state-backed hacking group (APT38, BlueNoroff). Responsible for $3B+ in crypto thefts including Bybit ($1.5B), Ronin ($620M), Harmony Bridge ($100M). Standard tactics: social engineering via LinkedIn, fake job offers, supply chain attacks. Primary money laundering: THORChain, eXch, Sinbad, Wasabi Wallet.",
@@ -597,7 +598,7 @@ Severity: {addr["severity"]}"""
 
 async def seed_community(client: httpx.AsyncClient, dry_run: bool) -> int:
     """Seed community intelligence into rmi_community."""
-    community_data = [
+    community_data: list[dict[str, Any]] = [
         {
             "topic": "Reentrancy Attack Detection",
             "insight": "Most common vulnerability in DeFi protocols. Detection patterns: check for external calls before state changes, check for missing reentrancy guards, check for cross-function reentrancy. Use Slither static analysis + Echidna fuzzing. High-risk patterns: transfer() in withdraw functions, missing nonReentrant modifier.",
@@ -626,8 +627,8 @@ async def seed_community(client: httpx.AsyncClient, dry_run: bool) -> int:
     ]
 
     count = 0
-    texts = []
-    docs = []
+    texts: list[str] = []
+    docs: list[dict[str, Any]] = []
 
     for item in community_data:
         text = f"""COMMUNITY TOPIC: {item["topic"]}
@@ -678,7 +679,7 @@ Tags: {", ".join(item["tags"])}"""
     return count
 
 
-async def try_fetch_backend_scans(client: httpx.AsyncClient) -> list[dict]:
+async def try_fetch_backend_scans(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     """Attempt to fetch recent scanner findings from rmi-backend."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as bc:
@@ -699,14 +700,14 @@ async def try_fetch_backend_scans(client: httpx.AsyncClient) -> list[dict]:
     return []
 
 
-async def seed_backend_findings(client: httpx.AsyncClient, findings: list[dict]) -> int:
+async def seed_backend_findings(client: httpx.AsyncClient, findings: list[dict[str, Any]]) -> int:
     """Embed and upsert backend scanner findings into threat_intel_v2."""
     if not findings:
         return 0
 
     count = 0
-    texts = []
-    docs = []
+    texts: list[str] = []
+    docs: list[dict[str, Any]] = []
 
     for finding in findings:
         token_address = finding.get("token_address", finding.get("address", "unknown"))
@@ -770,7 +771,7 @@ async def main() -> None:
 
     logger.info("RAG Seeder starting (dry_run=%s)", args.dry_run)
 
-    totals: dict[str, int] = {}
+    totals: dict[str, Any] = {}
 
     async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=30.0) as client:
         # 1. Seed threat_intel_v2

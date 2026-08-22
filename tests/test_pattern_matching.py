@@ -32,7 +32,7 @@ SAME_CODE = (
 )
 
 
-def test_match_bytecode_identical_code_matches():
+def test_match_bytecode_identical_code_matches() -> None:
     matches = match_bytecode(SAME_CODE, [REENTRANCY_PATTERN])
     assert len(matches) == 1
     assert matches[0]["name"] == "reentrancy"
@@ -40,60 +40,60 @@ def test_match_bytecode_identical_code_matches():
     assert matches[0]["reference_incident"] == "https://example.com/rekt"
 
 
-def test_match_bytecode_unrelated_code_no_match():
+def test_match_bytecode_unrelated_code_no_match() -> None:
     code = "contract PlainToken { string public name; function setName(string memory n) public { name = n; } }"
     matches = match_bytecode(code, [REENTRANCY_PATTERN])
     assert matches == []
 
 
-def test_match_bytecode_empty_code():
+def test_match_bytecode_empty_code() -> None:
     assert match_bytecode("", [REENTRANCY_PATTERN]) == []
     assert match_bytecode("short", [REENTRANCY_PATTERN]) == []
 
 
-def test_match_deployer_behavior_serial_deployer():
+def test_match_deployer_behavior_serial_deployer() -> None:
     signals = match_deployer_behavior({"deployment_count": 5})
     assert any(s["name"] == "serial-deployer" for s in signals)
 
 
-def test_match_deployer_behavior_mixer_funded():
+def test_match_deployer_behavior_mixer_funded() -> None:
     signals = match_deployer_behavior({"mixer_funded": True})
     assert any(s["name"] == "mixer-funded-deployer" for s in signals)
 
 
-def test_match_deployer_behavior_rapid_multi_chain():
+def test_match_deployer_behavior_rapid_multi_chain() -> None:
     signals = match_deployer_behavior({"rapid_deploy": True, "multi_chain": True})
     names = {s["name"] for s in signals}
     assert "rapid-deploy-after-rug" in names
     assert "multi-chain-launch" in names
 
 
-def test_match_deployer_behavior_clean_no_signals():
+def test_match_deployer_behavior_clean_no_signals() -> None:
     assert match_deployer_behavior({}) == []
 
 
-def test_match_token_economics_high_sell_tax():
+def test_match_token_economics_high_sell_tax() -> None:
     signals = match_token_economics({"sell_tax_pct": 20})
     assert any(s["name"] == "high-sell-tax" for s in signals)
 
 
-def test_match_token_economics_unlocked_lp_mint():
+def test_match_token_economics_unlocked_lp_mint() -> None:
     signals = match_token_economics({"lp_locked": False, "mint_enabled": True})
     names = {s["name"] for s in signals}
     assert "unlocked-liquidity" in names
     assert "mint-enabled" in names
 
 
-def test_match_token_economics_concentration():
+def test_match_token_economics_concentration() -> None:
     signals = match_token_economics({"holder_concentration_pct": 60})
     assert any(s["name"] == "holder-concentration" for s in signals)
 
 
-def test_match_token_economics_clean_no_signals():
+def test_match_token_economics_clean_no_signals() -> None:
     assert match_token_economics({"lp_locked": True, "ownership_renounced": True}) == []
 
 
-async def test_match_token_patterns_full_pipeline():
+async def test_match_token_patterns_full_pipeline() -> None:
     token = {
         "address": "0xabc",
         "chain": "bsc",
@@ -122,7 +122,7 @@ async def test_match_token_patterns_full_pipeline():
     assert len(result["risk_signals"]) > 0
 
 
-async def test_match_token_patterns_clean_token():
+async def test_match_token_patterns_clean_token() -> None:
     token = {
         "address": "0xabc",
         "chain": "ethereum",
@@ -136,11 +136,11 @@ async def test_match_token_patterns_clean_token():
     assert result["matched_patterns"] == []
 
 
-def test_score_scam_risk_unknown_when_empty():
+def test_score_scam_risk_unknown_when_empty() -> None:
     assert score_scam_risk([], [])["risk"] == "unknown"
 
 
-def test_score_scam_risk_high():
+def test_score_scam_risk_high() -> None:
     matches = [
         {
             "name": "mixer-funded-deployer",
@@ -154,7 +154,7 @@ def test_score_scam_risk_high():
     assert verdict["top_pattern"] == "mixer-funded-deployer"
 
 
-def test_score_scam_risk_medium():
+def test_score_scam_risk_medium() -> None:
     # Two moderate signals → medium (single 0.35 signal alone is low).
     matches = [
         {

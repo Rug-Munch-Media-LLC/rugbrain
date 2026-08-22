@@ -14,6 +14,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -71,7 +72,7 @@ def make_doc_id(address: str, source: str) -> str:
     return hashlib.sha256(f"known_scams:{address.lower()}:{source}".encode()).hexdigest()[:16]
 
 
-async def ingest_via_api(content: str, metadata: dict) -> bool:
+async def ingest_via_api(content: str, metadata: dict[str, Any]) -> bool:
     try:
         import httpx
 
@@ -84,7 +85,7 @@ async def ingest_via_api(content: str, metadata: dict) -> bool:
         return False
 
 
-async def ingest_yaml():
+async def ingest_yaml() -> dict[str, int]:
     """Parse the YAML blacklist and ingest entries with addresses."""
     yaml_path = os.path.join(DATA_DIR, "cryptoscamdb_urls.yaml")
     if not Path(yaml_path).exists():  # noqa: ASYNC240
@@ -92,8 +93,8 @@ async def ingest_yaml():
         return {"ingested": 0, "no_address": 0}
 
     # Simple YAML parser (avoid pyyaml dependency for this structure)
-    entries = []
-    current = {}
+    entries: list[dict[str, Any]] = []
+    current: dict[str, Any] = {}
     with open(yaml_path, encoding="utf-8", errors="replace") as f:  # noqa: ASYNC230
         for line in f:
             stripped = line.rstrip()
@@ -119,7 +120,7 @@ async def ingest_yaml():
                 addr = (
                     stripped.split('"')[-2] if '"' in stripped else stripped.split("-")[-1].strip()
                 )
-                current.setdefault("addresses", []).append(addr)  # type: ignore[arg-type,attr-defined]
+                current.setdefault("addresses", []).append(addr)
             elif stripped.startswith("    BTC:"):
                 current["chain"] = "bitcoin"
             elif stripped.startswith(("    BSC:", "    BNB:")):
@@ -182,7 +183,7 @@ async def ingest_yaml():
     return {"ingested": ingested, "no_address": no_address}
 
 
-async def main():
+async def main() -> None:
     yaml_available = await asyncio.to_thread(_ensure_yaml)
     result = await ingest_yaml()
     logger.info(f"Final: {result}")

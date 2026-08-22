@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,16 +12,16 @@ import pytest
 # installed package; this makes the scheduler testable in-process).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import ingest_continuous as mod  # type: ignore[import-not-found]
+import ingest_continuous as mod
 
 
-def _no_redis(monkeypatch) -> None:
+def _no_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force the Redis client to fail fast so state falls back to memory."""
     monkeypatch.setattr(mod, "REDIS_HOST", "127.0.0.1")
     monkeypatch.setattr(mod, "REDIS_PORT", 1)
 
 
-def test_jobs_cadence():
+def test_jobs_cadence() -> None:
     names = {j.name: j.interval for j in mod.JOBS}
     assert names["security_alerts"] == 5 * 60
     assert names["market_snapshot"] == 5 * 60
@@ -30,12 +31,12 @@ def test_jobs_cadence():
     assert names["full_recrawl"] == 6 * 60 * 60
 
 
-def test_get_job():
+def test_get_job() -> None:
     assert mod.get_job("news_crawl") is not None
     assert mod.get_job("does_not_exist") is None
 
 
-async def test_checkpoint_store_memory_fallback(monkeypatch):
+async def test_checkpoint_store_memory_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
     assert await store.last_run("job1") is None
@@ -48,12 +49,12 @@ async def test_checkpoint_store_memory_fallback(monkeypatch):
     assert await store.last_run("job1") is None
 
 
-async def test_run_job_due_marks_checkpoint(monkeypatch):
+async def test_run_job_due_marks_checkpoint(monkeypatch: pytest.MonkeyPatch) -> Any:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
     calls: list[bool] = []
 
-    async def fake_run(dry_run: bool) -> dict:
+    async def fake_run(dry_run: bool) -> Any:
         calls.append(dry_run)
         return {"ok": True}
 
@@ -69,11 +70,11 @@ async def test_run_job_due_marks_checkpoint(monkeypatch):
     assert len(calls) == 1
 
 
-async def test_run_job_failure_does_not_checkpoint(monkeypatch):
+async def test_run_job_failure_does_not_checkpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
 
-    async def boom(dry_run: bool) -> dict:
+    async def boom(dry_run: bool) -> dict[str, Any]:
         raise RuntimeError("boom")
 
     job = mod.Job("boom", 60, boom)
@@ -83,13 +84,13 @@ async def test_run_job_failure_does_not_checkpoint(monkeypatch):
     assert await store.last_run("boom") is None  # retried next tick
 
 
-async def test_run_job_force_runs_regardless(monkeypatch):
+async def test_run_job_force_runs_regardless(monkeypatch: pytest.MonkeyPatch) -> Any:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
     await store.mark("forced", 0.0)
     calls = 0
 
-    async def fake_run(dry_run: bool) -> dict:
+    async def fake_run(dry_run: bool) -> Any:
         nonlocal calls
         calls += 1
         return {"ok": True}
@@ -101,7 +102,7 @@ async def test_run_job_force_runs_regardless(monkeypatch):
 
 
 @pytest.mark.integration
-async def test_run_due_filters_by_names(monkeypatch):
+async def test_run_due_filters_by_names(monkeypatch: pytest.MonkeyPatch) -> None:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
     results = await mod.run_due(store, names=("security_alerts", "market_snapshot"))
@@ -109,10 +110,13 @@ async def test_run_due_filters_by_names(monkeypatch):
     assert {r["job"] for r in results} == {"security_alerts", "market_snapshot"}
 
 
-async def test_job_market_snapshot_wiring(monkeypatch):
-    from rugbrain import market_snapshot as ms
+async def test_job_market_snapshot_wiring(monkeypatch: pytest.MonkeyPatch) -> Any:
+    import importlib
 
-    async def fake_build(client=None):
+    mod = importlib.import_module("rugbrain.market_snapshot")
+    ms = mod
+
+    async def fake_build(client: Any = None) -> Any:
         return {
             "generated_at": "2026-08-04T00:00:00Z",
             "fear_greed": {"value": 50, "classification": "neutral"},
@@ -129,7 +133,7 @@ async def test_job_market_snapshot_wiring(monkeypatch):
     assert dry["stored"] is False
 
 
-async def test_checkpoint_store_redis_unreachable_returns_none(monkeypatch):
+async def test_checkpoint_store_redis_unreachable_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     _no_redis(monkeypatch)
     store = mod.CheckpointStore()
     client = await store._client()

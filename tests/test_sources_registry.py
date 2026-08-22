@@ -1,13 +1,18 @@
-"""Tests for rugbrain.sources_registry — additional data source pipelines."""
 
 from __future__ import annotations
 
+import importlib as _il
+from typing import Any
+
+import pytest
 import respx
 
-from rugbrain import sources_registry as mod
+sources_registry = _il.import_module("rugbrain.sources_registry")
+
+mod = sources_registry
 
 
-def test_all_requested_sources_present():
+def test_all_requested_sources_present() -> None:
     names = {s.name for s in mod.NEW_SOURCES}
     for expected in (
         "cryptopanic",
@@ -24,16 +29,22 @@ def test_all_requested_sources_present():
         assert expected in names, f"missing source: {expected}"
 
 
-def test_get_source():
+def test_get_source() -> None:
     assert mod.get_source("cryptopanic") is not None
     assert mod.get_source("does_not_exist") is None
 
 
-async def test_fetch_source_rss(monkeypatch):
+async def test_fetch_source_rss(monkeypatch: pytest.MonkeyPatch) -> Any:
     cfg = mod.get_source("week_in_ethereum")
     assert cfg is not None and cfg.kind == "rss"
 
-    async def fake_feed(url, source, collection, category, limit=15):
+    async def fake_feed(
+        url: Any,
+        source: Any,
+        collection: Any,
+        category: Any,
+        limit: int = 15,
+    ) -> Any:
         return [
             mod.doc_from_article(
                 title="WIE",
@@ -52,7 +63,7 @@ async def test_fetch_source_rss(monkeypatch):
 
 
 @respx.mock
-async def test_fetch_source_cryptopanic_api(monkeypatch):
+async def test_fetch_source_cryptopanic_api(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CRYPTOPANIC_API_TOKEN", "test-token")
     respx.get("https://cryptopanic.com/api/v1/posts/").respond(
         200,
@@ -76,7 +87,7 @@ async def test_fetch_source_cryptopanic_api(monkeypatch):
     assert docs[0].metadata["upvotes"] == 5
 
 
-async def test_fetch_source_cryptopanic_no_token(monkeypatch):
+async def test_fetch_source_cryptopanic_no_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CRYPTOPANIC_API_TOKEN", raising=False)
     cfg = mod.get_source("cryptopanic")
     assert cfg is not None
@@ -84,17 +95,23 @@ async def test_fetch_source_cryptopanic_no_token(monkeypatch):
     assert docs == []
 
 
-async def test_fetch_source_rss_or_crawl_fallback(monkeypatch):
+async def test_fetch_source_rss_or_crawl_fallback(monkeypatch: pytest.MonkeyPatch) -> Any:
     cfg = mod.get_source("bankless")
     assert cfg is not None and cfg.kind == "rss_or_crawl"
 
-    async def fake_feed_empty(*a, **k):
+    async def fake_feed_empty(*a: Any, **k: Any) -> Any:
         return []
 
     monkeypatch.setattr(mod, "fetch_rss_feed", fake_feed_empty)
     c = mod.WebCrawler()
 
-    async def fake_crawl(url, source="", category="", collection="default", published=""):
+    async def fake_crawl(
+        url: Any,
+        source: str = "",
+        category: str = "",
+        collection: str = "default",
+        published: str = "",
+    ) -> Any:
         return mod.doc_from_article(
             title="Bankless",
             content="archive",
@@ -110,12 +127,18 @@ async def test_fetch_source_rss_or_crawl_fallback(monkeypatch):
     assert docs[0].url == cfg.urls[1]  # fell back to the archive URL
 
 
-async def test_fetch_source_crawl(monkeypatch):
+async def test_fetch_source_crawl(monkeypatch: pytest.MonkeyPatch) -> Any:
     cfg = mod.get_source("eips_ethereum")
     assert cfg is not None and cfg.kind == "crawl"
     c = mod.WebCrawler()
 
-    async def fake_crawl(url, source="", category="", collection="default", published=""):
+    async def fake_crawl(
+        url: Any,
+        source: str = "",
+        category: str = "",
+        collection: str = "default",
+        published: str = "",
+    ) -> Any:
         return mod.doc_from_article(
             title="EIP",
             content="standards",
@@ -131,10 +154,15 @@ async def test_fetch_source_crawl(monkeypatch):
     assert docs[0].source == "eips_ethereum"
 
 
-async def test_ingest_all_sources_dry_run(monkeypatch):
+async def test_ingest_all_sources_dry_run(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
 
-    async def fake_fetch(cfg, crawler=None, client=None, limit=15):
+    async def fake_fetch(
+        cfg: Any,
+        crawler: Any = None,
+        client: Any = None,
+        limit: int = 15,
+    ) -> Any:
         return [
             mod.doc_from_article(
                 title=cfg.name,

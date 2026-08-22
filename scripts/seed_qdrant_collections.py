@@ -103,7 +103,8 @@ def _normalize(vec: list[float]) -> list[float]:
     n = float(np.linalg.norm(arr))
     if n > 0:
         arr = arr / n
-    return arr.tolist()
+    _vec: list[float] = arr.tolist()
+    return _vec
 
 
 async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list[float]]:
@@ -615,7 +616,8 @@ async def _fetch_metamask() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=40.0) as c:
             r = await c.get(METAMASK_URL, headers={"User-Agent": "RMI-RAG/1.0"})
             if r.status_code == 200:
-                return r.json()
+                _payload: dict[str, Any] = r.json()
+                return _payload
     except Exception as e:
         logger.warning("metamask_fetch_failed: %s", str(e)[:120])
     return {}
@@ -768,8 +770,8 @@ def load_agent_memory() -> list[dict[str, Any]]:
             "tags": ["solana", "token2022", "transfer_hook"],
         },
     ]
-    for e in entities:
-        slug = e["name"].lower().replace(" ", "_")
+    for e in list(entities):
+        slug = str(e["name"]).lower().replace(" ", "_")
         docs.append(
             {
                 "doc_id": f"agent_memory:entity:{slug}",
@@ -851,8 +853,8 @@ def load_community() -> list[dict[str, Any]]:
             "tags": ["bridge", "cross_chain", "security"],
         },
     ]
-    for t in topics:
-        slug = t["topic"].lower().replace(" ", "_")
+    for t in list(topics):
+        slug = str(t["topic"]).lower().replace(" ", "_")
         docs.append(
             {
                 "doc_id": f"community:topic:{slug}",

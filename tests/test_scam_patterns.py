@@ -7,6 +7,8 @@ patterns without any external services (pure function tests).
 
 from __future__ import annotations
 
+from typing import Any
+
 from rugbrain.scam_patterns import (
     build_token_scam_profile,
     detect_attack_vectors,
@@ -25,7 +27,7 @@ def _doc(
     severity: str = "critical",
     amount: float | str | None = 1_500_000,
     source_url: str = "https://github.com/SunWeb3Sec/DeFiHackLabs",
-) -> dict:
+) -> dict[str, Any]:
     return {
         "content": content,
         "metadata": {
@@ -60,32 +62,32 @@ function attack() external {
 """
 
 
-def test_detect_attack_vectors_reentrancy():
+def test_detect_attack_vectors_reentrancy() -> None:
     vectors = detect_attack_vectors(REENTRANCY_CODE)
     assert "reentrancy" in vectors
 
 
-def test_detect_attack_vectors_flash_loan():
+def test_detect_attack_vectors_flash_loan() -> None:
     vectors = detect_attack_vectors(FLASH_LOAN_CODE)
     assert "flash-loan" in vectors
 
 
-def test_detect_attack_vectors_unknown_defaults():
+def test_detect_attack_vectors_unknown_defaults() -> None:
     assert detect_attack_vectors("just a plain comment") == ["unknown"]
 
 
-def test_detect_indicators_unchecked_external_call():
+def test_detect_indicators_unchecked_external_call() -> None:
     indicators = detect_indicators(REENTRANCY_CODE)
     assert "reentrancy-guard-missing" in indicators
     assert "unchecked-external-call" in indicators
 
 
-def test_detect_indicators_empty_code():
+def test_detect_indicators_empty_code() -> None:
     assert detect_indicators("") == []
-    assert detect_indicators(None) == []  # type: ignore[arg-type]
+    assert detect_indicators(None) == []
 
 
-def test_extract_scam_patterns_groups_by_vector():
+def test_extract_scam_patterns_groups_by_vector() -> None:
     docs = [
         _doc(REENTRANCY_CODE, protocol="Agave", attack_vector="reentrancy"),
         _doc(REENTRANCY_CODE, protocol="Another", attack_vector="reentrancy"),
@@ -107,24 +109,24 @@ def test_extract_scam_patterns_groups_by_vector():
     assert reentrancy["reference_incidents"]
 
 
-def test_extract_scam_patterns_uses_metadata_when_vector_unknown():
+def test_extract_scam_patterns_uses_metadata_when_vector_unknown() -> None:
     docs = [_doc(REENTRANCY_CODE, attack_vector="unknown", category="rug-pull")]
     patterns = extract_scam_patterns_from_docs(docs)
     # Content keyword detection should recover reentrancy.
     assert patterns[0]["attack_type"] == "reentrancy"
 
 
-def test_extract_scam_patterns_string_amount():
+def test_extract_scam_patterns_string_amount() -> None:
     docs = [_doc(REENTRANCY_CODE, amount="$2.5M")]
     patterns = extract_scam_patterns_from_docs(docs)
     assert patterns[0]["funds_lost"] == 2_500_000.0
 
 
-def test_extract_scam_patterns_empty():
+def test_extract_scam_patterns_empty() -> None:
     assert extract_scam_patterns_from_docs([]) == []
 
 
-def test_extract_scam_patterns_severity_aggregation():
+def test_extract_scam_patterns_severity_aggregation() -> None:
     docs = [
         _doc(REENTRANCY_CODE, severity="low"),
         _doc(REENTRANCY_CODE, severity="high"),
@@ -133,7 +135,7 @@ def test_extract_scam_patterns_severity_aggregation():
     assert patterns[0]["severity"] == "high"
 
 
-def test_build_token_scam_profile_merges_nested_metadata():
+def test_build_token_scam_profile_merges_nested_metadata() -> None:
     token = {
         "token_address": "0xabc",
         "chain": "bsc",

@@ -24,6 +24,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -61,23 +62,24 @@ HOT_FIRST = (
 INSTRUCT = "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: {}"
 
 
-def _load_state() -> dict:
+def _load_state() -> dict[str, Any]:
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            loaded: dict[str, Any] = json.loads(STATE_FILE.read_text())
+            return loaded
         except Exception:
             return {}
     return {}
 
 
-def _save_state(state: dict) -> None:
+def _save_state(state: dict[str, Any]) -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=1))
     tmp.replace(STATE_FILE)
 
 
-def _extract_text(payload: dict) -> str:
+def _extract_text(payload: dict[str, Any]) -> str:
     for f in TEXT_FIELDS:
         v = payload.get(f) or (payload.get("metadata") or {}).get(f)
         if isinstance(v, str) and v.strip():
@@ -93,10 +95,10 @@ async def _supports_sparse(client: httpx.AsyncClient, collection: str) -> bool:
     return isinstance(vectors, dict) and "bm25" in vectors
 
 
-def _embed_payload(texts: list[str]) -> dict:
+def _embed_payload(texts: list[str]) -> dict[str, Any]:
     """Build /v1/embeddings body. API embedders need model+dimensions;
     local llama.cpp ignores unknown fields."""
-    payload: dict = {"input": texts}
+    payload: dict[str, Any] = {"input": texts}
     if EMBEDDER_MODEL:
         payload["model"] = EMBEDDER_MODEL
         payload["dimensions"] = EMBEDDER_DIMS
@@ -127,13 +129,14 @@ async def _embed_query(client: httpx.AsyncClient, query: str) -> list[float]:
     )
     if resp.status_code != 200:
         raise _EmbedHTTPError(resp.status_code, resp.text)
-    return resp.json()["data"][0]["embedding"]
+    embedding: list[float] = resp.json()["data"][0]["embedding"]
+    return embedding
 
 
-async def _sparse_for(text: str) -> dict | None:
+async def _sparse_for(text: str) -> dict[str, Any] | None:
     """Reuse rugbrain's fastembed BM25 sparse (mirrors qdrant_store.insert)."""
     try:
-        from rugbrain.qdrant_store import _embed_sparse  # type: ignore
+        from rugbrain.qdrant_store import _embed_sparse
 
         sparse = await _embed_sparse(text)
         if sparse is not None:
@@ -146,12 +149,12 @@ async def _sparse_for(text: str) -> dict | None:
 async def migrate_collection(
     client: httpx.AsyncClient,
     name: str,
-    state: dict,
+    state: dict[str, Any],
     batch: int,
     limit: int,
     skip_sparse: bool = False,
     concurrent: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Re-embed one collection. Sequential per collection; collections run
     concurrently via asyncio.gather in main() (matches llama.cpp --parallel)."""
     info = (await client.get(f"{LEGACY}/collections/{name}")).json()["result"]
@@ -203,7 +206,7 @@ async def migrate_collection(
                 points_to_upsert = []
                 for i, vec in enumerate(vecs):
                     point = {"id": ids[i], "payload": payloads[i]}
-                    vector: dict = {"dense": vec}
+                    vector: dict[str, Any] = {"dense": vec}
                     if supports_sparse and not skip_sparse:
                         sp = await _sparse_for(texts[i])
                         if sp is not None:
@@ -362,7 +365,7 @@ async def main() -> int:
         # per-collection, so parallel collections never clobber each other.
         sem = asyncio.Semaphore(max(1, args.concurrent))
 
-        async def _run(c: str) -> dict:
+        async def _run(c: str) -> dict[str, Any]:
             async with sem:
                 return await migrate_collection(
                     client, c, state, args.batch, args.limit, args.skip_sparse, args.concurrent

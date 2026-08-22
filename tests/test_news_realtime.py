@@ -3,39 +3,44 @@
 from __future__ import annotations
 
 import asyncio
+import importlib as _il
+from typing import Any
 
 import pytest
 
-from rugbrain import news_realtime as nrt
+news_realtime = _il.import_module("rugbrain.news_realtime")
+
+mod = news_realtime
+nrt = news_realtime
 from rugbrain.news_clustering import Story, StorySource
 
 # ── publish_story_update ──────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_publish_story_update_success(monkeypatch):
+async def test_publish_story_update_success(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Publishes the story payload on the news.story.updated subject."""
 
     class FakeBus:
-        def __init__(self, subject=None):
+        def __init__(self, subject: Any = None) -> None:
             self.subject = subject
             self.payload = None
 
-        async def connect(self):
+        async def connect(self) -> str:
             return "redis"
 
-        async def publish_payload(self, payload):
+        async def publish_payload(self, payload: Any) -> bool:
             self.payload = payload
             return True
 
-        async def close(self):
+        async def close(self) -> None:
             return None
 
-    captured: dict = {}
+    captured: dict[str, Any] = {}
     import rugbrain.alerts as alerts
 
     class FakeAlertBus(FakeBus):
-        def __init__(self, subject=None):
+        def __init__(self, subject: Any = None) -> None:
             super().__init__(subject=subject)
             captured["subject"] = subject
 
@@ -47,20 +52,20 @@ async def test_publish_story_update_success(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_publish_story_update_fails_open(monkeypatch):
+async def test_publish_story_update_fails_open(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Bus connect failure -> publish returns False, never raises."""
 
     class BoomBus:
-        def __init__(self, subject=None):
+        def __init__(self, subject: Any = None) -> None:
             pass
 
-        async def connect(self):
+        async def connect(self) -> None:
             raise RuntimeError("no bus")
 
-        async def publish_payload(self, payload):
+        async def publish_payload(self, payload: Any) -> bool:
             return False
 
-        async def close(self):
+        async def close(self) -> None:
             return None
 
     import rugbrain.alerts as alerts
@@ -73,7 +78,7 @@ async def test_publish_story_update_fails_open(monkeypatch):
 # ── process_news_batch ────────────────────────────────────────────────────
 
 
-def _article(article_id: str, title: str, url: str, published: str) -> dict:
+def _article(article_id: str, title: str, url: str, published: str) -> dict[str, Any]:
     return {
         "id": article_id,
         "title": title,
@@ -85,12 +90,12 @@ def _article(article_id: str, title: str, url: str, published: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_process_news_batch_empty():
+async def test_process_news_batch_empty() -> None:
     assert await nrt.process_news_batch([]) == []
 
 
 @pytest.mark.asyncio
-async def test_process_news_batch_creates_story(monkeypatch):
+async def test_process_news_batch_creates_story(monkeypatch: pytest.MonkeyPatch) -> Any:
     """New articles with no matching story create a fresh story."""
     articles = [
         _article(
@@ -101,22 +106,24 @@ async def test_process_news_batch_creates_story(monkeypatch):
         ),
     ]
 
-    async def fake_find_matching(title, embedding, threshold):
+    async def fake_find_matching(title: Any, embedding: Any, threshold: Any) -> None:
         return None
 
-    async def fake_cluster_articles(articles, threshold=0.72):
+    async def fake_cluster_articles(
+        articles: Any, threshold: float = 0.72
+    ) -> Any:
         from rugbrain.news_clustering import build_story
 
         return [build_story(articles)]
 
-    async def fake_rank_story(story):
+    async def fake_rank_story(story: Any) -> Any:
         story.composite_score = 88.0
         return story
 
-    async def fake_store_story(story):
+    async def fake_store_story(story: Any) -> Any:
         return True
 
-    async def fake_publish(story):
+    async def fake_publish(story: Any) -> Any:
         return True
 
     import rugbrain.news_ranking as rk
@@ -130,7 +137,7 @@ async def test_process_news_batch_creates_story(monkeypatch):
     monkeypatch.setattr(rk, "store_story", fake_store_story)
 
     # Embedding works (zero vector) so unmatched path is exercised.
-    async def fake_get_embedding(text):
+    async def fake_get_embedding(text: Any) -> list[float]:
         return [1.0] * 4
 
     import rugbrain.embeddings as emb
@@ -143,7 +150,7 @@ async def test_process_news_batch_creates_story(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_process_news_batch_extends_existing(monkeypatch):
+async def test_process_news_batch_extends_existing(monkeypatch: pytest.MonkeyPatch) -> Any:
     """An article matching an existing story extends it (no new story)."""
     existing = Story(
         id="story-x",
@@ -163,17 +170,19 @@ async def test_process_news_batch_extends_existing(monkeypatch):
         "a2", "Ethereum ETF gets green light", "https://theblock.co/2", "2026-08-05T10:00:00Z"
     )
 
-    async def fake_find_matching(title, embedding, threshold):
+    async def fake_find_matching(
+            title: Any, embedding: Any, threshold: Any
+        ) -> Any:
         return existing
 
-    async def fake_rank_story(story):
+    async def fake_rank_story(story: Any) -> Any:
         story.composite_score = 90.0
         return story
 
-    async def fake_store_story(story):
+    async def fake_store_story(story: Any) -> Any:
         return True
 
-    async def fake_publish(story):
+    async def fake_publish(story: Any) -> Any:
         return True
 
     import rugbrain.news_realtime as mod
@@ -183,7 +192,7 @@ async def test_process_news_batch_extends_existing(monkeypatch):
     monkeypatch.setattr(mod, "store_story", fake_store_story)
     monkeypatch.setattr(mod, "publish_story_update", fake_publish)
 
-    async def fake_get_embedding(text):
+    async def fake_get_embedding(text: Any) -> list[float]:
         return [1.0] * 4
 
     import rugbrain.embeddings as emb
@@ -199,7 +208,7 @@ async def test_process_news_batch_extends_existing(monkeypatch):
 # ── merge helper ──────────────────────────────────────────────────────────
 
 
-def test_merge_article_into_story_deduplicates_by_url():
+def test_merge_article_into_story_deduplicates_by_url() -> None:
     story = Story(
         id="story-x",
         title="Ethereum ETF approved",
@@ -231,7 +240,7 @@ def test_merge_article_into_story_deduplicates_by_url():
 
 
 @pytest.mark.asyncio
-async def test_updater_start_stop():
+async def test_updater_start_stop() -> None:
     await nrt.start_news_story_updater()
     assert nrt.is_news_story_updater_running() is True
     await asyncio.sleep(0.05)

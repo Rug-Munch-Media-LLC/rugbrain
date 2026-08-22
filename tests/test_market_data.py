@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import importlib as _il
+
+import pytest
 import respx
 
-from rugbrain import market_data as mod
+market_data = _il.import_module("rugbrain.market_data")
+
+mod = market_data
 
 TICKERS_PAYLOAD = [
     {
@@ -66,7 +71,7 @@ LUNARCRUSH_PAYLOAD = {
 }
 
 
-def test_top_gainers_losers_most_traded():
+def test_top_gainers_losers_most_traded() -> None:
     # Normalized rows shaped like fetch_coinpaprika_tickers output.
     tickers = [
         {
@@ -103,7 +108,7 @@ def test_top_gainers_losers_most_traded():
     assert len(mod.top_gainers(tickers, limit=2)) == 2
 
 
-def test_enrich_with_social_merges_by_symbol():
+def test_enrich_with_social_merges_by_symbol() -> None:
     tickers = [
         {
             "symbol": "AAA",
@@ -140,7 +145,7 @@ def test_enrich_with_social_merges_by_symbol():
 
 
 @respx.mock
-async def test_fetch_coinpaprika_tickers_maps_rows():
+async def test_fetch_coinpaprika_tickers_maps_rows() -> None:
     respx.get("https://api.coinpaprika.com/v1/tickers").respond(200, json=TICKERS_PAYLOAD)
     rows = await mod.fetch_coinpaprika_tickers()
     assert len(rows) == 3
@@ -150,13 +155,13 @@ async def test_fetch_coinpaprika_tickers_maps_rows():
 
 
 @respx.mock
-async def test_fetch_coinpaprika_tickers_error_returns_empty():
+async def test_fetch_coinpaprika_tickers_error_returns_empty() -> None:
     respx.get("https://api.coinpaprika.com/v1/tickers").respond(500, json={})
     assert await mod.fetch_coinpaprika_tickers() == []
 
 
 @respx.mock
-async def test_fetch_coinpaprika_new():
+async def test_fetch_coinpaprika_new() -> None:
     respx.get("https://api.coinpaprika.com/v1/coins/new").respond(200, json=NEW_PAYLOAD)
     coins = await mod.fetch_coinpaprika_new()
     assert len(coins) == 2
@@ -164,13 +169,13 @@ async def test_fetch_coinpaprika_new():
     assert coins[0]["is_new"] is True
 
 
-async def test_fetch_lunarcrush_disabled_without_key(monkeypatch):
+async def test_fetch_lunarcrush_disabled_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LUNARCRUSH_API_KEY", raising=False)
     assert await mod.fetch_lunarcrush_social() == []
 
 
 @respx.mock
-async def test_fetch_lunarcrush_social_with_key(monkeypatch):
+async def test_fetch_lunarcrush_social_with_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LUNARCRUSH_API_KEY", "test-key")
     respx.get("https://lunarcrush.com/api/v2").respond(200, json=LUNARCRUSH_PAYLOAD)
     rows = await mod.fetch_lunarcrush_social()
@@ -180,7 +185,7 @@ async def test_fetch_lunarcrush_social_with_key(monkeypatch):
 
 
 @respx.mock
-async def test_market_ticker_snapshot_combined(monkeypatch):
+async def test_market_ticker_snapshot_combined(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LUNARCRUSH_API_KEY", "test-key")
     respx.get("https://api.coinpaprika.com/v1/tickers").respond(200, json=TICKERS_PAYLOAD)
     respx.get("https://api.coinpaprika.com/v1/coins/new").respond(200, json=NEW_PAYLOAD)

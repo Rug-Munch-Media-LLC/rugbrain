@@ -16,6 +16,8 @@ All unit tests: no external services required.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rugbrain.app_chunking import _CODE_SPAN_RE, code_chunk, recursive_chunk
 from rugbrain.search.engine import (
     CODING_COLLECTIONS,
@@ -27,11 +29,10 @@ from rugbrain.search.engine import (
 )
 from rugbrain.search_service import search_coding_knowledge
 
-
 # ── 1. code-intent detection (regex term tier) ─────────────────────────
 
 
-def test_detect_coding_query_code_term_tier():
+def test_detect_coding_query_code_term_tier() -> None:
     # Terms the phrase hints alone did not cover.
     assert detect_coding_query("what is the ABI of a function")
     assert detect_coding_query("function selector collision")
@@ -41,7 +42,7 @@ def test_detect_coding_query_code_term_tier():
     assert detect_coding_query("what is the ABI")
 
 
-def test_detect_coding_query_reentrancy_needs_code_context():
+def test_detect_coding_query_reentrancy_needs_code_context() -> None:
     # "reentrancy" alone (exploit framing) is NOT coding; paired with code
     # terms or a "how does" phrasing it is.
     assert not detect_coding_query("reentrancy hack 2023")
@@ -49,7 +50,7 @@ def test_detect_coding_query_reentrancy_needs_code_context():
     assert detect_coding_query("reentrancy attack code")
 
 
-def test_detect_coding_query_preserves_non_code_negatives():
+def test_detect_coding_query_preserves_non_code_negatives() -> None:
     assert not detect_coding_query("")
     assert not detect_coding_query("bitcoin price today")
     assert not detect_coding_query("ethereum whale activity")
@@ -59,7 +60,7 @@ def test_detect_coding_query_preserves_non_code_negatives():
     assert not detect_coding_query("exploit code")
 
 
-def test_code_term_queries_route_to_coding_collections():
+def test_code_term_queries_route_to_coding_collections() -> None:
     routed = resolve_search_collections(None, "what is the ABI of a function")
     assert routed[: len(CODING_COLLECTIONS)] == list(CODING_COLLECTIONS)
 
@@ -67,7 +68,7 @@ def test_code_term_queries_route_to_coding_collections():
 # ── 2. code-chunk bias + answer formatting ─────────────────────────────
 
 
-def test_bias_toward_code_chunks_orders_code_first_for_code_query():
+def test_bias_toward_code_chunks_orders_code_first_for_code_query() -> None:
     results = [
         {"content": "prose explanation without code", "similarity": 0.86},
         {"content": "contract Vault { function rescue() external {} }", "similarity": 0.85},
@@ -76,7 +77,7 @@ def test_bias_toward_code_chunks_orders_code_first_for_code_query():
     assert biased[0]["content"].startswith("contract Vault")
 
 
-def test_bias_toward_code_chunks_passthrough_for_non_code_query():
+def test_bias_toward_code_chunks_passthrough_for_non_code_query() -> None:
     results = [
         {"content": "contract Vault { function rescue() external {} }", "similarity": 0.5},
         {"content": "general prose", "similarity": 0.9},
@@ -85,7 +86,7 @@ def test_bias_toward_code_chunks_passthrough_for_non_code_query():
     assert biased == results
 
 
-def test_bias_respects_doc_type_metadata():
+def test_bias_respects_doc_type_metadata() -> None:
     # A chunk typed as contract_code is code even when the marker regex
     # cannot tell from content alone.
     results = [
@@ -100,7 +101,7 @@ def test_bias_respects_doc_type_metadata():
     assert biased[0]["metadata"]["doc_type"] == "contract_code"
 
 
-def test_extract_code_blocks_preserves_fence_and_language():
+def test_extract_code_blocks_preserves_fence_and_language() -> None:
     content = (
         "Here is the fix:\n"
         "```solidity\n"
@@ -115,7 +116,7 @@ def test_extract_code_blocks_preserves_fence_and_language():
     assert "function rescue() external" in blocks[0]["code"]
 
 
-def test_format_code_answer_surfaces_code_block_intact():
+def test_format_code_answer_surfaces_code_block_intact() -> None:
     content = (
         "Fix with a guard:\n```solidity\nmodifier nonReentrant() { _; }\n```\nUse it on withdraw."
     )
@@ -127,7 +128,7 @@ def test_format_code_answer_surfaces_code_block_intact():
     assert format_code_answer("just prose here") == "just prose here"
 
 
-def test_search_coding_knowledge_surfaces_code_blocks():
+def test_search_coding_knowledge_surfaces_code_blocks() -> Any:
     import asyncio
 
     import rugbrain.search.engine as engine_mod
@@ -146,7 +147,7 @@ def test_search_coding_knowledge_surfaces_code_blocks():
         {"content": "prose about CEI ordering", "similarity": 0.8},
     ]
 
-    async def fake_search(query, collections, limit=10, min_similarity=0.4):
+    async def fake_search(query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4) -> Any:
         return [dict(r) for r in results]
 
     original = engine_mod.search_multi_collection
@@ -167,7 +168,7 @@ def test_search_coding_knowledge_surfaces_code_blocks():
 # ── 3. chunker hardening: inline code-span protection ──────────────────
 
 
-def test_code_span_regex_defined_and_matches():
+def test_code_span_regex_defined_and_matches() -> None:
     assert _CODE_SPAN_RE.search("call `transfer` now") is not None
     assert _CODE_SPAN_RE.search("use ``msg.sender`` here") is not None
     # Triple fences are handled by the fence protection; unmatched backticks
@@ -187,7 +188,7 @@ def _assert_span_intact(chunks: list[str], span: str) -> None:
     )
 
 
-def test_recursive_chunk_keeps_inline_code_span_intact():
+def test_recursive_chunk_keeps_inline_code_span_intact() -> None:
     para = (
         "Call `transfer` to move tokens; the `transfer` function reverts when "
         "the balance is insufficient and never re-enters the caller. "
@@ -199,7 +200,7 @@ def test_recursive_chunk_keeps_inline_code_span_intact():
         _assert_span_intact(chunks, span)
 
 
-def test_code_chunk_keeps_inline_code_span_intact():
+def test_code_chunk_keeps_inline_code_span_intact() -> None:
     src = (
         "// Use `deposit` for ETH inflow and `withdraw` for outflows.\n"
         "contract Vault {\n"

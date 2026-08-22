@@ -7,16 +7,21 @@ fetching (httpx MockTransport), awareness scoring, and snapshot building.
 
 from __future__ import annotations
 
+import importlib as _il
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
+import pytest
 
-from rugbrain import market_awareness as mod
+market_awareness = _il.import_module("rugbrain.market_awareness")
+
+mod = market_awareness
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
-def test_fng_classification():
+def test_fng_classification() -> None:
     assert mod._fng_classification(10) == "fearful"
     assert mod._fng_classification(29) == "fearful"
     assert mod._fng_classification(50) == "neutral"
@@ -24,7 +29,7 @@ def test_fng_classification():
     assert mod._fng_classification(80) == "greedy"
 
 
-def test_suspicious_profile():
+def test_suspicious_profile() -> None:
     assert mod._suspicious_profile({"links": []}) is True
     assert (
         mod._suspicious_profile({"links": [{"label": "Website", "url": "https://x.com"}]}) is False
@@ -37,11 +42,11 @@ def test_suspicious_profile():
 # ── Fetching (mocked HTTP) ───────────────────────────────────────────────
 
 
-def _make_transport(json_payload, status=200):
+def _make_transport(json_payload: Any, status: int = 200) -> Any:
     return httpx.MockTransport(handler=lambda request: httpx.Response(status, json=json_payload))
 
 
-async def test_fetch_recent_exploits_window():
+async def test_fetch_recent_exploits_window() -> None:
     now = datetime.now(UTC).timestamp()
     payload = [
         {
@@ -69,7 +74,7 @@ async def test_fetch_recent_exploits_window():
     assert exploits[0]["amount_lost_usd"] == 5000000
 
 
-async def test_fetch_recent_exploits_error():
+async def test_fetch_recent_exploits_error() -> None:
     client = httpx.AsyncClient(transport=_make_transport({}, status=500))
     try:
         exploits = await mod.fetch_recent_exploits(client)
@@ -78,7 +83,7 @@ async def test_fetch_recent_exploits_error():
     assert exploits == []
 
 
-async def test_fetch_trending_scams():
+async def test_fetch_trending_scams() -> Any:
     profiles = [
         {
             "tokenAddress": "0xabc",
@@ -114,7 +119,7 @@ async def test_fetch_trending_scams():
     assert "Tiny Coin" in tokens
 
 
-async def test_fetch_market_sentiment():
+async def test_fetch_market_sentiment() -> None:
     client = httpx.AsyncClient(transport=_make_transport({"data": [{"value": "15"}]}))
     try:
         sentiment = await mod.fetch_market_sentiment(client)
@@ -126,7 +131,7 @@ async def test_fetch_market_sentiment():
 # ── Scoring ──────────────────────────────────────────────────────────────
 
 
-def test_score_awareness_exploit_match():
+def test_score_awareness_exploit_match() -> None:
     snapshot = {
         "recent_exploits": [{"protocol": "Super Sushi Samurai"}],
         "trending_scams": [{"token": "0xabc"}],
@@ -136,19 +141,19 @@ def test_score_awareness_exploit_match():
     assert mod.score_awareness("check 0xabc token", snapshot) == 1.0
 
 
-def test_score_awareness_fearful_keyword():
+def test_score_awareness_fearful_keyword() -> None:
     snapshot = {"recent_exploits": [], "trending_scams": [], "market_sentiment": "fearful"}
     assert mod.score_awareness("is this a rug pull?", snapshot) == 0.75
     assert mod.score_awareness("generic question", snapshot) == 0.5
 
 
-def test_score_awareness_default():
+def test_score_awareness_default() -> None:
     snapshot = {"recent_exploits": [], "trending_scams": [], "market_sentiment": "greedy"}
     assert mod.score_awareness("anything", snapshot) == 0.5
     assert mod.score_awareness("", snapshot) == 0.5
 
 
-def test_boosted_risk_reasons():
+def test_boosted_risk_reasons() -> None:
     snapshot = {
         "recent_exploits": [{"protocol": "Wormhole"}],
         "trending_scams": [],
@@ -162,14 +167,14 @@ def test_boosted_risk_reasons():
 # ── Snapshot (mocked client, no cache) ──────────────────────────────────
 
 
-async def test_market_awareness_snapshot_mocked(monkeypatch):
-    async def fake_exploits(client):
+async def test_market_awareness_snapshot_mocked(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_exploits(client: Any) -> Any:
         return [{"protocol": "Fresh Hack", "date": "2026-08-01", "amount_lost_usd": 1}]
 
-    async def fake_scams(client):
+    async def fake_scams(client: Any) -> Any:
         return [{"token": "0xabc", "chain": "ethereum", "reasons": ["no_socials"], "url": ""}]
 
-    async def fake_fng(client):
+    async def fake_fng(client: Any) -> Any:
         return "greedy"
 
     monkeypatch.setattr(mod, "fetch_recent_exploits", fake_exploits)

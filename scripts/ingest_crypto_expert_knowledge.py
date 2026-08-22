@@ -67,7 +67,8 @@ CHUNK_OVERLAP = 100
 
 def _collection_for(doc: dict[str, Any]) -> str:
     """Resolve the target collection from the doc's routing hint."""
-    return doc.get("collection", EDUCATION_COLLECTION)
+    _col: str = str(doc.get("collection", EDUCATION_COLLECTION))
+    return _col
 
 
 def _doc_points(

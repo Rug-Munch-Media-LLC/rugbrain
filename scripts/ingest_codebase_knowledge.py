@@ -89,7 +89,7 @@ def _clone_repo(protocol: dict[str, Any], base_dir: Path) -> Path:
     If the configured tag no longer exists upstream (tags drift), falls back
     to the default branch with a warning instead of aborting the ingest.
     """
-    target = base_dir / protocol["id"]
+    target: Path = Path(str(base_dir / protocol["id"]))
     if (target / ".git").exists():
         logger.info("repo_present id=%s dir=%s", protocol["id"], target)
         return target
@@ -130,7 +130,9 @@ def _clone_repo(protocol: dict[str, Any], base_dir: Path) -> Path:
         shutil.rmtree(tmp, ignore_errors=True)
     size_mb = sum(p.stat().st_size for p in target.rglob("*") if p.is_file()) / 1e6
     logger.info("clone_complete id=%s size_mb=%.1f", protocol["id"], size_mb)
-    return target
+    _target: Path = target
+
+    return _target
 
 
 def _is_skipped(rel_path: str) -> bool:

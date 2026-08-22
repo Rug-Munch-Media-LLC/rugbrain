@@ -124,7 +124,7 @@ def _write_chain_parquet(tmp_path: Path) -> list[Path]:
 # ── Prefix / date / chain resolution ──────────────────────────────────
 
 
-def test_chain_prefix_basic():
+def test_chain_prefix_basic() -> None:
     assert chain_prefix("ethereum") == "b2-crypt:chain-data/parquet/ethereum"
     assert (
         chain_prefix("gnosis", "2026-08-03", "00")
@@ -133,12 +133,12 @@ def test_chain_prefix_basic():
     assert chain_prefix("base", "2026-08-03") == "b2-crypt:chain-data/parquet/base/2026/08/03"
 
 
-def test_chain_prefix_bad_date():
+def test_chain_prefix_bad_date() -> None:
     # Invalid dates are skipped rather than crashing.
     assert chain_prefix("eth", "not-a-date") == "b2-crypt:chain-data/parquet/eth"
 
 
-def test_extract_chain_from_query():
+def test_extract_chain_from_query() -> None:
     assert extract_chain_from_query("show me recent ETH transfers") == "ethereum"
     assert extract_chain_from_query("who deployed tokens on Base yesterday") == "base"
     assert extract_chain_from_query("solana whale activity") == "solana"
@@ -146,7 +146,7 @@ def test_extract_chain_from_query():
     assert extract_chain_from_query("nothing here") is None
 
 
-def test_extract_date_from_query():
+def test_extract_date_from_query() -> None:
     assert (
         extract_date_from_query("activity yesterday")
         == (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
@@ -156,7 +156,7 @@ def test_extract_date_from_query():
     assert extract_date_from_query("nothing here") is None
 
 
-def test_detect_chain_data_intent():
+def test_detect_chain_data_intent() -> None:
     assert detect_chain_data_intent("show me recent ETH transfers")
     assert detect_chain_data_intent("who deployed tokens on Base yesterday")
     assert detect_chain_data_intent("whale swap on gnosis")
@@ -166,19 +166,19 @@ def test_detect_chain_data_intent():
 # ── Canned intent SQL ─────────────────────────────────────────────────
 
 
-def test_build_intent_sql_transfers():
+def test_build_intent_sql_transfers() -> None:
     sql = build_intent_sql("recent ETH transfers", chain="ethereum", date=None, limit=5)
     assert "FROM chain_events" in sql
     assert "chain = 'ethereum'" in sql
     assert sql.strip().lower().startswith("select")
 
 
-def test_build_intent_sql_dex():
+def test_build_intent_sql_dex() -> None:
     sql = build_intent_sql("whale swaps on base", chain="base", date=None, limit=10)
     assert "FROM chain_dex" in sql
 
 
-def test_build_intent_sql_deploy():
+def test_build_intent_sql_deploy() -> None:
     sql = build_intent_sql(
         "who deployed tokens on Base yesterday", chain="base", date=None, limit=5
     )
@@ -186,7 +186,7 @@ def test_build_intent_sql_deploy():
     assert "from_address = '0x0000000000000000000000000000000000000000'" in sql
 
 
-def test_build_intent_sql_is_read_only():
+def test_build_intent_sql_is_read_only() -> None:
     sql = build_intent_sql("recent transfers", chain="gnosis", date=None, limit=3)
     validate_read_only_sql(sql)  # must pass the shared guard
 
@@ -194,7 +194,7 @@ def test_build_intent_sql_is_read_only():
 # ── run_chain_query over local parquet ────────────────────────────────
 
 
-def test_run_chain_query_local_transfers(tmp_path):
+def test_run_chain_query_local_transfers(tmp_path: Path) -> None:
     files = _write_chain_parquet(tmp_path)
     result = run_chain_query(
         "SELECT chain, tx_hash, from_address, value FROM chain_events "
@@ -206,7 +206,7 @@ def test_run_chain_query_local_transfers(tmp_path):
     assert result["rows"][0][1] == "0xtransfer3"  # newest block_timestamp (03:00) first
 
 
-def test_run_chain_query_local_dex(tmp_path):
+def test_run_chain_query_local_dex(tmp_path: Path) -> None:
     files = _write_chain_parquet(tmp_path)
     result = run_chain_query("SELECT type, dex, whale FROM chain_dex", files_override=files)
     assert result["row_count"] == 1
@@ -214,7 +214,7 @@ def test_run_chain_query_local_dex(tmp_path):
     assert result["rows"][0][1] == "uniswap_v3"
 
 
-def test_run_chain_query_local_deploy_events(tmp_path):
+def test_run_chain_query_local_deploy_events(tmp_path: Path) -> None:
     files = _write_chain_parquet(tmp_path)
     # Only row 1 has from_address = zero address (token creation).
     result = run_chain_query(
@@ -226,7 +226,7 @@ def test_run_chain_query_local_deploy_events(tmp_path):
     assert result["rows"][0][0] == "0xtransfer1"
 
 
-def test_run_chain_query_glob_override(tmp_path):
+def test_run_chain_query_glob_override(tmp_path: Path) -> None:
     _write_chain_parquet(tmp_path)
     result = run_chain_query(
         "SELECT count(*) AS n FROM chain_events",
@@ -236,13 +236,13 @@ def test_run_chain_query_glob_override(tmp_path):
     assert result["rows"][0][0] == 3
 
 
-def test_run_chain_query_rejects_write(tmp_path):
+def test_run_chain_query_rejects_write(tmp_path: Path) -> None:
     files = _write_chain_parquet(tmp_path)
     with pytest.raises(ValueError, match="Only read-only"):
         run_chain_query("INSERT INTO chain_events VALUES (1)", files_override=files)
 
 
-def test_run_chain_query_requires_chain_for_b2(tmp_path):
+def test_run_chain_query_requires_chain_for_b2(tmp_path: Path) -> None:
     # Without files/glob overrides and without a chain, B2 path must fail
     # with a clear error instead of attempting an empty prefix download.
     with pytest.raises(ValueError, match="chain is required"):

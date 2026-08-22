@@ -3,23 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import importlib as _il
+from typing import Any
 
 import pytest
 
-from rugbrain import news_clustering as nc
+news_clustering = _il.import_module("rugbrain.news_clustering")
+g = news_clustering
+nc = news_clustering
+nc = news_clustering
+
+mod = news_clustering
 
 # ── Embedding / cosine ────────────────────────────────────────────────────
 
 
-def test_cosine_similarity_identical_vectors():
+def test_cosine_similarity_identical_vectors() -> None:
     assert nc.cosine_similarity([1.0, 0.0, 0.0], [1.0, 0.0, 0.0]) == pytest.approx(1.0)
 
 
-def test_cosine_similarity_orthogonal():
+def test_cosine_similarity_orthogonal() -> None:
     assert nc.cosine_similarity([1.0, 0.0], [0.0, 1.0]) == pytest.approx(0.0)
 
 
-def test_cosine_similarity_empty_or_mismatched():
+def test_cosine_similarity_empty_or_mismatched() -> None:
     assert nc.cosine_similarity([], [1.0, 2.0]) == 0.0
     assert nc.cosine_similarity([1.0], [1.0, 2.0]) == 0.0
     assert nc.cosine_similarity([0.0, 0.0], [1.0, 1.0]) == 0.0
@@ -28,7 +35,7 @@ def test_cosine_similarity_empty_or_mismatched():
 # ── Clustering ────────────────────────────────────────────────────────────
 
 
-def test_cluster_embeddings_groups_similar():
+def test_cluster_embeddings_groups_similar() -> None:
     """Similar vectors cluster together; distant vectors form new clusters."""
     near_a = [1.0, 0.0, 0.0]
     near_b = [0.95, 0.05, 0.0]
@@ -41,14 +48,14 @@ def test_cluster_embeddings_groups_similar():
     assert {1} in groups
 
 
-def test_cluster_embeddings_all_similar_single_cluster():
+def test_cluster_embeddings_all_similar_single_cluster() -> None:
     vectors = [[1.0, 0.0], [0.99, 0.01], [0.98, 0.02]]
     clusters = nc.cluster_embeddings(vectors, threshold=0.9)
     assert len(clusters) == 1
     assert len(clusters[0]) == 3
 
 
-def test_cluster_embeddings_high_threshold_splits():
+def test_cluster_embeddings_high_threshold_splits() -> None:
     vectors = [[1.0, 0.0], [0.8, 0.6], [0.0, 1.0]]
     clusters = nc.cluster_embeddings(vectors, threshold=0.95)
     assert len(clusters) == 3  # nothing meets the strict threshold
@@ -57,7 +64,7 @@ def test_cluster_embeddings_high_threshold_splits():
 # ── Story building ────────────────────────────────────────────────────────
 
 
-def _articles():
+def _articles() -> list[dict[str, Any]]:
     return [
         {
             "id": "a1",
@@ -89,7 +96,7 @@ def _articles():
     ]
 
 
-def test_build_story_sources_and_credibility():
+def test_build_story_sources_and_credibility() -> None:
     story = nc.build_story(_articles())
     assert len(story.sources) == 3
     # coindesk + theblock are established (>=90), cointelegraph >= 85.
@@ -98,21 +105,21 @@ def test_build_story_sources_and_credibility():
     assert any(s.domain == "coindesk.com" for s in story.sources)
 
 
-def test_build_story_timeline_sorted_ascending():
+def test_build_story_timeline_sorted_ascending() -> None:
     story = nc.build_story(_articles())
     times = [nc._parse_dt(item["published_at"]) for item in story.timeline]
-    assert times == sorted(times)  # type: ignore[arg-type]
+    assert times == sorted(times)
     assert len(story.timeline) == 3
 
 
-def test_build_story_sentiment_distribution_shape():
+def test_build_story_sentiment_distribution_shape() -> None:
     story = nc.build_story(_articles())
     for key in ("positive", "neutral", "negative"):
         assert key in story.sentiment_distribution
     assert sum(story.sentiment_distribution.values()) == 3
 
 
-def test_build_story_bias_distribution_shape():
+def test_build_story_bias_distribution_shape() -> None:
     story = nc.build_story(_articles())
     for key in ("left", "center", "right", "unknown"):
         assert key in story.bias_distribution
@@ -120,24 +127,24 @@ def test_build_story_bias_distribution_shape():
     assert story.bias_distribution["center"] == 3
 
 
-def test_build_story_topics_extracted():
+def test_build_story_topics_extracted() -> None:
     story = nc.build_story(_articles())
     assert "ethereum" in story.topics
     assert "bitcoin" in story.topics
 
 
-def test_build_story_deterministic_id():
+def test_build_story_deterministic_id() -> None:
     a = _articles()
     b = _articles()
     assert nc.build_story(a).id == nc.build_story(b).id
 
 
-def test_build_story_summary_nonempty():
+def test_build_story_summary_nonempty() -> None:
     story = nc.build_story(_articles())
     assert story.summary.strip()
 
 
-def test_build_story_factual_consensus_agreement():
+def test_build_story_factual_consensus_agreement() -> None:
     """Sources sharing the same verifiable claims get high consensus."""
     articles = [
         {
@@ -170,7 +177,7 @@ def test_build_story_factual_consensus_agreement():
     assert story.factual_consensus >= 0.5
 
 
-def test_build_story_factual_consensus_low_when_disjoint():
+def test_build_story_factual_consensus_low_when_disjoint() -> None:
     """Sources with no shared claims get low/neutral consensus."""
     articles = [
         {
@@ -217,7 +224,7 @@ async def _fake_embedder(titles: list[str]) -> list[list[float]]:
 
 
 @pytest.mark.asyncio
-async def test_cluster_articles_groups_related():
+async def test_cluster_articles_groups_related() -> None:
     articles = [
         {
             "id": "1",
@@ -255,11 +262,11 @@ async def test_cluster_articles_groups_related():
 
 
 @pytest.mark.asyncio
-async def test_cluster_articles_empty_input():
+async def test_cluster_articles_empty_input() -> None:
     assert await nc.cluster_articles([], embedder=_fake_embedder) == []
 
 
-def test_embed_titles_uses_embeddings_module(monkeypatch):
+def test_embed_titles_uses_embeddings_module(monkeypatch: pytest.MonkeyPatch) -> Any:
     """embed_titles delegates to rugbrain.embeddings.get_embeddings."""
     calls: list[list[str]] = []
 
@@ -271,7 +278,7 @@ def test_embed_titles_uses_embeddings_module(monkeypatch):
 
     monkeypatch.setattr(emb, "get_embeddings", fake_get_embeddings)
 
-    async def run():
+    async def run() -> Any:
         return await nc.embed_titles(["hello", "world"])
 
     result = asyncio.run(run())

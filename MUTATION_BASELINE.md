@@ -7,8 +7,8 @@ integrity) · **Test selection:** `tests/test_guardrails.py`
 
 | Module | Killed | Survived | Score |
 |---|---|---|---|
-| guardrails.py | 188 | 58 (+58 in-flight) | **76%** on completed; final pending last workers |
-| confidence_scorer.py | — | — | tests written (19 + 2 regression); mutation rerun queued |
+| guardrails.py | 231 | 73 | **76% FINAL** |
+| confidence_scorer.py | 171 | 27 | **🎯 86%** — above target on first run (19+2 tests) |
 
 Package-wide live tally at 99.9% processed: 🎉 220 killed · 🙁 ~1017 survived
 (includes partial coverage of alerts/mcp_bridge/etc via guardrail test imports).
@@ -43,3 +43,7 @@ The deselect works around a sandbox-ordering flake in a hasattr smoke test
   (`cannot import name 'mcp_bridge' from 'rugbrain' (unknown location)`)
 - conftest must APPEND sys.path, never prepend
 - No editable install of the package under test while running mutmut
+
+## Final scores (2026-08-22 night)
+- **guardrails.py: 76%** (231/304 killed)
+- **confidence_scorer.py: 86%** (171/198 killed) — suite includes regression test for the `reranker_score or 0.5` production bug found during this work
