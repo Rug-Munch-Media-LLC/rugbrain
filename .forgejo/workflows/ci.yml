@@ -107,3 +107,15 @@ jobs:
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
           grype dir:. --fail-on critical || echo "::warning::critical vulns in tree"
+
+  nightly-api-fuzz:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: docker-x64
+    container:
+      image: python:3.11-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Schemathesis property-based API fuzzing (live OpenAPI)
+        run: |
+          pip install schemathesis
+          st run --url "${SCHEMA_URL:-http://rmi-backend:8000/openapi.json}" --checks all --max-examples 50 || echo "::warning::API contract violations found"
