@@ -39,7 +39,141 @@ RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 
 # Max content chars fed to the cross-encoder per chunk (truncation guard).
-_RERANK_TEXT_LIMIT = 2000
+# Server ctx raised 4096 -> 8192 (2026-08-22); query+doc must fit the budget,
+# so ~6000 chars of doc text is safe for typical queries.
+_RERANK_TEXT_LIMIT = 6000
+
+# ── Vertical instruction library ─────────────────────────────────────────────
+# Qwen3-Reranker is instruction-aware (official docs: +1-5% retrieval; FollowIR
+# 14.84 = best-in-class instruction following). Our llama.cpp build IGNORES the
+# /rerank 'instruct' field (hardcoded generic web-search instruct), so task
+# framing is embedded into the query text instead — validated live 2026-08-22:
+# a Tornado-Cash-funding evidence doc went 0.001 -> 0.99 on a rug-pull query.
+# Disable with RERANK_INSTRUCTIONS=off.
+_INSTRUCTION_LIBRARY: dict[str, str] = {
+    "forensics": (
+        "Crypto forensics task: rank documents by their evidentiary value for "
+        "assessing rug-pull and scam risk, including funding sources, wallet "
+        "concentration, mint authority, liquidity lock status, and honeypot signals."
+    ),
+    "contract": (
+        "Smart-contract security review task: rank documents by relevance to "
+        "contract analysis, prioritizing exploit patterns, privileged functions, "
+        "audit findings, and vulnerability disclosures."
+    ),
+    "tracing": (
+        "Fund-tracing task: rank documents by relevance to tracing fund flows, "
+        "wallet attribution, mixer usage, bridge hops, and entity resolution."
+    ),
+    "code": (
+        "Blockchain code intelligence task: rank documents by relevance to the "
+        "development question, prioritizing Solidity/Solana security semantics "
+        "and concrete vulnerable patterns or fixes."
+    ),
+}
+
+_VERTICAL_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "forensics",
+        (
+            "rug",
+            "rugpull",
+            "rug pull",
+            "scam",
+            "honeypot",
+            "deployer",
+            "mint authority",
+            "liquidity lock",
+            "slippage",
+            "pump and dump",
+            "fraud",
+            "steal",
+            "drain",
+        ),
+    ),
+    (
+        "tracing",
+        (
+            "trace",
+            "fund flow",
+            "mixer",
+            "tornado",
+            "attribution",
+            "launder",
+            "bridge hop",
+            "cluster",
+            "entity resolution",
+            "source of funds",
+        ),
+    ),
+    (
+        "contract",
+        (
+            "contract",
+            "solidity",
+            "solana program",
+            "audit",
+            "reentrancy",
+            "overflow",
+            "access control",
+            "proxy",
+            "upgradeable",
+            "token standard",
+        ),
+    ),
+    (
+        "code",
+        (
+            "code",
+            "function",
+            "snippet",
+            "implement",
+            "example",
+            "anchor",
+            "web3.py",
+            "ethers",
+            "sdk",
+            "how do i",
+            "how to",
+        ),
+    ),
+)
+
+_RERANK_INSTRUCTIONS_ENABLED = os.getenv("RERANK_INSTRUCTIONS", "true").lower() != "off"
+
+# Sigmoid P(relevant) below this is confidently-irrelevant noise (Qwen3
+# rerank scores are 0-1). Applied only when enough strong candidates remain.
+_RERANK_NOISE_FLOOR = 0.10
+
+
+def detect_vertical(query: str) -> str | None:
+    """Classify a query into a platform vertical for instruction selection.
+
+    Order matters: forensics > tracing > contract > code. Returns None when
+    no vertical matches (generic/news queries keep the model's default
+    web-search instruction, which is optimal for plain relevance).
+    """
+    q = query.lower()
+    for vertical, patterns in _VERTICAL_PATTERNS:
+        if any(p in q for p in patterns):
+            return vertical
+    return None
+
+
+def apply_instruction(query: str) -> str:
+    """Embed the vertical instruction into the query text (query-slot trick).
+
+    Returns the query unchanged when instructions are disabled or no vertical
+    matches. The constant per-vertical prefix is also prompt-prefix-cache
+    friendly on the llama.cpp side.
+    """
+    if not _RERANK_INSTRUCTIONS_ENABLED:
+        return query
+    vertical = detect_vertical(query)
+    if vertical is None:
+        return query
+    return f"[TASK] {_INSTRUCTION_LIBRARY[vertical]} [QUERY] {query}"
+
 
 # Cache health so we don't hammer a down server.
 _health: dict[str, Any] = {"ok": False, "last_check": 0.0}
@@ -131,7 +265,7 @@ async def _score_candidates(
     try:
         async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
             payload = {
-                "query": query,
+                "query": apply_instruction(query),
                 "documents": [t for _, t in valid],
                 "top_n": len(valid),
             }
@@ -220,12 +354,21 @@ async def rerank_chunks(
 
     scored = sorted(zip(candidates, scores, strict=True), key=lambda x: x[1], reverse=True)
 
+    # ── noise floor: drop sub-0.1 docs when we have enough signal ──
+    # Qwen3 rerank scores are sigmoid P(relevant); <0.1 is confidently
+    # irrelevant. Only filter when enough above-floor candidates remain to
+    # honor `keep`, so callers always get a full result set when possible.
+    strong = [(d, s) for d, s in scored if s >= _RERANK_NOISE_FLOOR]
+    if len(strong) >= keep:
+        scored = strong
+
     results: list[dict[str, Any]] = []
     for doc, cross in scored[:keep]:
         entry = dict(doc)
         entry["rerank_score"] = round(float(cross), 6)
         entry["rerank_method"] = method
         entry["reranked"] = True
+        entry["rerank_vertical"] = detect_vertical(query)
         entry["rerank_duration_ms"] = round(duration_ms, 1)
         results.append(entry)
     return results
