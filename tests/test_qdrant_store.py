@@ -5,12 +5,15 @@ Uses respx to mock HTTP calls to the Qdrant REST API.
 """
 
 import uuid
+from typing import Any
 
 import pytest
 import respx
 
 
-def _mock_collection(respx_mock, collection="default", exists=True):
+def _mock_collection(
+        respx_mock: Any, collection: str = "default", exists: bool = True
+    ) -> None:
     """Mock collection existence check."""
     status = 200 if exists else 404
     respx_mock.get(f"/collections/{collection}").respond(
@@ -18,7 +21,11 @@ def _mock_collection(respx_mock, collection="default", exists=True):
     )
 
 
-def _mock_search(respx_mock, results: list[dict], collection="default"):
+def _mock_search(
+        respx_mock: Any,
+        results: list[dict[str, Any]],
+        collection: str = "default",
+    ) -> None:
     """Mock search endpoint with given results."""
     respx_mock.post(f"/collections/{collection}/points/search").respond(
         200, json={"result": results}
@@ -26,7 +33,7 @@ def _mock_search(respx_mock, results: list[dict], collection="default"):
 
 
 @pytest.mark.asyncio
-async def test_search_returns_results():
+async def test_search_returns_results() -> None:
     """search() should return formatted results from Qdrant."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -59,7 +66,7 @@ async def test_search_returns_results():
 
 
 @pytest.mark.asyncio
-async def test_search_empty_when_no_results():
+async def test_search_empty_when_no_results() -> None:
     """search() should return empty list when no results found."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -72,7 +79,7 @@ async def test_search_empty_when_no_results():
 
 
 @pytest.mark.asyncio
-async def test_search_with_filters():
+async def test_search_with_filters() -> None:
     """search() should pass filters to Qdrant."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -95,7 +102,7 @@ async def test_search_with_filters():
 
 
 @pytest.mark.asyncio
-async def test_search_handles_http_500():
+async def test_search_handles_http_500() -> None:
     """search() should handle HTTP errors gracefully."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -108,7 +115,7 @@ async def test_search_handles_http_500():
 
 
 @pytest.mark.asyncio
-async def test_search_handles_network_error():
+async def test_search_handles_network_error() -> None:
     """search() should handle network errors gracefully."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -123,7 +130,7 @@ async def test_search_handles_network_error():
 
 
 @pytest.mark.asyncio
-async def test_search_with_custom_collection():
+async def test_search_with_custom_collection() -> None:
     """search() should use the specified collection name."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -142,7 +149,7 @@ async def test_search_with_custom_collection():
 
 
 @pytest.mark.asyncio
-async def test_search_uses_named_dense_vector_on_hybrid_collection():
+async def test_search_uses_named_dense_vector_on_hybrid_collection() -> None:
     """search() against a hybrid (named-vector) collection must send the
     named dense vector, not a bare vector — Qdrant rejects bare vectors
     against named-vector collections with 400 "Not existing vector name"."""
@@ -167,7 +174,7 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection():
 
 
 @pytest.mark.asyncio
-async def test_insert_stores_document(monkeypatch):
+async def test_insert_stores_document(monkeypatch: pytest.MonkeyPatch) -> None:
     """insert() should PUT document to Qdrant and return True."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -201,7 +208,7 @@ async def test_insert_stores_document(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_insert_fails_on_http_error():
+async def test_insert_fails_on_http_error() -> None:
     """insert() should return False on HTTP error."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -218,7 +225,7 @@ async def test_insert_fails_on_http_error():
 
 
 @pytest.mark.asyncio
-async def test_insert_creates_collection_if_missing(monkeypatch):
+async def test_insert_creates_collection_if_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """insert() should create the collection if it doesn't exist."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -241,7 +248,7 @@ async def test_insert_creates_collection_if_missing(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search():
+async def test_hybrid_search() -> None:
     """hybrid_search() should include keyword matching in ranking."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -286,7 +293,7 @@ async def test_hybrid_search():
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_fallback_to_vector():
+async def test_hybrid_search_fallback_to_vector() -> None:
     """Without query text, hybrid_search should fall back to vector search."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -320,7 +327,7 @@ async def test_hybrid_search_fallback_to_vector():
 
 
 @pytest.mark.asyncio
-async def test_get_qdrant_store_singleton():
+async def test_get_qdrant_store_singleton() -> None:
     """get_qdrant_store() should return a singleton."""
     from rugbrain.qdrant_store import get_qdrant_store
 
@@ -330,7 +337,9 @@ async def test_get_qdrant_store_singleton():
     await s1.close()
 
 
-def _mock_hybrid_collection(respx_mock, collection="default"):
+def _mock_hybrid_collection(
+        respx_mock: Any, collection: str = "default"
+    ) -> None:
     """Mock collection existence check with a BM25 sparse config."""
     respx_mock.get(f"/collections/{collection}").respond(
         200,
@@ -339,14 +348,14 @@ def _mock_hybrid_collection(respx_mock, collection="default"):
 
 
 @pytest.mark.asyncio
-async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
+async def test_insert_includes_sparse_when_collection_supports(monkeypatch: pytest.MonkeyPatch) -> Any:
     """insert() should add a BM25 sparse vector for hybrid collections."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
     monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> Any:
         assert text == "solana honeypot rug"
         return ([10, 20, 30], [1.5, 0.8, 0.4])
 
@@ -375,14 +384,14 @@ async def test_insert_includes_sparse_when_collection_supports(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
+async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch: pytest.MonkeyPatch) -> None:
     """insert() should keep dense-only payload for legacy collections."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
     monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> None:
         raise AssertionError("sparse embedder must not be called for dense-only")
 
     monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
@@ -406,12 +415,12 @@ async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_native_rrf(monkeypatch):
+async def test_hybrid_search_native_rrf(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hybrid_search() should use Qdrant's dense+sparse RRF fusion."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> Any:
         assert text == "solana rug"
         return ([5, 6], [0.9, 0.3])
 
@@ -457,12 +466,12 @@ async def test_hybrid_search_native_rrf(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch):
+async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hybrid_search() should fall back to dense search when RRF errors."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> Any:
         return ([1], [0.5])
 
     monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
@@ -499,12 +508,12 @@ async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_sparse_capability_cached(monkeypatch):
+async def test_hybrid_search_sparse_capability_cached(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Sparse-capability probe should be cached per store instance."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> Any:
         return ([1], [0.5])
 
     monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)

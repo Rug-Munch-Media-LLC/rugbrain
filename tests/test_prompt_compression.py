@@ -12,6 +12,8 @@ All compression tests force the extractive path (``use_llmlingua=False`` or
 environments with or without the optional ``llmlingua`` package.
 """
 
+from typing import Any
+
 import pytest
 
 from rugbrain.prompt_compression import (
@@ -34,7 +36,7 @@ CODE_BLOCK = (
 
 
 @pytest.fixture
-def sample_chunks():
+def sample_chunks() -> list[dict[str, Any]]:
     """Three chunks: high-signal prose, code, and filler-heavy prose."""
     return [
         {
@@ -63,12 +65,12 @@ def sample_chunks():
     ]
 
 
-def test_module_imports_cleanly():
+def test_module_imports_cleanly() -> None:
     """Module must import without llmlingua installed (lazy optional import)."""
     import rugbrain.prompt_compression  # noqa: F401
 
 
-def test_compress_context_reduces_tokens_and_keeps_code_and_addresses(sample_chunks):
+def test_compress_context_reduces_tokens_and_keeps_code_and_addresses(sample_chunks: Any) -> None:
     """Extractive compression: reduces tokens, keeps code + addresses intact."""
     out = compress_context(sample_chunks, target_tokens=60, use_llmlingua=False)
 
@@ -87,7 +89,7 @@ def test_compress_context_reduces_tokens_and_keeps_code_and_addresses(sample_chu
     assert "code" in out[1]["compression_tags"]
 
 
-def test_compress_context_prefers_high_signal_over_filler(sample_chunks):
+def test_compress_context_prefers_high_signal_over_filler(sample_chunks: Any) -> None:
     """Filler ('Stay tuned!') must not outrank the high-signal sentence."""
     out = compress_context(sample_chunks, target_tokens=60, use_llmlingua=False)
 
@@ -99,7 +101,7 @@ def test_compress_context_prefers_high_signal_over_filler(sample_chunks):
             assert chunk["content"].strip() != filler
 
 
-def test_compress_context_noop_when_within_budget(sample_chunks):
+def test_compress_context_noop_when_within_budget(sample_chunks: Any) -> None:
     """target_tokens >= total tokens: chunks pass through unchanged."""
     out = compress_context(sample_chunks, target_tokens=1_000_000, use_llmlingua=False)
 
@@ -109,11 +111,11 @@ def test_compress_context_noop_when_within_budget(sample_chunks):
         assert chunk["content"] == sample_chunks[i]["content"]
 
 
-def test_compress_context_empty_chunks():
+def test_compress_context_empty_chunks() -> None:
     assert compress_context([], target_tokens=100, use_llmlingua=False) == []
 
 
-def test_compress_context_does_not_mutate_input(sample_chunks):
+def test_compress_context_does_not_mutate_input(sample_chunks: Any) -> None:
     original = [dict(c) for c in sample_chunks]
     compress_context(sample_chunks, target_tokens=60, use_llmlingua=False)
 
@@ -121,7 +123,7 @@ def test_compress_context_does_not_mutate_input(sample_chunks):
         assert orig["content"] == chunk["content"]
 
 
-def test_compress_context_fallback_when_llmlingua_absent(sample_chunks, monkeypatch):
+def test_compress_context_fallback_when_llmlingua_absent(sample_chunks: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """LLMLingua absent (or broken): extractive fallback still works."""
     monkeypatch.setattr("rugbrain.prompt_compression.LLMLINGUA_AVAILABLE", False)
 
@@ -132,7 +134,7 @@ def test_compress_context_fallback_when_llmlingua_absent(sample_chunks, monkeypa
     assert SECOND_ADDRESS in out[2]["content"]
 
 
-def test_compress_context_handles_text_field():
+def test_compress_context_handles_text_field() -> None:
     """Chunks carrying ``text`` instead of ``content`` are compressed too."""
     chunks = [{"id": "x", "text": "This is a long filler sentence with no signal at all. " * 8}]
     out = compress_context(chunks, target_tokens=20, use_llmlingua=False)
@@ -143,7 +145,7 @@ def test_compress_context_handles_text_field():
     assert "content" not in out[0]
 
 
-def test_pack_context_orders_top_first_middle_query_last():
+def test_pack_context_orders_top_first_middle_query_last() -> None:
     """Rerank scores drive top-of-window placement; query always LAST."""
     chunks = [
         {"id": "a", "content": "low relevance", "rerank_score": 0.1},
@@ -164,7 +166,7 @@ def test_pack_context_orders_top_first_middle_query_last():
     assert parts[-1] == "user query?"
 
 
-def test_layout_context_uses_retrieval_order_when_no_rerank_scores():
+def test_layout_context_uses_retrieval_order_when_no_rerank_scores() -> None:
     """Without rerank keys, retrieval ``score`` drives ordering."""
     chunks = [
         {"id": "a", "content": "weak", "score": 0.2},
@@ -179,7 +181,7 @@ def test_layout_context_uses_retrieval_order_when_no_rerank_scores():
     assert parts[-1] == "q"
 
 
-def test_layout_context_preserves_order_when_no_scores():
+def test_layout_context_preserves_order_when_no_scores() -> None:
     """All-zero / missing scores: stable sort keeps original retrieval order."""
     chunks = [
         {"id": "a", "content": "first"},
@@ -191,11 +193,11 @@ def test_layout_context_preserves_order_when_no_scores():
     assert parts == ["first", "second", "third", "q"]
 
 
-def test_pack_context_empty_chunks_returns_query():
+def test_pack_context_empty_chunks_returns_query() -> None:
     assert pack_context([], "just the query") == "just the query"
 
 
-def test_pack_context_score_key_override():
+def test_pack_context_score_key_override() -> None:
     """``score_key`` forces a specific key when multiple scores are present."""
     chunks = [
         {"id": "a", "content": "A", "score": 0.99, "rerank_score": 0.1},

@@ -7,6 +7,8 @@ assessment aggregation) so they can be verified without live Qdrant/Qwen3.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rugbrain.contract_analysis import (
     CHAIN_IDS,
     _aggregate_assessment,
@@ -72,17 +74,17 @@ contract SecureToken is ERC20, Ownable {
 """
 
 
-def _severities(findings):
+def _severities(findings: Any) -> dict[str, str]:
     return {f["rule"]: f["severity"] for f in findings}
 
 
-def test_static_scan_reentrancy_bad_order_flagged():
+def test_static_scan_reentrancy_bad_order_flagged() -> None:
     findings = static_security_scan(REENTRANCY_BAD)
     rules = _severities(findings)
     assert rules.get("reentrancy-unsafe-order") == "high"
 
 
-def test_static_scan_cei_order_not_flagged_high():
+def test_static_scan_cei_order_not_flagged_high() -> None:
     findings = static_security_scan(REENTRANCY_GOOD)
     rules = _severities(findings)
     assert rules.get("reentrancy-unsafe-order") is None
@@ -90,12 +92,12 @@ def test_static_scan_cei_order_not_flagged_high():
     assert rules.get("raw-external-call", "info") == "info"
 
 
-def test_static_scan_tx_origin():
+def test_static_scan_tx_origin() -> None:
     findings = static_security_scan(TX_ORIGIN)
     assert _severities(findings).get("tx-origin-auth") == "critical"
 
 
-def test_static_scan_selfdestruct_and_delegatecall():
+def test_static_scan_selfdestruct_and_delegatecall() -> None:
     findings = static_security_scan(
         "function kill() external { selfdestruct(payable(owner)); }"
         "function exec(address t, bytes calldata d) external { t.delegatecall(d); }"
@@ -105,7 +107,7 @@ def test_static_scan_selfdestruct_and_delegatecall():
     assert rules.get("delegatecall") == "high"
 
 
-def test_static_scan_secure_erc20_no_critical():
+def test_static_scan_secure_erc20_no_critical() -> None:
     findings = static_security_scan(SECURE_ERC20)
     critical = [f for f in findings if f["severity"] == "critical"]
     assert critical == []
@@ -114,7 +116,7 @@ def test_static_scan_secure_erc20_no_critical():
     assert rules.get("unrestricted-mint") is None
 
 
-def test_static_scan_unrestricted_mint_flagged():
+def test_static_scan_unrestricted_mint_flagged() -> None:
     findings = static_security_scan(
         "function mint(address to, uint256 amount) external { _mint(to, amount); }"
     )
@@ -122,11 +124,11 @@ def test_static_scan_unrestricted_mint_flagged():
     assert rules.get("unrestricted-mint") == "high"
 
 
-def test_static_scan_empty_source():
+def test_static_scan_empty_source() -> None:
     assert static_security_scan("") == []
 
 
-def test_sourcify_metadata_parsing():
+def test_sourcify_metadata_parsing() -> None:
     metadata = {
         "compiler": {"version": "0.8.20+commit.a1b79de6"},
         "sources": {
@@ -141,7 +143,7 @@ def test_sourcify_metadata_parsing():
     assert version == "0.8.20+commit.a1b79de6"
 
 
-def test_etherscan_single_file_parsing():
+def test_etherscan_single_file_parsing() -> None:
     row = {
         "ContractName": "Simple",
         "CompilerVersion": "0.8.20",
@@ -153,7 +155,7 @@ def test_etherscan_single_file_parsing():
     assert version == "0.8.20"
 
 
-def test_etherscan_multi_file_parsing():
+def test_etherscan_multi_file_parsing() -> None:
     row = {
         "ContractName": "Wrapper",
         "CompilerVersion": "0.8.20",
@@ -165,7 +167,7 @@ def test_etherscan_multi_file_parsing():
     assert name == "Wrapper"
 
 
-def test_aggregate_assessment_high_on_bad_match():
+def test_aggregate_assessment_high_on_bad_match() -> None:
     assessment, _ = _aggregate_assessment(
         static=[],
         similar_good=[],
@@ -175,7 +177,7 @@ def test_aggregate_assessment_high_on_bad_match():
     assert assessment == "high"
 
 
-def test_aggregate_assessment_high_on_critical_static():
+def test_aggregate_assessment_high_on_critical_static() -> None:
     assessment, _ = _aggregate_assessment(
         static=[{"severity": "critical"}],
         similar_good=[],
@@ -185,7 +187,7 @@ def test_aggregate_assessment_high_on_critical_static():
     assert assessment == "high"
 
 
-def test_aggregate_assessment_medium_on_medium_static():
+def test_aggregate_assessment_medium_on_medium_static() -> None:
     assessment, _ = _aggregate_assessment(
         static=[{"severity": "medium"}],
         similar_good=[],
@@ -195,13 +197,13 @@ def test_aggregate_assessment_medium_on_medium_static():
     assert assessment == "medium"
 
 
-def test_aggregate_assessment_info_when_clean():
+def test_aggregate_assessment_info_when_clean() -> None:
     assessment, summary = _aggregate_assessment([], [], [], [])
     assert assessment == "info"
     assert summary  # non-empty summary string
 
 
-def test_chain_ids_cover_major_chains():
+def test_chain_ids_cover_major_chains() -> None:
     assert CHAIN_IDS["ethereum"] == 1
     assert CHAIN_IDS["bsc"] == 56
     assert CHAIN_IDS["polygon"] == 137

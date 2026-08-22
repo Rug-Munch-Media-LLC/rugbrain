@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import importlib as _il
+from typing import Any
+
+import pytest
 import respx
 
-from rugbrain import market_snapshot as mod
+market_snapshot = _il.import_module("rugbrain.market_snapshot")
+
+mod = market_snapshot
 
 TICKERS_PAYLOAD = [
     {
@@ -61,7 +67,7 @@ FNG_PAYLOAD = {"data": [{"value": "25", "value_classification": "Fear"}]}
 
 
 @respx.mock
-async def test_build_market_snapshot():
+async def test_build_market_snapshot() -> None:
     respx.get("https://api.coinpaprika.com/v1/tickers").respond(200, json=TICKERS_PAYLOAD)
     respx.get("https://api.coinpaprika.com/v1/coins/new").respond(200, json=NEW_PAYLOAD)
     respx.get("https://api.dexscreener.com/latest/dex/search").respond(200, json=DEX_PAIRS)
@@ -80,7 +86,7 @@ async def test_build_market_snapshot():
 
 
 @respx.mock
-async def test_fetch_fear_greed_neutral_on_failure():
+async def test_fetch_fear_greed_neutral_on_failure() -> None:
     respx.get("https://api.alternative.me/fng/").respond(500, json={})
     async with _client() as client:
         result = await mod.fetch_fear_greed(client)
@@ -89,14 +95,14 @@ async def test_fetch_fear_greed_neutral_on_failure():
 
 
 @respx.mock
-async def test_fetch_tvl_changes_parses():
+async def test_fetch_tvl_changes_parses() -> None:
     respx.get("https://api.llama.fi/v2/chains").respond(200, json=CHAINS_PAYLOAD)
     async with _client() as client:
         rows = await mod.fetch_tvl_changes(client)
     assert rows[0]["change_1d"] == 2.5
 
 
-def test_market_snapshot_store_degrades_without_clickhouse(monkeypatch):
+def test_market_snapshot_store_degrades_without_clickhouse(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CLICKHOUSE_HOST", "127.0.0.1")
     monkeypatch.setenv("CLICKHOUSE_PORT", "1")
     store = mod.MarketSnapshotStore()
@@ -112,7 +118,7 @@ def test_market_snapshot_store_degrades_without_clickhouse(monkeypatch):
     assert store.recent(limit=3) == []
 
 
-def _client():
+def _client() -> Any:
     import httpx
 
     return httpx.AsyncClient(timeout=10.0)

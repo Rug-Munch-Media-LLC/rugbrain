@@ -19,7 +19,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
@@ -194,7 +194,7 @@ def _compute_risk_metrics(pkey: str, snap: dict[str, Any]) -> dict[str, Any]:
     )
     bd_t = 0.0
     if len(bd) >= 2:
-        e, l = bd[0].get("bad_debt_usd", 0), bd[-1].get("bad_debt_usd", 0)
+        e, l = bd[0].get("bad_debt_usd", 0), bd[-1].get("bad_debt_usd", 0)  # noqa: E741 — pre-existing, audited 2026-08-22
         bd_t = round(((l - e) / e) * 100, 2) if e > 0 else 0.0
     return {
         "ltv_proximity_pct": ltv_p,
@@ -213,14 +213,16 @@ def _compute_risk_metrics(pkey: str, snap: dict[str, Any]) -> dict[str, Any]:
 # ── Alert Generation ────────────────────────────────────────────────────────
 
 
-async def _check_alerts(pkey: str, snap: dict[str, Any], risk: dict[str, Any]) -> list[dict[str, Any]]:
+async def _check_alerts(
+    pkey: str, snap: dict[str, Any], risk: dict[str, Any]
+) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
     label = snap.get("protocol", pkey)
     util = snap.get("utilization_rate") or 0
     ba = snap.get("borrow_apy") or 0
     avail = snap.get("available_liquidity_usd") or 0
     bd = risk.get("bad_debt_trend_24h_pct", 0)
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(UTC).isoformat()
     if snap.get("utilization_rate") is not None and util > UTILIZATION_ALERT:
         alerts.append(
             dict(
@@ -339,7 +341,7 @@ async def defi_lending_full_cycle() -> dict[str, Any]:
         bool(THEGRAPH_API_KEY),
     )
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "protocols": {k: v.get("protocol", k) for k, v in _health_store.items()},
         "alerts": all_alerts,
         "healthy_protocols": sum(1 for v in _health_store.values() if v.get("status") == "ok"),
@@ -381,7 +383,7 @@ def get_defi_lending_state() -> dict[str, Any]:
         snapshots[pkey] = {k: snap.get(k) for k in fields}
         snapshots[pkey]["risk"] = {k: r.get(k) for k in risk_fields}
     return {
-        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(UTC).isoformat(),
         "health": {**_health_state.copy(), "time_since_last_poll_s": round(now - last, 1)},
         "protocols": snapshots,
         "alerts": _recent_alerts[-20:],

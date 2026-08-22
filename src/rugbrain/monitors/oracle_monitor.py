@@ -19,7 +19,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from statistics import median
 from typing import Any, cast
 
@@ -123,7 +123,7 @@ async def _price(coin: str, exchange: str) -> float | None:
             return None
         d = await _fetch(f"https://api.kraken.com/0/public/Ticker?pair={pair}")
         if d and "result" in d:
-            for rkey, rval in d["result"].items():
+            for _rkey, rval in d["result"].items():
                 if "c" in rval and len(rval["c"]) > 0:
                     return float(rval["c"][0])
         return None
@@ -143,7 +143,7 @@ async def _price(coin: str, exchange: str) -> float | None:
 async def _collect(coin: str, hl: dict[str, float]) -> dict[str, float]:
     exs = ["binance", "coinbase", "kraken", "defillama"]
     res = await asyncio.gather(*(_price(coin, e) for e in exs))
-    prices = {e: p for e, p in zip(exs, res) if p is not None}
+    prices = {e: p for e, p in zip(exs, res, strict=False) if p is not None}
     if coin in hl:
         prices["hyperliquid"] = hl[coin]
     if coin in ("ETH", "BTC"):
@@ -275,7 +275,7 @@ async def oracle_scan_cycle() -> dict[str, Any]:
             continue
 
         snap: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "ts": time.time(),
             "prices": prices,
         }
@@ -294,7 +294,7 @@ async def oracle_scan_cycle() -> dict[str, Any]:
         await asyncio.sleep(0.15)
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "coins": len(summary),
         "total_events": len(all_ev),
         "critical_events": sum(1 for e in all_ev if e["severity"] == "critical"),

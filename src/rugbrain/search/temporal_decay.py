@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 # Default decay parameters
@@ -143,6 +143,6 @@ def apply_temporal_decay_batch(
     ``results_by_collection`` is a dict mapping collection names to lists of
     result dicts. Returns the same structure with decay applied per-collection.
     """
-    for collection, results in results_by_collection.items():
+    for _collection, results in results_by_collection.items():
         apply_temporal_decay(results, **kwargs)
     return results_by_collection

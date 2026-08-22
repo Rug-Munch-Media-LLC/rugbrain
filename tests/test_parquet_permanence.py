@@ -22,9 +22,9 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import b2_common  # type: ignore[import-not-found]  # noqa: E402
-import b2_restore  # type: ignore[import-not-found]  # noqa: E402
-import migrate_to_parquet  # type: ignore[import-not-found]  # noqa: E402
+import b2_common
+import b2_restore
+import migrate_to_parquet
 
 # Re-exported for use by later modules in this file
 __all__ = ["b2_common", "b2_restore", "migrate_to_parquet"]
@@ -36,7 +36,7 @@ __all__ = ["b2_common", "b2_restore", "migrate_to_parquet"]
 class FakePoint:
     """Minimal stand-in for a qdrant scroll Record."""
 
-    def __init__(self, pid: object, vector: object = None, payload: object = None):
+    def __init__(self, pid: object, vector: object = None, payload: object = None) -> None:
         self.id = pid
         self.vector = vector
         self.payload = payload if payload is not None else {}
@@ -45,7 +45,7 @@ class FakePoint:
 # ── b2_common: row conversion ──────────────────────────────────────────
 
 
-def test_point_to_row_flat_vector():
+def test_point_to_row_flat_vector() -> None:
     point = FakePoint(
         pid=123,
         vector=[0.1, 0.2, 0.3],
@@ -60,7 +60,7 @@ def test_point_to_row_flat_vector():
     assert json.loads(row["payload"])["source"] == "x"
 
 
-def test_point_to_row_uuid_and_named_vectors():
+def test_point_to_row_uuid_and_named_vectors() -> None:
     point = FakePoint(
         pid="07ba6f51-a3a9-5387-b6aa-3baa5f267986",
         vector={"dense": [1.0, 2.0], "bm25": {"indices": [0, 2], "values": [0.5, 0.25]}},
@@ -73,14 +73,14 @@ def test_point_to_row_uuid_and_named_vectors():
     assert vectors["bm25"]["indices"] == [0, 2]
 
 
-def test_point_to_row_no_vectors():
+def test_point_to_row_no_vectors() -> None:
     point = FakePoint(pid=7, vector=[9.9], payload={"content": "x"})
     row = b2_common.point_to_row(point, with_vectors=False)
     assert row["embedding"] is None
     assert row["vectors"] is None
 
 
-def test_point_to_row_non_dict_payload():
+def test_point_to_row_non_dict_payload() -> None:
     point = FakePoint(pid=1, vector=[1.0], payload=None)
     row = b2_common.point_to_row(point)
     assert row["payload"] == "{}"
@@ -90,7 +90,7 @@ def test_point_to_row_non_dict_payload():
 # ── b2_common: parquet write / DuckDB read round-trip ──────────────────
 
 
-def test_parquet_write_read_roundtrip(tmp_path):
+def test_parquet_write_read_roundtrip(tmp_path: Path) -> None:
     rows = [
         {
             "id": "123",
@@ -122,7 +122,7 @@ def test_parquet_write_read_roundtrip(tmp_path):
     )
 
 
-def test_parquet_stream_roundtrip(tmp_path):
+def test_parquet_stream_roundtrip(tmp_path: Path) -> None:
     dest = tmp_path / "stream.parquet"
     batches = [
         [
@@ -146,7 +146,7 @@ def test_parquet_stream_roundtrip(tmp_path):
 # ── b2_restore: record → PointStruct ───────────────────────────────────
 
 
-def test_record_to_point_parquet_row():
+def test_record_to_point_parquet_row() -> None:
     rec = {
         "id": "07ba6f51-a3a9-5387-b6aa-3baa5f267986",
         "content": "hello",
@@ -161,7 +161,7 @@ def test_record_to_point_parquet_row():
     assert point.payload["severity"] == "high"
 
 
-def test_record_to_point_named_vectors():
+def test_record_to_point_named_vectors() -> None:
     rec = {
         "id": "42",
         "content": "",
@@ -177,7 +177,7 @@ def test_record_to_point_named_vectors():
     assert point.vector["bm25"].values == [0.5]
 
 
-def test_parse_point_id():
+def test_parse_point_id() -> None:
     assert b2_restore.parse_point_id(123) == 123
     assert b2_restore.parse_point_id("123") == 123
     assert (
@@ -188,7 +188,7 @@ def test_parse_point_id():
         b2_restore.parse_point_id("not-a-valid-id")
 
 
-def test_parse_ndjson_legacy(tmp_path):
+def test_parse_ndjson_legacy(tmp_path: Path) -> None:
     path = tmp_path / "points.jsonl"
     path.write_text(
         json.dumps({"id": "123", "vector": [0.5], "payload": {"content": "a"}})
@@ -208,7 +208,7 @@ def test_parse_ndjson_legacy(tmp_path):
     assert points[1].payload["content"] == "b"
 
 
-def test_restore_prefers_parquet_entry():
+def test_restore_prefers_parquet_entry() -> None:
     ndjson = {"collection": "x", "format": "ndjson", "object_key": "x.jsonl.zst.enc"}
     parquet = {"collection": "x", "format": "parquet", "object_key": "x.parquet"}
     assert b2_restore._prefer_format(parquet, ndjson)
@@ -219,7 +219,7 @@ def test_restore_prefers_parquet_entry():
 # ── migrate_to_parquet: NDJSON → parquet ───────────────────────────────
 
 
-def test_ndjson_records_to_rows(tmp_path):
+def test_ndjson_records_to_rows(tmp_path: Path) -> None:
     src = tmp_path / "legacy.jsonl"
     src.write_text(
         json.dumps(
@@ -234,14 +234,14 @@ def test_ndjson_records_to_rows(tmp_path):
     assert json.loads(rows[0]["metadata"]) == {"a": 1}
 
 
-def test_legacy_object_format():
+def test_legacy_object_format() -> None:
     assert migrate_to_parquet.legacy_object_format("x.jsonl.zst.enc") == "zstd-encrypted"
     assert migrate_to_parquet.legacy_object_format("x.jsonl.zst") == "zstd"
     assert migrate_to_parquet.legacy_object_format("x.jsonl") == "plain"
     assert migrate_to_parquet.legacy_object_format("x.parquet") is None
 
 
-def test_collection_from_legacy_key():
+def test_collection_from_legacy_key() -> None:
     assert (
         migrate_to_parquet.collection_from_legacy_key(
             "snapshots/2026-08-01/threat_intel.jsonl.zst.enc"
@@ -257,7 +257,7 @@ def test_collection_from_legacy_key():
 # ── parquet_analytics: SQL guard + JSON safety ─────────────────────────
 
 
-def test_validate_read_only_sql_accepts():
+def test_validate_read_only_sql_accepts() -> None:
     from rugbrain.parquet_analytics import validate_read_only_sql
 
     validate_read_only_sql("SELECT count(*) FROM snapshots")
@@ -266,7 +266,7 @@ def test_validate_read_only_sql_accepts():
     validate_read_only_sql("SHOW TABLES")
 
 
-def test_validate_read_only_sql_rejects():
+def test_validate_read_only_sql_rejects() -> None:
     from rugbrain.parquet_analytics import validate_read_only_sql
 
     for bad in (
@@ -289,7 +289,7 @@ def test_validate_read_only_sql_rejects():
             validate_read_only_sql(bad)
 
 
-def test_json_safe_row():
+def test_json_safe_row() -> None:
     from rugbrain.parquet_analytics import json_safe_row
 
     assert json_safe_row((1, "a", 2.5, None, True)) == [1, "a", 2.5, None, True]
@@ -303,7 +303,7 @@ def test_json_safe_row():
 # ── parquet_analytics: DuckDB query over local parquet ─────────────────
 
 
-def test_run_snapshot_query_local_glob(tmp_path):
+def test_run_snapshot_query_local_glob(tmp_path: Path) -> None:
     from rugbrain.parquet_analytics import run_snapshot_query
 
     rows = [

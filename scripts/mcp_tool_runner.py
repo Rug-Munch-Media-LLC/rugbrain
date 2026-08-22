@@ -44,10 +44,10 @@ def _result(data: dict[str, Any]) -> None:
 
 async def _call_async(fn: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     """Run an async MCP tool inside the server lifespan (starts codebase-memory)."""
-    import codebase_server as cs  # type: ignore[import-not-found]
+    import codebase_server as cs
 
-    async with cs.lifespan(None):  # type: ignore[arg-type]
-        result = await fn(**kwargs)
+    async with cs.lifespan(None):
+        result: dict[str, Any] = await fn(**kwargs)
     return result
 
 
@@ -66,7 +66,7 @@ def main() -> int:
 
     try:
         if tool in {"search", "trace", "refresh", "status"}:
-            import codebase_server as cs  # type: ignore[import-not-found]
+            import codebase_server as cs
 
             fn = {
                 "search": cs.rmi_search,
@@ -76,7 +76,7 @@ def main() -> int:
             }[tool]
             result = asyncio.run(_call_async(fn, kwargs))
         elif tool in {"resolve_library", "query_codebase"}:
-            import codebase_server as cs  # type: ignore[import-not-found]
+            import codebase_server as cs
 
             # Sync Context7-style reference tools — no lifespan needed.
             fn = {

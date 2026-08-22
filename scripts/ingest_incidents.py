@@ -52,10 +52,12 @@ import logging
 import os
 import sys
 from collections import defaultdict
+from typing import Any
 
 import httpx
 
 from rugbrain.ingest_sources import fetch_source, list_sources
+from rugbrain.ingest_sources.base import IngestDoc
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_incidents")
@@ -79,7 +81,7 @@ DEFAULT_SOURCES = (
 )
 
 
-def _doc_to_ingest_dict(doc) -> dict:
+def _doc_to_ingest_dict(doc: IngestDoc) -> dict[str, Any]:
     """Bridge an IngestDoc into the ``write_docs`` dict shape.
 
     The target collection comes from the per-doc metadata (set by the
@@ -111,7 +113,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, int]:
         logger.error("unknown_sources=%s available=%s", unknown, list_sources())
         return {"inserted": 0, "chunks": 0, "failed": 0}
 
-    all_docs: list = []
+    all_docs: list[dict[str, Any]] = []
     per_source: dict[str, int] = {}
     for name in sources:
         docs = await fetch_source(name, limit=args.limit)
@@ -140,7 +142,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, int]:
     # defi_exploits, slowmist audit findings → contract_audits). Group so
     # write_docs gets one collection per call (it writes the whole batch
     # to the collection argument).
-    by_collection: dict[str, list[dict]] = defaultdict(list)
+    by_collection: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for d in docs:
         by_collection[str(d.get("collection") or COLLECTION)].append(d)
 

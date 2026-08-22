@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 
-def test_chunking_config_loads():
+def test_chunking_config_loads() -> None:
     path = Path(__file__).parent.parent / "src" / "rugbrain" / "chunking_config.yaml"
     with open(path) as f:
         config = yaml.safe_load(f)

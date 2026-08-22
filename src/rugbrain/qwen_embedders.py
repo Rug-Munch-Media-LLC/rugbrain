@@ -7,7 +7,7 @@ OpenRouter/HuggingFace (external fallbacks), and specialized contract embedder.
 import asyncio
 import logging
 import os
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 

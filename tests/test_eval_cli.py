@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,25 +36,25 @@ _RELEVANT_BY_QUERY: dict[str, list[str]] = {
 }
 
 
-async def fake_search(query: str, limit: int) -> list[dict]:
+async def fake_search(query: str, limit: int) -> Any:
     """Perfect mocked search: returns the relevant ids first, then distractors."""
     relevant = _RELEVANT_BY_QUERY.get(query, ["relevant-a", "relevant-b"])
-    results: list[dict] = [{"id": rid, "content": f"content {rid}"} for rid in relevant[:limit]]
+    results: list[dict[str, Any]] = [{"id": rid, "content": f"content {rid}"} for rid in relevant[:limit]]
     while len(results) < limit:
         results.append({"id": f"distractor-{len(results)}", "content": "distractor content"})
     return results
 
 
-async def fake_search_with_doc_id_key(query: str, limit: int) -> list[dict]:
+async def fake_search_with_doc_id_key(query: str, limit: int) -> Any:
     """Search returning ``doc_id`` instead of ``id`` (extraction fallback)."""
     return [{"doc_id": f"doc-{i}", "content": f"content {i}"} for i in range(limit)]
 
 
-async def fake_search_error(query: str, limit: int) -> list[dict]:
+async def fake_search_error(query: str, limit: int) -> Any:
     raise RuntimeError("search backend unavailable")
 
 
-async def fake_search_missing_id(query: str, limit: int) -> list[dict]:
+async def fake_search_missing_id(query: str, limit: int) -> Any:
     return [{"content": "no id here"}, {"content": "still none"}]
 
 
@@ -61,7 +62,7 @@ async def fake_search_missing_id(query: str, limit: int) -> list[dict]:
 
 
 class TestRunQuery:
-    async def test_scores_perfect_ranking(self):
+    async def test_scores_perfect_ranking(self) -> None:
         ex = QueryExample(
             query="How was the Euler Finance flash loan attack executed?",
             relevant_doc_ids=["defi_exploits/euler-finance-2023", "flash_loan_attack_pattern"],
@@ -74,7 +75,7 @@ class TestRunQuery:
         assert res.hit_rate == 1.0
         assert res.mrr_value == 1.0
 
-    async def test_expected_answer_triggers_content_metrics(self):
+    async def test_expected_answer_triggers_content_metrics(self) -> None:
         ex = QueryExample(
             query="How was the Euler Finance flash loan attack executed?",
             relevant_doc_ids=["defi_exploits/euler-finance-2023"],
@@ -85,25 +86,25 @@ class TestRunQuery:
         assert res.answer_relevance_score is not None
         assert 0.0 <= res.faithfulness_score <= 1.0
 
-    async def test_search_error_is_captured(self):
+    async def test_search_error_is_captured(self) -> None:
         ex = QueryExample(query="q", relevant_doc_ids=["a"])
         res = await run_query(fake_search_error, ex, top_k=5)
         assert res.error != ""
         assert res.ndcg == 0.0
 
-    async def test_missing_id_is_error_not_crash(self):
+    async def test_missing_id_is_error_not_crash(self) -> None:
         ex = QueryExample(query="q", relevant_doc_ids=["a"])
         res = await run_query(fake_search_missing_id, ex, top_k=5)
         assert "no id key" in res.error
 
-    async def test_extracts_doc_id_key_fallback(self):
+    async def test_extracts_doc_id_key_fallback(self) -> None:
         ex = QueryExample(query="q", relevant_doc_ids=["doc-0"])
         res = await run_query(fake_search_with_doc_id_key, ex, top_k=5)
         assert res.retrieved_ids == ["doc-0", "doc-1", "doc-2", "doc-3", "doc-4"]
 
 
 class TestRunEval:
-    async def test_aggregates_metrics(self):
+    async def test_aggregates_metrics(self) -> None:
         examples = load_dataset(SAMPLE_DATASET)
         summary = await run_eval(fake_search, examples, top_k=5)
         assert summary.total == 10
@@ -113,7 +114,7 @@ class TestRunEval:
         assert summary.mean_hit_rate == 1.0
         assert len(summary.per_query) == 10
 
-    async def test_errors_are_counted(self):
+    async def test_errors_are_counted(self) -> None:
         examples = [QueryExample(query="q", relevant_doc_ids=["a"])]
         summary = await run_eval(fake_search_error, examples, top_k=5)
         assert summary.total == 1
@@ -125,36 +126,36 @@ class TestRunEval:
 
 
 class TestLoadDataset:
-    def test_parses_sample(self):
+    def test_parses_sample(self) -> None:
         examples = load_dataset(SAMPLE_DATASET)
         assert len(examples) == 10
         assert all(ex.query for ex in examples)
         assert all(ex.relevant_doc_ids for ex in examples)
 
-    def test_missing_dataset_raises(self):
+    def test_missing_dataset_raises(self) -> None:
         with pytest.raises(FileNotFoundError):
             load_dataset(Path("/nonexistent/dataset.jsonl"))
 
-    def test_invalid_line_raises(self, tmp_path: Path):
+    def test_invalid_line_raises(self, tmp_path: Path) -> None:
         bad = tmp_path / "bad.jsonl"
         bad.write_text('{"query": "q"}\nnot json\n', encoding="utf-8")
         with pytest.raises(ValueError):
             load_dataset(bad)
 
-    def test_ignores_blank_and_comment_lines(self, tmp_path: Path):
+    def test_ignores_blank_and_comment_lines(self, tmp_path: Path) -> None:
         f = tmp_path / "mixed.jsonl"
         f.write_text('# comment\n\n{"query": "q", "relevant_doc_ids": ["a"]}\n', encoding="utf-8")
         assert len(load_dataset(f)) == 1
 
 
 class TestResultId:
-    def test_id_priority(self):
+    def test_id_priority(self) -> None:
         assert _result_id({"id": "a", "doc_id": "b"}) == "a"
         assert _result_id({"doc_id": "b", "uuid": "c"}) == "b"
         assert _result_id({"uuid": "c"}) == "c"
         assert _result_id({"chunk_id": "d"}) == "d"
 
-    def test_missing_key_raises(self):
+    def test_missing_key_raises(self) -> None:
         with pytest.raises(ValueError):
             _result_id({"content": "x"})
 
@@ -163,15 +164,15 @@ class TestResultId:
 
 
 class TestCli:
-    def test_load_search_function_dotted_path(self):
+    def test_load_search_function_dotted_path(self) -> None:
         fn = load_search_function("tests.test_eval_cli.fake_search")
         assert callable(fn)
 
-    def test_invalid_dotted_path(self):
+    def test_invalid_dotted_path(self) -> None:
         with pytest.raises(ValueError):
             load_search_function("no-dotted-path")
 
-    def test_cli_dry_run(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_dry_run(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(
             [
                 "--dataset",
@@ -189,7 +190,7 @@ class TestCli:
         assert "recall@5=1.0000" in out
         assert "errors=0" in out
 
-    def test_cli_json_output(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_json_output(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(
             [
                 "--dataset",
@@ -207,24 +208,24 @@ class TestCli:
         assert payload["mean_ndcg"] == pytest.approx(1.0)
         assert len(payload["per_query"]) == 10
 
-    def test_cli_missing_dataset(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_missing_dataset(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(
             ["--dataset", "/nonexistent.jsonl", "--search", "tests.test_eval_cli.fake_search"]
         )
         assert code == 2
         assert "error:" in capsys.readouterr().err
 
-    def test_cli_bad_top_k(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_bad_top_k(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(["--top-k", "0"])
         assert code == 2
         assert "--top-k" in capsys.readouterr().err
 
-    def test_cli_bad_search_path(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_bad_search_path(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(["--dataset", str(SAMPLE_DATASET), "--search", "no.such.fn"])
         assert code == 2
         assert "error:" in capsys.readouterr().err
 
-    def test_cli_all_errors_exit_nonzero(self, capsys: pytest.CaptureFixture[str]):
+    def test_cli_all_errors_exit_nonzero(self, capsys: pytest.CaptureFixture[str]) -> None:
         code = main(
             [
                 "--dataset",

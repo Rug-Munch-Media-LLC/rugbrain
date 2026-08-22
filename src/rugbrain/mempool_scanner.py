@@ -15,12 +15,11 @@ Data sources (all free-tier):
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -123,7 +122,7 @@ async def poll_ethereum_mempool() -> list[dict[str, Any]]:
                     "value_eth": round(value_eth, 4),
                     "flags": flags,
                     "chain": "ethereum",
-                    "detected_at": datetime.now(timezone.utc).isoformat(),
+                    "detected_at": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -174,7 +173,7 @@ async def poll_solana_mempool() -> list[dict[str, Any]]:
                         "value_sol": round(total / 1e9, 4),
                         "flags": flags,
                         "chain": "solana",
-                        "detected_at": datetime.now(timezone.utc).isoformat(),
+                        "detected_at": datetime.now(UTC).isoformat(),
                     }
                 )
 
@@ -192,7 +191,7 @@ async def mempool_scan_cycle() -> dict[str, Any]:
     all_suspicious = eth_results + sol_results
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "chains_scanned": ["ethereum", "solana"],
         "ethereum_pending": len(eth_results),
         "solana_pending": len(sol_results),

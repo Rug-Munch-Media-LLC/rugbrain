@@ -1,18 +1,22 @@
-"""Tests for rugbrain.web_crawler — crawl4ai integration + polite crawling."""
 
 from __future__ import annotations
 
+import importlib as _il
 import time
+from typing import Any
 
 import httpx
+import pytest
 import respx
 
-from rugbrain import web_crawler as mod
+web_crawler = _il.import_module("rugbrain.web_crawler")
+
+mod = web_crawler
 
 # ── Politeness helpers ───────────────────────────────────────────────────
 
 
-async def test_domain_rate_limiter_spaces_requests():
+async def test_domain_rate_limiter_spaces_requests() -> None:
     limiter = mod.DomainRateLimiter(default_interval=0.05)
     await limiter.acquire("https://a.com/x")
     t0 = time.monotonic()
@@ -23,18 +27,18 @@ async def test_domain_rate_limiter_spaces_requests():
     assert time.monotonic() - t1 < 0.04
 
 
-def test_robots_parse_disallow_default_group():
+def test_robots_parse_disallow_default_group() -> None:
     text = "User-agent: *\nDisallow: /search\nDisallow: /api\n\nUser-agent: googlebot\nDisallow: /x"
     assert mod.RobotsTxtCache._parse_disallow(text) == ["/search", "/api"]
 
 
-def test_robots_parse_ignores_other_agents():
+def test_robots_parse_ignores_other_agents() -> None:
     text = "User-agent: googlebot\nDisallow: /x"
     assert mod.RobotsTxtCache._parse_disallow(text) == []
 
 
 @respx.mock
-async def test_robots_allowed_respects_disallow():
+async def test_robots_allowed_respects_disallow() -> None:
     respx.get("https://example.com/robots.txt").respond(
         200, text="User-agent: *\nDisallow: /private\n"
     )
@@ -44,7 +48,7 @@ async def test_robots_allowed_respects_disallow():
         assert await cache.allowed("https://example.com/private/y", client) is False
 
 
-def test_html_to_text_strips_noise():
+def test_html_to_text_strips_noise() -> None:
     html = "<html><script>evil()</script><nav>menu</nav><p>Hello   <b>world</b></p></html>"
     text = mod.html_to_text(html)
     assert "Hello world" in text
@@ -55,16 +59,16 @@ def test_html_to_text_strips_noise():
 # ── WebCrawler ───────────────────────────────────────────────────────────
 
 
-def test_crawl4ai_probe_never_raises():
+def test_crawl4ai_probe_never_raises() -> None:
     c = mod.WebCrawler()
     result = c._crawl4ai()
     assert result is None or hasattr(result, "AsyncWebCrawler")
 
 
-async def test_crawl_http_fallback_extracts_text(monkeypatch):
+async def test_crawl_http_fallback_extracts_text(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
 
-    async def fake_httpx(url: str) -> str | None:
+    async def fake_httpx(url: str) -> Any:
         # _httpx_fetch normally runs html_to_text before returning.
         return mod.html_to_text(
             "<html><p>Clean <b>content</b> here.</p><script>x()</script></html>"
@@ -82,10 +86,10 @@ async def test_crawl_http_fallback_extracts_text(monkeypatch):
     assert doc.collection == "c"
 
 
-async def test_crawl_http_fallback_empty_when_blocked(monkeypatch):
+async def test_crawl_http_fallback_empty_when_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     c = mod.WebCrawler()
 
-    async def fake_httpx(url: str) -> str | None:
+    async def fake_httpx(url: str) -> Any:
         return None
 
     # Prevent crawl4ai from running (it is installed system-wide).
@@ -98,11 +102,11 @@ async def test_crawl_http_fallback_empty_when_blocked(monkeypatch):
     assert doc.content == ""
 
 
-async def test_crawl_many_bounded_concurrency(monkeypatch):
+async def test_crawl_many_bounded_concurrency(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
     calls: list[str] = []
 
-    async def fake_httpx(url: str) -> str | None:
+    async def fake_httpx(url: str) -> Any:
         calls.append(url)
         return f"content for {url}"
 
@@ -121,20 +125,26 @@ async def test_crawl_many_bounded_concurrency(monkeypatch):
 # ── Entry points (store mocked to avoid network) ─────────────────────────
 
 
-def _fake_store_fn(stored: list[list[mod.CrawlDocument]]):
-    async def fake_store(docs: list[mod.CrawlDocument], collection: str) -> dict[str, int]:
+def _fake_store_fn(stored: list[list[dict[str, Any]]]) -> Any:
+    async def fake_store(docs: list[dict[str, Any]], collection: str) -> dict[str, int]:
         stored.append(docs)
         return {"inserted": len(docs), "failed": 0, "chunks": len(docs)}
 
     return fake_store
 
 
-async def test_crawl_crypto_news_rss_first(monkeypatch):
+async def test_crawl_crypto_news_rss_first(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
-    stored: list[list[mod.CrawlDocument]] = []
+    stored: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
 
-    async def fake_fetch_rss(url, source, collection, category, limit=15):
+    async def fake_fetch_rss(
+        url: Any,
+        source: Any,
+        collection: Any,
+        category: Any,
+        limit: int = 15,
+    ) -> Any:
         return [
             mod.doc_from_article(
                 title=f"{source} story",
@@ -152,17 +162,17 @@ async def test_crawl_crypto_news_rss_first(monkeypatch):
     assert stored and stored[0]
 
 
-async def test_crawl_crypto_news_homepage_fallback(monkeypatch):
+async def test_crawl_crypto_news_homepage_fallback(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
-    stored: list[list[mod.CrawlDocument]] = []
+    stored: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
 
-    async def fake_feed_empty(*a, **k):
+    async def fake_feed_empty(*a: Any, **k: Any) -> Any:
         return []
 
     monkeypatch.setattr(mod, "fetch_rss_feed", fake_feed_empty)
 
-    async def fake_httpx(url: str) -> str | None:
+    async def fake_httpx(url: str) -> Any:
         return "homepage crawl content"
 
     monkeypatch.setattr(c, "_httpx_fetch", fake_httpx)
@@ -170,12 +180,12 @@ async def test_crawl_crypto_news_homepage_fallback(monkeypatch):
     assert result["inserted"] == len(mod.NEWS_FEEDS)
 
 
-async def test_crawl_security_feeds(monkeypatch):
+async def test_crawl_security_feeds(monkeypatch: pytest.MonkeyPatch) -> Any:
     c = mod.WebCrawler()
-    stored: list[list[mod.CrawlDocument]] = []
+    stored: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
 
-    async def fake_httpx(url: str) -> str | None:
+    async def fake_httpx(url: str) -> Any:
         return "security blog content"
 
     monkeypatch.setattr(c, "_httpx_fetch", fake_httpx)
@@ -184,9 +194,9 @@ async def test_crawl_security_feeds(monkeypatch):
 
 
 @respx.mock
-async def test_crawl_social_sentiment_via_searxng(monkeypatch):
+async def test_crawl_social_sentiment_via_searxng(monkeypatch: pytest.MonkeyPatch) -> None:
     c = mod.WebCrawler()
-    stored: list[list[mod.CrawlDocument]] = []
+    stored: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
     monkeypatch.setattr(mod, "SEARXNG_URL", "http://127.0.0.1:8089")
 
@@ -204,13 +214,13 @@ async def test_crawl_social_sentiment_via_searxng(monkeypatch):
     )
     result = await mod.crawl_social_sentiment(c, limit=30)
     assert result["inserted"] == len(mod.X_ACCOUNTS)
-    assert stored and stored[0][0].source.startswith("x:")
+    assert stored and stored[0][0]["source"].startswith("x:")
 
 
 @respx.mock
-async def test_crawl_github_audits(monkeypatch):
+async def test_crawl_github_audits(monkeypatch: pytest.MonkeyPatch) -> None:
     c = mod.WebCrawler()
-    stored: list[list[mod.CrawlDocument]] = []
+    stored: list[list[dict[str, Any]]] = []
     monkeypatch.setattr(c, "store", _fake_store_fn(stored))
 
     respx.get(url__regex=r"https://api\.github\.com/search/repositories.*").respond(
@@ -232,11 +242,11 @@ async def test_crawl_github_audits(monkeypatch):
     )
     result = await mod.crawl_github_audits(c, limit=15)
     assert result["inserted"] == 1
-    assert stored and stored[0][0].metadata["repo"] == "org/audit-repo"
+    assert stored and stored[0][0]["metadata"]["repo"] == "org/audit-repo"
 
 
 @respx.mock
-async def test_fetch_rss_feed_parses_items():
+async def test_fetch_rss_feed_parses_items() -> None:
     respx.get("https://feed.example.com/rss").respond(
         200,
         text="""<rss><channel><title>F</title>

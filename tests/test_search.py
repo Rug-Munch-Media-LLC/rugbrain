@@ -1,10 +1,10 @@
-def test_classify_query():
+def test_classify_query() -> None:
     from rugbrain.search_service import _classify_query
     assert _classify_query("0xabc123") in ("entity_heavy", "keyword_heavy", "balanced")
     assert _classify_query("explain how defi works") == "semantic_heavy"
     assert _classify_query("btc") == "keyword_heavy"
 
-def test_three_pillar_exists():
+def test_three_pillar_exists() -> None:
     import inspect
 
     from rugbrain.search_service import three_pillar_search

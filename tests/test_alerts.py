@@ -8,17 +8,22 @@ bus publishing fallback, and ClickHouse logging degradation.
 
 from __future__ import annotations
 
+import importlib as _il
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
+import pytest
 import respx
 
-from rugbrain import alerts as mod
+alerts = _il.import_module("rugbrain.alerts")
+
+mod = alerts
 
 # ── Model / helpers ──────────────────────────────────────────────────────
 
 
-def test_alert_id_deterministic():
+def test_alert_id_deterministic() -> None:
     a = mod.SecurityAlert(source="rekt", title="Curve Hack", date="2023-07-30")
     b = mod.SecurityAlert(source="rekt", title="Curve Hack", date="2023-07-30")
     assert a.id == b.id
@@ -26,7 +31,7 @@ def test_alert_id_deterministic():
     assert a.id != c.id
 
 
-def test_alert_text_contains_fields():
+def test_alert_text_contains_fields() -> None:
     a = mod.SecurityAlert(
         source="defillama",
         title="Super Sushi Samurai",
@@ -41,21 +46,21 @@ def test_alert_text_contains_fields():
     assert "Infinite mint and dump." in text
 
 
-def test_detect_vector_keywords():
+def test_detect_vector_keywords() -> None:
     assert mod.detect_vector("reentrancy vulnerability in withdraw") == "reentrancy"
     assert mod.detect_vector("oracle price manipulation attack") == "oracle-manipulation"
     assert mod.detect_vector("liquidity removed exit scam") == "rug-pull"
     assert mod.detect_vector("nothing suspicious here") == "unknown"
 
 
-def test_detect_chain_keywords():
+def test_detect_chain_keywords() -> None:
     assert mod.detect_chain("exploit on solana") == "solana"
     assert mod.detect_chain("hack on ethereum mainnet") == "ethereum"
     assert mod.detect_chain("cross-chain bridge hack") == "multi"
     assert mod.detect_chain("0xabc123456789abcdef") == "ethereum"
 
 
-def test_parse_date_iso_rfc822():
+def test_parse_date_iso_rfc822() -> None:
     assert mod._parse_date_iso("Tue, 04 Aug 2026 12:00:00 +0000") == "2026-08-04"
     assert mod._parse_date_iso("2026-08-04T10:00:00Z") == "2026-08-04"
     assert mod._parse_date_iso("") == ""
@@ -64,19 +69,19 @@ def test_parse_date_iso_rfc822():
 # ── Pollers (mocked HTTP) ────────────────────────────────────────────────
 
 
-async def _poll_json(poller, payload):
+async def _poll_json(poller: Any, payload: Any) -> Any:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(200, json=payload))
     async with httpx.AsyncClient(transport=transport) as client:
         return await poller(client, datetime.now(UTC).timestamp())
 
 
-async def _poll_text(poller, text):
+async def _poll_text(poller: Any, text: Any) -> Any:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(200, text=text))
     async with httpx.AsyncClient(transport=transport) as client:
         return await poller(client, datetime.now(UTC).timestamp())
 
 
-async def test_poll_defillama_recent():
+async def test_poll_defillama_recent() -> None:
     now = datetime.now(UTC).timestamp()
     payload = [
         {
@@ -105,14 +110,14 @@ async def test_poll_defillama_recent():
     assert alerts[0].severity == "high"  # $4.8M < $10M critical threshold
 
 
-async def test_poll_defillama_http_error():
+async def test_poll_defillama_http_error() -> None:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(500))
     async with httpx.AsyncClient(transport=transport) as client:
         alerts = await mod.poll_defillama(client, datetime.now(UTC).timestamp())
     assert alerts == []
 
 
-async def test_poll_coingecko():
+async def test_poll_coingecko() -> None:
     payload = [
         {
             "id": "shibainu-new",
@@ -128,7 +133,7 @@ async def test_poll_coingecko():
     assert alerts[0].attack_vector == "rug-pull"
 
 
-async def test_poll_rekt_leaderboard_next_data():
+async def test_poll_rekt_leaderboard_next_data() -> None:
     now = datetime.now(UTC).timestamp()
     iso = datetime.fromtimestamp(now, tz=UTC).date().isoformat()
     html = (
@@ -145,7 +150,7 @@ async def test_poll_rekt_leaderboard_next_data():
     assert alerts[0].amount_lost_usd == 62000000
 
 
-def test_parse_rss_items():
+def test_parse_rss_items() -> None:
     xml = (
         "<rss><channel><item><title>New hack alert</title>"
         "<link>https://example.com/1</link>"
@@ -161,14 +166,14 @@ def test_parse_rss_items():
 # ── State (rate limit + dedup, in-memory fallback) ───────────────────────
 
 
-def _rate_limited_for_test(state, source, now, interval) -> bool:
+def _rate_limited_for_test(state: Any, source: Any, now: Any, interval: Any) -> Any:
     last = state._memory.get(f"poll:{source}")
     if last is None:
         return False
     return (now - float(last)) < interval
 
 
-async def test_alert_state_memory_fallback():
+async def test_alert_state_memory_fallback() -> None:
     state = mod.AlertState()
     await state.set_last_poll("defillama", 100.0)
     assert await state.last_poll("defillama") == 100.0
@@ -185,7 +190,7 @@ async def test_alert_state_memory_fallback():
 
 
 @respx.mock
-async def test_store_alert_upsert():
+async def test_store_alert_upsert() -> None:
     alert = mod.SecurityAlert(source="rekt", title="Curve Hack", date="2023-07-30")
     embedding = [0.1] * mod.EMBEDDING_DIM
 
@@ -197,7 +202,7 @@ async def test_store_alert_upsert():
 
 
 @respx.mock
-async def test_store_alert_creates_collection():
+async def test_store_alert_creates_collection() -> None:
     alert = mod.SecurityAlert(source="rekt", title="Curve Hack", date="2023-07-30")
     embedding = [0.1] * mod.EMBEDDING_DIM
 
@@ -212,7 +217,7 @@ async def test_store_alert_creates_collection():
 # ── Bus publishing ───────────────────────────────────────────────────────
 
 
-async def test_alert_bus_publish_no_transport(monkeypatch):
+async def test_alert_bus_publish_no_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NATS_URL", "")
     bus = mod.AlertBus()
     await bus.connect()
@@ -225,7 +230,7 @@ async def test_alert_bus_publish_no_transport(monkeypatch):
 # ── ClickHouse logger degradation ────────────────────────────────────────
 
 
-def test_clickhouse_logger_unavailable(monkeypatch):
+def test_clickhouse_logger_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CLICKHOUSE_PASSWORD", raising=False)
     logger = mod.ClickHouseAlertLogger()
     assert logger._client is None
@@ -238,14 +243,14 @@ def test_clickhouse_logger_unavailable(monkeypatch):
 # ── poll_once orchestration with a stubbed source ────────────────────────
 
 
-async def test_poll_once_fake_source(monkeypatch):
-    async def fake_poller(client, now):
+async def test_poll_once_fake_source(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_poller(client: Any, now: Any) -> list[Any]:
         return [mod.SecurityAlert(source="fake", title="Fake Incident", date="2026-08-01")]
 
     monkeypatch.setattr(mod, "SOURCE_POLLERS", {"fake": fake_poller})
     # Force in-memory state (no Redis), no bus.
 
-    async def _no_client(self):
+    async def _no_client(self: Any) -> bool:
         return False
 
     monkeypatch.setattr(mod.AlertState, "_client", _no_client)
@@ -257,14 +262,14 @@ async def test_poll_once_fake_source(monkeypatch):
     assert results["total_new"] == 1
 
 
-async def test_poll_once_dedups_within_pass(monkeypatch):
-    async def fake_poller(client, now):
+async def test_poll_once_dedups_within_pass(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_poller(client: Any, now: Any) -> list[Any]:
         alert = mod.SecurityAlert(source="fake", title="Fake Incident", date="2026-08-01")
         return [alert, alert]  # same incident detected twice in one pass
 
     monkeypatch.setattr(mod, "SOURCE_POLLERS", {"fake": fake_poller})
 
-    async def _no_client(self):
+    async def _no_client(self: Any) -> bool:
         return False
 
     monkeypatch.setattr(mod.AlertState, "_client", _no_client)

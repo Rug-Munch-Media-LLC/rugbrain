@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,7 +12,7 @@ from rugbrain.news_clustering import Story, StorySource
 
 
 @pytest.fixture
-def client():
+def client() -> Any:
     from fastapi import FastAPI
 
     from rugbrain.news_feed import news_feed_router
@@ -22,7 +23,7 @@ def client():
     return AsyncClient(transport=transport, base_url="http://test")
 
 
-def _story(**overrides) -> Story:
+def _story(**overrides: Any) -> Story:
     now = datetime.now(UTC)
     sources = [
         StorySource(
@@ -72,10 +73,14 @@ def _story(**overrides) -> Story:
 
 
 @pytest.mark.asyncio
-async def test_news_feed_empty_without_store(client, monkeypatch):
+async def test_news_feed_empty_without_store(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """No stories in Qdrant -> 200 with empty stories (fail-open)."""
 
-    async def fake_ranked_feed(topic=None, min_quality=70.0, limit=20):
+    async def fake_ranked_feed(
+        topic: Any = None,
+        min_quality: float = 70.0,
+        limit: int = 20,
+    ) -> Any:
         return []
 
     import rugbrain.news_feed as nf
@@ -90,11 +95,15 @@ async def test_news_feed_empty_without_store(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_feed_returns_ranked_stories(client, monkeypatch):
+async def test_news_feed_returns_ranked_stories(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     story = _story(composite_score=88.0)
     story2 = _story(id="story-2", composite_score=75.0)
 
-    async def fake_ranked_feed(topic=None, min_quality=70.0, limit=20):
+    async def fake_ranked_feed(
+        topic: Any = None,
+        min_quality: float = 70.0,
+        limit: int = 20,
+    ) -> Any:
         return [story2, story]
 
     import rugbrain.news_feed as nf
@@ -118,10 +127,10 @@ async def test_news_feed_returns_ranked_stories(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_story_detail(client, monkeypatch):
+async def test_news_story_detail(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     story = _story()
 
-    async def fake_load_story(story_id):
+    async def fake_load_story(story_id: Any) -> Any:
         return story
 
     import rugbrain.news_feed as nf
@@ -141,8 +150,8 @@ async def test_news_story_detail(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_story_detail_404(client, monkeypatch):
-    async def fake_load_story(story_id):
+async def test_news_story_detail_404(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_load_story(story_id: Any) -> None:
         return None
 
     import rugbrain.news_feed as nf
@@ -158,11 +167,11 @@ async def test_news_story_detail_404(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_trending_velocity_sorted(client, monkeypatch):
+async def test_news_trending_velocity_sorted(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     hot = _story(id="hot", velocity=12.5, composite_score=80.0)
     cold = _story(id="cold", velocity=0.5, composite_score=90.0)
 
-    async def fake_trending(limit=20):
+    async def fake_trending(limit: int = 20) -> Any:
         return [hot, cold]
 
     import rugbrain.news_feed as nf
@@ -181,8 +190,8 @@ async def test_news_trending_velocity_sorted(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_news_topics_counts(client, monkeypatch):
-    async def fake_topic_counts(limit=50):
+async def test_news_topics_counts(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_topic_counts(limit: int = 50) -> Any:
         return {"ethereum": 5, "bitcoin": 3, "security": 1}
 
     import rugbrain.news_feed as nf

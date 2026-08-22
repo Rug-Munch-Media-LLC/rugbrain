@@ -1,11 +1,16 @@
 """Tests for rugbrain.social_intel — X/Reddit/Farcaster social intelligence."""
-
 from __future__ import annotations
 
+import importlib as _il
+from typing import Any
+
 import httpx
+import pytest
 import respx
 
-from rugbrain import social_intel as mod
+social_intel = _il.import_module("rugbrain.social_intel")
+
+mod = social_intel
 from rugbrain.ingest_common import doc_from_article
 
 REDDIT_PAYLOAD = {
@@ -44,7 +49,7 @@ HUBBLE_CAST = {
 # ── Analysis helpers ─────────────────────────────────────────────────────
 
 
-def _doc(title: str, content: str, source: str = "x", **meta) -> mod.CrawlDocument:
+def _doc(title: str, content: str, source: str = "x", **meta: Any) -> Any:
     return doc_from_article(
         title=title,
         content=content,
@@ -55,7 +60,7 @@ def _doc(title: str, content: str, source: str = "x", **meta) -> mod.CrawlDocume
     )
 
 
-def test_analyze_sentiment_positive_negative():
+def test_analyze_sentiment_positive_negative() -> None:
     bullish = _doc("BTC bullish moon rally", "strong gains, buy signal")
     bearish = _doc("rug pull hack", "crash dump, loss")
     assert mod.analyze_sentiment([bullish]) > 0
@@ -65,7 +70,7 @@ def test_analyze_sentiment_positive_negative():
     assert -1.0 <= mixed <= 1.0
 
 
-def test_trending_topics_counts():
+def test_trending_topics_counts() -> None:
     docs = [
         _doc("solana upgrade", "solana validators solana"),
         _doc("ethereum roadmap", "ethereum roadmap"),
@@ -77,7 +82,7 @@ def test_trending_topics_counts():
     assert topics[0][1] >= 3
 
 
-def test_influential_posts_ranks_by_engagement():
+def test_influential_posts_ranks_by_engagement() -> None:
     low = _doc("low", "x", score=1, num_comments=1)
     high = _doc("high", "x", score=500, num_comments=100)
     ranked = mod.influential_posts([low, high])
@@ -88,7 +93,7 @@ def test_influential_posts_ranks_by_engagement():
 
 
 @respx.mock
-async def test_fetch_x_posts_via_searxng(monkeypatch):
+async def test_fetch_x_posts_via_searxng(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mod, "SEARXNG_URL", "http://127.0.0.1:8089")
     respx.get(url__regex=r"http://127\.0\.0\.1:8089/search.*").respond(
         200,
@@ -102,7 +107,7 @@ async def test_fetch_x_posts_via_searxng(monkeypatch):
 
 
 @respx.mock
-async def test_fetch_reddit_posts():
+async def test_fetch_reddit_posts() -> None:
     respx.get("https://www.reddit.com/r/solana/new.json").respond(200, json=REDDIT_PAYLOAD)
     async with httpx.AsyncClient() as client:
         docs = await mod.fetch_reddit_posts(client, ("solana",), limit=25)
@@ -113,7 +118,7 @@ async def test_fetch_reddit_posts():
 
 
 @respx.mock
-async def test_fetch_reddit_posts_handles_failure():
+async def test_fetch_reddit_posts_handles_failure() -> None:
     respx.get("https://www.reddit.com/r/ethdev/new.json").respond(403, json={})
     async with httpx.AsyncClient() as client:
         docs = await mod.fetch_reddit_posts(client, ("ethdev",), limit=25)
@@ -121,7 +126,7 @@ async def test_fetch_reddit_posts_handles_failure():
 
 
 @respx.mock
-async def test_fetch_farcaster_casts_recent_casts():
+async def test_fetch_farcaster_casts_recent_casts() -> None:
     respx.get("http://127.0.0.1:2281/v1/info").respond(200, json={"version": "1.0"})
     respx.get("http://127.0.0.1:2281/v1/recent-casts").respond(200, json=HUBBLE_CAST)
     async with httpx.AsyncClient() as client:
@@ -132,7 +137,7 @@ async def test_fetch_farcaster_casts_recent_casts():
 
 
 @respx.mock
-async def test_fetch_farcaster_casts_falls_back_to_fid():
+async def test_fetch_farcaster_casts_falls_back_to_fid() -> None:
     respx.get("http://127.0.0.1:2281/v1/info").respond(200, json={"version": "1.0"})
     respx.get("http://127.0.0.1:2281/v1/recent-casts").respond(500, json={})
     respx.get("http://127.0.0.1:2281/v1/castsByFid").respond(200, json=HUBBLE_CAST)
@@ -142,21 +147,21 @@ async def test_fetch_farcaster_casts_falls_back_to_fid():
 
 
 @respx.mock
-async def test_fetch_farcaster_casts_hubble_down():
+async def test_fetch_farcaster_casts_hubble_down() -> None:
     respx.get("http://127.0.0.1:2281/v1/info").respond(503, json={})
     async with httpx.AsyncClient() as client:
         docs = await mod.fetch_farcaster_casts(client, ("3",))
     assert docs == []
 
 
-async def test_collect_social_intel_dry_run(monkeypatch):
-    async def fake_x(client, accounts):
+async def test_collect_social_intel_dry_run(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def fake_x(client: Any, accounts: Any) -> Any:
         return [_doc("x post", "content", source="x:h")]
 
-    async def fake_reddit(client, subreddits, limit=25):
+    async def fake_reddit(client: Any, subreddits: Any, limit: int = 25) -> Any:
         return [_doc("reddit post", "content", source="reddit:solana", score=10)]
 
-    async def fake_farcaster(client, fids):
+    async def fake_farcaster(client: Any, fids: Any) -> Any:
         return [_doc("cast", "content", source="farcaster", reactions=2)]
 
     monkeypatch.setattr(mod, "fetch_x_posts", fake_x)

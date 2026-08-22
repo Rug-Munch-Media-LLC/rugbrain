@@ -119,13 +119,13 @@ def _async_get_redis(redis: _FakeRedis) -> Any:
 # ── 1. query_transform: multi-query expansion ─────────────────────────
 
 
-def test_multi_query_expand_noop_without_llm():
+def test_multi_query_expand_noop_without_llm() -> None:
     assert asyncio.run(multi_query_expand("bitcoin etf approval news")) == [
         "bitcoin etf approval news"
     ]
 
 
-def test_multi_query_expand_with_sync_llm():
+def test_multi_query_expand_with_sync_llm() -> Any:
     def llm(query: str) -> list[str]:
         return [
             "bitcoin ETF approval regulatory news",
@@ -139,7 +139,7 @@ def test_multi_query_expand_with_sync_llm():
     assert "bitcoin ETF approval regulatory news" in out
 
 
-def test_multi_query_expand_with_async_llm():
+def test_multi_query_expand_with_async_llm() -> Any:
     async def llm(query: str) -> list[str]:
         return ["async rewrite one", "async rewrite two"]
 
@@ -147,7 +147,7 @@ def test_multi_query_expand_with_async_llm():
     assert out == ["some query", "async rewrite one", "async rewrite two"]
 
 
-def test_multi_query_expand_caps_at_four_variants():
+def test_multi_query_expand_caps_at_four_variants() -> Any:
     def llm(query: str) -> list[str]:
         return [f"rewrite {i}" for i in range(10)]
 
@@ -155,24 +155,24 @@ def test_multi_query_expand_caps_at_four_variants():
     assert len(out) == 4  # original + 3 rewrites
 
 
-def test_multi_query_expand_dedupes_and_drops_non_strings():
-    def llm(query: str) -> list[str]:
-        return ["q", "same as original", 123, "same as original", "unique"]  # type: ignore[list-item]
+def test_multi_query_expand_dedupes_and_drops_non_strings() -> Any:
+    def llm(query: str) -> Any:
+        return ["q", "same as original", 123, "same as original", "unique"]
 
     out = asyncio.run(multi_query_expand("q", llm_fn=llm))
     assert out == ["q", "same as original", "unique"]
 
 
-def test_multi_query_expand_failure_falls_back_to_noop():
+def test_multi_query_expand_failure_falls_back_to_noop() -> None:
     def llm(query: str) -> list[str]:
         raise RuntimeError("model down")
 
     assert asyncio.run(multi_query_expand("q", llm_fn=llm)) == ["q"]
 
 
-def test_multi_query_expand_accepts_comma_separated_string():
-    def llm(query: str) -> list[str]:
-        return "alpha, beta; gamma"  # type: ignore[return-value]
+def test_multi_query_expand_accepts_comma_separated_string() -> Any:
+    def llm(query: str) -> Any:
+        return "alpha, beta; gamma"
 
     out = asyncio.run(multi_query_expand("q", llm_fn=llm))
     assert out == ["q", "alpha", "beta", "gamma"]
@@ -181,7 +181,7 @@ def test_multi_query_expand_accepts_comma_separated_string():
 # ── 2. query_transform: HyDE ──────────────────────────────────────────
 
 
-def test_expand_synonyms_maps_crypto_terms():
+def test_expand_synonyms_maps_crypto_terms() -> None:
     """Common crypto terms gain alias variants (rug pull→rugpull/honeypot)."""
     out = expand_synonyms("rug pull token cannot sell")
     assert out[0] == "rug pull token cannot sell"
@@ -189,22 +189,22 @@ def test_expand_synonyms_maps_crypto_terms():
     assert any("honeypot" in v for v in out)
 
 
-def test_expand_synonyms_flash_loan_and_sandwich():
+def test_expand_synonyms_flash_loan_and_sandwich() -> None:
     assert any("flashloan" in v for v in expand_synonyms("flash loan attack how it works"))
     mev = expand_synonyms("MEV sandwich attack prevention")
     assert any("frontrunning" in v for v in mev)
 
 
-def test_expand_synonyms_oracle_manipulation():
+def test_expand_synonyms_oracle_manipulation() -> None:
     out = expand_synonyms("oracle manipulation TWAP spot price attack")
     assert any("price manipulation" in v for v in out)
 
 
-def test_expand_synonyms_noop_unmatched():
+def test_expand_synonyms_noop_unmatched() -> None:
     assert expand_synonyms("bitcoin price today") == ["bitcoin price today"]
 
 
-def test_expand_synonyms_bounded():
+def test_expand_synonyms_bounded() -> None:
     q = "rug pull flash loan sandwich oracle manipulation"
     out = expand_synonyms(q)
     assert out[0] == q
@@ -213,7 +213,7 @@ def test_expand_synonyms_bounded():
 
 def test_search_multi_collection_synonym_expand_searches_variants(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     """synonym_expand=True searches the original query plus alias variants."""
     searches: list[str] = []
 
@@ -223,7 +223,7 @@ def test_search_multi_collection_synonym_expand_searches_variants(
         limit: int = 10,
         min_similarity: float = 0.0,
         content_limit: int = 500,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         searches.append(query)
         return [
             {
@@ -236,7 +236,7 @@ def test_search_multi_collection_synonym_expand_searches_variants(
 
     monkeypatch.setattr(engine_mod, "search_similar", fake_search_similar)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "rug pull token cannot sell",
             collections=["coll_a"],
@@ -252,7 +252,7 @@ def test_search_multi_collection_synonym_expand_searches_variants(
     assert out
 
 
-def test_hyde_expand_noop_fallback_uses_query():
+def test_hyde_expand_noop_fallback_uses_query() -> Any:
     embedded: list[str] = []
 
     async def embed_fn(text: str) -> list[float]:
@@ -266,7 +266,7 @@ def test_hyde_expand_noop_fallback_uses_query():
     assert embedded == ["reentrancy guard solidity"]
 
 
-def test_hyde_expand_with_llm_embeds_hypothetical_doc():
+def test_hyde_expand_with_llm_embeds_hypothetical_doc() -> Any:
     embedded: list[str] = []
 
     async def embed_fn(text: str) -> list[float]:
@@ -282,7 +282,7 @@ def test_hyde_expand_with_llm_embeds_hypothetical_doc():
     assert embedded == [out["hypothetical_doc"]]
 
 
-def test_hyde_expand_llm_failure_falls_back():
+def test_hyde_expand_llm_failure_falls_back() -> Any:
     def llm(query: str) -> str:
         raise RuntimeError("down")
 
@@ -294,7 +294,7 @@ def test_hyde_expand_llm_failure_falls_back():
     assert out["hypothetical_doc"] == "q"
 
 
-def test_hyde_expand_supports_sync_embed_fn():
+def test_hyde_expand_supports_sync_embed_fn() -> Any:
     def embed_fn(text: str) -> list[float]:
         return [len(text)]
 
@@ -305,14 +305,14 @@ def test_hyde_expand_supports_sync_embed_fn():
 # ── 3. fusion: recency-aware decay helpers ────────────────────────────
 
 
-def test_half_life_decay_math():
+def test_half_life_decay_math() -> None:
     assert half_life_decay(0.0, 30.0) == pytest.approx(1.0)
     assert half_life_decay(30.0, 30.0) == pytest.approx(0.5)
     assert half_life_decay(60.0, 30.0) == pytest.approx(0.25)
     assert half_life_decay(10.0, 0.0) == 1.0  # disabled when half-life <= 0
 
 
-def test_extract_doc_date_parses_iso_epoch_and_missing():
+def test_extract_doc_date_parses_iso_epoch_and_missing() -> None:
     now = datetime.now(UTC)
     iso = now.isoformat()
     assert extract_doc_date({"metadata": {"published": iso}}) is not None
@@ -324,7 +324,7 @@ def test_extract_doc_date_parses_iso_epoch_and_missing():
     assert extract_doc_date({"metadata": {"published": "not-a-date"}}) is None
 
 
-def test_apply_recency_decay_orders_newer_first_and_tags():
+def test_apply_recency_decay_orders_newer_first_and_tags() -> None:
     old = datetime.now(UTC) - timedelta(days=400)
     fresh = datetime.now(UTC) - timedelta(days=1)
     results = [
@@ -341,7 +341,7 @@ def test_apply_recency_decay_orders_newer_first_and_tags():
     assert out[0]["similarity"] > out[1]["similarity"]
 
 
-def test_apply_recency_decay_leaves_docs_without_date_unchanged():
+def test_apply_recency_decay_leaves_docs_without_date_unchanged() -> None:
     results = [
         {"id": "a", "rrf_score": 0.5, "metadata": {}},
         {"id": "b", "rrf_score": 0.4, "metadata": {"published": "2020-01-01T00:00:00Z"}},
@@ -353,7 +353,7 @@ def test_apply_recency_decay_leaves_docs_without_date_unchanged():
     assert by_id["b"]["rrf_score"] < 0.4
 
 
-def test_rrf_fuse_recency_equals_rrf_when_disabled():
+def test_rrf_fuse_recency_equals_rrf_when_disabled() -> None:
     lists = [
         [{"id": "a", "similarity": 0.9}, {"id": "b", "similarity": 0.8}],
         [{"id": "b", "similarity": 0.7}, {"id": "c", "similarity": 0.6}],
@@ -363,7 +363,7 @@ def test_rrf_fuse_recency_equals_rrf_when_disabled():
     assert all(r.get("recency_decay") is None for r in out)
 
 
-def test_rrf_fuse_recency_applies_half_life_decay():
+def test_rrf_fuse_recency_applies_half_life_decay() -> None:
     old = datetime.now(UTC) - timedelta(days=300)
     fresh = datetime.now(UTC) - timedelta(days=1)
     lists = [
@@ -380,7 +380,7 @@ def test_rrf_fuse_recency_applies_half_life_decay():
 # ── 4. engine wiring: search_multi_collection expansion ───────────────
 
 
-def test_search_multi_collection_default_no_expansion(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_default_no_expansion(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hyde/multi_query default OFF: no extra embedder calls, single search."""
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(engine_mod, "get_embedder", _async_get_embedder(embedder))
@@ -391,14 +391,14 @@ def test_search_multi_collection_default_no_expansion(monkeypatch: pytest.Monkey
         limit: int = 10,
         min_similarity: float = 0.0,
         content_limit: int = 500,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return [
             {"id": f"{collection}-x", "similarity": 0.9, "content": query, "collection": collection}
         ]
 
     monkeypatch.setattr(engine_mod, "search_similar", fake_search_similar)
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "bitcoin price", collections=["coll_a"], limit=2
         )
@@ -408,7 +408,7 @@ def test_search_multi_collection_default_no_expansion(monkeypatch: pytest.Monkey
     assert embedder.embedded == []  # expansion fully off — embedder never touched
 
 
-def test_search_multi_collection_hyde_expands_query(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_hyde_expands_query(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hyde=True searches the original query AND the hypothetical doc."""
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(engine_mod, "get_embedder", _async_get_embedder(embedder))
@@ -420,7 +420,7 @@ def test_search_multi_collection_hyde_expands_query(monkeypatch: pytest.MonkeyPa
         limit: int = 10,
         min_similarity: float = 0.0,
         content_limit: int = 500,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         searches.append(query)
         return [
             {
@@ -436,7 +436,7 @@ def test_search_multi_collection_hyde_expands_query(monkeypatch: pytest.MonkeyPa
     def llm(query: str) -> str:
         return "Hypothetical answer: the reentrancy guard uses checks-effects-interactions."
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "reentrancy guard solidity",
             collections=["coll_a"],
@@ -454,7 +454,7 @@ def test_search_multi_collection_hyde_expands_query(monkeypatch: pytest.MonkeyPa
     assert out
 
 
-def test_search_multi_collection_multi_query_expands(monkeypatch: pytest.MonkeyPatch):
+def test_search_multi_collection_multi_query_expands(monkeypatch: pytest.MonkeyPatch) -> Any:
     """multi_query=True searches every variant; results are RRF-fused."""
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(engine_mod, "get_embedder", _async_get_embedder(embedder))
@@ -466,7 +466,7 @@ def test_search_multi_collection_multi_query_expands(monkeypatch: pytest.MonkeyP
         limit: int = 10,
         min_similarity: float = 0.0,
         content_limit: int = 500,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         searches.append(query)
         return [
             {
@@ -486,7 +486,7 @@ def test_search_multi_collection_multi_query_expands(monkeypatch: pytest.MonkeyP
             "CEI pattern solidity",
         ]
 
-    async def run() -> list[dict[str, Any]]:
+    async def run() -> Any:
         return await engine_mod.search_multi_collection(
             "reentrancy guard solidity",
             collections=["coll_a"],
@@ -505,12 +505,12 @@ def test_search_multi_collection_multi_query_expands(monkeypatch: pytest.MonkeyP
 # ── 5. engine wiring: three_pillar_search ─────────────────────────────
 
 
-def test_three_pillar_reranker_defaults_on():
+def test_three_pillar_reranker_defaults_on() -> None:
     sig = inspect.signature(engine_mod.three_pillar_search)
     assert sig.parameters["use_reranker"].default is True
 
 
-def test_three_pillar_search_defaults_are_additive():
+def test_three_pillar_search_defaults_are_additive() -> None:
     """The new params exist and are OFF by default (except use_reranker)."""
     sig = inspect.signature(engine_mod.three_pillar_search)
     assert sig.parameters["hyde"].default is False
@@ -542,7 +542,7 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> dict[str, 
         min_similarity: float = 0.5,
         content_limit: int = 500,
         **kwargs: Any,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         recorder["search_multi_collection_calls"].append(kwargs)
         return [
             {"id": "va", "similarity": 0.9, "content": "vector a", "collection": "coll_a"},
@@ -551,7 +551,7 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> dict[str, 
 
     async def fake_splade(
         query: str, collections: list[str] | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return []
 
     monkeypatch.setattr(engine_mod, "get_embedder", fake_get_embedder)
@@ -560,14 +560,14 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> dict[str, 
     return recorder
 
 
-def test_three_pillar_search_expansion_passthrough(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_expansion_passthrough(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hyde/multi_query/llm_fn reach the dense fallback when ANN is absent."""
     recorder = _patch_three_pillar_externals(monkeypatch)
 
     def llm(query: str) -> str:
         return "Hypothetical doc about the attack vector"
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "what is a flash loan attack pattern",
             collections=["coll_a", "coll_b"],
@@ -591,7 +591,7 @@ def test_three_pillar_search_expansion_passthrough(monkeypatch: pytest.MonkeyPat
     assert calls[0]["llm_fn"] is llm
 
 
-def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch) -> Any:
     """use_recency_decay=True folds half-life decay into the RRF weight."""
     _patch_three_pillar_externals(monkeypatch)
     old = (datetime.now(UTC) - timedelta(days=500)).isoformat()
@@ -604,7 +604,7 @@ def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch):
         min_similarity: float = 0.5,
         content_limit: int = 500,
         **kwargs: Any,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return [
             {
                 "id": "fresh",
@@ -624,7 +624,7 @@ def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(engine_mod, "search_multi_collection", fake_multi_collection)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "bitcoin price today",
             collections=["coll_a"],
@@ -644,11 +644,11 @@ def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch):
     assert all("recency_decay" in r for r in results)
 
 
-def test_three_pillar_search_recency_off_by_default(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_recency_off_by_default(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Default OFF: no recency decay, no summary tag."""
     _patch_three_pillar_externals(monkeypatch)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "bitcoin price today",
             collections=["coll_a", "coll_b"],
@@ -663,7 +663,7 @@ def test_three_pillar_search_recency_off_by_default(monkeypatch: pytest.MonkeyPa
     assert all("recency_decay" not in r for r in out["results"])
 
 
-def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.MonkeyPatch) -> Any:
     """With ANN available, hyde runs one dense search per variant.
 
     The Qdrant-backed ``search_multi_collection`` is the primary pillar-1
@@ -724,7 +724,7 @@ def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.M
 
     async def fake_splade(
         query: str, collections: list[str] | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return []
 
     monkeypatch.setattr("rugbrain.splade_bm25.splade_search", fake_splade)
@@ -732,7 +732,7 @@ def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.M
     def llm(query: str) -> str:
         return "Hypothetical: an attacker borrows flash loan liquidity and drains the pool."
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "flash loan attack pattern",
             collections=["coll_a"],
@@ -758,7 +758,7 @@ def test_three_pillar_search_hyde_dense_loop_uses_variants(monkeypatch: pytest.M
 # ── 6. parent-child: ingest seam + retrieval connect ──────────────────
 
 
-def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.MonkeyPatch):
+def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.MonkeyPatch) -> Any:
     fake_redis = _FakeRedis()
     monkeypatch.setattr(filters_mod, "_get_redis", _async_get_redis(fake_redis))
     embedder = _RecordingEmbedder()
@@ -766,7 +766,7 @@ def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.Monke
 
     fake_pr = parent_retriever_mod.ParentRetriever(redis="unused")
     stored: list[dict[str, Any]] = []
-    fake_pr.store_parent = _record_store_parent(stored)  # type: ignore[method-assign]
+    fake_pr.store_parent = _record_store_parent(stored)
 
     async def fake_get_parent_retriever() -> Any:
         return fake_pr
@@ -780,7 +780,7 @@ def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.Monke
         + ("Reentrancy risk detected in the withdraw function. " * 15)
     )
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await filters_mod.ingest_document(
             "news_articles", doc, metadata={"source": "auditor"}, parent_child=True
         )
@@ -816,13 +816,13 @@ def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.Monke
     assert not (indexed & child_meta_parents)
 
 
-def test_ingest_document_parent_child_falls_back_on_unsplittable(monkeypatch: pytest.MonkeyPatch):
+def test_ingest_document_parent_child_falls_back_on_unsplittable(monkeypatch: pytest.MonkeyPatch) -> Any:
     fake_redis = _FakeRedis()
     monkeypatch.setattr(filters_mod, "_get_redis", _async_get_redis(fake_redis))
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(filters_mod, "get_embedder", _async_get_embedder(embedder))
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await filters_mod.ingest_document("news_articles", "   \n  ", parent_child=True)
 
     out = asyncio.run(run())
@@ -838,7 +838,7 @@ def _record_store_parent(stored: list[dict[str, Any]]) -> Any:
     return store_parent
 
 
-def test_fetch_parent_context_chunk_keyed(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_parent_context_chunk_keyed(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = _FakeRedis()
     fake_redis._data["rag:docs:p123"] = json.dumps(
         {"content": "parent text", "metadata": {"title": "P"}}
@@ -851,7 +851,7 @@ def test_fetch_parent_context_chunk_keyed(monkeypatch: pytest.MonkeyPatch):
     assert out["metadata"]["title"] == "P"
 
 
-def test_fetch_parent_context_parent_retriever_key(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_parent_context_parent_retriever_key(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_redis = _FakeRedis()
     fake_redis._data["rag:parent:p456"] = json.dumps(
         {"doc_id": "p456", "content": "parent via retriever", "metadata": {}}
@@ -863,12 +863,12 @@ def test_fetch_parent_context_parent_retriever_key(monkeypatch: pytest.MonkeyPat
     assert out["content"] == "parent via retriever"
 
 
-def test_fetch_parent_context_missing_returns_none(monkeypatch: pytest.MonkeyPatch):
+def test_fetch_parent_context_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(engine_mod, "_get_redis", _async_get_redis(_FakeRedis()))
     assert asyncio.run(engine_mod._fetch_parent_context("docs", "missing")) is None
 
 
-def test_three_pillar_search_expands_child_to_parent(monkeypatch: pytest.MonkeyPatch):
+def test_three_pillar_search_expands_child_to_parent(monkeypatch: pytest.MonkeyPatch) -> Any:
     """A matched child with parent_id gains parent_content in retrieval."""
     fake_redis = _FakeRedis()
     fake_redis._data["rag:coll_a:p-parent"] = json.dumps(
@@ -889,7 +889,7 @@ def test_three_pillar_search_expands_child_to_parent(monkeypatch: pytest.MonkeyP
         min_similarity: float = 0.5,
         content_limit: int = 500,
         **kwargs: Any,
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return [
             {
                 "id": "child-1",
@@ -902,14 +902,14 @@ def test_three_pillar_search_expands_child_to_parent(monkeypatch: pytest.MonkeyP
 
     async def fake_splade(
         query: str, collections: list[str] | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    ) -> Any:
         return []
 
     monkeypatch.setattr(engine_mod, "get_embedder", fake_get_embedder)
     monkeypatch.setattr(engine_mod, "search_multi_collection", fake_multi_collection)
     monkeypatch.setattr("rugbrain.splade_bm25.splade_search", fake_splade)
 
-    async def run() -> dict[str, Any]:
+    async def run() -> Any:
         return await engine_mod.three_pillar_search(
             "reentrancy guard withdraw",
             collections=["coll_a"],

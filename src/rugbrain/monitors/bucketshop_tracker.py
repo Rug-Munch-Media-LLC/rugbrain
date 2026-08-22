@@ -267,7 +267,7 @@ async def bucketshop_tracker_cycle() -> dict[str, Any]:
             *[_ping(client, n) for n in _LIVE_NAMES], return_exceptions=True
         )
         live: dict[str, ExchangeStatus] = {}
-        for n, r in zip(_LIVE_NAMES, ping):
+        for n, r in zip(_LIVE_NAMES, ping, strict=False):
             live[n] = (
                 r
                 if isinstance(r, ExchangeStatus)
@@ -277,7 +277,7 @@ async def bucketshop_tracker_cycle() -> dict[str, Any]:
         cg = await asyncio.gather(
             *[_cg_trust(client, s) for s in cg_s.values()], return_exceptions=True
         )
-        for n, cg_res in zip(cg_s, cg):
+        for n, cg_res in zip(cg_s, cg, strict=False):
             if isinstance(cg_res, dict) and cg_res and (ls := live.get(n)):
                 ls.trust_score = cg_res.get("trust_score")
                 ls.btc_vol_24h = cg_res.get("btc_vol_24h")
@@ -300,7 +300,7 @@ async def bucketshop_tracker_cycle() -> dict[str, Any]:
             last_updated=now_iso,
         )
         sc[name] = se
-    for name, flagged in zip(wt_n, wt):
+    for name, flagged in zip(wt_n, wt, strict=False):
         if isinstance(flagged, Exception) or flagged is not True:
             continue
         sig = ScamSignal(

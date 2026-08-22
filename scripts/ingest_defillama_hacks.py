@@ -107,7 +107,7 @@ def _severity_for_amount(amount: float | None) -> str:
     return "medium"
 
 
-async def fetch_hacks(client: httpx.AsyncClient, limit: int | None) -> list[dict[str, Any]]:
+async def fetch_hacks(client: httpx.AsyncClient, limit: int | None) -> list[Any]:
     r = await client.get(DEFILLAMA_HACKS_API, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     hacks = r.json() or []
@@ -120,7 +120,7 @@ async def fetch_hacks(client: httpx.AsyncClient, limit: int | None) -> list[dict
     return hacks
 
 
-def build_docs(hacks: list[dict[str, Any]], days: int | None) -> list[dict[str, Any]]:
+def build_docs(hacks: list[Any], days: int | None) -> list[dict[str, Any]]:
     """Normalize raw DeFiLlama hacks into RAG docs.
 
     Returns a list of ``{doc_id, title, text, metadata}`` dicts. When *days*
@@ -241,13 +241,14 @@ async def run(dry_run: bool, limit: int | None, days: int | None) -> dict[str, A
         # + BM25 sparse automatically (hybrid threat_intel_v2).
         store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         for doc in docs:
-            vec = doc.get("vector")
-            if not vec:
+            vec_raw: Any = doc.get("vector")
+            if not vec_raw:
                 continue
+            vec_f: list[float] = [float(x) for x in vec_raw]
             ok = await store.insert(
                 doc_id=doc["doc_id"],
                 collection=COLLECTION,
-                embedding=vec,
+                embedding=vec_f,
                 content=doc["text"],
                 metadata=doc["metadata"],
                 source=SOURCE,

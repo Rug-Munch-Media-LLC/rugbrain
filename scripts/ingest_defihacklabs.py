@@ -42,8 +42,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_defihacklabs")
@@ -328,9 +328,7 @@ async def ingest_files(
         )
         return total_chunks
 
-    embedder = Qwen3Embedder(
-        _url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
-    )
+    embedder = Qwen3Embedder(_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
     store = QdrantVectorStore()
     inserted = 0
     skipped = 0

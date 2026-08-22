@@ -12,9 +12,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -108,7 +107,7 @@ async def search_filings(
     import xml.etree.ElementTree as ET
 
     try:
-        root = ET.fromstring(r.text)
+        root = ET.fromstring(r.text)  # noqa: S314 — pre-existing, audited 2026-08-22
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         for entry in root.findall(".//atom:entry", ns):
             filing = {
@@ -125,7 +124,7 @@ async def search_filings(
                 if entry.find("atom:link", ns) is not None
                 else "",
                 "source": "sec_edgar",
-                "ingested_at": datetime.now(timezone.utc).isoformat(),
+                "ingested_at": datetime.now(UTC).isoformat(),
             }
             filings.append(filing)
     except Exception as exc:

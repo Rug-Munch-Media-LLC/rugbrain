@@ -135,7 +135,7 @@ async def _search_for_token(
     address_fragment: str,
     poll_timeout: float = POLL_TIMEOUT,
     interval: float = POLL_INTERVAL,
-) -> dict[str, Any] | None:
+) -> Any:
     """Poll rugbrain search until *address_fragment* appears, or return None."""
     import asyncio
 
@@ -167,7 +167,7 @@ async def _search_for_token(
 
 
 @pytest.mark.asyncio
-async def test_scanner_to_rag_pipeline():
+async def test_scanner_to_rag_pipeline() -> None:
     """Publish a scan finding to Redis and verify rugbrain ingests it.
 
     Full end-to-end check of the scanner → Redis → subscriber → Qdrant flow.
@@ -210,7 +210,7 @@ async def test_scanner_to_rag_pipeline():
 
 
 @pytest.mark.asyncio
-async def test_rag_search_endpoint_returns_expected_schema():
+async def test_rag_search_endpoint_returns_expected_schema() -> None:
     """Verify the search endpoint schema matches what the frontend expects."""
     if not await _service_healthy(RMI_RAG_URL):
         pytest.skip(f"rugbrain service not reachable at {RMI_RAG_URL}")
@@ -259,7 +259,7 @@ async def test_rag_search_endpoint_returns_expected_schema():
 
 
 @pytest.mark.asyncio
-async def test_redis_publish_survives_invalid_json():
+async def test_redis_publish_survives_invalid_json() -> None:
     """Publish invalid JSON — subscriber must not crash.
 
     This test only validates that the publish operation itself works.
@@ -287,7 +287,7 @@ async def test_redis_publish_survives_invalid_json():
         await r.publish(CHANNEL, "")
         await r.publish(CHANNEL, "null")
     finally:
-        await r.aclose()  # type: ignore[operator]
+        await r.aclose()
 
     # If we get here without exception, the publish operations completed.
     # The subscriber handles malformed input gracefully (logs warnings).
@@ -295,7 +295,7 @@ async def test_redis_publish_survives_invalid_json():
 
 
 @pytest.mark.asyncio
-async def test_subscriber_health_check():
+async def test_subscriber_health_check() -> None:
     """The rugbrain subscriber health endpoint reflects subscriber status."""
     if not await _service_healthy(RMI_RAG_URL):
         pytest.skip(f"rugbrain service not reachable at {RMI_RAG_URL}")

@@ -42,7 +42,6 @@ from typing import Any
 
 import httpx
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.crypto_schema import (
     detect_attack_vector,
     detect_chain,
@@ -52,6 +51,7 @@ from rugbrain.crypto_schema import (
     parse_date,
 )
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("crypto_alert_digest")
@@ -470,11 +470,12 @@ async def store_alerts(
             severity=str(metadata.get("severity", "info")),
             chain=str(metadata.get("chain", "unknown")),
         )
-        if ok:
+        ok_bool: bool = bool(ok)
+        if ok_bool:
             stored += 1
         else:
             failed += 1
-        return ok
+        return ok_bool
 
     try:
         for inc in incidents:

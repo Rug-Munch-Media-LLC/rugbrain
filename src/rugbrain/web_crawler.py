@@ -45,9 +45,9 @@ from urllib.parse import urlparse
 
 import httpx
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.ingest_common import CrawlDocument, doc_from_article, store_documents
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.rss_parser import parse_feed
 
 log = logging.getLogger(__name__)

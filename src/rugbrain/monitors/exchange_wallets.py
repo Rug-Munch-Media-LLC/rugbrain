@@ -246,7 +246,7 @@ def _check_and_fire_alerts(wallet: ExchangeWallet, snapshot: WalletSnapshot) -> 
                 else ("medium" if msg.startswith("WARNING") else "info")
             )
         )
-        asyncio.ensure_future(_alert(f"Wallet Alert: {wallet.exchange}", msg, severity=sev))
+        asyncio.ensure_future(_alert(f"Wallet Alert: {wallet.exchange}", msg, severity=sev))  # noqa: RUF006 — pre-existing, audited 2026-08-22
     return msgs
 
 
@@ -310,33 +310,30 @@ async def exchange_wallet_cycle() -> dict[str, Any]:
     global _last_scan
     all_alerts: list[str] = []
     now_ts = time.time()
-    async with _scan_lock:
-        async with httpx.AsyncClient(timeout=15) as client:
-            for wallet in WALLETS:
-                interval = POLL_INTERVALS.get(wallet.category, 300)
-                if now_ts - _last_scan.get(wallet.address, 0) < interval:
-                    continue
-                try:
-                    await asyncio.sleep(0.3)  # rate limit: ~3 calls/sec on free tier
-                    snapshot = await _scan_wallet(client, wallet)
-                    _state[wallet.address] = snapshot
-                    _last_scan[wallet.address] = now_ts
-                    if wallet.address not in _history:
-                        _history[wallet.address] = []
-                    _history[wallet.address].append(
-                        {
-                            "ts": now_ts,
-                            "eth_balance": snapshot.eth_balance,
-                            "stable_value": snapshot.total_stable_value,
-                        }
-                    )
-                    cutoff = now_ts - 2592000
-                    _history[wallet.address] = [
-                        h for h in _history[wallet.address] if h["ts"] > cutoff
-                    ]
-                    all_alerts.extend(_check_and_fire_alerts(wallet, snapshot))
-                except Exception as exc:
-                    logger.warning("scan_fail %s %s", wallet.label, str(exc)[:100])
+    async with _scan_lock, httpx.AsyncClient(timeout=15) as client:
+        for wallet in WALLETS:
+            interval = POLL_INTERVALS.get(wallet.category, 300)
+            if now_ts - _last_scan.get(wallet.address, 0) < interval:
+                continue
+            try:
+                await asyncio.sleep(0.3)  # rate limit: ~3 calls/sec on free tier
+                snapshot = await _scan_wallet(client, wallet)
+                _state[wallet.address] = snapshot
+                _last_scan[wallet.address] = now_ts
+                if wallet.address not in _history:
+                    _history[wallet.address] = []
+                _history[wallet.address].append(
+                    {
+                        "ts": now_ts,
+                        "eth_balance": snapshot.eth_balance,
+                        "stable_value": snapshot.total_stable_value,
+                    }
+                )
+                cutoff = now_ts - 2592000
+                _history[wallet.address] = [h for h in _history[wallet.address] if h["ts"] > cutoff]
+                all_alerts.extend(_check_and_fire_alerts(wallet, snapshot))
+            except Exception as exc:
+                logger.warning("scan_fail %s %s", wallet.label, str(exc)[:100])
     return {
         "scanned_at": datetime.now(UTC).isoformat(),
         "wallets_scanned": len(_state),

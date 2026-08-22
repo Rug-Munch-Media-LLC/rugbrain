@@ -7,11 +7,18 @@ news_sources.py source-credibility database.
 
 from __future__ import annotations
 
-from rugbrain import news_clustering as nc
+import importlib as _il
+from typing import Any
+
+news_clustering = _il.import_module("rugbrain.news_clustering")
+nc = news_clustering
+nc = news_clustering
+
+mod = news_clustering
 from rugbrain.news_sources import EXTENDED_SOURCE_LEANINGS
 
 
-def _articles():
+def _articles() -> list[dict[str, Any]]:
     return [
         {
             "id": "b1",
@@ -43,7 +50,7 @@ def _articles():
     ]
 
 
-def test_source_leanings_database_populated():
+def test_source_leanings_database_populated() -> None:
     assert len(EXTENDED_SOURCE_LEANINGS) >= 100
     # Spot checks on the major outlets.
     assert EXTENDED_SOURCE_LEANINGS["reuters.com"] == "center"
@@ -52,7 +59,7 @@ def test_source_leanings_database_populated():
     assert EXTENDED_SOURCE_LEANINGS["coindesk.com"] == "center"
 
 
-def test_bias_distribution_counts_known_leanings():
+def test_bias_distribution_counts_known_leanings() -> None:
     story = nc.build_story(_articles())
     dist = story.bias_distribution
     # nytimes -> left, reuters -> center, coindesk -> center.
@@ -62,7 +69,7 @@ def test_bias_distribution_counts_known_leanings():
     assert dist["unknown"] == 0
 
 
-def test_bias_distribution_unknown_source_counts_unknown():
+def test_bias_distribution_unknown_source_counts_unknown() -> None:
     articles = [
         {
             "id": "u1",
@@ -77,7 +84,7 @@ def test_bias_distribution_unknown_source_counts_unknown():
     assert story.bias_distribution["unknown"] == 1
 
 
-def test_sentiment_distribution_counts_positive_negative():
+def test_sentiment_distribution_counts_positive_negative() -> None:
     articles = [
         {
             "id": "s1",
@@ -102,7 +109,7 @@ def test_sentiment_distribution_counts_positive_negative():
     assert dist["negative"] >= 1
 
 
-def test_factual_consensus_high_on_shared_claims():
+def test_factual_consensus_high_on_shared_claims() -> None:
     articles = [
         {
             "id": "f1",
@@ -135,7 +142,7 @@ def test_factual_consensus_high_on_shared_claims():
     assert story.consensus_detail["total_unique_claims"] > 0
 
 
-def test_consensus_detail_has_metrics():
+def test_consensus_detail_has_metrics() -> None:
     story = nc.build_story(_articles())
     detail = story.consensus_detail
     assert "total_unique_claims" in detail
@@ -143,7 +150,7 @@ def test_consensus_detail_has_metrics():
     assert "single_source_claims" in detail
 
 
-def test_timeline_sorted_by_published():
+def test_timeline_sorted_by_published() -> None:
     story = nc.build_story(_articles())
     times = [item["published_at"] for item in story.timeline]
     assert times == sorted(times)

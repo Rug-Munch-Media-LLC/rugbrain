@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import importlib as _il
+from typing import Any
+
+import pytest
 import respx
 
-from rugbrain import ingest_sources as mod
+ingest_sources = _il.import_module("rugbrain.ingest_sources")
+
+mod = ingest_sources
 from rugbrain.ingest_sources import (
     base,
     blacklists,
@@ -91,24 +97,24 @@ REQUIRED = {
 }
 
 
-def test_registry_contains_all_required_sources():
+def test_registry_contains_all_required_sources() -> None:
     names = mod.list_sources()
     assert set(REQUIRED) <= set(names), f"missing: {set(REQUIRED) - set(names)}"
     assert len(names) == len(set(names))  # no duplicates
 
 
-def test_doc_types_assigned():
+def test_doc_types_assigned() -> None:
     for name, doc_type in REQUIRED.items():
         src = mod.get_source(name)
         assert src is not None
         assert src.doc_type == doc_type, f"{name}: expected {doc_type}, got {src.doc_type}"
 
 
-def test_get_source_unknown():
+def test_get_source_unknown() -> None:
     assert mod.get_source("does_not_exist") is None
 
 
-def test_ingest_doc_shape():
+def test_ingest_doc_shape() -> None:
     doc = base.IngestDoc(content="x", doc_id="a:1", metadata={"k": "v"}, doc_type="t", source="s")
     assert doc.content == "x"
     assert doc.doc_id == "a:1"
@@ -119,7 +125,7 @@ def test_ingest_doc_shape():
     assert doc.url == ""
 
 
-def test_to_crawl_document_bridge():
+def test_to_crawl_document_bridge() -> None:
     doc = base.IngestDoc(
         content="body",
         doc_id="x:1",
@@ -139,7 +145,7 @@ def test_to_crawl_document_bridge():
 # ── DeFiHackLabs parsers ────────────────────────────────────────────────
 
 
-def test_defihacklabs_parse_sol():
+def test_defihacklabs_parse_sol() -> None:
     code = "// Reentrancy attack PoC\n// steals all funds\ncontract Hack { function pwn() external {} }"
     doc = defihacklabs.parse_sol_file("src/test/2023-01/Foo_exp.sol", code)
     assert doc is not None
@@ -151,11 +157,11 @@ def test_defihacklabs_parse_sol():
     assert doc.source == "defihacklabs"
 
 
-def test_defihacklabs_parse_sol_empty():
+def test_defihacklabs_parse_sol_empty() -> None:
     assert defihacklabs.parse_sol_file("src/a.sol", "   ") is None
 
 
-def test_defihacklabs_parse_incident_readme():
+def test_defihacklabs_parse_incident_readme() -> None:
     md = """# Past hacks
 
 ### 20230101 Foo Protocol - Reentrancy
@@ -177,7 +183,7 @@ Foo got drained.
 # ── SWC Registry parsers ────────────────────────────────────────────────
 
 
-def test_swc_markdown_to_doc():
+def test_swc_markdown_to_doc() -> None:
     md = """# Title
 
 SWC-101
@@ -205,14 +211,14 @@ function transfer() { }
     assert "Integer overflow" in doc.content
 
 
-def test_swc_markdown_empty_rejected():
+def test_swc_markdown_empty_rejected() -> None:
     assert swc.swc_markdown_to_doc("SWC-999", "# Title\n\nnothing here") is None
 
 
 # ── EIPs / BIPs parsers ─────────────────────────────────────────────────
 
 
-def test_eips_parse_frontmatter():
+def test_eips_parse_frontmatter() -> None:
     md = """---
 title: ERC-20 Token Standard
 status: Final
@@ -230,7 +236,7 @@ created: 2015-11-09
     assert "Abstract" in body
 
 
-def test_standard_to_doc():
+def test_standard_to_doc() -> None:
     doc = eips.standard_to_doc(
         prefix="EIP",
         number="20",
@@ -249,7 +255,7 @@ def test_standard_to_doc():
 # ── Rekt news parsers ───────────────────────────────────────────────────
 
 
-def test_rekt_parse_leaderboard():
+def test_rekt_parse_leaderboard() -> None:
     html = """
     <html><body>
     <a href="/poly-network-rekt/" class="x">Poly Network</a>
@@ -264,7 +270,7 @@ def test_rekt_parse_leaderboard():
     assert articles[1].title == "Wormhole"
 
 
-def test_rekt_article_to_doc():
+def test_rekt_article_to_doc() -> None:
     doc = rekt.article_to_doc(rekt.RektArticle(rank=1, title="Wormhole", url="/wormhole-rekt/"))
     assert doc.doc_type == "post_mortem"
     assert doc.url == "https://rekt.news/wormhole-rekt/"
@@ -274,7 +280,7 @@ def test_rekt_article_to_doc():
 # ── Whitepapers parsers ─────────────────────────────────────────────────
 
 
-def test_whitepapers_markdown_to_doc():
+def test_whitepapers_markdown_to_doc() -> None:
     md = "# Bitcoin: A Peer-to-Peer Electronic Cash System\n\nAbstract...\n"
     doc = whitepapers.markdown_to_doc("bitcoin.md", md)
     assert doc is not None
@@ -283,7 +289,7 @@ def test_whitepapers_markdown_to_doc():
     assert doc.metadata["format"] == "markdown"
 
 
-def test_whitepapers_pdf_stub():
+def test_whitepapers_pdf_stub() -> None:
     doc = whitepapers.pdf_to_stub("ethereum.pdf", size=500_000)
     assert doc.doc_type == "whitepaper"
     assert doc.metadata["format"] == "pdf"
@@ -293,7 +299,7 @@ def test_whitepapers_pdf_stub():
 # ── DeFiLlama parsers ───────────────────────────────────────────────────
 
 
-def test_defillama_tvl_to_docs():
+def test_defillama_tvl_to_docs() -> None:
     chains = [
         {"name": "Ethereum", "tvl": 50000000000.0, "change_24h": 1.5},
         {"name": "Solana", "tvl": 0},
@@ -305,7 +311,7 @@ def test_defillama_tvl_to_docs():
     assert docs[0].metadata["tvl_usd"] == 50000000000.0
 
 
-def test_defillama_protocol_to_doc():
+def test_defillama_protocol_to_doc() -> None:
     proto = {
         "name": "Uniswap",
         "slug": "uniswap",
@@ -320,7 +326,7 @@ def test_defillama_protocol_to_doc():
     assert "Arbitrum" in doc.content
 
 
-def test_defillama_hacks_to_docs():
+def test_defillama_hacks_to_docs() -> None:
     hacks = [
         {
             "name": "Foo",
@@ -342,7 +348,7 @@ def test_defillama_hacks_to_docs():
 # ── Proxy support (base client) ────────────────────────────────────────
 
 
-def test_proxy_url_env(monkeypatch):
+def test_proxy_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PROXY_URL", raising=False)
     assert base.proxy_url() is None
     monkeypatch.setenv("PROXY_URL", "http://user:pass@residential:8080")
@@ -354,7 +360,7 @@ def test_proxy_url_env(monkeypatch):
 # ── Bridge parsers (LayerZero / Axelar / CCIP) ─────────────────────────
 
 
-def test_bridge_contract_to_doc():
+def test_bridge_contract_to_doc() -> None:
     code = (
         "// SPDX-License-Identifier: MIT\n"
         "pragma solidity ^0.8.22;\n"
@@ -379,7 +385,7 @@ def test_bridge_contract_to_doc():
     assert "0.8.22" in doc.metadata["pragma"]
 
 
-def test_bridge_contract_to_doc_archived():
+def test_bridge_contract_to_doc_archived() -> None:
     doc = bridges.bridge_contract_to_doc(
         protocol="Chainlink CCIP",
         source="ccip",
@@ -394,7 +400,7 @@ def test_bridge_contract_to_doc_archived():
     assert "archived" in doc.content
 
 
-def test_bridge_contract_empty_rejected():
+def test_bridge_contract_empty_rejected() -> None:
     assert (
         bridges.bridge_contract_to_doc(
             protocol="X",
@@ -445,7 +451,7 @@ export const arbitrum: Layer2 = {
 """
 
 
-def test_l2beat_extract_risk_areas():
+def test_l2beat_extract_risk_areas() -> None:
     areas = l2beat.extract_risk_areas(L2BEAT_TS)
     assert len(areas) == 3
     names = {n for n, _ in areas}
@@ -453,7 +459,7 @@ def test_l2beat_extract_risk_areas():
     assert any("challenge a state root" in d for _, d in areas)
 
 
-def test_l2beat_project_to_doc():
+def test_l2beat_project_to_doc() -> None:
     doc = l2beat.l2beat_project_to_doc(
         "packages/config/src/projects/arbitrum/arbitrum.ts", L2BEAT_TS
     )
@@ -467,14 +473,14 @@ def test_l2beat_project_to_doc():
     assert "Arbitrum is an optimistic rollup" in doc.content
 
 
-def test_l2beat_project_empty_rejected():
+def test_l2beat_project_empty_rejected() -> None:
     assert l2beat.l2beat_project_to_doc("projects/x/x.ts", "  ") is None
 
 
 # ── ZK toolchain parsers (Circom / SnarkJS) ────────────────────────────
 
 
-def test_zk_doc_to_doc():
+def test_zk_doc_to_doc() -> None:
     md = "# Circom Language\n\n## Basic Operators\n\nCircom supports +, -, *, %.\n"
     doc = zk.zk_doc_to_doc(
         source="circom",
@@ -492,7 +498,7 @@ def test_zk_doc_to_doc():
     assert "Basic Operators" in doc.content
 
 
-def test_zk_doc_empty_rejected():
+def test_zk_doc_empty_rejected() -> None:
     assert (
         zk.zk_doc_to_doc(
             source="snarkjs",
@@ -509,7 +515,7 @@ def test_zk_doc_empty_rejected():
 # ── MEV architecture parsers (mev-boost / relay) ───────────────────────
 
 
-def test_mev_doc_to_doc():
+def test_mev_doc_to_doc() -> None:
     md = "# MEV-Boost Specification\n\nThis document specifies the mev-boost API.\n"
     doc = mev.mev_doc_to_doc(
         source="mev_boost",
@@ -529,7 +535,7 @@ def test_mev_doc_to_doc():
 # ── Safe smart-account parser ──────────────────────────────────────────
 
 
-def test_safe_parse_file():
+def test_safe_parse_file() -> None:
     code = (
         "// SPDX-License-Identifier: LGPL-3.0-only\n"
         "pragma solidity >=0.7.0 <0.9.0;\n"
@@ -547,7 +553,7 @@ def test_safe_parse_file():
 # ── Privacy protocol parser (Tornado Cash) ─────────────────────────────
 
 
-def test_tornado_parse_file():
+def test_tornado_parse_file() -> None:
     code = "pragma solidity ^0.6.12;\ncontract Tornado { function deposit(bytes32 commitment) external payable {} }\n"
     doc = privacy.parse_tornado_file("contracts/Tornado.sol", code)
     assert doc is not None
@@ -561,12 +567,12 @@ def test_tornado_parse_file():
 # ── Fetch paths (mocked network) ────────────────────────────────────────
 
 
-def _tree_payload(*paths: str) -> dict:
+def _tree_payload(*paths: str) -> dict[str, Any]:
     return {"tree": [{"path": p, "type": "blob", "size": 100} for p in paths]}
 
 
 @respx.mock
-async def test_swc_fetch_end_to_end():
+async def test_swc_fetch_end_to_end() -> None:
     swc_mod = mod.get_source("swc_registry")
     assert swc_mod is not None
     respx.get(
@@ -586,7 +592,7 @@ async def test_swc_fetch_end_to_end():
 
 
 @respx.mock
-async def test_swc_fetch_graceful_on_rate_limit():
+async def test_swc_fetch_graceful_on_rate_limit() -> None:
     swc_mod = mod.get_source("swc_registry")
     assert swc_mod is not None
     # Tree API 403 → fall back to known IDs; raw fetches return non-200 → no docs.
@@ -601,7 +607,7 @@ async def test_swc_fetch_graceful_on_rate_limit():
 
 
 @respx.mock
-async def test_defillama_fetch():
+async def test_defillama_fetch() -> None:
     dll = mod.get_source("defillama")
     assert dll is not None
     respx.get("https://api.llama.fi/v2/chains").respond(
@@ -613,7 +619,7 @@ async def test_defillama_fetch():
 
 
 @respx.mock
-async def test_layerzero_fetch_end_to_end():
+async def test_layerzero_fetch_end_to_end() -> None:
     lz = mod.get_source("layerzero")
     assert lz is not None
     respx.get("https://api.github.com/repos/LayerZero-Labs/LayerZero-v2/git/trees/main").respond(
@@ -638,7 +644,7 @@ async def test_layerzero_fetch_end_to_end():
 
 
 @respx.mock
-async def test_l2beat_fetch_end_to_end():
+async def test_l2beat_fetch_end_to_end() -> None:
     lb = mod.get_source("l2beat")
     assert lb is not None
     respx.get("https://api.github.com/repos/l2beat/l2beat/git/trees/main").respond(
@@ -660,7 +666,7 @@ async def test_l2beat_fetch_end_to_end():
 
 
 @respx.mock
-async def test_tornado_fetch_graceful_on_rate_limit():
+async def test_tornado_fetch_graceful_on_rate_limit() -> None:
     tc = mod.get_source("tornado_cash")
     assert tc is not None
     respx.get("https://api.github.com/repos/tornadocash/tornado-core/git/trees/master").respond(
@@ -673,7 +679,7 @@ async def test_tornado_fetch_graceful_on_rate_limit():
 # ── Incident / post-mortem sources (incidents.py) ────────────────────────
 
 
-def test_parse_guttedefi_table():
+def test_parse_guttedefi_table() -> None:
     md = """
 # All the Gutted DeFi Projects
 
@@ -694,7 +700,7 @@ def test_parse_guttedefi_table():
     assert rows[1].protocol == "DAO Maker"
 
 
-def test_guttedefi_to_doc():
+def test_guttedefi_to_doc() -> None:
     inc = incidents.GutteDeFiIncident(
         day="30th",
         month_year="Aug 2021",
@@ -717,7 +723,7 @@ def test_guttedefi_to_doc():
     assert doc.url == "https://medium.com/cream"
 
 
-def test_parse_immunefi_hack_analyses():
+def test_parse_immunefi_hack_analyses() -> None:
     md = """
 # Hack Analyses
 
@@ -743,7 +749,7 @@ Saddle Finance ... price miscalculation when swapping a token for an LP token.
     assert entries[1].vulnerability_type.startswith("Logic")
 
 
-def test_immunefi_to_doc():
+def test_immunefi_to_doc() -> None:
     a = incidents.ImmunefiHackAnalysis(
         title="BonqDAO",
         month_year="February 2023",
@@ -759,7 +765,7 @@ def test_immunefi_to_doc():
     assert "Root cause" in doc.content
 
 
-def test_blocksecteam_poc_to_doc():
+def test_blocksecteam_poc_to_doc() -> None:
     doc = incidents.blocksecteam_poc_to_doc(
         "CREAM/README.md",
         "# CREAM PoC\n\nFlash loan exploit using DEX to repay the flash swap.\n",
@@ -772,7 +778,7 @@ def test_blocksecteam_poc_to_doc():
     assert incidents.blocksecteam_poc_to_doc("README.md", "x") is None
 
 
-def test_slowmist_report_to_doc():
+def test_slowmist_report_to_doc() -> None:
     md = """# IoTeX-voting-contracts Smart Contract Security Audit Report
 
 ## Summary
@@ -797,7 +803,7 @@ Details...
 # ── Chainabuse scam-report source (chainabuse.py) ───────────────────────
 
 
-def test_chainabuse_report_to_doc():
+def test_chainabuse_report_to_doc() -> None:
     report = {
         "id": 12345,
         "scam_type": {"id": 14, "type": "Phishing"},
@@ -819,7 +825,7 @@ def test_chainabuse_report_to_doc():
     assert doc.doc_id.startswith("chainabuse:12345:")
 
 
-def test_chainabuse_report_to_doc_string_scam_type_and_domain():
+def test_chainabuse_report_to_doc_string_scam_type_and_domain() -> None:
     report = {
         "id": 99,
         "category": "Investment Scam",
@@ -835,12 +841,12 @@ def test_chainabuse_report_to_doc_string_scam_type_and_domain():
     assert doc.metadata["collection"] == "crime_reports"
 
 
-def test_chainabuse_report_empty_rejected():
+def test_chainabuse_report_empty_rejected() -> None:
     assert chainabuse.report_to_doc({}) is None
     assert chainabuse.report_to_doc({"id": 1}) is None  # no entity, no description
 
 
-def test_chainabuse_extract_reports_envelopes():
+def test_chainabuse_extract_reports_envelopes() -> None:
     bare = [{"id": 1}, {"id": 2}]
     assert len(chainabuse._extract_reports(bare)) == 2
     assert len(chainabuse._extract_reports({"reports": bare})) == 2
@@ -850,7 +856,7 @@ def test_chainabuse_extract_reports_envelopes():
 
 
 @respx.mock
-async def test_chainabuse_fetch_mocked(monkeypatch):
+async def test_chainabuse_fetch_mocked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHAINABUSE_API_KEY", "test-key")
     monkeypatch.setattr(chainabuse, "BASE_URL", "https://api.chainabuse.com")
     src = mod.get_source("chainabuse")
@@ -888,7 +894,7 @@ async def test_chainabuse_fetch_mocked(monkeypatch):
 
 
 @respx.mock
-async def test_chainabuse_fetch_no_key(monkeypatch):
+async def test_chainabuse_fetch_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CHAINABUSE_API_KEY", raising=False)
     src = mod.get_source("chainabuse")
     assert src is not None
@@ -897,7 +903,7 @@ async def test_chainabuse_fetch_no_key(monkeypatch):
 
 
 @respx.mock
-async def test_chainabuse_fetch_graceful_on_error(monkeypatch):
+async def test_chainabuse_fetch_graceful_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHAINABUSE_API_KEY", "test-key")
     monkeypatch.setattr(chainabuse, "BASE_URL", "https://api.chainabuse.com")
     src = mod.get_source("chainabuse")
@@ -910,7 +916,7 @@ async def test_chainabuse_fetch_graceful_on_error(monkeypatch):
 # ── crypto-rekts incident knowledgebase (crypto_rekts.py) ───────────────
 
 
-def test_crypto_rekt_to_doc():
+def test_crypto_rekt_to_doc() -> None:
     item = {
         "id": 3058,
         "title": "Beanstalk",
@@ -944,7 +950,7 @@ def test_crypto_rekt_to_doc():
     assert doc.doc_id.startswith("crypto_rekts:3058:")
 
 
-def test_crypto_rekt_to_doc_governance_keyword_detection():
+def test_crypto_rekt_to_doc_governance_keyword_detection() -> None:
     item = {
         "id": 42,
         "title": "AnubisDAO",
@@ -959,12 +965,12 @@ def test_crypto_rekt_to_doc_governance_keyword_detection():
     assert doc.metadata["severity"] == "high"
 
 
-def test_crypto_rekt_empty_rejected():
+def test_crypto_rekt_empty_rejected() -> None:
     assert crypto_rekts.crypto_rekt_to_doc({}) is None
     assert crypto_rekts.crypto_rekt_to_doc({"title": "X"}) is None  # no id
 
 
-def test_parse_rektdb_tolerates_envelope_and_list():
+def test_parse_rektdb_tolerates_envelope_and_list() -> None:
     envelope = '{"items": [{"id": 1, "title": "A"}], "currentPage": 1, "lastPage": 1, "count": 1}'
     items = crypto_rekts.parse_rektdb(envelope)
     assert len(items) == 1
@@ -975,7 +981,7 @@ def test_parse_rektdb_tolerates_envelope_and_list():
 
 
 @respx.mock
-async def test_crypto_rekts_fetch_mocked():
+async def test_crypto_rekts_fetch_mocked() -> None:
     src = mod.get_source("crypto_rekts")
     assert src is not None
     payload = {
@@ -1015,7 +1021,7 @@ async def test_crypto_rekts_fetch_mocked():
 
 
 @respx.mock
-async def test_crypto_rekts_fetch_limit():
+async def test_crypto_rekts_fetch_limit() -> None:
     src = mod.get_source("crypto_rekts")
     assert src is not None
     payload = {
@@ -1033,7 +1039,7 @@ async def test_crypto_rekts_fetch_limit():
 
 
 @respx.mock
-async def test_crypto_rekts_fetch_graceful_on_error():
+async def test_crypto_rekts_fetch_graceful_on_error() -> None:
     src = mod.get_source("crypto_rekts")
     assert src is not None
     respx.get("https://raw.githubusercontent.com/liqtags/crypto-rekts/main/rektdb.json").respond(
@@ -1046,7 +1052,7 @@ async def test_crypto_rekts_fetch_graceful_on_error():
 # ── Existing blacklist coverage (candidate #4: Phishing.Database + MetaMask) ─
 
 
-def test_blacklists_has_phishing_database_and_metamask_feeds():
+def test_blacklists_has_phishing_database_and_metamask_feeds() -> None:
     feed_keys = {f.key for f in blacklists.FEEDS}
     assert "phishing_database" in feed_keys
     assert "metamask_blocklist" in feed_keys
@@ -1061,7 +1067,7 @@ def test_blacklists_has_phishing_database_and_metamask_feeds():
 # ── phishdestroy/destroylist ─────────────────────────────────────────────
 
 
-def test_phishdestroy_parse_list_json():
+def test_phishdestroy_parse_list_json() -> None:
     domains = phishdestroy.parse_list_json('["0-105.com", "evil.example", " good.example "]')
     assert domains == ["0-105.com", "evil.example", "good.example"]
     # dict envelope + plain-lines fallback
@@ -1072,7 +1078,7 @@ def test_phishdestroy_parse_list_json():
 
 
 @respx.mock
-async def test_phishdestroy_fetch_mocked():
+async def test_phishdestroy_fetch_mocked() -> None:
     src = mod.get_source("phishdestroy_destroylist")
     assert src is not None
     respx.get(phishdestroy.LIST_URL).respond(200, json=["evil-1.com", "evil-2.com"])
@@ -1087,7 +1093,7 @@ async def test_phishdestroy_fetch_mocked():
 
 
 @respx.mock
-async def test_phishdestroy_fetch_graceful_on_error():
+async def test_phishdestroy_fetch_graceful_on_error() -> None:
     src = mod.get_source("phishdestroy_destroylist")
     assert src is not None
     respx.get(phishdestroy.LIST_URL).respond(500)
@@ -1098,7 +1104,7 @@ async def test_phishdestroy_fetch_graceful_on_error():
 # ── DeFiLabX/SolRPDS ─────────────────────────────────────────────────────
 
 
-def test_deflabx_wallet_to_doc():
+def test_deflabx_wallet_to_doc() -> None:
     record = {
         "MINT": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         "LIQUIDITY_POOL_ADDRESS": "821L241gacEqKJiCp9H7E9rqRXB31WoHLBqwhn8NMyWS",
@@ -1120,7 +1126,7 @@ def test_deflabx_wallet_to_doc():
 
 
 @respx.mock
-async def test_deflabx_fetch_mocked():
+async def test_deflabx_fetch_mocked() -> None:
     src = mod.get_source("deflabx_solrpds")
     assert src is not None
     respx.get(f"{deflabx.RAW_BASE}/2021.json").respond(200, json=[{"MINT": "mint2021"}])
@@ -1137,7 +1143,7 @@ async def test_deflabx_fetch_mocked():
 # ── security-alliance/seal-911 ───────────────────────────────────────────
 
 
-def test_seal911_parse_activity_log():
+def test_seal911_parse_activity_log() -> None:
     md = (
         "# Log\n\n"
         "- [RISEx incident resolution](https://x.com/risextrade/status/1)\n"
@@ -1149,7 +1155,7 @@ def test_seal911_parse_activity_log():
     assert entries[0].url == "https://x.com/risextrade/status/1"
 
 
-def test_seal911_to_doc():
+def test_seal911_to_doc() -> None:
     doc = seal911.seal911_to_doc(
         seal911.Seal911Entry(
             "Across incident resolution", "https://x.com/acrossprotocol/status/2", 0
@@ -1161,7 +1167,7 @@ def test_seal911_to_doc():
 
 
 @respx.mock
-async def test_seal911_fetch_mocked():
+async def test_seal911_fetch_mocked() -> None:
     src = mod.get_source("seal_911")
     assert src is not None
     respx.get(seal911.ACTIVITY_URL).respond(
@@ -1178,7 +1184,7 @@ async def test_seal911_fetch_mocked():
 # ── trailofbits/publications ─────────────────────────────────────────────
 
 
-def test_tob_csv_row_to_doc():
+def test_tob_csv_row_to_doc() -> None:
     headers = ["Project", "Issue", "Type", "CS Severity", "ToB Severity", "Difficulty"]
     doc = trailofbits_publications.csv_row_to_doc(
         "datasets/smart_contract_audit_findings/other_audit_sources/chainsecurity.csv",
@@ -1193,7 +1199,7 @@ def test_tob_csv_row_to_doc():
     assert doc.doc_id.startswith("trailofbits_publications:")
 
 
-def test_tob_markdown_review_to_doc():
+def test_tob_markdown_review_to_doc() -> None:
     doc = trailofbits_publications.markdown_review_to_doc(
         "reviews/celo_bugfixes.md", "# Celo bug fixes\n\nDetails about reentrancy fix.\n"
     )
@@ -1204,7 +1210,7 @@ def test_tob_markdown_review_to_doc():
 
 
 @respx.mock
-async def test_tob_publications_fetch_mocked():
+async def test_tob_publications_fetch_mocked() -> None:
     src = mod.get_source("trailofbits_publications")
     assert src is not None
     tree_url = "https://api.github.com/repos/trailofbits/publications/git/trees/master"
@@ -1238,7 +1244,7 @@ async def test_tob_publications_fetch_mocked():
 # ── gcf3711/audit-report-archive (HF) ────────────────────────────────────
 
 
-def test_gcf3711_row_to_doc():
+def test_gcf3711_row_to_doc() -> None:
     row = {
         "pdf": {"src": "https://datasets-server.huggingface.co/files/x.pdf", "size_bytes": 2048},
         "label": "hexens",
@@ -1253,7 +1259,7 @@ def test_gcf3711_row_to_doc():
 
 
 @respx.mock
-async def test_gcf3711_fetch_mocked():
+async def test_gcf3711_fetch_mocked() -> None:
     src = mod.get_source("gcf3711_audit_report_archive_hf")
     assert src is not None
     url = f"{hf_audit_archive.ROWS_URL}10"
@@ -1277,7 +1283,7 @@ async def test_gcf3711_fetch_mocked():
 # ── emperor-mew/cftc-actions ─────────────────────────────────────────────
 
 
-def test_emperor_cftc_release_to_doc():
+def test_emperor_cftc_release_to_doc() -> None:
     item = {
         "release_number": "9131-26",
         "title": "CFTC Staff Issues No-Action Letter",
@@ -1299,7 +1305,7 @@ def test_emperor_cftc_release_to_doc():
 
 
 @respx.mock
-async def test_emperor_cftc_fetch_mocked():
+async def test_emperor_cftc_fetch_mocked() -> None:
     src = mod.get_source("emperor_mew_cftc_actions")
     assert src is not None
     respx.get(emperor_cftc.API_URL).respond(
@@ -1339,7 +1345,7 @@ async def test_emperor_cftc_fetch_mocked():
 # ── OpenSanctions bulk ───────────────────────────────────────────────────
 
 
-def test_opensanctions_wallet_to_doc():
+def test_opensanctions_wallet_to_doc() -> None:
     entity = {
         "id": "NK-abc123",
         "caption": "OFAC sanctioned wallet",
@@ -1364,7 +1370,7 @@ def test_opensanctions_wallet_to_doc():
 
 
 @respx.mock
-async def test_opensanctions_fetch_mocked():
+async def test_opensanctions_fetch_mocked() -> None:
     src = mod.get_source("opensanctions")
     assert src is not None
     ftm = (
@@ -1386,13 +1392,13 @@ async def test_opensanctions_fetch_mocked():
 # ── samczsun.com ─────────────────────────────────────────────────────────
 
 
-def test_samczsun_extract_article_links():
+def test_samczsun_extract_article_links() -> None:
     html = '<a href="/escaping-the-dark-forest/">a</a><a href="/#about">x</a><a href="/icon.png">i</a><a href="/hiding-in-plain-sight/">b</a>'
     links = samczsun.extract_article_links(html)
     assert links == ["escaping-the-dark-forest", "hiding-in-plain-sight"]
 
 
-def test_samczsun_extract_article_text():
+def test_samczsun_extract_article_text() -> None:
     html = "<html><head><title>Escaping the Dark Forest - samczsun</title></head><body><nav>menu</nav><article><h1>Escaping</h1><p>Research body text.</p></article></body></html>"
     title, body = samczsun.extract_article_text(html)
     assert title == "Escaping the Dark Forest"
@@ -1400,7 +1406,7 @@ def test_samczsun_extract_article_text():
 
 
 @respx.mock
-async def test_samczsun_fetch_mocked():
+async def test_samczsun_fetch_mocked() -> None:
     src = mod.get_source("samczsun_blog")
     assert src is not None
     home = '<html><a href="/escaping-the-dark-forest/">a</a><a href="/booby-trapping-the-ethereum-blockchain/">b</a></html>'
@@ -1425,7 +1431,7 @@ async def test_samczsun_fetch_mocked():
 # ── blocksecteam/phishing_contract_sigmetrics25 ──────────────────────────
 
 
-def test_blocksecteam_phishing_parse():
+def test_blocksecteam_phishing_parse() -> None:
     log_text = "0x000000000000232e765d898b5f1b189b5c993f05\n0x0000000000958ec6667eb97e2f64f6909073e6b7\nnot-an-address\n"
     addrs = blocksecteam_phishing.parse_address_log(log_text)
     assert len(addrs) == 2
@@ -1433,7 +1439,7 @@ def test_blocksecteam_phishing_parse():
 
 
 @respx.mock
-async def test_blocksecteam_phishing_fetch_mocked():
+async def test_blocksecteam_phishing_fetch_mocked() -> None:
     src = mod.get_source("blocksecteam_phishing_contracts")
     assert src is not None
     respx.get(blocksecteam_phishing.LOG_URL).respond(
@@ -1452,7 +1458,7 @@ async def test_blocksecteam_phishing_fetch_mocked():
 # ── ossf/malicious-packages ──────────────────────────────────────────────
 
 
-def test_ossf_osv_to_doc():
+def test_ossf_osv_to_doc() -> None:
     advisory = {
         "id": "MAL-2023-8429",
         "summary": "Malicious code in littest (crates.io)",
@@ -1472,7 +1478,7 @@ def test_ossf_osv_to_doc():
 
 
 @respx.mock
-async def test_ossf_malicious_fetch_mocked():
+async def test_ossf_malicious_fetch_mocked() -> None:
     src = mod.get_source("ossf_malicious_packages")
     assert src is not None
     tree_url = "https://api.github.com/repos/ossf/malicious-packages/git/trees/main"
@@ -1531,7 +1537,7 @@ _RSS_FIXTURE = """<?xml version="1.0"?>
 </channel></rss>"""
 
 
-def test_rss_item_to_doc():
+def test_rss_item_to_doc() -> None:
     doc = feeds.rss_item_to_doc(
         "trailofbits_blog_rss",
         {
@@ -1550,7 +1556,7 @@ def test_rss_item_to_doc():
 
 
 @respx.mock
-async def test_trailofbits_blog_rss_fetch_mocked():
+async def test_trailofbits_blog_rss_fetch_mocked() -> None:
     src = mod.get_source("trailofbits_blog_rss")
     assert src is not None
     respx.get("https://blog.trailofbits.com/feed/").respond(200, text=_RSS_FIXTURE)
@@ -1563,7 +1569,7 @@ async def test_trailofbits_blog_rss_fetch_mocked():
 
 
 @respx.mock
-async def test_zellic_blog_rss_fetch_mocked():
+async def test_zellic_blog_rss_fetch_mocked() -> None:
     src = mod.get_source("zellic_blog_rss")
     assert src is not None
     respx.get("https://www.zellic.io/blog/rss.xml").respond(200, text=_RSS_FIXTURE)
@@ -1573,7 +1579,7 @@ async def test_zellic_blog_rss_fetch_mocked():
 
 
 @respx.mock
-async def test_immunefi_blog_rss_fetch_mocked():
+async def test_immunefi_blog_rss_fetch_mocked() -> None:
     src = mod.get_source("immunefi_blog_rss")
     assert src is not None
     respx.get("https://immunefi.com/blog/rss/").respond(200, text=_RSS_FIXTURE)
@@ -1583,7 +1589,7 @@ async def test_immunefi_blog_rss_fetch_mocked():
 
 
 @respx.mock
-async def test_neodyme_blog_rss_fetch_mocked():
+async def test_neodyme_blog_rss_fetch_mocked() -> None:
     src = mod.get_source("neodyme_blog_rss")
     assert src is not None
     respx.get("https://neodyme.io/rss.xml").respond(200, text=_RSS_FIXTURE)
@@ -1593,7 +1599,7 @@ async def test_neodyme_blog_rss_fetch_mocked():
 
 
 @respx.mock
-async def test_cftc_press_releases_rss_fetch_mocked():
+async def test_cftc_press_releases_rss_fetch_mocked() -> None:
     src = mod.get_source("cftc_press_releases_rss")
     assert src is not None
     respx.get("https://www.cftc.gov/PressRoom/PressReleases/PressReleasesRSS").respond(
@@ -1606,7 +1612,7 @@ async def test_cftc_press_releases_rss_fetch_mocked():
 
 
 @respx.mock
-async def test_rss_fetch_graceful_on_error():
+async def test_rss_fetch_graceful_on_error() -> None:
     src = mod.get_source("trailofbits_blog_rss")
     assert src is not None
     respx.get("https://blog.trailofbits.com/feed/").respond(500)
@@ -1617,7 +1623,7 @@ async def test_rss_fetch_graceful_on_error():
 # ── CISA KEV ─────────────────────────────────────────────────────────────
 
 
-def test_cisa_kev_to_doc():
+def test_cisa_kev_to_doc() -> None:
     vuln = {
         "cveID": "CVE-2026-20349",
         "vendorProject": "Cisco",
@@ -1640,7 +1646,7 @@ def test_cisa_kev_to_doc():
 
 
 @respx.mock
-async def test_cisa_kev_fetch_mocked():
+async def test_cisa_kev_fetch_mocked() -> None:
     src = mod.get_source("cisa_kev")
     assert src is not None
     respx.get(cisa_kev.KEV_URL).respond(
@@ -1675,13 +1681,13 @@ async def test_cisa_kev_fetch_mocked():
 # ── openphish feed ───────────────────────────────────────────────────────
 
 
-def test_openphish_parse_lines():
+def test_openphish_parse_lines() -> None:
     urls = openphish.parse_feed_lines("https://a.com/\n# comment\nhttps://b.com/x\n<html>\n")
     assert urls == ["https://a.com/", "https://b.com/x"]
 
 
 @respx.mock
-async def test_openphish_fetch_mocked():
+async def test_openphish_fetch_mocked() -> None:
     src = mod.get_source("openphish_feed")
     assert src is not None
     respx.get("https://openphish.com/feed.txt").respond(
@@ -1699,7 +1705,7 @@ async def test_openphish_fetch_mocked():
 # ── URLhaus CSV feed ─────────────────────────────────────────────────────
 
 
-def test_urlhaus_row_to_doc_filters_threats():
+def test_urlhaus_row_to_doc_filters_threats() -> None:
     keep = [
         "1",
         "2026-08-16 05:07:07",
@@ -1728,7 +1734,7 @@ def test_urlhaus_row_to_doc_filters_threats():
     assert urlhaus.urlhaus_row_to_doc([]) is None
 
 
-def test_urlhaus_parse_csv_rows():
+def test_urlhaus_parse_csv_rows() -> None:
     text = (
         "################################################################\n"
         "# abuse.ch URLhaus Database Dump\n"
@@ -1740,7 +1746,7 @@ def test_urlhaus_parse_csv_rows():
 
 
 @respx.mock
-async def test_urlhaus_fetch_mocked():
+async def test_urlhaus_fetch_mocked() -> None:
     src = mod.get_source("urlhaus_feed")
     assert src is not None
     csv_text = (
@@ -1761,7 +1767,7 @@ async def test_urlhaus_fetch_mocked():
 # ── yAudit/defi-fork-bugs ────────────────────────────────────────────────
 
 
-def test_yaudit_parse_fork_bugs():
+def test_yaudit_parse_fork_bugs() -> None:
     md = (
         "# Common fork bugs\n\n"
         "## Compound\n\n"
@@ -1778,7 +1784,7 @@ def test_yaudit_parse_fork_bugs():
     assert bugs[2].protocol == "Uniswap"
 
 
-def test_yaudit_fork_bug_to_doc():
+def test_yaudit_fork_bug_to_doc() -> None:
     doc = yaudit_fork_bugs.fork_bug_to_doc(
         yaudit_fork_bugs.ForkBug(
             "Compound", "flashloan & reentrancy", (("Postmortem", "https://medium.com/x"),)
@@ -1792,7 +1798,7 @@ def test_yaudit_fork_bug_to_doc():
 
 
 @respx.mock
-async def test_yaudit_fetch_mocked():
+async def test_yaudit_fetch_mocked() -> None:
     src = mod.get_source("yaudit_defi_fork_bugs")
     assert src is not None
     respx.get(yaudit_fork_bugs.README_URL).respond(
@@ -1811,7 +1817,7 @@ async def test_yaudit_fetch_mocked():
 # ── coinspect/learn-evm-attacks ──────────────────────────────────────────
 
 
-def test_coinspect_readme_to_doc():
+def test_coinspect_readme_to_doc() -> None:
     doc = coinspect_evm_attacks.readme_to_doc(
         "test/Access_Control/DAOMaker/README.md",
         "# DAOMaker\n\nVulnerability description and PoC details.\n",
@@ -1829,7 +1835,7 @@ def test_coinspect_readme_to_doc():
 
 
 @respx.mock
-async def test_coinspect_fetch_mocked():
+async def test_coinspect_fetch_mocked() -> None:
     src = mod.get_source("coinspect_learn_evm_attacks")
     assert src is not None
     tree_url = "https://api.github.com/repos/coinspect/learn-evm-attacks/git/trees/master"

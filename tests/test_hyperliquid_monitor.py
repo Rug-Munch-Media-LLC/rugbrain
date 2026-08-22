@@ -3,30 +3,29 @@
 from __future__ import annotations
 
 import pytest
-from typing import Any
 
 from rugbrain.monitors.hyperliquid_monitor import (
-    classify_trade,
-    classify_liquidation,
-    scan_liquidations_from_data,
-    WHALE_WATCHLIST,
     BIG_TRADE_THRESHOLD,
-    WHALE_TRADE_THRESHOLD,
     MEGA_TRADE_THRESHOLD,
+    WHALE_TRADE_THRESHOLD,
+    WHALE_WATCHLIST,
+    classify_liquidation,
+    classify_trade,
+    scan_liquidations_from_data,
 )
 
 
 class TestTradeClassification:
     """Test trade classification logic."""
 
-    def test_mega_whale_trade(self):
+    def test_mega_whale_trade(self) -> None:
         trade = {"px": "65000", "sz": "20", "side": "B", "coin": "BTC"}
         result = classify_trade(trade)
         assert result["usd_value"] >= MEGA_TRADE_THRESHOLD
         assert "MEGA" in result["tier"]
         assert result["coin"] == "BTC"
 
-    def test_whale_trade(self):
+    def test_whale_trade(self) -> None:
         trade = {"px": "65000", "sz": "2", "side": "B", "coin": "BTC"}
         result = classify_trade(trade)
         assert result["usd_value"] >= WHALE_TRADE_THRESHOLD
@@ -34,26 +33,26 @@ class TestTradeClassification:
         assert "WHALE" in result["tier"]
         assert "MEGA" not in result["tier"]
 
-    def test_minnow_trade(self):
+    def test_minnow_trade(self) -> None:
         trade = {"px": "65000", "sz": "0.2", "side": "B", "coin": "BTC"}
         result = classify_trade(trade)
         assert result["usd_value"] >= BIG_TRADE_THRESHOLD
         assert result["usd_value"] < WHALE_TRADE_THRESHOLD
         assert "MINNOW" in result["tier"]
 
-    def test_regular_trade(self):
+    def test_regular_trade(self) -> None:
         trade = {"px": "65000", "sz": "0.001", "side": "B", "coin": "BTC"}
         result = classify_trade(trade)
         assert result["usd_value"] < BIG_TRADE_THRESHOLD
         assert result["tier"] == "regular"
 
-    def test_buy_trade_side(self):
+    def test_buy_trade_side(self) -> None:
         trade = {"px": "100", "sz": "10", "side": "B", "coin": "ETH"}
         result = classify_trade(trade)
         assert result["is_buy"] is True
         assert "BUY" in result["side"]
 
-    def test_sell_trade_side(self):
+    def test_sell_trade_side(self) -> None:
         trade = {"px": "100", "sz": "10", "side": "A", "coin": "ETH"}
         result = classify_trade(trade)
         assert result["is_buy"] is False
@@ -63,33 +62,33 @@ class TestTradeClassification:
 class TestLiquidationClassification:
     """Test liquidation classification logic."""
 
-    def test_mega_liquidation(self):
+    def test_mega_liquidation(self) -> None:
         liq = {"coin": "BTC", "side": "B", "sz": "20", "lidPx": "65000"}
         result = classify_liquidation(liq)
         assert result["usd_value"] >= MEGA_TRADE_THRESHOLD
         assert "MEGA" in result["tier"]
 
-    def test_whale_liquidation(self):
+    def test_whale_liquidation(self) -> None:
         liq = {"coin": "ETH", "side": "A", "sz": "50", "lidPx": "2000"}
         result = classify_liquidation(liq)
         assert result["usd_value"] >= WHALE_TRADE_THRESHOLD
         assert result["usd_value"] < MEGA_TRADE_THRESHOLD
         assert "WHALE" in result["tier"]
 
-    def test_regular_liquidation(self):
+    def test_regular_liquidation(self) -> None:
         liq = {"coin": "SOL", "side": "B", "sz": "150", "lidPx": "75"}
         result = classify_liquidation(liq)
         assert result["usd_value"] < WHALE_TRADE_THRESHOLD
         assert result["usd_value"] >= BIG_TRADE_THRESHOLD
         assert "WHALE" not in result["tier"]
 
-    def test_long_liquidation(self):
+    def test_long_liquidation(self) -> None:
         liq = {"coin": "BTC", "side": "B", "sz": "1", "lidPx": "65000"}
         result = classify_liquidation(liq)
         assert result["is_long"] is True
         assert "LONG" in result["side"]
 
-    def test_short_liquidation(self):
+    def test_short_liquidation(self) -> None:
         liq = {"coin": "BTC", "side": "A", "sz": "1", "lidPx": "65000"}
         result = classify_liquidation(liq)
         assert result["is_long"] is False
@@ -99,7 +98,7 @@ class TestLiquidationClassification:
 class TestLiquidationScan:
     """Test scanning liquidation data."""
 
-    def test_scan_liquidations_from_data(self):
+    def test_scan_liquidations_from_data(self) -> None:
         data = [
             {"coin": "BTC", "side": "B", "sz": "20", "lidPx": "65000", "time": 1000},
             {"coin": "ETH", "side": "A", "sz": "1", "lidPx": "2000", "time": 1001},
@@ -108,7 +107,7 @@ class TestLiquidationScan:
         assert len(notable) >= 1
         assert any(n["coin"] == "BTC" for n in notable)
 
-    def test_scan_empty_data(self):
+    def test_scan_empty_data(self) -> None:
         notable = scan_liquidations_from_data([])
         assert notable == []
 
@@ -116,7 +115,7 @@ class TestLiquidationScan:
 class TestWhaleWatchlist:
     """Test whale watchlist configuration."""
 
-    def test_watchlist_defined(self):
+    def test_watchlist_defined(self) -> None:
         assert isinstance(WHALE_WATCHLIST, dict)
 
 
@@ -124,7 +123,7 @@ class TestEndpoints:
     """Test endpoint configurations."""
 
     @pytest.mark.asyncio
-    async def test_api_call_meta(self):
+    async def test_api_call_meta(self) -> None:
         from rugbrain.monitors.hyperliquid_monitor import _api_call
 
         result = await _api_call({"type": "allMids"})
@@ -132,7 +131,7 @@ class TestEndpoints:
         assert len(result) > 100  # 232+ coins
 
     @pytest.mark.asyncio
-    async def test_api_call_mids_has_major(self):
+    async def test_api_call_mids_has_major(self) -> None:
         from rugbrain.monitors.hyperliquid_monitor import _api_call
 
         result = await _api_call({"type": "allMids"})

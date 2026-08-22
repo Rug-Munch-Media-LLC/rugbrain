@@ -1,21 +1,21 @@
 from rugbrain.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING_DIM
 
 
-def test_embedding_dim():
+def test_embedding_dim() -> None:
     assert EMBEDDING_DIM == 2560
 
 
-def test_model_name():
+def test_model_name() -> None:
     assert EMBED_MODEL_NAME == "qwen3-embedding-4b"
 
 
-def test_version_stamp():
+def test_version_stamp() -> None:
     assert "qwen3-embedding-4b" in EMBED_VERSION_STAMP
     assert "2560" in EMBED_VERSION_STAMP
     assert ":" in EMBED_VERSION_STAMP
 
 
-def test_embeddings_importable():
+def test_embeddings_importable() -> None:
     from rugbrain.embeddings import current_backend, get_embedding, get_embeddings
 
     assert callable(get_embedding)

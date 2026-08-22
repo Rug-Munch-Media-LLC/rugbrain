@@ -12,7 +12,7 @@ Returns deduplicated, sorted-by-date results with source attribution.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
@@ -74,10 +74,10 @@ async def get_unified_news_feed(
                         # Add source tag
                         meta["_source"] = source_key
                         meta["_feed_date"] = (
-                            meta.get("upload_date") or
-                            meta.get("ingested_at") or
-                            meta.get("date") or
-                            datetime.now(timezone.utc).isoformat()
+                            meta.get("upload_date")
+                            or meta.get("ingested_at")
+                            or meta.get("date")
+                            or datetime.now(UTC).isoformat()
                         )
                     all_results.append(r)
             except Exception:
@@ -86,7 +86,9 @@ async def get_unified_news_feed(
         # Sort by date descending
         all_results.sort(
             key=lambda r: (
-                r.get("metadata", {}).get("_feed_date", "") if isinstance(r.get("metadata"), dict) else ""
+                r.get("metadata", {}).get("_feed_date", "")
+                if isinstance(r.get("metadata"), dict)
+                else ""
             ),
             reverse=True,
         )
@@ -108,7 +110,7 @@ async def get_unified_news_feed(
             "total": len(filtered),
             "query": q,
             "sources_queried": source_list,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     except Exception as exc:
@@ -119,9 +121,9 @@ async def get_unified_news_feed(
 @news_feed_router.get("/sources")
 async def list_sources() -> dict[str, Any]:
     """List all tracked content sources."""
-    from rugbrain.youtube_ingester import YT_CHANNELS
-    from rugbrain.podcast_ingester import CRYPTO_PODCASTS
     from rugbrain.newsletter_ingester import NEWSLETTERS
+    from rugbrain.podcast_ingester import CRYPTO_PODCASTS
+    from rugbrain.youtube_ingester import YT_CHANNELS
 
     return {
         "youtube": {

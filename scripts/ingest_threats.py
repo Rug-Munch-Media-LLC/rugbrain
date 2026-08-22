@@ -5,6 +5,7 @@ Embeds with Qwen3-4B (2560d) and stores in Qdrant rag_threats collection.
 """
 
 import asyncio
+from typing import Any
 
 import httpx
 from qdrant_client import QdrantClient
@@ -16,14 +17,15 @@ MODEL_NAME = "qwen3-embedding-4b"
 VECTOR_SIZE = 1024
 
 
-async def fetch_goplus_threats() -> list[dict]:
+async def fetch_goplus_threats() -> list[dict[str, Any]]:
     """Fetch from GoPlus Security API."""
     async with httpx.AsyncClient() as client:
         resp = await client.get("https://api.gopluslabs.io/api/v1/phishing_site")
-        return resp.json().get("result", [])
+        _result: list[dict[str, Any]] = resp.json().get("result", [])
+        return _result
 
 
-def embed_and_store(threats: list[dict]):
+def embed_and_store(threats: list[dict[str, Any]]) -> None:
     model = SentenceTransformer(MODEL_NAME)
     client = QdrantClient(host="rmi-qdrant", port=6333)
     # Ensure target collection exists with matching vector size.

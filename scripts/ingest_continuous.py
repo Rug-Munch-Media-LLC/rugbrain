@@ -129,9 +129,11 @@ class CheckpointStore:
 
 async def _job_security_alerts(dry_run: bool) -> dict[str, Any]:
     """Poll crypto security sources (CoinGecko/DeFiLlama/Rekt/Nitter+SearXNG)."""
-    from rugbrain import alerts
+    import importlib
 
-    result = await alerts.poll_once(dry_run=dry_run)
+    alerts = importlib.import_module("rugbrain.alerts")
+
+    result: dict[str, Any] = await alerts.poll_once(dry_run=dry_run)
     return {"source": "security_alerts", "result": result}
 
 
@@ -161,7 +163,8 @@ async def _job_social_intel(dry_run: bool) -> dict[str, Any]:
     """X + Reddit + Farcaster social intelligence into Qdrant."""
     from rugbrain.social_intel import collect_social_intel
 
-    return await collect_social_intel(dry_run=dry_run)
+    _res: dict[str, Any] = await collect_social_intel(dry_run=dry_run)
+    return _res
 
 
 async def _job_codebase_repos(dry_run: bool) -> dict[str, Any]:

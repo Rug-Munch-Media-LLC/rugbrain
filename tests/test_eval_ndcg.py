@@ -21,33 +21,33 @@ from rugbrain.eval.ndcg import (
 
 
 class TestNdcgAtK:
-    def test_perfect_ranking(self):
+    def test_perfect_ranking(self) -> None:
         assert ndcg_at_k(["a", "b"], ["a", "b"]) == pytest.approx(1.0)
 
-    def test_known_value(self):
+    def test_known_value(self) -> None:
         # Verified: DCG=1/log2(3)+1/log2(5); IDCG=1/log2(2)+1/log2(3).
         assert ndcg_at_k(["a", "b", "c", "d"], ["b", "d"]) == pytest.approx(0.650921, abs=1e-6)
 
-    def test_cutoff_truncation(self):
+    def test_cutoff_truncation(self) -> None:
         # k=2 only sees "a","b" — one relevant doc at rank 2.
         assert ndcg_at_k(["a", "b", "c", "d"], ["b", "d"], k=2) == pytest.approx(0.386853, abs=1e-6)
 
-    def test_no_hits(self):
+    def test_no_hits(self) -> None:
         assert ndcg_at_k(["x", "y", "z"], ["q"]) == 0.0
 
-    def test_empty_relevant_set(self):
+    def test_empty_relevant_set(self) -> None:
         assert ndcg_at_k(["a", "b"], []) == 0.0
 
-    def test_empty_retrieved(self):
+    def test_empty_retrieved(self) -> None:
         assert ndcg_at_k([], ["a"]) == 0.0
 
-    def test_k_larger_than_retrieved_clamps(self):
+    def test_k_larger_than_retrieved_clamps(self) -> None:
         assert ndcg_at_k(["a", "b"], ["a", "b"], k=99) == pytest.approx(1.0)
 
-    def test_k_zero(self):
+    def test_k_zero(self) -> None:
         assert ndcg_at_k(["a", "b"], ["a", "b"], k=0) == 0.0
 
-    def test_relevant_ordering_matters(self):
+    def test_relevant_ordering_matters(self) -> None:
         # Same set, worse ordering -> lower NDCG.
         good = ndcg_at_k(["a", "b", "c"], ["a", "b"])
         bad = ndcg_at_k(["c", "a", "b"], ["a", "b"])
@@ -55,131 +55,131 @@ class TestNdcgAtK:
 
 
 class TestRecallAtK:
-    def test_all_found(self):
+    def test_all_found(self) -> None:
         assert recall_at_k(["a", "b", "c"], ["a", "b"]) == pytest.approx(1.0)
 
-    def test_partial(self):
+    def test_partial(self) -> None:
         assert recall_at_k(["a", "x", "y"], ["a", "b", "c"]) == pytest.approx(1 / 3)
 
-    def test_cutoff(self):
+    def test_cutoff(self) -> None:
         # "b" is at rank 4 — outside k=3.
         assert recall_at_k(["a", "x", "y", "b"], ["b"], k=3) == 0.0
         assert recall_at_k(["a", "x", "y", "b"], ["b"], k=4) == pytest.approx(1.0)
 
-    def test_empty_relevant_set(self):
+    def test_empty_relevant_set(self) -> None:
         assert recall_at_k(["a", "b"], []) == 1.0
 
-    def test_none_found(self):
+    def test_none_found(self) -> None:
         assert recall_at_k(["x", "y"], ["a"]) == 0.0
 
 
 class TestHitRateAtK:
-    def test_hit(self):
+    def test_hit(self) -> None:
         assert hit_rate_at_k(["a", "b", "c"], ["c"]) == 1.0
 
-    def test_miss(self):
+    def test_miss(self) -> None:
         assert hit_rate_at_k(["a", "b", "c"], ["z"]) == 0.0
 
-    def test_hit_beyond_cutoff(self):
+    def test_hit_beyond_cutoff(self) -> None:
         assert hit_rate_at_k(["a", "b", "c", "z"], ["z"], k=3) == 0.0
 
-    def test_empty_relevant_set(self):
+    def test_empty_relevant_set(self) -> None:
         assert hit_rate_at_k(["a", "b"], []) == 1.0
 
 
 class TestPrecisionAtK:
-    def test_all_relevant(self):
+    def test_all_relevant(self) -> None:
         assert precision_at_k(["a", "b", "c"], ["a", "b", "c"]) == pytest.approx(1.0)
 
-    def test_partial(self):
+    def test_partial(self) -> None:
         assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=4) == pytest.approx(0.5)
 
-    def test_cutoff(self):
+    def test_cutoff(self) -> None:
         # Only "a" is within k=2; the relevant "b" at rank 4 is excluded.
         assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=2) == pytest.approx(0.5)
         assert precision_at_k(["a", "x", "y", "b"], ["a", "b"], k=1) == pytest.approx(1.0)
 
-    def test_no_hits(self):
+    def test_no_hits(self) -> None:
         assert precision_at_k(["x", "y"], ["a"]) == 0.0
 
-    def test_empty_relevant_set(self):
+    def test_empty_relevant_set(self) -> None:
         # Precision is undefined with no labeled relevant docs -> 0.0
         # (differs from recall/hit-rate which pass on empty sets).
         assert precision_at_k(["a", "b"], []) == 0.0
 
-    def test_empty_retrieved(self):
+    def test_empty_retrieved(self) -> None:
         assert precision_at_k([], ["a"]) == 0.0
 
-    def test_k_zero(self):
+    def test_k_zero(self) -> None:
         assert precision_at_k(["a", "b"], ["a"], k=0) == 0.0
 
-    def test_k_larger_than_retrieved_clamps(self):
+    def test_k_larger_than_retrieved_clamps(self) -> None:
         assert precision_at_k(["a", "b"], ["a"], k=99) == pytest.approx(0.5)
 
 
 class TestMrr:
-    def test_first_rank(self):
+    def test_first_rank(self) -> None:
         assert mrr(["a", "b", "c"], ["a"]) == 1.0
 
-    def test_second_rank(self):
+    def test_second_rank(self) -> None:
         assert mrr(["x", "b"], ["b"]) == pytest.approx(0.5)
 
-    def test_none_found(self):
+    def test_none_found(self) -> None:
         assert mrr(["x", "y"], ["a"]) == 0.0
 
-    def test_empty_relevant_set(self):
+    def test_empty_relevant_set(self) -> None:
         assert mrr(["x", "y"], []) == 1.0
 
-    def test_first_relevant_rank_wins(self):
+    def test_first_relevant_rank_wins(self) -> None:
         assert mrr(["x", "b", "a"], ["a", "b"]) == pytest.approx(0.5)
 
 
 class TestNdcgFromGains:
-    def test_perfect_ranking(self):
+    def test_perfect_ranking(self) -> None:
         assert ndcg_from_gains([1.0, 1.0], k=2) == pytest.approx(1.0)
 
-    def test_known_value_matches_id_based(self):
+    def test_known_value_matches_id_based(self) -> None:
         # Equivalent to ndcg_at_k(["a","b","c","d"], ["b","d"]): gains at ranks 2 and 4.
         assert ndcg_from_gains([0, 1, 0, 1], k=4) == pytest.approx(0.650921, abs=1e-6)
 
-    def test_cutoff_truncation(self):
+    def test_cutoff_truncation(self) -> None:
         # k=2 sees gains [0, 1] — one relevant doc at rank 2.
         assert ndcg_from_gains([0, 1, 0, 1], k=2) == pytest.approx(0.386853, abs=1e-6)
 
-    def test_no_hits(self):
+    def test_no_hits(self) -> None:
         assert ndcg_from_gains([0.0, 0.0, 0.0]) == 0.0
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert ndcg_from_gains([]) == 0.0
 
-    def test_k_zero(self):
+    def test_k_zero(self) -> None:
         assert ndcg_from_gains([1.0, 0.0], k=0) == 0.0
 
-    def test_k_larger_than_gains_clamps(self):
+    def test_k_larger_than_gains_clamps(self) -> None:
         assert ndcg_from_gains([1.0, 1.0], k=99) == pytest.approx(1.0)
 
-    def test_ordering_matters(self):
+    def test_ordering_matters(self) -> None:
         good = ndcg_from_gains([1.0, 1.0, 0.0], k=3)
         bad = ndcg_from_gains([0.0, 1.0, 1.0], k=3)
         assert good > bad
 
-    def test_graded_gains_supported(self):
+    def test_graded_gains_supported(self) -> None:
         graded = ndcg_from_gains([2.0, 0.0, 1.0], k=3)
         assert 0.0 < graded <= 1.0
 
 
 class TestMrrFromGains:
-    def test_first_rank(self):
+    def test_first_rank(self) -> None:
         assert mrr_from_gains([1.0, 0.0, 0.0]) == pytest.approx(1.0)
 
-    def test_second_rank(self):
+    def test_second_rank(self) -> None:
         assert mrr_from_gains([0.0, 1.0, 0.0]) == pytest.approx(0.5)
 
-    def test_none_found(self):
+    def test_none_found(self) -> None:
         assert mrr_from_gains([0.0, 0.0]) == 0.0
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         assert mrr_from_gains([]) == 0.0
 
-    def test_first_positive_rank_wins(self):
+    def test_first_positive_rank_wins(self) -> None:
         assert mrr_from_gains([0.0, 1.0, 1.0]) == pytest.approx(0.5)

@@ -28,6 +28,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -58,7 +59,7 @@ def make_doc_id(collection: str, key: str) -> str:
     return hashlib.sha256(f"{collection}:{key.lower()}".encode()).hexdigest()[:16]
 
 
-async def ingest_doc(collection: str, content: str, metadata: dict) -> bool:
+async def ingest_doc(collection: str, content: str, metadata: dict[str, Any]) -> bool:
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -697,8 +698,8 @@ async def ingest_phishdestroy() -> dict[str, int]:
 # ─── Main ─────────────────────────────────────────────────────────────
 
 
-async def main():
-    total_stats = {
+async def main() -> None:
+    total_stats: dict[str, Any] = {
         "known_scams_added": 0,
         "wallet_profiles_added": 0,
         "errors": 0,

@@ -32,8 +32,8 @@ import os
 import sys
 from typing import Any
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logging.basicConfig(
     level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"

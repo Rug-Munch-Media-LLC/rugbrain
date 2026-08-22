@@ -101,8 +101,8 @@ else:
 from rugbrain.qwen_embedders import (  # noqa: E402
     ContractCodeEmbedder,
     HuggingFaceEmbedder,
-    Qwen3Embedder,
     OpenRouterEmbedder,
+    Qwen3Embedder,
 )
 
 # Qwen3-Embedding query template — must match the migration/search path so

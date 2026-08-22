@@ -90,21 +90,20 @@ def _pct_change(prev: Any, cur: Any) -> float | None:
     return round((c - p) / p * 100.0, 2)
 
 
-async def fetch_stablecoins(client: httpx.AsyncClient, limit: int | None) -> list[dict[str, Any]]:
+async def fetch_stablecoins(client: httpx.AsyncClient, limit: int | None) -> list[Any]:
     r = await client.get(STABLECOINS_API, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     if not isinstance(data, dict) or not isinstance(data.get("peggedAssets"), list):
         logger.warning("stablecoins_unexpected_payload type=%s", type(data).__name__)
         return []
-    assets = data["peggedAssets"]
-    if limit:
-        assets = assets[:limit]
+    assets_raw: Any = data["peggedAssets"]
+    assets: list[Any] = list(assets_raw)[:limit] if limit else list(assets_raw)
     logger.info("stablecoins_fetched total=%d", len(assets))
     return assets
 
 
-def build_docs(assets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_docs(assets: list[Any]) -> list[dict[str, Any]]:
     """Normalize raw stablecoin assets into RAG docs.
 
     Returns a list of ``{doc_id, title, text, metadata}`` dicts plus the
@@ -249,13 +248,14 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
         # use; insert() creates the bare-vector collection when missing.
         store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         for doc in docs:
-            vec = doc.get("vector")
-            if not vec:
+            vec_raw: Any = doc.get("vector")
+            if not vec_raw:
                 continue
+            vec_f: list[float] = [float(x) for x in vec_raw]
             ok = await store.insert(
                 doc_id=doc["doc_id"],
                 collection=COLLECTION,
-                embedding=vec,
+                embedding=vec_f,
                 content=doc["text"],
                 metadata=doc["metadata"],
                 source=SOURCE,

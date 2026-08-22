@@ -552,13 +552,14 @@ async def run(
 
         store = QdrantVectorStore(qdrant_url)
         for doc in docs:
-            vec = doc.get("vector")
-            if not vec:
+            vec_raw: Any = doc.get("vector")
+            if not vec_raw:
                 continue
+            vec_f: list[float] = [float(x) for x in vec_raw]
             ok = await store.insert(
                 doc_id=doc["doc_id"],
                 collection=COLLECTION,
-                embedding=vec,
+                embedding=vec_f,
                 content=doc["text"],
                 metadata=doc["metadata"],
                 source=doc["metadata"].get("source_type") or "regulation",

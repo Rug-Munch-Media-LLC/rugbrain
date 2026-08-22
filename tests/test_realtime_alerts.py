@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import pytest
@@ -21,7 +22,7 @@ import rugbrain.realtime_alerts as ra
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_critical_alert_id_deterministic():
+def test_critical_alert_id_deterministic() -> None:
     a = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-04T00:00:00+00:00")
     b = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-04T00:00:00+00:00")
     assert a.id == b.id
@@ -29,7 +30,7 @@ def test_critical_alert_id_deterministic():
     assert a.id != c.id
 
 
-def test_critical_alert_from_candidate_classifies():
+def test_critical_alert_from_candidate_classifies() -> None:
     a = ra.CriticalAlert.from_candidate(
         title="Oracle price manipulation exploit drains $4.2M from Solana protocol",
         description="Attacker manipulated the price feed and drained funds.",
@@ -39,41 +40,41 @@ def test_critical_alert_from_candidate_classifies():
     assert a.id
 
 
-def test_critical_alert_from_candidate_unknown():
+def test_critical_alert_from_candidate_unknown() -> None:
     a = ra.CriticalAlert.from_candidate(title="Just a market update")
     assert a.chain == "unknown"
     assert a.amount_usd == 0.0
 
 
-def test_is_exploit_candidate():
+def test_is_exploit_candidate() -> None:
     assert ra.is_exploit_candidate("Exploit detected on Ethereum mainnet")
     assert ra.is_exploit_candidate("funds drained from bridge")
     assert ra.is_exploit_candidate("critical vulnerability disclosed")
     assert not ra.is_exploit_candidate("market making is fine today")
 
 
-def test_parse_amount_usd_formats():
+def test_parse_amount_usd_formats() -> None:
     assert ra.parse_amount_usd("lost $1.2M") == pytest.approx(1_200_000)
     assert ra.parse_amount_usd("stolen $4,800,000") == pytest.approx(4_800_000)
     assert ra.parse_amount_usd("$300k total") == pytest.approx(300_000)
     assert ra.parse_amount_usd("no money mentioned") == 0.0
 
 
-def test_detect_chain_critical():
+def test_detect_chain_critical() -> None:
     assert ra.detect_chain_critical("exploit on solana") == "solana"
     assert ra.detect_chain_critical("ethereum mainnet hack") == "ethereum"
     assert ra.detect_chain_critical("cross-chain bridge") == "multi"
     assert ra.detect_chain_critical("nothing") == "unknown"
 
 
-def test_text_contains_fields():
+def test_text_contains_fields() -> None:
     a = ra.CriticalAlert(title="Hack", description="Drained", amount_usd=1_000_000)
     text = a.text()
     assert "Hack" in text
     assert "$1,000,000" in text
 
 
-async def _no_redis():
+async def _no_redis() -> None:
     return None
 
 
@@ -82,7 +83,7 @@ async def _no_redis():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_sign_and_verify_hmac():
+def test_sign_and_verify_hmac() -> None:
     payload = b'{"event": "critical_alert"}'
     sig = ra.sign_payload("secret123", payload)
     assert sig.startswith("sha256=")
@@ -92,11 +93,11 @@ def test_sign_and_verify_hmac():
     assert not ra.verify_signature("secret123", "", payload)
 
 
-def test_sign_payload_string_and_bytes_equivalent():
+def test_sign_payload_string_and_bytes_equivalent() -> None:
     assert ra.sign_payload("s", "hello") == ra.sign_payload("s", b"hello")
 
 
-def test_build_webhook_payload_shape():
+def test_build_webhook_payload_shape() -> None:
     a = ra.CriticalAlert(title="Hack", chain="ethereum", source="searxng", amount_usd=5e6)
     p = ra.build_webhook_payload(a)
     assert p["event"] == "critical_alert"
@@ -112,7 +113,7 @@ def test_build_webhook_payload_shape():
 
 
 @pytest.mark.asyncio
-async def test_webhook_register_unregister_roundtrip():
+async def test_webhook_register_unregister_roundtrip() -> None:
     reg = ra.WebhookRegistry()
     rec = await reg.register("https://example.com/hook", name="test")
     assert rec["webhook_id"]
@@ -125,21 +126,26 @@ async def test_webhook_register_unregister_roundtrip():
 
 
 @pytest.mark.asyncio
-async def test_webhook_register_generates_secret_when_absent():
+async def test_webhook_register_generates_secret_when_absent() -> None:
     reg = ra.WebhookRegistry()
     rec = await reg.register("https://example.com/hook")
     assert len(rec["secret"]) >= 16
 
 
 @pytest.mark.asyncio
-async def test_deliver_webhooks_signed(monkeypatch):
+async def test_deliver_webhooks_signed(monkeypatch: pytest.MonkeyPatch) -> Any:
     reg = ra.WebhookRegistry()
     rec = await reg.register("https://example.com/hook")
     alert = ra.CriticalAlert(title="Hack", source="test")
 
-    received: dict = {}
+    received: dict[str, Any] = {}
 
-    async def fake_post(url, content=None, headers=None, **kwargs):
+    async def fake_post(
+            url: Any,
+            content: Any = None,
+            headers: Any = None,
+            **kwargs: Any,
+        ) -> Any:
         received["url"] = url
         received["content"] = content
         received["headers"] = headers
@@ -157,11 +163,11 @@ async def test_deliver_webhooks_signed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_deliver_webhooks_skips_errors(monkeypatch):
+async def test_deliver_webhooks_skips_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     reg = ra.WebhookRegistry()
     await reg.register("https://example.com/hook")
 
-    async def fail_post(*args, **kwargs):
+    async def fail_post(*args: Any, **kwargs: Any) -> None:
         raise httpx.ConnectError("boom")
 
     monkeypatch.setattr(ra.httpx, "AsyncClient", lambda **kw: _FakeClient(fail_post))
@@ -173,13 +179,13 @@ async def test_deliver_webhooks_skips_errors(monkeypatch):
 class _FakeClient:
     """Minimal httpx.AsyncClient stand-in with a custom ``post``."""
 
-    def __init__(self, post, **kwargs):
+    def __init__(self, post: Any, **kwargs: Any) -> None:
         self._post = post
 
-    async def post(self, *args, **kwargs):
+    async def post(self, *args: Any, **kwargs: Any) -> Any:
         return await self._post(*args, **kwargs)
 
-    async def get(self, *args, **kwargs):
+    async def get(self, *args: Any, **kwargs: Any) -> Any:
         return await self._post(*args, **kwargs)
 
     async def aclose(self) -> None:
@@ -208,7 +214,7 @@ _RSS = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 @pytest.mark.asyncio
-async def test_poll_searxng_exploits_rss():
+async def test_poll_searxng_exploits_rss() -> None:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(200, text=_RSS))
     async with httpx.AsyncClient(transport=transport) as client:
         alerts = await ra.poll_searxng_exploits(client, accounts=("CertiKAlert",))
@@ -220,7 +226,7 @@ async def test_poll_searxng_exploits_rss():
 
 
 @pytest.mark.asyncio
-async def test_poll_searxng_exploits_json_fallback():
+async def test_poll_searxng_exploits_json_fallback() -> Any:
     def handler(request: httpx.Request) -> httpx.Response:
         # RSS request (first) returns non-RSS body → JSON fallback.
         if request.url.params.get("format") == "rss":
@@ -252,7 +258,7 @@ async def test_poll_searxng_exploits_json_fallback():
 
 
 @pytest.mark.asyncio
-async def test_poll_searxng_exploits_fails_open():
+async def test_poll_searxng_exploits_fails_open() -> None:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(500))
     async with httpx.AsyncClient(transport=transport) as client:
         alerts = await ra.poll_searxng_exploits(client, accounts=("CertiKAlert",))
@@ -264,20 +270,20 @@ async def test_poll_searxng_exploits_fails_open():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_dex_whale_sql_replaces_db():
+def test_dex_whale_sql_replaces_db() -> None:
     sql = ra._dex_whale_sql("wallet_memory")
     assert "wallet_memory.dex_events" in sql
     assert "{threshold:Float64}" in sql
     assert "__DB__" not in sql
 
 
-def test_new_address_sql_replaces_db():
+def test_new_address_sql_replaces_db() -> None:
     sql = ra._new_address_sql("rmi")
     assert "rmi.dex_events d" in sql
     assert "{new_max:UInt32}" in sql
 
 
-def test_oracle_pattern_sql_replaces_db():
+def test_oracle_pattern_sql_replaces_db() -> None:
     sql = ra._oracle_pattern_sql("wallet_memory")
     assert "wallet_memory.dex_events" in sql
     assert "{whale_min:UInt32}" in sql
@@ -286,11 +292,13 @@ def test_oracle_pattern_sql_replaces_db():
 class _FakeCh:
     """clickhouse-connect query() stand-in returning canned rows."""
 
-    def __init__(self, rows_by_contains: dict[str, list[tuple]]):
+    def __init__(self, rows_by_contains: dict[str, list[tuple[Any, ...]]]) -> None:
         self._rows = rows_by_contains
         self.queries: list[str] = []
 
-    def query(self, sql, parameters=None, settings=None):
+    def query(
+            self, sql: Any, parameters: Any = None, settings: Any = None
+        ) -> Any:
         self.queries.append(sql)
         rows = []
         for needle, hits in self._rows.items():
@@ -301,12 +309,12 @@ class _FakeCh:
 
 
 class _FakeResult:
-    def __init__(self, rows):
+    def __init__(self, rows: Any) -> None:
         self.result_rows = rows
 
 
 @pytest.mark.asyncio
-async def test_poll_onchain_anomalies_candidates():
+async def test_poll_onchain_anomalies_candidates() -> None:
     ch = _FakeCh(
         {
             "HAVING": [("ethereum", "0xpair1", "0xt0", "0xt1", 5, 2_500_000, "2026-08-04")],
@@ -349,13 +357,13 @@ async def test_poll_onchain_anomalies_candidates():
 
 
 @pytest.mark.asyncio
-async def test_poll_onchain_anomalies_fails_open():
+async def test_poll_onchain_anomalies_fails_open() -> None:
     alerts = await ra.poll_onchain_anomalies(ch=_BoomCh(), db="wallet_memory")
     assert alerts == []
 
 
 class _BoomCh:
-    def query(self, *args, **kwargs):
+    def query(self, *args: Any, **kwargs: Any) -> None:
         raise RuntimeError("clickhouse exploded")
 
 
@@ -376,7 +384,7 @@ _RPC_BLOCK = {
 }
 
 
-def _rpc_handler(monkeypatch):
+def _rpc_handler(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ra, "ETH_RPC_URL", "https://example.invalid/rpc")
     monkeypatch.setattr(ra, "ETH_PRICE_USD", 3000.0)
     monkeypatch.setattr(ra, "LARGE_TX_USD", 1_000_000.0)
@@ -391,7 +399,7 @@ def _rpc_handler(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_poll_ethereum_rpc_filters_large(monkeypatch):
+async def test_poll_ethereum_rpc_filters_large(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = _rpc_handler(monkeypatch)
     transport = httpx.MockTransport(handler=handler)
     async with httpx.AsyncClient(transport=transport) as client:
@@ -402,14 +410,14 @@ async def test_poll_ethereum_rpc_filters_large(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_poll_ethereum_rpc_disabled_when_no_url():
+async def test_poll_ethereum_rpc_disabled_when_no_url() -> None:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(500))
     async with httpx.AsyncClient(transport=transport) as client:
         assert await ra.poll_ethereum_rpc(client) == []
 
 
 @pytest.mark.asyncio
-async def test_poll_solana_rpc(monkeypatch):
+async def test_poll_solana_rpc(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ra, "SOLANA_RPC_URL", "https://example.invalid/sol")
     monkeypatch.setattr(ra, "SOL_PRICE_USD", 150.0)
     monkeypatch.setattr(ra, "LARGE_TX_USD", 1_000_000.0)
@@ -449,7 +457,7 @@ async def test_poll_solana_rpc(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_poll_solana_rpc_disabled_when_no_url():
+async def test_poll_solana_rpc_disabled_when_no_url() -> None:
     transport = httpx.MockTransport(handler=lambda request: httpx.Response(500))
     async with httpx.AsyncClient(transport=transport) as client:
         assert await ra.poll_solana_rpc(client) == []
@@ -461,7 +469,7 @@ async def test_poll_solana_rpc_disabled_when_no_url():
 
 
 @pytest.mark.asyncio
-async def test_store_record_dedup_and_live(monkeypatch):
+async def test_store_record_dedup_and_live(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     store = ra.LiveThreatStore()
     alert = ra.CriticalAlert(title="Hack", source="test", detected_at=datetime.now(UTC).isoformat())
@@ -474,7 +482,7 @@ async def test_store_record_dedup_and_live(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_store_recent_alerts_window(monkeypatch):
+async def test_store_recent_alerts_window(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     store = ra.LiveThreatStore()
     old = ra.CriticalAlert(
@@ -493,7 +501,7 @@ async def test_store_recent_alerts_window(monkeypatch):
     assert "Old hack" not in titles
 
 
-def test_module_helpers_degrade_without_network(monkeypatch):
+def test_module_helpers_degrade_without_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     assert ra.get_recent_alerts(minutes=60) == []
 
@@ -504,38 +512,42 @@ def test_module_helpers_degrade_without_network(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_monitor_pipeline_runs_every_step(monkeypatch):
+async def test_monitor_pipeline_runs_every_step(monkeypatch: pytest.MonkeyPatch) -> Any:
     """All four pipeline stages execute (counters increment) for a new alert."""
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     calls = {"nats": 0, "ch": 0, "tg": 0, "qd": 0, "wh": 0}
 
     class FakeBus:
-        def __init__(self, subject=None, **kwargs):
+        def __init__(self, subject: Any = None, **kwargs: Any) -> None:
             self.subject = subject
 
         async def connect(self) -> str:
             return "redis"
 
-        async def publish_payload(self, payload):
+        async def publish_payload(self, payload: Any) -> bool:
             calls["nats"] += 1
             return True
 
         async def close(self) -> None:
             pass
 
-    def fake_ch_log(alert):
+    def fake_ch_log(alert: Any) -> Any:
         calls["ch"] += 1
         return True
 
-    async def fake_tg(alert):
+    async def fake_tg(alert: Any) -> Any:
         calls["tg"] += 1
         return True
 
-    async def fake_qd(alert):
+    async def fake_qd(alert: Any) -> Any:
         calls["qd"] += 1
         return True
 
-    async def fake_deliver(alert, registry=None, client=None):
+    async def fake_deliver(
+            alert: Any,
+            registry: Any = None,
+            client: Any = None,
+        ) -> Any:
         calls["wh"] += 1
         return {"delivered": 1, "failed": 0, "errors": []}
 
@@ -553,31 +565,35 @@ async def test_monitor_pipeline_runs_every_step(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_monitor_dedup_skips_second_alert(monkeypatch):
+async def test_monitor_dedup_skips_second_alert(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ra, "_get_redis", _no_redis)
     calls = {"nats": 0}
 
     class FakeBus:
-        def __init__(self, subject=None, **kwargs):
+        def __init__(self, subject: Any = None, **kwargs: Any) -> None:
             pass
 
         async def connect(self) -> str:
             return "redis"
 
-        async def publish_payload(self, payload):
+        async def publish_payload(self, payload: Any) -> bool:
             calls["nats"] += 1
             return True
 
         async def close(self) -> None:
             pass
 
-    async def fake_deliver(alert, registry=None, client=None):
+    async def fake_deliver(
+            alert: Any,
+            registry: Any = None,
+            client: Any = None,
+        ) -> Any:
         return {"delivered": 0, "failed": 0, "errors": []}
 
-    async def fake_tg(alert):
+    async def fake_tg(alert: Any) -> Any:
         return True
 
-    async def fake_qd(alert):
+    async def fake_qd(alert: Any) -> Any:
         return True
 
     monkeypatch.setattr(ra, "AlertBus", FakeBus)
@@ -597,7 +613,7 @@ async def test_monitor_dedup_skips_second_alert(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_start_stop_monitor_idempotent():
+async def test_start_stop_monitor_idempotent() -> None:
     await ra.stop_realtime_monitor()  # clean slate
     assert await ra.start_realtime_monitor() is True
     assert ra.is_realtime_monitor_running()

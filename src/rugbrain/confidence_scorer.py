@@ -112,8 +112,9 @@ def score_confidence(
     # 4. Embedding similarity factor
     sim_factor = min(1.0, max(0.0, query_similarity))
 
-    # 5. Reranker factor (if available)
-    rerank_factor = min(1.0, max(0.0, reranker_score or 0.5))
+    # 5. Reranker factor (if available). NOTE: `is not None` — an explicit
+    # 0.0 is a meaningful "totally irrelevant" score, not a missing value.
+    rerank_factor = min(1.0, max(0.0, reranker_score if reranker_score is not None else 0.5))
 
     # Combine: weighted average
     confidence = (

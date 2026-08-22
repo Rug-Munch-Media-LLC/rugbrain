@@ -296,7 +296,7 @@ def snapshot_collection(
         "format": fmt,
         "object_key": object_key,
         "point_count": point_count,
-        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,  # type: ignore[possibly-undefined]
+        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,
         "bytes_stored": upload_path.stat().st_size,
         "compression": "zstd-19" if fmt == "ndjson" else "parquet-zstd-19",
         "encrypted": False,  # SSE-B2 encrypts at rest; no client-side encryption

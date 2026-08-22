@@ -10,7 +10,6 @@ unmodified so RAG ingestion never blocks on PII scrubbing.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from typing import Any, cast

@@ -28,7 +28,7 @@ Pipeline guarantees:
   * Checkpointed — progress is tracked in a JSON checkpoint file
     (``RAG_KNOWLEDGE_CHECKPOINT``, default /tmp/rag-knowledge/checkpoint.json)
     keyed by source → file → sha256, so already-ingested files are skipped.
-  * Batched — embeddings are computed 50 at a time through 
+  * Batched — embeddings are computed 50 at a time through
     (OpenAI-compatible /embeddings) and upserts are sent 50 points per call.
 
 Usage:
@@ -777,7 +777,7 @@ def _cryptoscamdb_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any
     if not data_dir.exists():
         return []
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
     except ImportError:
         yaml = None
     if yaml is None:

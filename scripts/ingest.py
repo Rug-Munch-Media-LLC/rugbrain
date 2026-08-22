@@ -162,7 +162,12 @@ def cmd_security(args: argparse.Namespace) -> None:
         ran = True
 
     if args.codebase or args.all:
-        from ingest_codebase_knowledge import DEFAULT_MAX_CHUNKS, DEFAULT_MAX_CONTRACTS, main_async
+
+        from ingest_codebase_knowledge import (
+            DEFAULT_MAX_CHUNKS,
+            DEFAULT_MAX_CONTRACTS,
+        )
+        from ingest_codebase_knowledge import main_async as codebase_main_async
 
         ns = argparse.Namespace(
             dry_run=args.dry_run,
@@ -172,13 +177,13 @@ def cmd_security(args: argparse.Namespace) -> None:
             no_clone=args.no_clone,
             repo_dir=args.repo_dir or os.getenv("RAG_CODEBASE_DIR", "/tmp/rag_codebases"),  # noqa: S108  # nosec B108
         )
-        all_stats = asyncio.run(main_async(ns))
+        all_stats: list[dict[str, Any]] = asyncio.run(codebase_main_async(ns))
         print("=" * 60)
         print("CODEBASE KNOWLEDGE INGEST COMPLETE")
-        for s in all_stats:
+        for stat in all_stats:
             print(
-                f"  {s['id']:<12} files={s['files']:<4} chunks={s['chunks']:<5} "
-                f"inserted={s['inserted']} skipped={s['skipped']}"
+                f"  {stat['id']:<12} files={stat['files']:<4} chunks={stat['chunks']:<5} "
+                f"inserted={stat['inserted']} skipped={stat['skipped']}"
             )
         print("=" * 60)
         ran = True

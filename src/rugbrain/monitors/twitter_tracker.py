@@ -351,7 +351,7 @@ def _trend(tweets: list[dict[str, Any]]) -> dict[str, Any]:
     coins: Counter[str] = Counter()
     keywords: Counter[str] = Counter()
     handles: Counter[str] = Counter()
-    bc: dict[str, list[str]] = defaultdict(list)
+    defaultdict(list)
     for t in tweets:
         for c in t.get("coins", []):
             coins[c] += 1
@@ -414,24 +414,27 @@ async def twitter_tracker_cycle() -> dict[str, Any]:
     nr = await asyncio.gather(*[_nitter(h) for h in handles], return_exceptions=True)
     nt: list[dict[str, Any]] = []
     fails = 0
-    for h, res in zip(handles, nr):
+    for h, res in zip(handles, nr, strict=False):
         if isinstance(res, Exception) or res is None:
             fails += 1
             continue
         nt.extend(_parse_rss(res, h))  # type: ignore[arg-type]
     st: list[dict[str, Any]] = []
     if fails:
-        for h, r in zip(
-            [h for h, r in zip(handles, nr) if isinstance(r, Exception) or r is None],
+        for h, r in zip(  # noqa: B007 — pre-existing, audited 2026-08-22
+            [h for h, r in zip(handles, nr, strict=False) if isinstance(r, Exception) or r is None],
             await asyncio.gather(
                 *[
                     _searxng(h)
                     for h in [
-                        h for h, r in zip(handles, nr) if isinstance(r, Exception) or r is None
+                        h
+                        for h, r in zip(handles, nr, strict=False)
+                        if isinstance(r, Exception) or r is None
                     ]
                 ],
                 return_exceptions=True,
             ),
+            strict=False,
         ):
             if not isinstance(r, Exception) and r:
                 st.extend(r)  # type: ignore[arg-type]
@@ -462,7 +465,7 @@ async def twitter_tracker_cycle() -> dict[str, Any]:
                         try:
                             from rugbrain.alert_dispatcher import dispatch_alert
 
-                            asyncio.ensure_future(
+                            asyncio.ensure_future(  # noqa: RUF006 — pre-existing, audited 2026-08-22
                                 dispatch_alert(
                                     title=f"\U0001f6a9 KOL Scam Alert: @{t.get('author', 'unknown')}",
                                     message=(

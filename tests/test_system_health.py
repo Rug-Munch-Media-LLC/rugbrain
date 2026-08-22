@@ -6,6 +6,9 @@ aggregation with all external services mocked.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 import rugbrain.system_health as sh
@@ -15,14 +18,14 @@ import rugbrain.system_health as sh
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_chain_state_sql_replaces_db():
+def test_chain_state_sql_replaces_db() -> None:
     sql = sh._chain_state_sql("wallet_memory")
     assert "wallet_memory.evm_transfers" in sql
     assert "wallet_memory.solana_transfers" in sql
     assert "__DB__" not in sql
 
 
-def test_chain_max_sql_replaces_db():
+def test_chain_max_sql_replaces_db() -> None:
     sql = sh._chain_max_sql("rmi")
     assert "rmi.evm_transfers" in sql
     assert "__DB__" not in sql
@@ -33,7 +36,7 @@ def test_chain_max_sql_replaces_db():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_meminfo_returns_shape(monkeypatch, tmp_path):
+def test_meminfo_returns_shape(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text(
         "MemTotal:       16777216 kB\n"
@@ -48,7 +51,7 @@ def test_meminfo_returns_shape(monkeypatch, tmp_path):
     assert info["mem_used_pct"] == pytest.approx(50.0, rel=1e-3)
 
 
-def _parse_meminfo(path: str) -> dict:
+def _parse_meminfo(path: str) -> dict[str, Any]:
     fields: dict[str, int] = {}
     with open(path) as fh:
         for line in fh:
@@ -71,7 +74,7 @@ def _parse_meminfo(path: str) -> dict:
     }
 
 
-def test_meminfo_high_pressure(monkeypatch, tmp_path):
+def test_meminfo_high_pressure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     meminfo = tmp_path / "meminfo"
     meminfo.write_text(
         "MemTotal:       1000000 kB\nMemAvailable:   500000 kB\n"
@@ -82,7 +85,7 @@ def test_meminfo_high_pressure(monkeypatch, tmp_path):
     assert info["swap_pressure"] == "high"
 
 
-def test_zombies_scan(tmp_path):
+def test_zombies_scan(tmp_path: Path) -> None:
     procdir = tmp_path / "proc"
     procdir.mkdir()
     # Zombie process: state 'Z'
@@ -106,8 +109,8 @@ def test_zombies_scan(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_rugbrain_section_all_down(monkeypatch):
-    async def down(url, timeout_s=None):
+async def test_rugbrain_section_all_down(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def down(url: Any, timeout_s: float | None = None) -> bool:
         return False
 
     monkeypatch.setattr(sh, "_http_ok", down)
@@ -119,8 +122,8 @@ async def test_rugbrain_section_all_down(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rugbrain_section_redis_ping_fails(monkeypatch):
-    async def down(url, timeout_s=None):
+async def test_rugbrain_section_redis_ping_fails(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def down(url: Any, timeout_s: float | None = None) -> bool:
         return False
 
     monkeypatch.setattr(sh, "_http_ok", down)
@@ -129,7 +132,7 @@ async def test_rugbrain_section_redis_ping_fails(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_indexer_section_ch_unreachable(monkeypatch):
+async def test_indexer_section_ch_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sh, "_clickhouse_client", lambda: None)
     section = await sh._indexer_section()
     assert section["ok"] is False
@@ -137,9 +140,11 @@ async def test_indexer_section_ch_unreachable(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_indexer_section_with_chains(monkeypatch):
+async def test_indexer_section_with_chains(monkeypatch: pytest.MonkeyPatch) -> Any:
     class FakeCh:
-        def query(self, sql, parameters=None, settings=None):
+        def query(
+            self, sql: Any, parameters: Any = None, settings: Any = None
+        ) -> Any:
             return _FakeRows([("ethereum", 22_000_000, "2026-08-04 12:00:00")])
 
         def close(self) -> None:
@@ -154,31 +159,33 @@ async def test_indexer_section_with_chains(monkeypatch):
 
 
 class _FakeRows:
-    def __init__(self, rows):
+    def __init__(self, rows: Any) -> None:
         self.result_rows = rows
 
 
 @pytest.mark.asyncio
-async def test_scanner_section_backend_ok(monkeypatch):
+async def test_scanner_section_backend_ok(monkeypatch: pytest.MonkeyPatch) -> Any:
     class FakeRedis:
-        async def ping(self):
+        async def ping(self) -> bool:
             return True
 
-        def scan_iter(self, match=None, count=None):
-            async def _gen():
+        def scan_iter(
+            self, match: str | None = None, count: int | None = None
+        ) -> Any:
+            async def _gen() -> Any:
                 yield "sentinel_scanner"
                 yield "rmi_databus_cache_hits_total"
 
             return _gen()
 
-        async def aclose(self):
+        async def aclose(self) -> None:
             pass
 
     import redis.asyncio as real_aioredis
 
     monkeypatch.setattr(real_aioredis, "Redis", lambda *a, **k: FakeRedis())
 
-    async def backend_ok(url, timeout_s=None):
+    async def backend_ok(url: Any, timeout_s: float | None = None) -> bool:
         return True
 
     monkeypatch.setattr(sh, "_http_ok", backend_ok)
@@ -194,11 +201,11 @@ async def test_scanner_section_backend_ok(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_full_health_shape(monkeypatch):
-    async def ok_section():
+async def test_get_full_health_shape(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def ok_section() -> dict[str, Any]:
         return {"ok": True}
 
-    async def ok_http(url, timeout_s=None):
+    async def ok_http(url: Any, timeout_s: float | None = None) -> bool:
         return True
 
     monkeypatch.setattr(sh, "_rugbrain_section", ok_section)
@@ -214,11 +221,11 @@ async def test_get_full_health_shape(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_full_health_degraded(monkeypatch):
-    async def ok_section():
+async def test_get_full_health_degraded(monkeypatch: pytest.MonkeyPatch) -> Any:
+    async def ok_section() -> dict[str, Any]:
         return {"ok": True}
 
-    async def bad_section():
+    async def bad_section() -> dict[str, Any]:
         return {"ok": False}
 
     monkeypatch.setattr(sh, "_rugbrain_section", ok_section)

@@ -3,34 +3,35 @@
 from __future__ import annotations
 
 import pytest
-from rugbrain.reranker import Reranker, get_reranker, rerank, get_reranker_health
+
+from rugbrain.reranker import Reranker, get_reranker, get_reranker_health, rerank
 
 
 class TestReranker:
-    def test_reranker_class_instantiation(self):
+    def test_reranker_class_instantiation(self) -> None:
         r = Reranker(url="http://localhost:8003")
         assert r._url == "http://localhost:8003"
 
-    def test_get_reranker_default(self):
+    def test_get_reranker_default(self) -> None:
         r = get_reranker()
         assert r._url is not None
         assert "8003" in r._url
 
-    def test_reranker_class_type(self):
+    def test_reranker_class_type(self) -> None:
         r = Reranker()
         assert isinstance(r, Reranker)
 
-    def test_reranker_class_url_default(self):
+    def test_reranker_class_url_default(self) -> None:
         r = Reranker()
         assert r._url is not None
 
     @pytest.mark.asyncio
-    async def test_rerank_with_empty_docs(self):
+    async def test_rerank_with_empty_docs(self) -> None:
         results = await rerank("test query", [])
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_rerank_with_server(self):
+    async def test_rerank_with_server(self) -> None:
         results = await rerank(
             "BTC whale moving to exchange",
             ["Whale moves 5000 BTC to Kraken", "Ethereum gas prices low", "BTC ETF approved"],
@@ -42,7 +43,7 @@ class TestReranker:
             assert "index" in results[0]
 
     @pytest.mark.asyncio
-    async def test_reranker_health(self):
+    async def test_reranker_health(self) -> None:
         health = await get_reranker_health()
         assert "ok" in health
         assert "enabled" in health

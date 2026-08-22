@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 from rugbrain.continuous_ingest import ContinuousSource, run_continuous_ingest
 from rugbrain.freshness_registry import FreshnessRegistry, git_head_sha, git_head_version
@@ -32,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # ── Quality scoring ─────────────────────────────────────────────────────
 
 
-def test_score_chunk_axes_and_range():
+def test_score_chunk_axes_and_range() -> None:
     score = score_chunk("Hackers drained $12.4m from 0x" + "a" * 40 + " via reentrancy exploit.")
     assert 0 <= score.composite <= 100
     assert set(score.axes) == {
@@ -45,13 +46,13 @@ def test_score_chunk_axes_and_range():
     assert score.tier in {"excellent", "good", "fair", "poor"}
 
 
-def test_length_penalty_short_content():
+def test_length_penalty_short_content() -> None:
     assert score_chunk("").composite < 40
     assert score_chunk("").axes["length"] == 0
     assert score_chunk("short").axes["length"] < 40
 
 
-def test_long_structured_content_scores_high():
+def test_long_structured_content_scores_high() -> None:
     text = "\n\n".join(
         f"# Section {i}\n\n" + "Detailed analysis of the exploit. " * 20 for i in range(4)
     )
@@ -61,7 +62,7 @@ def test_long_structured_content_scores_high():
     assert score.composite >= 60
 
 
-def test_duplicate_penalizes_uniqueness():
+def test_duplicate_penalizes_uniqueness() -> None:
     fresh = score_chunk("unique content here")
     dup = score_chunk("unique content here", is_duplicate=True)
     assert fresh.axes["uniqueness"] == 100
@@ -70,13 +71,13 @@ def test_duplicate_penalizes_uniqueness():
     assert fresh.composite > dup.composite
 
 
-def test_crypto_signals_detect_artifacts():
+def test_crypto_signals_detect_artifacts() -> None:
     rich = "Attacker stole 5000 ETH ($12.4m) from 0x" + "b" * 40 + " in a flash loan exploit."
     plain = "The protocol released a new version with several improvements."
     assert score_chunk(rich).axes["crypto_signals"] > score_chunk(plain).axes["crypto_signals"]
 
 
-def test_source_authority_unknown_low():
+def test_source_authority_unknown_low() -> None:
     score = score_chunk("Some analysis text. " * 10, source="mysteryblog")
     assert score.axes["source_authority"] < 50
     assert "low_authority_source" in score.signals["source_authority"]
@@ -89,7 +90,7 @@ def _doc(content: str, url: str = "https://x/1", source: str = "s") -> CrawlDocu
     return doc_from_article(title="T", content=content, url=url, source=source, collection="c")
 
 
-def test_tag_documents_metadata_and_dedup():
+def test_tag_documents_metadata_and_dedup() -> None:
     docs = [_doc("Alpha content " * 10), _doc("Alpha content " * 10), _doc("Beta content " * 10)]
     batch = tag_documents(docs)
     assert batch.duplicate_count == 1
@@ -98,7 +99,7 @@ def test_tag_documents_metadata_and_dedup():
     assert batch.docs[0].metadata["quality_score"] > batch.docs[1].metadata["quality_score"]
 
 
-def test_tag_documents_shares_seen_across_calls():
+def test_tag_documents_shares_seen_across_calls() -> None:
     docs1 = [_doc("Same body " * 10)]
     docs2 = [_doc("Same body " * 10)]
     b1 = tag_documents(docs1)
@@ -106,14 +107,14 @@ def test_tag_documents_shares_seen_across_calls():
     assert b2.duplicate_count == 1
 
 
-def test_score_document_uses_full_content():
+def test_score_document_uses_full_content() -> None:
     doc = _doc("Signal-rich: 0x" + "c" * 40 + " drained via reentrancy. " * 10, source="coindesk")
     score = score_document(doc)
     assert 0 <= score.composite <= 100
     assert "quality_score" not in doc.metadata  # score_document does not tag
 
 
-def test_filter_and_rank():
+def test_filter_and_rank() -> None:
     docs = [
         _doc("good " * 200, url="https://coindesk.com/a", source="coindesk"),
         _doc("tiny", url="https://unknown.example/b", source="mysteryblog"),
@@ -126,7 +127,7 @@ def test_filter_and_rank():
     assert ranked[0] is docs[0]
 
 
-def test_filter_keeps_untagged():
+def test_filter_keeps_untagged() -> None:
     docs = [_doc("untagged " * 20)]
     kept, dropped = filter_low_quality(docs, min_score=90)
     assert kept == [docs[0]]
@@ -136,12 +137,12 @@ def test_filter_keeps_untagged():
 # ── Freshness registry ──────────────────────────────────────────────────
 
 
-def test_registry_never_ingested_is_stale():
+def test_registry_never_ingested_is_stale() -> None:
     reg = FreshnessRegistry()
     assert reg.should_reingest("news", max_age_seconds=3600) is True
 
 
-def test_registry_record_and_fresh():
+def test_registry_record_and_fresh() -> None:
     reg = FreshnessRegistry()
     reg.record("news", version="v1", count=5)
     assert reg.get("news") is not None
@@ -153,7 +154,7 @@ def test_registry_record_and_fresh():
     )
 
 
-def test_registry_version_change_triggers_reingest():
+def test_registry_version_change_triggers_reingest() -> None:
     reg = FreshnessRegistry()
     reg.record("github", version="sha-old")
     assert (
@@ -164,7 +165,7 @@ def test_registry_version_change_triggers_reingest():
     )
 
 
-def test_registry_age_expiry():
+def test_registry_age_expiry() -> None:
     reg = FreshnessRegistry()
     reg.record("news", version="v1", now=1000.0)
     assert (
@@ -173,7 +174,7 @@ def test_registry_age_expiry():
     assert reg.should_reingest("news", max_age_seconds=60, current_version="v1", now=1061.0) is True
 
 
-def test_registry_error_retries():
+def test_registry_error_retries() -> None:
     reg = FreshnessRegistry()
     reg.record("news", version="v1", now=1000.0)
     reg.mark_error("news", "boom")
@@ -181,10 +182,10 @@ def test_registry_error_retries():
         reg.should_reingest("news", max_age_seconds=3600, current_version="v1", now=1001.0) is True
     )
     assert reg.get("news") is not None
-    assert reg.get("news").last_status == "error"  # type: ignore[union-attr]
+    assert reg.get("news").last_status == "error"
 
 
-def test_registry_json_persistence(tmp_path: Path):
+def test_registry_json_persistence(tmp_path: Path) -> None:
     path = tmp_path / "registry.json"
     reg = FreshnessRegistry(path=path)
     reg.record("github", version="sha1", count=3)
@@ -195,7 +196,7 @@ def test_registry_json_persistence(tmp_path: Path):
     assert rec.last_count == 3
 
 
-def test_stale_sources_filter():
+def test_stale_sources_filter() -> None:
     reg = FreshnessRegistry()
     reg.record("a", version="v1", now=1000.0)
     reg.record("b", version="v1", now=1000.0)
@@ -208,7 +209,7 @@ def test_stale_sources_filter():
     assert set(stale) == {"b", "c"}
 
 
-def test_git_head_version_repo():
+def test_git_head_version_repo() -> None:
     sha = git_head_sha(str(REPO_ROOT))
     assert sha is not None
     assert len(sha) == 40
@@ -217,7 +218,7 @@ def test_git_head_version_repo():
     assert version.startswith(sha)
 
 
-def test_git_head_version_missing_dir():
+def test_git_head_version_missing_dir() -> None:
     assert git_head_sha(str(REPO_ROOT / "does-not-exist")) is None
     assert git_head_version(str(REPO_ROOT / "does-not-exist")) is None
 
@@ -239,16 +240,16 @@ class _FakeStore:
         self.points: list[tuple[str, str]] = []
 
     async def insert(
-        self,
-        doc_id,
-        collection,
-        embedding,
-        content="",
-        metadata=None,
-        source="",
-        severity="medium",
-        chain="",
-    ):
+        self: Any,
+        doc_id: Any,
+        collection: Any,
+        embedding: Any,
+        content: str = "",
+        metadata: dict[str, Any] | None = None,
+        source: str = "",
+        severity: str = "medium",
+        chain: str = "",
+    ) -> bool:
         self.points.append((doc_id, content))
         return True
 
@@ -266,7 +267,7 @@ def _source(name: str, docs: list[CrawlDocument], version: str | None = None) ->
     )
 
 
-async def test_loop_dry_run_scores_and_records():
+async def test_loop_dry_run_scores_and_records() -> None:
     reg = FreshnessRegistry()
     docs = [_doc("A real incident: 0x" + "d" * 40 + " drained $5m. " * 5)]
     result = await run_continuous_ingest([_source("slowmist", docs)], reg, dry_run=True)
@@ -281,7 +282,7 @@ async def test_loop_dry_run_scores_and_records():
     assert rec.last_count == 1
 
 
-async def test_loop_skips_fresh_source():
+async def test_loop_skips_fresh_source() -> None:
     reg = FreshnessRegistry()
     reg.record("news", version="v1", count=2, now=time.time())
     result = await run_continuous_ingest(
@@ -293,7 +294,7 @@ async def test_loop_skips_fresh_source():
     assert result["news"] == {"skipped": True, "reason": "fresh"}
 
 
-async def test_loop_version_change_reingests():
+async def test_loop_version_change_reingests() -> None:
     reg = FreshnessRegistry()
     reg.record("github", version="old", count=1, now=time.time())
     docs = [_doc("New upstream content " * 10)]
@@ -307,7 +308,7 @@ async def test_loop_version_change_reingests():
     assert result["github"]["version"] == "new"
 
 
-async def test_loop_dedup_across_sources():
+async def test_loop_dedup_across_sources() -> None:
     reg = FreshnessRegistry()
     shared = _doc("Identical post body " * 10)
     sources = [
@@ -331,7 +332,7 @@ async def test_loop_dedup_across_sources():
     assert result["src_b"]["ingested"] == 0  # duplicate-only batch is filtered
 
 
-async def test_loop_fetch_error_does_not_advance_freshness():
+async def test_loop_fetch_error_does_not_advance_freshness() -> None:
     reg = FreshnessRegistry()
     reg.record("boom", version="v1", count=1, now=1000.0)
 
@@ -350,7 +351,7 @@ async def test_loop_fetch_error_does_not_advance_freshness():
     )
 
 
-async def test_loop_stores_when_store_provided():
+async def test_loop_stores_when_store_provided() -> None:
     reg = FreshnessRegistry()
     docs = [_doc("storable content " * 20)]
     store = _FakeStore()
@@ -359,11 +360,11 @@ async def test_loop_stores_when_store_provided():
         [_source("with_store", docs)],
         reg,
         dry_run=False,
-        store=store,  # type: ignore[arg-type]
+        store=store,
         embedder=embedder,
     )
     assert result["with_store"]["ok"] is True
     assert result["with_store"]["store"] is not None
     assert result["with_store"]["store"]["inserted"] >= 1
     assert len(store.points) >= 1
-    assert reg.get("with_store").last_count == result["with_store"]["ingested"]  # type: ignore[union-attr]
+    assert reg.get("with_store").last_count == result["with_store"]["ingested"]

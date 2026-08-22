@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import uuid
+from typing import Any
 
 import pytest
 import respx
@@ -31,14 +32,14 @@ def _fresh_embedder_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("_QWEN_OK", raising=False)
 
 
-def _embed_response(dim: int = 8) -> dict:
+def _embed_response(dim: int = 8) -> dict[str, Any]:
     # Deliberately short vector: _resize() must pad to EMBEDDING_DIM and
     # L2-normalize, which these tests also verify.
     return {"data": [{"index": 0, "embedding": [0.5] * dim}]}
 
 
 @pytest.mark.asyncio
-async def test_query_embedding_gets_instruct_prefix(monkeypatch, _fresh_embedder_probe):
+async def test_query_embedding_gets_instruct_prefix(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
     """query=True must send the Qwen3 Instruct template, not raw text."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
@@ -61,7 +62,7 @@ async def test_query_embedding_gets_instruct_prefix(monkeypatch, _fresh_embedder
 
 
 @pytest.mark.asyncio
-async def test_document_embedding_stays_raw(monkeypatch, _fresh_embedder_probe):
+async def test_document_embedding_stays_raw(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
     """Documents must NOT carry the Instruct prefix (query-only template)."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
@@ -77,7 +78,7 @@ async def test_document_embedding_stays_raw(monkeypatch, _fresh_embedder_probe):
 
 
 @pytest.mark.asyncio
-async def test_get_query_embedding_helper_uses_prefix(monkeypatch, _fresh_embedder_probe):
+async def test_get_query_embedding_helper_uses_prefix(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
 
@@ -92,7 +93,7 @@ async def test_get_query_embedding_helper_uses_prefix(monkeypatch, _fresh_embedd
 
 
 @pytest.mark.asyncio
-async def test_embedding_fails_loud_when_backends_down(monkeypatch, _fresh_embedder_probe):
+async def test_embedding_fails_loud_when_backends_down(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
     """T04 contract: no silent hash fallback — raise RAGUnavailableError."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "auto")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -108,7 +109,7 @@ async def test_embedding_fails_loud_when_backends_down(monkeypatch, _fresh_embed
 
 
 @pytest.mark.asyncio
-async def test_rerank_sorts_and_truncates(monkeypatch):
+async def test_rerank_sorts_and_truncates(monkeypatch: pytest.MonkeyPatch) -> Any:
     async def _ok() -> bool:
         return True
 
@@ -139,7 +140,7 @@ async def test_rerank_sorts_and_truncates(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rerank_raw_attaches_documents(monkeypatch):
+async def test_rerank_raw_attaches_documents(monkeypatch: pytest.MonkeyPatch) -> Any:
     async def _ok() -> bool:
         return True
 
@@ -165,7 +166,7 @@ async def test_rerank_raw_attaches_documents(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rerank_degrades_gracefully_when_down(monkeypatch):
+async def test_rerank_degrades_gracefully_when_down(monkeypatch: pytest.MonkeyPatch) -> Any:
     async def _down() -> bool:
         return False
 
@@ -176,7 +177,7 @@ async def test_rerank_degrades_gracefully_when_down(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rerank_disabled_returns_empty(monkeypatch):
+async def test_rerank_disabled_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(reranker_mod, "RERANKER_ENABLED", False)
     out = await reranker_mod.rerank("q", ["a"])
     assert out == []
@@ -185,11 +186,11 @@ async def test_rerank_disabled_returns_empty(monkeypatch):
 # ── 3. Hybrid RRF fusion ─────────────────────────────────────────────
 
 
-def _doc(doc_id: str, **extra) -> dict:
+def _doc(doc_id: str, **extra: Any) -> dict[str, Any]:
     return {"doc_id": doc_id, "content": f"content-{doc_id}", **extra}
 
 
-def test_rrf_doc_in_both_lists_outranks_single_list_winner():
+def test_rrf_doc_in_both_lists_outranks_single_list_winner() -> None:
     dense = [_doc("a"), _doc("b"), _doc("c")]
     sparse = [_doc("b"), _doc("d")]
     fused = _rrf_fuse([dense, sparse], k=60)
@@ -199,7 +200,7 @@ def test_rrf_doc_in_both_lists_outranks_single_list_winner():
     assert abs(fused[0]["rrf_score"] - round(expected_b, 6)) < 1e-9
 
 
-def test_rrf_entity_boost_changes_order():
+def test_rrf_entity_boost_changes_order() -> None:
     dense = [_doc("a"), _doc("b")]
     entity = [_doc("x"), _doc("y")]
     plain = _rrf_fuse([dense, entity], k=60)
@@ -213,7 +214,7 @@ def test_rrf_entity_boost_changes_order():
     assert y["rrf_score"] > (1 / (60 + 2)) * 1.5 - 1e-9
 
 
-def test_rrf_pillar_weights_respected():
+def test_rrf_pillar_weights_respected() -> None:
     dense = [_doc("a")]
     sparse = [_doc("b")]
     fused = _rrf_fuse([dense, sparse], k=60, pillar_weights=[0.0, 1.0])
@@ -223,7 +224,7 @@ def test_rrf_pillar_weights_respected():
     assert next(d for d in fused if d["doc_id"] == "a")["rrf_score"] == 0.0
 
 
-def test_rrf_skips_docs_without_id():
+def test_rrf_skips_docs_without_id() -> None:
     fused = _rrf_fuse([[{"content": "no id"}, _doc("a")]], k=60)
     assert [d["doc_id"] for d in fused] == ["a"]
 
@@ -233,7 +234,7 @@ def test_rrf_skips_docs_without_id():
 MOCK_QDRANT = "http://mock-qdrant-test:6333"
 
 
-def _mock_collection(rx, collection: str, exists: bool = True) -> None:
+def _mock_collection(rx: Any, collection: str, exists: bool = True) -> None:
     status = 200 if exists else 404
     rx.get(f"/collections/{collection}").respond(
         status, json={"status": "ok" if exists else "not found"}
@@ -241,7 +242,7 @@ def _mock_collection(rx, collection: str, exists: bool = True) -> None:
 
 
 @pytest.mark.asyncio
-async def test_qdrant_insert_posts_point(monkeypatch):
+async def test_qdrant_insert_posts_point(monkeypatch: pytest.MonkeyPatch) -> None:
     from rugbrain.qdrant_store import QdrantVectorStore
 
     monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
@@ -276,7 +277,7 @@ async def test_qdrant_insert_posts_point(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_qdrant_insert_readonly_mode_refuses(monkeypatch):
+async def test_qdrant_insert_readonly_mode_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
     """Read-only deployments must refuse writes instead of failing mid-flight."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -293,7 +294,7 @@ async def test_qdrant_insert_readonly_mode_refuses(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_qdrant_search_maps_results():
+async def test_qdrant_search_maps_results() -> None:
     from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url=MOCK_QDRANT)
@@ -326,7 +327,7 @@ async def test_qdrant_search_maps_results():
 
 
 @pytest.mark.asyncio
-async def test_qdrant_search_empty_on_http_error():
+async def test_qdrant_search_empty_on_http_error() -> None:
     from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url=MOCK_QDRANT)
@@ -338,7 +339,7 @@ async def test_qdrant_search_empty_on_http_error():
 
 
 @pytest.mark.asyncio
-async def test_qdrant_has_point():
+async def test_qdrant_has_point() -> None:
     from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore(url=MOCK_QDRANT)
@@ -353,7 +354,7 @@ async def test_qdrant_has_point():
         assert await store.has_point("missing", "scam_intel") is False
 
 
-def test_build_qdrant_filter_shapes():
+def test_build_qdrant_filter_shapes() -> None:
     from rugbrain.qdrant_store import build_qdrant_filter
 
     assert build_qdrant_filter() is None

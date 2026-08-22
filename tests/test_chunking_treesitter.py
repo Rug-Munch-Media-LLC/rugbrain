@@ -20,7 +20,7 @@ from rugbrain.tree_sitter_chunking import detect_language, ts_code_unit_spans
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _treesitter_required():
+def _treesitter_required() -> None:
     """Skip the module's tests when the tree-sitter grammars are missing."""
     pytest.importorskip("tree_sitter")
     pytest.importorskip("tree_sitter_solidity")
@@ -81,7 +81,7 @@ owner: public(address)
 
 @external
 @payable
-def deposit():
+def deposit() -> None:
     self.balance += msg.value
 
 @external
@@ -104,26 +104,26 @@ def _assert_unit_atomic(chunks: list[str], unit: str) -> None:
 # ── language sniffing ──
 
 
-def test_detect_language_solidity():
+def test_detect_language_solidity() -> None:
     assert detect_language(SOLIDITY) == "solidity"
 
 
-def test_detect_language_rust():
+def test_detect_language_rust() -> None:
     assert detect_language(RUST) == "rust"
 
 
-def test_detect_language_vyper():
+def test_detect_language_vyper() -> None:
     assert detect_language(VYPER) == "vyper"
 
 
-def test_detect_language_none_for_prose():
+def test_detect_language_none_for_prose() -> None:
     assert detect_language("The rug was pulled with 5000 holders watching closely.") is None
 
 
 # ── AST unit extraction ──
 
 
-def test_ts_units_found_for_solidity():
+def test_ts_units_found_for_solidity() -> None:
     spans = ts_code_unit_spans(SOLIDITY)
     assert spans
     # the contract is a container: the three functions should be leaf atoms
@@ -135,14 +135,14 @@ def test_ts_units_found_for_solidity():
     assert "function setOwner(address newOwner) external" in joined
 
 
-def test_comment_attached_to_function():
+def test_comment_attached_to_function() -> None:
     spans = ts_code_unit_spans(SOLIDITY)
     assert spans
     deposit = next(SOLIDITY[s:e] for s, e in spans if "function deposit" in SOLIDITY[s:e])
     assert "/// @notice deposit funds into the vault" in deposit
 
 
-def test_bare_contract_without_functions_stays_atomic():
+def test_bare_contract_without_functions_stays_atomic() -> None:
     src = "// SPDX-License-Identifier: MIT\ncontract Storage {\n    uint256 public value;\n}\n"
     chunks = code_chunk(src, chunk_size=64, overlap=0.2)
     _assert_unit_atomic(chunks, "contract Storage {")
@@ -151,7 +151,7 @@ def test_bare_contract_without_functions_stays_atomic():
 # ── code_chunk atomicity per language ──
 
 
-def test_solidity_functions_atomic():
+def test_solidity_functions_atomic() -> None:
     chunks = code_chunk(SOLIDITY, chunk_size=120, overlap=0.2)
     for func in (
         "function deposit() external payable {",
@@ -161,7 +161,7 @@ def test_solidity_functions_atomic():
         _assert_unit_atomic(chunks, func)
 
 
-def test_rust_functions_and_struct_atomic():
+def test_rust_functions_and_struct_atomic() -> None:
     pytest.importorskip("tree_sitter_rust")
     chunks = code_chunk(RUST, chunk_size=90, overlap=0.2)
     for unit in (
@@ -173,7 +173,7 @@ def test_rust_functions_and_struct_atomic():
         _assert_unit_atomic(chunks, unit)
 
 
-def test_vyper_decorated_functions_atomic():
+def test_vyper_decorated_functions_atomic() -> None:
     pytest.importorskip("tree_sitter_python")
     chunks = code_chunk(VYPER, chunk_size=80, overlap=0.2)
     for unit in (
@@ -183,7 +183,7 @@ def test_vyper_decorated_functions_atomic():
         _assert_unit_atomic(chunks, unit)
 
 
-def test_prose_falls_back_to_recursive():
+def test_prose_falls_back_to_recursive() -> None:
     text = "The rug was pulled at 0x" + "a1" * 20 + " with 5000 holders watching. " * 20
     chunks = code_chunk(text, chunk_size=120, overlap=0.15)
     assert chunks

@@ -6,12 +6,14 @@ Some endpoints depend on external modules that may not be installed,
 so we test the self-contained ones and mock the rest.
 """
 
+from typing import Any
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture
-def client():
+def client() -> Any:
     """Create a test client for all RAG routers."""
     from fastapi import FastAPI
 
@@ -25,7 +27,7 @@ def client():
 
 
 @pytest.mark.asyncio
-async def test_chunk_solidity_empty_source(client):
+async def test_chunk_solidity_empty_source(client: Any) -> None:
     """POST /api/v1/rag/chunk-solidity with empty source should return error."""
     resp = await client.post(
         "/api/v1/rag/chunk-solidity",
@@ -38,7 +40,7 @@ async def test_chunk_solidity_empty_source(client):
 
 
 @pytest.mark.asyncio
-async def test_chunk_solidity_simple_contract(client):
+async def test_chunk_solidity_simple_contract(client: Any) -> None:
     """POST /api/v1/rag/chunk-solidity with a simple contract should chunk it."""
     contract = """
     pragma solidity ^0.8.0;
@@ -58,7 +60,7 @@ async def test_chunk_solidity_simple_contract(client):
 
 
 @pytest.mark.asyncio
-async def test_email_accounts_returns_list(client, monkeypatch):
+async def test_email_accounts_returns_list(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """GET /api/v1/email/accounts reads accounts from RMI_EMAIL_ACCOUNTS env."""
     monkeypatch.setenv(
         "RMI_EMAIL_ACCOUNTS",
@@ -75,7 +77,7 @@ async def test_email_accounts_returns_list(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_email_accounts_unconfigured_empty(client, monkeypatch):
+async def test_email_accounts_unconfigured_empty(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Unset RMI_EMAIL_ACCOUNTS returns an empty list (no hardcoded emails)."""
     monkeypatch.delenv("RMI_EMAIL_ACCOUNTS", raising=False)
     resp = await client.get("/api/v1/email/accounts")
@@ -85,7 +87,7 @@ async def test_email_accounts_unconfigured_empty(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rag_watch_create_validation(client):
+async def test_rag_watch_create_validation(client: Any) -> None:
     """POST /api/v1/rag/watch without token_address should handle gracefully."""
     resp = await client.post(
         "/api/v1/rag/watch",
@@ -96,7 +98,7 @@ async def test_rag_watch_create_validation(client):
 
 
 @pytest.mark.asyncio
-async def test_search_empty_query(client):
+async def test_search_empty_query(client: Any) -> None:
     """GET /api/v1/search with empty query should return empty results."""
     resp = await client.get("/api/v1/search")
     assert resp.status_code == 200
@@ -106,7 +108,7 @@ async def test_search_empty_query(client):
 
 
 @pytest.mark.asyncio
-async def test_confidence_score_basic(client):
+async def test_confidence_score_basic(client: Any) -> None:
     """POST /api/v1/rag/confidence — skip if external dep not installed."""
     pytest.importorskip("app.confidence", reason="External dep app.confidence not installed")
     resp = await client.post(
@@ -117,7 +119,7 @@ async def test_confidence_score_basic(client):
 
 
 @pytest.mark.asyncio
-async def test_cross_chain_basic(client):
+async def test_cross_chain_basic(client: Any) -> None:
     """POST /api/v1/rag/cross-chain — skip if external dep not installed."""
     pytest.importorskip("app.cross_chain", reason="External dep not installed")
     resp = await client.post(
@@ -128,7 +130,7 @@ async def test_cross_chain_basic(client):
 
 
 @pytest.mark.asyncio
-async def test_deployer_risk_exists(client):
+async def test_deployer_risk_exists(client: Any) -> None:
     """POST /api/v1/scanner/deployer-risk — skip if external dep not installed."""
     pytest.importorskip("app.deployer_reputation", reason="External dep not installed")
     resp = await client.post(
@@ -139,7 +141,7 @@ async def test_deployer_risk_exists(client):
 
 
 @pytest.mark.asyncio
-async def test_rag_watches_endpoint(client):
+async def test_rag_watches_endpoint(client: Any) -> None:
     """GET /api/v1/rag/watches should return OK."""
     resp = await client.get("/api/v1/rag/watches")
     assert resp.status_code in (200, 500)
@@ -147,7 +149,7 @@ async def test_rag_watches_endpoint(client):
 
 @pytest.mark.skip(reason="Requires Redis — use integration test suite instead")
 @pytest.mark.asyncio
-async def test_scam_check_integration(client):
+async def test_scam_check_integration(client: Any) -> None:
     """GET /api/v1/rag/v2/scam-check — requires Redis and search_service."""
     resp = await client.get(
         "/api/v1/rag/v2/scam-check",
@@ -157,7 +159,7 @@ async def test_scam_check_integration(client):
 
 
 @pytest.mark.asyncio
-async def test_investigate_missing_query(client):
+async def test_investigate_missing_query(client: Any) -> None:
     """POST /api/v1/rag/investigate without query should return error."""
     resp = await client.post(
         "/api/v1/rag/investigate",
@@ -170,7 +172,7 @@ async def test_investigate_missing_query(client):
 
 
 @pytest.mark.asyncio
-async def test_image_analysis_missing_url(client):
+async def test_image_analysis_missing_url(client: Any) -> None:
     """POST /api/v1/rag/image-analysis without URL."""
     resp = await client.post(
         "/api/v1/rag/image-analysis",
@@ -181,7 +183,7 @@ async def test_image_analysis_missing_url(client):
 
 
 @pytest.mark.asyncio
-async def test_logo_check_missing_url(client):
+async def test_logo_check_missing_url(client: Any) -> None:
     """POST /api/v1/rag/logo-check without image_url should return error."""
     resp = await client.post(
         "/api/v1/rag/logo-check",
@@ -196,7 +198,7 @@ VALID_ADDRESS = "0x0a16a85be44627c10cee75db06b169c7bc76de2c"
 
 
 @pytest.mark.asyncio
-async def test_analyze_invalid_address(client):
+async def test_analyze_invalid_address(client: Any) -> None:
     """GET /api/v1/analyze/{address} rejects non-address input."""
     resp = await client.get("/api/v1/analyze/not-an-address")
     assert resp.status_code == 400
@@ -207,11 +209,11 @@ async def test_analyze_invalid_address(client):
 
 
 @pytest.mark.asyncio
-async def test_analyze_valid_address_fail_open(client, monkeypatch):
+async def test_analyze_valid_address_fail_open(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """GET /api/v1/analyze/{address} returns findings; fails open on backend errors."""
     import rugbrain.endpoints as ep
 
-    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+    async def fake_findings(address: str, chain: str, limit: int) -> Any:
         return {
             "address": address,
             "chain": chain,
@@ -244,11 +246,11 @@ async def test_analyze_valid_address_fail_open(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_search_token_address_includes_pattern_matches(client, monkeypatch):
+async def test_search_token_address_includes_pattern_matches(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """GET /api/v1/search?q=<address> attaches pattern_matches findings."""
     import rugbrain.endpoints as ep
 
-    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+    async def fake_findings(address: str, chain: str, limit: int) -> Any:
         return {
             "address": address,
             "chain": chain,
@@ -271,11 +273,11 @@ async def test_search_token_address_includes_pattern_matches(client, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_market_mood_fail_open(client, monkeypatch):
+async def test_market_mood_fail_open(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """GET /api/v1/market/mood returns neutral values when providers fail."""
     import rugbrain.market_context as mc
 
-    async def fake_mood(chain: str) -> dict:
+    async def fake_mood(chain: str) -> Any:
         return {
             "fear_index": 20.0,
             "fear_classification": "fearful",
@@ -301,11 +303,11 @@ async def test_market_mood_fail_open(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_market_mood_fallback_on_error(client, monkeypatch):
+async def test_market_mood_fallback_on_error(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """GET /api/v1/market/mood degrades to neutral when build raises."""
     import rugbrain.market_context as mc
 
-    async def boom(chain: str) -> dict:
+    async def boom(chain: str) -> dict[str, Any]:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr(mc, "build_market_mood", boom)
@@ -320,18 +322,18 @@ async def test_market_mood_fallback_on_error(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_market_context_invalid_address(client):
+async def test_market_context_invalid_address(client: Any) -> None:
     """GET /api/v1/market/context/{address} rejects non-address input."""
     resp = await client.get("/api/v1/market/context/not-an-address")
     assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_market_context_token(client, monkeypatch):
+async def test_market_context_token(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """GET /api/v1/market/context/{address} returns the full context."""
     import rugbrain.market_context as mc
 
-    async def fake_context(address: str, chain: str) -> dict:
+    async def fake_context(address: str, chain: str) -> Any:
         return {
             "address": address,
             "chain": chain,
@@ -371,19 +373,19 @@ async def test_market_context_token(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_analyze_full_invalid_address(client):
+async def test_analyze_full_invalid_address(client: Any) -> None:
     """GET /api/v1/analyze/{address}/full rejects non-address input."""
     resp = await client.get("/api/v1/analyze/not-an-address/full")
     assert resp.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_analyze_full_sections(client, monkeypatch):
+async def test_analyze_full_sections(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     """GET /api/v1/analyze/{address}/full returns every section fail-open."""
     import rugbrain.endpoints as ep
     import rugbrain.market_context as mc
 
-    async def fake_findings(address: str, chain: str, limit: int) -> dict:
+    async def fake_findings(address: str, chain: str, limit: int) -> Any:
         return {
             "address": address,
             "chain": chain,
@@ -395,7 +397,7 @@ async def test_analyze_full_sections(client, monkeypatch):
             "contract_security": {"assessment": "unverified", "source_fetched": False},
         }
 
-    async def fake_market(address: str, chain: str) -> dict:
+    async def fake_market(address: str, chain: str) -> Any:
         return {
             "address": address,
             "chain": chain,

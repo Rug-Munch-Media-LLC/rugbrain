@@ -121,7 +121,7 @@ def get_b2_api() -> B2Api:
             "B2 credentials missing — set B2_APPLICATION_KEY_ID and "
             "B2_APPLICATION_KEY (systemd: EnvironmentFile=/path/to/b2-permanence.env)"
         )
-    api = B2Api(InMemoryAccountInfo())  # type: ignore[arg-type]
+    api = B2Api(InMemoryAccountInfo())
     api.authorize_account("production", key_id, key)
     return api
 
@@ -130,8 +130,8 @@ def ensure_bucket(api: B2Api, bucket_name: str) -> Bucket:
     """Return the bucket, creating it (private) if it does not exist."""
     for bucket in api.list_buckets():
         if bucket.name == bucket_name:
-            return bucket  # type: ignore[return-type]
-    return api.create_bucket(bucket_name, "allPrivate")  # type: ignore[return-type]
+            return bucket
+    return api.create_bucket(bucket_name, "allPrivate")
 
 
 def upload_file(api: B2Api, bucket_name: str, local_path: Path, key: str) -> None:
@@ -211,7 +211,7 @@ def decompress_file(src: Path, dst: Path) -> Path:
 
 def parquet_schema(with_vectors: bool = True) -> Any:
     """Return the pyarrow schema used for permanence snapshots."""
-    import pyarrow as pa  # type: ignore[import-untyped]
+    import pyarrow as pa
 
     fields: list[Any] = [
         ("id", pa.string()),
@@ -274,7 +274,7 @@ def table_from_rows(rows: Iterable[dict[str, object]]) -> Any:
 
 def write_parquet_file(dest: Path, rows: Iterable[dict[str, object]], level: int = 19) -> Path:
     """Write *rows* to *dest* as a zstd-compressed parquet file."""
-    import pyarrow.parquet as pq  # type: ignore[import-untyped]
+    import pyarrow.parquet as pq
 
     pq.write_table(table_from_rows(rows), dest, compression="zstd", compression_level=level)
     return dest

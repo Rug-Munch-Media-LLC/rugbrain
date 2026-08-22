@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import importlib as _il
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
-from rugbrain import news_ranking as nk
+news_ranking = _il.import_module("rugbrain.news_ranking")
+nk = news_ranking
+
+mod = news_ranking
 from rugbrain.news_clustering import Story, StorySource
 
 
-def _story(**overrides) -> Story:
+def _story(**overrides: Any) -> Story:
     now = datetime.now(UTC)
     sources = [
         StorySource(
@@ -57,31 +62,31 @@ def _story(**overrides) -> Story:
 # ── Composite scoring ─────────────────────────────────────────────────────
 
 
-def test_composite_score_weights_sum_to_one():
+def test_composite_score_weights_sum_to_one() -> None:
     assert sum(nk.RANK_WEIGHTS.values()) == pytest.approx(1.0)
 
 
-def test_score_story_axes_source_credibility_is_mean():
+def test_score_story_axes_source_credibility_is_mean() -> None:
     story = _story()
     axes = nk.score_story_axes(story)
     expected = (95 + 94 + 45) / 3
     assert axes["source_credibility"] == pytest.approx(expected, abs=0.2)
 
 
-def test_score_story_axes_timeliness_uses_newest():
+def test_score_story_axes_timeliness_uses_newest() -> None:
     story = _story()
     axes = nk.score_story_axes(story)
     # Newest source is 2h old -> high timeliness.
     assert axes["timeliness"] >= 70
 
 
-def test_composite_score_in_range():
+def test_composite_score_in_range() -> None:
     story = _story()
     score = nk.composite_story_score(story)
     assert 0 <= score <= 100
 
 
-def test_composite_score_corroboration_boosted_by_sources():
+def test_composite_score_corroboration_boosted_by_sources() -> None:
     single = _story(sources=_story().sources[:1])
     multi = _story(sources=_story().sources[:3])
     single_axes = nk.score_story_axes(single)
@@ -89,7 +94,7 @@ def test_composite_score_corroboration_boosted_by_sources():
     assert multi_axes["story_corroboration"] > single_axes["story_corroboration"]
 
 
-def test_story_velocity_sources_per_hour():
+def test_story_velocity_sources_per_hour() -> None:
     story = _story()
     now = datetime.now(UTC)
     vel = nk.story_velocity(story, now=now)
@@ -102,14 +107,14 @@ def test_story_velocity_sources_per_hour():
 
 
 @pytest.mark.asyncio
-async def test_rerank_story_sources_qwen3(monkeypatch):
+async def test_rerank_story_sources_qwen3(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Qwen3-Reranker-8B /rerank reorders sources by relevance score."""
 
     class FakeResp:
         def raise_for_status(self) -> None:
             return None
 
-        def json(self):
+        def json(self) -> Any:
             return {
                 "results": [
                     {"index": 2, "relevance_score": 0.99},
@@ -118,19 +123,19 @@ async def test_rerank_story_sources_qwen3(monkeypatch):
                 ]
             }
 
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
     class FakeClient:
-        def __init__(self, timeout=30.0):
+        def __init__(self, timeout: float = 30.0) -> None:
             captured["timeout"] = timeout
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def post(self, url, json):
+        async def post(self, url: Any, json: Any) -> Any:
             captured["url"] = url
             captured["json"] = json
             return FakeResp()
@@ -147,20 +152,20 @@ async def test_rerank_story_sources_qwen3(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rerank_story_sources_fallback(monkeypatch):
+async def test_rerank_story_sources_fallback(monkeypatch: pytest.MonkeyPatch) -> Any:
     """When the embedder fails, sources sort by credibility (best-effort)."""
 
     class Boom:
-        def __init__(self, timeout=30.0):
+        def __init__(self, timeout: float = 30.0) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def post(self, url, json):
+        async def post(self, url: Any, json: Any) -> None:
             raise RuntimeError("embedder down")
 
     import httpx
@@ -173,7 +178,7 @@ async def test_rerank_story_sources_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rank_story_sets_primary_and_composite():
+async def test_rank_story_sets_primary_and_composite() -> None:
     story = _story()
     ranked = await nk.rank_story(story, rerank=False)
     assert ranked.primary_source_id == "s1"  # highest credibility
@@ -183,7 +188,7 @@ async def test_rank_story_sets_primary_and_composite():
 
 
 @pytest.mark.asyncio
-async def test_reranker_improves_primary_selection(monkeypatch):
+async def test_reranker_improves_primary_selection(monkeypatch: pytest.MonkeyPatch) -> Any:
     """The reranker promotes a highly-relevant source over a merely
     high-credibility one — the core ranking-quality improvement.
 
@@ -194,13 +199,13 @@ async def test_reranker_improves_primary_selection(monkeypatch):
     story = _story()
     # Rerank says the last (low-credibility) source is most relevant.
     relevances = {0: 0.5, 1: 0.6, 2: 0.99}
-    captured: dict = {}
+    captured: dict[str, Any] = {}
 
     class FakeResp:
         def raise_for_status(self) -> None:
             return None
 
-        def json(self):
+        def json(self) -> Any:
             return {
                 "results": [
                     {"index": i, "relevance_score": score} for i, score in relevances.items()
@@ -208,16 +213,16 @@ async def test_reranker_improves_primary_selection(monkeypatch):
             }
 
     class FakeClient:
-        def __init__(self, timeout=30.0):
+        def __init__(self, timeout: float = 30.0) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def post(self, url, json):
+        async def post(self, url: Any, json: Any) -> Any:
             captured["json"] = json
             return FakeResp()
 
@@ -238,24 +243,24 @@ async def test_reranker_improves_primary_selection(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_store_story_fails_open(monkeypatch):
+async def test_store_story_fails_open(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Qdrant unreachable -> store_story returns False (never raises)."""
     import httpx
 
     class Boom:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def get(self, url, **kwargs):
+        async def get(self, url: Any, **kwargs: Any) -> None:
             raise RuntimeError("qdrant down")
 
-        async def put(self, url, **kwargs):
+        async def put(self, url: Any, **kwargs: Any) -> None:
             raise RuntimeError("qdrant down")
 
     monkeypatch.setattr(httpx, "AsyncClient", Boom)
@@ -264,7 +269,7 @@ async def test_store_story_fails_open(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_load_story_parses_payload(monkeypatch):
+async def test_load_story_parses_payload(monkeypatch: pytest.MonkeyPatch) -> Any:
     """load_story reconstructs a Story from a stored payload."""
     import httpx
 
@@ -272,23 +277,23 @@ async def test_load_story_parses_payload(monkeypatch):
     payload = nk._story_payload(story)
 
     class FakeResp:
-        def __init__(self, status_code=200):
+        def __init__(self, status_code: int = 200) -> None:
             self.status_code = status_code
 
-        def json(self):
+        def json(self) -> Any:
             return {"result": {"payload": payload}}
 
     class FakeClient:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def get(self, url, params=None):
+        async def get(self, url: Any, params: Any = None) -> Any:
             return FakeResp()
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
@@ -299,24 +304,24 @@ async def test_load_story_parses_payload(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_load_story_missing_returns_none(monkeypatch):
+async def test_load_story_missing_returns_none(monkeypatch: pytest.MonkeyPatch) -> Any:
     import httpx
 
     class FakeResp:
-        def __init__(self, status_code=404):
+        def __init__(self, status_code: int = 404) -> None:
             self.status_code = status_code
 
     class FakeClient:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def get(self, url, params=None):
+        async def get(self, url: Any, params: Any = None) -> Any:
             return FakeResp(404)
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
@@ -324,21 +329,21 @@ async def test_load_story_missing_returns_none(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ranked_feed_fails_open(monkeypatch):
+async def test_ranked_feed_fails_open(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Qdrant unreachable -> empty feed (fail-open, no exception)."""
     import httpx
 
     class Boom:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Any:
             return self
 
-        async def __aexit__(self, *args):
+        async def __aexit__(self, *args: Any) -> Any:
             return False
 
-        async def post(self, url, **kwargs):
+        async def post(self, url: Any, **kwargs: Any) -> None:
             raise RuntimeError("qdrant down")
 
     monkeypatch.setattr(httpx, "AsyncClient", Boom)
@@ -346,7 +351,7 @@ async def test_ranked_feed_fails_open(monkeypatch):
     assert feed == []
 
 
-def test_story_payload_has_facets():
+def test_story_payload_has_facets() -> None:
     payload = nk._story_payload(_story())
     assert payload["type"] == "news_story"
     assert payload["story_id"] == "story-1"

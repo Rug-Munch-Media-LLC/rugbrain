@@ -4,6 +4,8 @@ Covers the pure filter builders plus end-to-end filter pass-through into the
 Qdrant search payloads (RRF and dense fallback), using respx mocks.
 """
 
+from typing import Any
+
 import pytest
 import respx
 
@@ -11,67 +13,67 @@ from rugbrain.qdrant_store import build_qdrant_filter, build_search_filters
 
 
 class TestBuildQdrantFilter:
-    def test_empty_returns_none(self):
+    def test_empty_returns_none(self) -> None:
         assert build_qdrant_filter() is None
         assert build_qdrant_filter({}, []) is None
 
-    def test_single_match(self):
+    def test_single_match(self) -> None:
         result = build_qdrant_filter({"severity": "critical"})
         assert result == {"must": [{"key": "severity", "match": {"value": "critical"}}]}
 
-    def test_match_skips_empty(self):
+    def test_match_skips_empty(self) -> None:
         result = build_qdrant_filter({"severity": "", "chain": "ethereum"})
         assert result == {"must": [{"key": "chain", "match": {"value": "ethereum"}}]}
 
-    def test_range(self):
+    def test_range(self) -> None:
         result = build_qdrant_filter(None, [("date_ts", {"gte": 1672531200})])
         assert result == {"must": [{"key": "date_ts", "range": {"gte": 1672531200}}]}
 
-    def test_match_and_range(self):
+    def test_match_and_range(self) -> None:
         result = build_qdrant_filter(
             {"chain": "ethereum"}, [("amount_lost_usd", {"gte": 1_000_000})]
         )
         assert result is not None
         assert len(result["must"]) == 2
 
-    def test_range_skips_empty_constraint(self):
+    def test_range_skips_empty_constraint(self) -> None:
         assert build_qdrant_filter(None, [("date_ts", {})]) is None
-        assert build_qdrant_filter(None, [("date_ts", {"gte": None})]) is None  # type: ignore[arg-type]
+        assert build_qdrant_filter(None, [("date_ts", {"gte": None})]) is None
 
 
 class TestBuildSearchFilters:
-    def test_none_when_no_params(self):
+    def test_none_when_no_params(self) -> None:
         assert build_search_filters() is None
 
-    def test_severity_normalized(self):
+    def test_severity_normalized(self) -> None:
         result = build_search_filters(severity="CRITICAL")
         assert result is not None
         assert result["match"]["severity"] == "critical"
 
-    def test_chain_lowercased(self):
+    def test_chain_lowercased(self) -> None:
         result = build_search_filters(chain="Ethereum")
         assert result is not None
         assert result["match"]["chain"] == "ethereum"
 
-    def test_source_type_lowercased(self):
+    def test_source_type_lowercased(self) -> None:
         result = build_search_filters(source_type="REKT_NEWS")
         assert result is not None
         assert result["match"]["source_type"] == "rekt_news"
 
-    def test_date_after_converts_to_ts(self):
+    def test_date_after_converts_to_ts(self) -> None:
         result = build_search_filters(date_after="2023-01-01")
         assert result is not None
         ranges = dict(result["range"])
         assert "date_ts" in ranges
         assert ranges["date_ts"]["gte"] == 1672531200.0
 
-    def test_amount_min(self):
+    def test_amount_min(self) -> None:
         result = build_search_filters(amount_min=5_000_000)
         assert result is not None
         ranges = dict(result["range"])
         assert ranges["amount_lost_usd"]["gte"] == 5_000_000.0
 
-    def test_full_filter(self):
+    def test_full_filter(self) -> None:
         result = build_search_filters(
             severity="critical",
             chain="ethereum",
@@ -88,7 +90,9 @@ class TestBuildSearchFilters:
 # ── Filter pass-through into live search payloads ────────────────────
 
 
-def _mock_hybrid_collection(respx_mock, collection="default"):
+def _mock_hybrid_collection(
+        respx_mock: Any, collection: str = "default"
+    ) -> None:
     respx_mock.get(f"/collections/{collection}").respond(
         200,
         json={"result": {"config": {"params": {"sparse_vectors": {"bm25": {}}}}}},
@@ -96,12 +100,12 @@ def _mock_hybrid_collection(respx_mock, collection="default"):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_rrf_sends_filter(monkeypatch):
+async def test_hybrid_search_rrf_sends_filter(monkeypatch: pytest.MonkeyPatch) -> Any:
     """hybrid_search() must include the structured filter in the RRF request."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
 
-    async def _fake_embed_sparse(text):
+    async def _fake_embed_sparse(text: Any) -> Any:
         return ([5, 6], [0.9, 0.3])
 
     monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
@@ -132,7 +136,7 @@ async def test_hybrid_search_rrf_sends_filter(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_dense_fallback_sends_filter():
+async def test_hybrid_search_dense_fallback_sends_filter() -> None:
     """hybrid_search() must forward filters to the dense fallback path."""
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -162,7 +166,7 @@ async def test_hybrid_search_dense_fallback_sends_filter():
 
 
 @pytest.mark.asyncio
-async def test_hybrid_search_no_filter_omits_filter_key():
+async def test_hybrid_search_no_filter_omits_filter_key() -> None:
     """hybrid_search() must omit the filter key when no filters are given."""
     from rugbrain.qdrant_store import QdrantVectorStore
 

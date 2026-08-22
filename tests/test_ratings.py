@@ -1,11 +1,17 @@
 """Tests for Ground News-style ratings integration in the RAG pipeline."""
 
 import asyncio
+from typing import Any
 
 import pytest
 
 
-def _rated_doc(doc_id, score, rating=None, score_field="similarity"):
+def _rated_doc(
+    doc_id: Any,
+    score: Any,
+    rating: dict[str, Any] | None = None,
+    score_field: str = "similarity",
+) -> dict[str, Any]:
     doc = {
         "id": doc_id,
         "content": f"Article {doc_id} about a crypto event",
@@ -16,7 +22,7 @@ def _rated_doc(doc_id, score, rating=None, score_field="similarity"):
     return doc
 
 
-def _verified_doc(doc_id, score):
+def _verified_doc(doc_id: Any, score: Any) -> dict[str, Any]:
     return _rated_doc(
         doc_id,
         score,
@@ -30,7 +36,7 @@ def _verified_doc(doc_id, score):
     )
 
 
-def _rumor_doc(doc_id, score):
+def _rumor_doc(doc_id: Any, score: Any) -> dict[str, Any]:
     return _rated_doc(
         doc_id,
         score,
@@ -42,7 +48,7 @@ def _rumor_doc(doc_id, score):
     )
 
 
-def _unrated_doc(doc_id, score):
+def _unrated_doc(doc_id: Any, score: Any) -> dict[str, Any]:
     return _rated_doc(doc_id, score)
 
 
@@ -51,14 +57,14 @@ def _unrated_doc(doc_id, score):
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_rating_multiplier_empty_rating_is_neutral():
+def test_rating_multiplier_empty_rating_is_neutral() -> None:
     from rugbrain.ratings import rating_multiplier
 
     assert rating_multiplier({}) == 1.0
     assert rating_multiplier({"market_impact": "medium"}) == 1.0
 
 
-def test_rating_multiplier_verified_stacked():
+def test_rating_multiplier_verified_stacked() -> None:
     from rugbrain.ratings import rating_multiplier
 
     rating = {
@@ -72,7 +78,7 @@ def test_rating_multiplier_verified_stacked():
     assert rating_multiplier(rating) == pytest.approx(expected, rel=1e-6)
 
 
-def test_rating_multiplier_rumor_penalty():
+def test_rating_multiplier_rumor_penalty() -> None:
     from rugbrain.ratings import rating_multiplier
 
     rating = {
@@ -87,7 +93,7 @@ def test_rating_multiplier_rumor_penalty():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_apply_rating_boosts_boosts_verified():
+def test_apply_rating_boosts_boosts_verified() -> None:
     from rugbrain.ratings import apply_rating_boosts
 
     docs = [_verified_doc("1", 0.5)]
@@ -97,7 +103,7 @@ def test_apply_rating_boosts_boosts_verified():
     assert "rating_multiplier" in boosted[0]
 
 
-def test_apply_rating_boosts_penalizes_rumor():
+def test_apply_rating_boosts_penalizes_rumor() -> None:
     from rugbrain.ratings import apply_rating_boosts
 
     docs = [_rumor_doc("2", 0.8)]
@@ -106,7 +112,7 @@ def test_apply_rating_boosts_penalizes_rumor():
     assert boosted[0]["rating_multiplier"] == pytest.approx(0.4, rel=1e-6)
 
 
-def test_apply_rating_boosts_skips_unrated():
+def test_apply_rating_boosts_skips_unrated() -> None:
     from rugbrain.ratings import apply_rating_boosts
 
     docs = [_unrated_doc("3", 0.6)]
@@ -115,7 +121,7 @@ def test_apply_rating_boosts_skips_unrated():
     assert "rating_boosted" not in boosted[0]
 
 
-def test_apply_rating_boosts_handles_rerank_score_fields():
+def test_apply_rating_boosts_handles_rerank_score_fields() -> None:
     """Boosts the first present score field — combined_score for reranked docs."""
     from rugbrain.ratings import apply_rating_boosts
 
@@ -132,7 +138,7 @@ def test_apply_rating_boosts_handles_rerank_score_fields():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_filter_factuality_verified():
+def test_filter_factuality_verified() -> None:
     from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8), _unrated_doc("3", 0.7)]
@@ -143,7 +149,7 @@ def test_filter_factuality_verified():
     assert "3" in ids  # unrated passes through
 
 
-def test_filter_min_source_tier():
+def test_filter_min_source_tier() -> None:
     from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8)]
@@ -151,7 +157,7 @@ def test_filter_min_source_tier():
     assert [d["id"] for d in filtered] == ["1"]
 
 
-def test_filter_require_corroboration():
+def test_filter_require_corroboration() -> None:
     from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8), _unrated_doc("3", 0.7)]
@@ -162,7 +168,7 @@ def test_filter_require_corroboration():
     assert "3" in ids  # unrated passes through
 
 
-def test_filter_no_criteria_returns_all():
+def test_filter_no_criteria_returns_all() -> None:
     from rugbrain.ratings import filter_docs_by_ratings
 
     docs = [_verified_doc("1", 0.9), _rumor_doc("2", 0.8)]
@@ -174,7 +180,7 @@ def test_filter_no_criteria_returns_all():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_source_badge_verified_with_corroboration():
+def test_source_badge_verified_with_corroboration() -> None:
     from rugbrain.ratings import source_badge
 
     source = {
@@ -191,7 +197,7 @@ def test_source_badge_verified_with_corroboration():
     assert "3 sources corroborate" in source_badge(source)
 
 
-def test_format_rag_answer_with_ratings_badges_and_disclaimer():
+def test_format_rag_answer_with_ratings_badges_and_disclaimer() -> None:
     from rugbrain.ratings import format_rag_answer_with_ratings
 
     sources = [
@@ -211,7 +217,7 @@ def test_format_rag_answer_with_ratings_badges_and_disclaimer():
     assert "Disclaimer" in out  # rumor source triggers disclaimer
 
 
-def test_format_rag_answer_with_ratings_no_sources():
+def test_format_rag_answer_with_ratings_no_sources() -> None:
     from rugbrain.ratings import format_rag_answer_with_ratings
 
     assert format_rag_answer_with_ratings("plain answer", []) == "plain answer"
@@ -222,7 +228,7 @@ def test_format_rag_answer_with_ratings_no_sources():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_prioritize_verified_sources():
+def test_prioritize_verified_sources() -> None:
     from rugbrain.ratings import prioritize_verified_sources
 
     sources = [
@@ -236,7 +242,7 @@ def test_prioritize_verified_sources():
     assert ordered[2]["id"] == "rumor"
 
 
-def test_synthesize_answer_shape():
+def test_synthesize_answer_shape() -> None:
     from rugbrain.ratings import synthesize_answer
 
     result = synthesize_answer(
@@ -257,7 +263,7 @@ def test_synthesize_answer_shape():
 # ═══════════════════════════════════════════════════════════════════
 
 
-def test_synthesize_answer_node():
+def test_synthesize_answer_node() -> None:
     """synthesize_answer (shared rating node) surfaces verified sources first."""
     from rugbrain.ratings import synthesize_answer
 
@@ -266,7 +272,7 @@ def test_synthesize_answer_node():
     assert result["citations"][0]["id"] == "1"
 
 
-def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch):
+def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Cross-encoder reorder + rating boost: verified doc outranks rumor.
 
     Mirrors the production pipeline: rerank (Qwen3 cross-encoder) produces
@@ -277,7 +283,9 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch):
     from rugbrain.ratings import _primary_score, apply_rating_boosts
 
     # Raw cross-encoder: rumor doc scores slightly higher (0.65 > 0.60)
-    async def fake_rerank(query, documents, top_k=10, raw=False):
+    async def fake_rerank(
+        query: Any, documents: Any, top_k: int = 10, raw: bool = False
+    ) -> Any:
         return [
             {"index": 1, "relevance_score": 0.65},
             {"index": 0, "relevance_score": 0.60},
@@ -287,7 +295,7 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch):
 
     docs = [_verified_doc("verified", 0.5), _rumor_doc("rumor", 0.7)]
 
-    async def run():
+    async def run() -> Any:
         ranked = await rr_mod.rerank("hack news", [d["content"] for d in docs], top_k=2)
         for r in ranked:
             idx = r["index"]
@@ -303,11 +311,13 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch):
     assert results[0]["rating_multiplier"] > 1.0
 
 
-def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch):
+def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Without rating boosts, pure cross-encoder ordering is preserved."""
     import rugbrain.reranker as rr_mod
 
-    async def fake_rerank(query, documents, top_k=10, raw=False):
+    async def fake_rerank(
+        query: Any, documents: Any, top_k: int = 10, raw: bool = False
+    ) -> Any:
         return [
             {"index": 1, "relevance_score": 0.65},
             {"index": 0, "relevance_score": 0.60},
@@ -317,7 +327,7 @@ def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch):
 
     docs = [_verified_doc("verified", 0.5), _rumor_doc("rumor", 0.7)]
 
-    async def run():
+    async def run() -> Any:
         ranked = await rr_mod.rerank("hack news", [d["content"] for d in docs], top_k=2)
         for r in ranked:
             idx = r["index"]
@@ -330,7 +340,7 @@ def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch):
     assert "rating_boosted" not in results[0]
 
 
-def test_search_endpoint_has_rating_filter_params():
+def test_search_endpoint_has_rating_filter_params() -> None:
     """GET /api/v1/search accepts the new rating filter query params."""
     import inspect
 
@@ -342,7 +352,7 @@ def test_search_endpoint_has_rating_filter_params():
     assert "require_corroboration" in sig.parameters
 
 
-def test_three_pillar_search_has_rating_boost_param():
+def test_three_pillar_search_has_rating_boost_param() -> None:
     """three_pillar_search accepts use_rating_boosts."""
     import inspect
 

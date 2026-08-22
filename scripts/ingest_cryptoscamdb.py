@@ -131,7 +131,7 @@ def _load_file(path: Path) -> list[dict[str, Any]]:
     raw = path.read_text(encoding="utf-8", errors="ignore")
     entries: list[dict[str, Any]] = []
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
 
         parsed = yaml.safe_load(raw)
         if isinstance(parsed, list):

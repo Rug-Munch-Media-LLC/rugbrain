@@ -16,12 +16,15 @@ from __future__ import annotations
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import b2_permanence  # type: ignore[import-not-found]  # noqa: E402
+import b2_permanence
 
 # ── Fixtures / fakes ───────────────────────────────────────────────────
 
@@ -50,7 +53,7 @@ class FakeBucket:
         self._keys = keys
         self.deleted: list[str] = []
 
-    def ls(self, prefix: str, recursive: bool = True):
+    def ls(self, prefix: str, recursive: bool = True) -> Any:
         return [(_FakeVersion(k), None) for k in self._keys if k.startswith(prefix)]
 
     def delete_file_version(self, file_id: str, file_name: str) -> None:
@@ -62,19 +65,19 @@ class FakeApi:
         self.bucket = FakeBucket(keys)
         self._deleted: list[str] = []
 
-    def ensure_bucket(self, name: str):
+    def ensure_bucket(self, name: str) -> Any:
         return self.bucket
 
 
 # ── parse_snapshot_date ────────────────────────────────────────────────
 
 
-def test_parse_snapshot_date_accepts_dated_dir_objects():
+def test_parse_snapshot_date_accepts_dated_dir_objects() -> None:
     assert b2_permanence.parse_snapshot_date("snapshots/2026-08-15/news.parquet") == "2026-08-15"
     assert b2_permanence.parse_snapshot_date("snapshots/2026-08-15/manifest.json") == "2026-08-15"
 
 
-def test_parse_snapshot_date_rejects_pointers_and_strays():
+def test_parse_snapshot_date_rejects_pointers_and_strays() -> None:
     assert b2_permanence.parse_snapshot_date("snapshots/latest.json") is None
     assert b2_permanence.parse_snapshot_date("snapshots/manifest.json") is None
     assert b2_permanence.parse_snapshot_date("latest.json") is None
@@ -82,7 +85,7 @@ def test_parse_snapshot_date_rejects_pointers_and_strays():
     assert b2_permanence.parse_snapshot_date("2026-08-15/foo.parquet") is None
 
 
-def test_parse_snapshot_date_rejects_malformed_dates():
+def test_parse_snapshot_date_rejects_malformed_dates() -> None:
     assert b2_permanence.parse_snapshot_date("snapshots/2026-13-99/x") is None
     assert b2_permanence.parse_snapshot_date("snapshots/2026-02-30/x") is None
     assert b2_permanence.parse_snapshot_date("snapshots/20260815/x") is None
@@ -92,7 +95,7 @@ def test_parse_snapshot_date_rejects_malformed_dates():
 # ── retention_keep_set ─────────────────────────────────────────────────
 
 
-def test_retention_keeps_newest_30_daily():
+def test_retention_keeps_newest_30_daily() -> None:
     dates = make_dates("2026-01-01", "2026-03-01")  # 60 days
     keep = b2_permanence.retention_keep_set(dates)
     assert len(keep) >= 30
@@ -101,7 +104,7 @@ def test_retention_keeps_newest_30_daily():
     assert dates[0] not in keep
 
 
-def test_retention_monthly_tier_extends_beyond_daily_window():
+def test_retention_monthly_tier_extends_beyond_daily_window() -> None:
     # 200 days spans ~7 calendar months; monthly keeps the newest per month,
     # so keep count grows beyond the 30-day daily window.
     dates = make_dates("2025-08-15", "2026-03-01")
@@ -112,18 +115,18 @@ def test_retention_monthly_tier_extends_beyond_daily_window():
     assert dates[0] not in keep
 
 
-def test_retention_small_history_kept_entirely():
+def test_retention_small_history_kept_entirely() -> None:
     dates = make_dates("2026-08-01", "2026-08-15")  # 15 days < 30
     keep = b2_permanence.retention_keep_set(dates)
     assert keep == set(dates)
 
 
-def test_retention_edge_cases():
+def test_retention_edge_cases() -> None:
     assert b2_permanence.retention_keep_set([]) == set()
     assert b2_permanence.retention_keep_set(["2026-08-15"]) == {"2026-08-15"}
 
 
-def test_retention_never_drops_newest_date():
+def test_retention_never_drops_newest_date() -> None:
     for n in (1, 5, 40, 200):
         dates = make_dates(
             "2026-01-01", (datetime(2026, 1, 1) + timedelta(days=n - 1)).strftime("%Y-%m-%d")
@@ -135,7 +138,7 @@ def test_retention_never_drops_newest_date():
 # ── prune_snapshots safety guards ──────────────────────────────────────
 
 
-def test_prune_refuses_permanent_bucket(monkeypatch):
+def test_prune_refuses_permanent_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
     api = FakeApi(["snapshots/2026-08-15/news.parquet"])
     monkeypatch.setattr(b2_permanence, "ensure_bucket", lambda api_, name: api.ensure_bucket(name))
     result = b2_permanence.prune_snapshots(api, "rugmunch-permanent", dry_run=True)
@@ -143,7 +146,7 @@ def test_prune_refuses_permanent_bucket(monkeypatch):
     assert api.bucket.deleted == []
 
 
-def test_prune_refuses_empty_keep_set(monkeypatch):
+def test_prune_refuses_empty_keep_set(monkeypatch: pytest.MonkeyPatch) -> None:
     api = FakeApi(["snapshots/2026-08-15/news.parquet"])
     monkeypatch.setattr(b2_permanence, "ensure_bucket", lambda api_, name: api.ensure_bucket(name))
     monkeypatch.setattr(b2_permanence, "retention_keep_set", lambda *a, **k: set())
@@ -152,7 +155,7 @@ def test_prune_refuses_empty_keep_set(monkeypatch):
     assert api.bucket.deleted == []
 
 
-def test_prune_dry_run_lists_without_deleting(monkeypatch):
+def test_prune_dry_run_lists_without_deleting(monkeypatch: pytest.MonkeyPatch) -> None:
     # 60 daily snapshots with a tight policy → old dirs flagged, nothing deleted
     dates = make_dates("2026-01-01", "2026-03-01")
     keys = [f"snapshots/{d}/news.parquet" for d in dates]
@@ -176,7 +179,7 @@ def test_prune_dry_run_lists_without_deleting(monkeypatch):
     assert max(dates) in b2_permanence.retention_keep_set(dates, 10, 2, 3)
 
 
-def test_prune_live_deletes_only_unprotected_dirs(monkeypatch):
+def test_prune_live_deletes_only_unprotected_dirs(monkeypatch: pytest.MonkeyPatch) -> None:
     # 60 daily snapshots; live prune with a tight policy must delete the old
     # dirs but never the newest, and never latest.json at the prefix root.
     dates = make_dates("2026-01-01", "2026-03-01")
