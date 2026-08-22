@@ -91,3 +91,7 @@ fail-under = 50
 ignore-init-method = true
 ignore-init-module = true
 exclude = ["tests/*", "setup.py"]
+
+[tool.mutmut]
+source_paths = ["src/rugbrain"]
+pytest_add_cli_args_test_selection = ["tests/test_guardrails.py", "--deselect", "tests/test_guardrails.py::test_mcp_bridge_guard_helpers_exist"]
