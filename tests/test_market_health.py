@@ -23,7 +23,7 @@ class TestMarketHealthConfig:
         assert "USDT" in STABLECOINS
 
     def test_stablecoin_addresses_valid(self) -> None:
-        for name, addr in STABLECOINS.items():
+        for _name, addr in STABLECOINS.items():
             assert addr.startswith("0x")
             assert len(addr) == 42
 
@@ -34,7 +34,7 @@ class TestMarketHealthConfig:
         assert "DAI" in pegs
         assert "USDC" in pegs
         assert "USDT" in pegs
-        for coin, price in pegs.items():
+        for _coin, price in pegs.items():
             assert isinstance(price, float)
             assert price > 0.5  # Not zero
 

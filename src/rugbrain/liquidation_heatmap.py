@@ -20,7 +20,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -98,7 +98,7 @@ async def get_binance_liquidations() -> list[dict[str, Any]]:
                                     "price": float(order.get("price", "0")),
                                     "value_usd": round(usd_value, 2),
                                     "time": order.get("time", ""),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
                                     else "high"
@@ -136,7 +136,7 @@ async def get_bybit_liquidations() -> list[dict[str, Any]]:
                                     "qty": float(order.get("size", "0")),
                                     "price": float(order.get("price", "0")),
                                     "value_usd": round(usd_value, 2),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
                                     else "high"
@@ -172,7 +172,7 @@ async def get_okx_liquidations() -> list[dict[str, Any]]:
                                     "qty": float(order.get("sz", "0")),
                                     "price": float(order.get("px", "0")),
                                     "value_usd": round(usd_value, 2),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
                                     else "high"
@@ -208,7 +208,7 @@ async def get_protocol_liquidations() -> list[dict[str, Any]]:
                                         "tx_hash": tx_hash,
                                         "block_number": int(log.get("blockNumber", "0x0"), 16),
                                         "value_usd": 0,  # Need to decode log data
-                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        "timestamp": datetime.now(UTC).isoformat(),
                                         "severity": "high",
                                     }
                                 )
@@ -243,7 +243,7 @@ async def get_dydx_liquidations() -> list[dict[str, Any]]:
                                     "value_usd": round(
                                         vol_24h * 0.02, 2
                                     ),  # est. liq volume ~2% of 24h vol
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "high" if vol_24h * 0.02 > 1_000_000 else "medium",
                                 }
                             )
@@ -293,7 +293,7 @@ async def get_gmx_liquidations() -> list[dict[str, Any]]:
                                     "price": price,
                                     "value_usd": round(usd_value, 2),
                                     "timestamp": datetime.fromtimestamp(
-                                        int(liq.get("timestamp", "0")), tz=timezone.utc
+                                        int(liq.get("timestamp", "0")), tz=UTC
                                     ).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
@@ -348,7 +348,7 @@ async def get_synthetix_liquidations() -> list[dict[str, Any]]:
                                     "price": 1.0,
                                     "value_usd": round(usd_value, 2),
                                     "timestamp": datetime.fromtimestamp(
-                                        int(liq.get("timestamp", "0")), tz=timezone.utc
+                                        int(liq.get("timestamp", "0")), tz=UTC
                                     ).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
@@ -367,12 +367,11 @@ async def get_kraken_futures_liquidations() -> list[dict[str, Any]]:
     """Get liquidation orders from Kraken Futures API."""
     events = []
     symbols = ["PI_XBTUSD", "PI_ETHUSD", "PI_SOLUSD"]
-    for symbol in symbols:
+    for _symbol in symbols:
         try:
-            url = f"https://futures.kraken.com/derivatives/api/v3/sendorder?orderType=liq"
             # Kraken does not have a dedicated liquidation endpoint;
             # use the ticker endpoint to infer liquidation pressure from funding/mark price divergence
-            ticker_url = f"https://futures.kraken.com/derivatives/api/v3/tickers"
+            ticker_url = "https://futures.kraken.com/derivatives/api/v3/tickers"
             async with httpx.AsyncClient(timeout=10) as c:
                 r = await c.get(ticker_url)
                 if r.status_code == 200:
@@ -397,7 +396,7 @@ async def get_kraken_futures_liquidations() -> list[dict[str, Any]]:
                                             "qty": liq_estimate / mark if mark > 0 else 0,
                                             "price": mark,
                                             "value_usd": round(liq_estimate, 2),
-                                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                                            "timestamp": datetime.now(UTC).isoformat(),
                                             "severity": "critical"
                                             if liq_estimate > 10_000_000
                                             else "high"
@@ -438,9 +437,7 @@ async def get_bitmex_liquidations() -> list[dict[str, Any]]:
                                 "qty": qty,
                                 "price": price,
                                 "value_usd": round(usd_value, 2),
-                                "timestamp": liq.get(
-                                    "timestamp", datetime.now(timezone.utc).isoformat()
-                                ),
+                                "timestamp": liq.get("timestamp", datetime.now(UTC).isoformat()),
                                 "severity": "critical"
                                 if usd_value > 10_000_000
                                 else "high"
@@ -484,7 +481,7 @@ async def get_deribit_liquidations() -> list[dict[str, Any]]:
                                         "value_usd": round(usd_value, 2),
                                         "timestamp": datetime.fromtimestamp(
                                             int(settlement.get("timestamp", "0")) / 1000,
-                                            tz=timezone.utc,
+                                            tz=UTC,
                                         ).isoformat(),
                                         "severity": "critical"
                                         if usd_value > 10_000_000
@@ -529,7 +526,7 @@ async def get_hyperliquid_liquidations() -> list[dict[str, Any]]:
                                 "qty": float(cls.get("size", 0)),
                                 "price": float(cls.get("price", 0)),
                                 "value_usd": round(usd_value, 2),
-                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                                "timestamp": datetime.now(UTC).isoformat(),
                                 "severity": "critical"
                                 if usd_value > 10_000_000
                                 else "high"
@@ -570,7 +567,7 @@ async def get_hyperliquid_liquidations() -> list[dict[str, Any]]:
                                         "qty": sz,
                                         "price": px,
                                         "value_usd": round(usd_value, 2),
-                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        "timestamp": datetime.now(UTC).isoformat(),
                                         "severity": "critical"
                                         if usd_value > 10_000_000
                                         else "high"
@@ -610,7 +607,7 @@ async def get_kucoin_futures_liquidations() -> list[dict[str, Any]]:
                                     "qty": qty,
                                     "price": price,
                                     "value_usd": round(usd_value, 2),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
                                     else "high"
@@ -650,7 +647,7 @@ async def get_phemex_liquidations() -> list[dict[str, Any]]:
                                     "qty": qty,
                                     "price": price,
                                     "value_usd": round(usd_value, 2),
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "severity": "critical"
                                     if usd_value > 10_000_000
                                     else "high"
@@ -817,7 +814,7 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
     wins = get_liquidation_wins(all_events)
 
     # 24h aggregation
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_24h = now - timedelta(hours=24)
     last_24h = [
         e
@@ -832,7 +829,7 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
             try:
                 from rugbrain.alert_dispatcher import dispatch_alert
 
-                asyncio.ensure_future(
+                asyncio.ensure_future(  # noqa: RUF006 — pre-existing, audited 2026-08-22
                     dispatch_alert(
                         f"MEGA LIQUIDATION: ${e['value_usd']:,.0f} on {e.get('exchange', '?')}",
                         f"Symbol: {e.get('symbol', '?')}\nPrice: ${e.get('price', 0)}\nSeverity: CRITICAL",

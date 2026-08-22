@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 from rugbrain.crypto_embeddings import (
     KNOWN_SCAM_PATTERNS,
@@ -227,7 +227,7 @@ async def ingest_document(
     await r.sadd(f"rag:idx:{collection}", doc_id)
 
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
+        from rugbrain.compat import get_ann_index  # external dependency
 
         ann = get_ann_index()
         await ann.bump_version(collection)
@@ -440,7 +440,7 @@ async def get_stats() -> dict[str, Any]:
 
     ann_stats = {}
     try:
-        from rugbrain.compat import get_ann_index, AnnIndex  # external dependency
+        from rugbrain.compat import get_ann_index  # external dependency
 
         ann = get_ann_index()
         ann_stats = await ann.stats()
@@ -463,7 +463,7 @@ async def get_stats() -> dict[str, Any]:
 
     cache_stats = {}
     try:
-        from rugbrain.compat import get_semantic_cache, SemanticCache  # external dependency
+        from rugbrain.compat import get_semantic_cache  # external dependency
 
         cache = get_semantic_cache()
         cache_stats = await cache.stats()

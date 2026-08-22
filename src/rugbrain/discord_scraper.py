@@ -16,7 +16,7 @@ import logging
 import os
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
@@ -35,7 +35,6 @@ DISCORD_CHANNELS: list[tuple[str, str, str, str]] = [
     ("Peckshield Alerts", "peckshield", "peckshield", "security"),
     ("Immunefi Alerts", "immunefi", "immunefi", "security"),
     ("Rekt News", "rektnews", "rektnews", "security"),
-
     # ═══ DEFI ═══
     ("Uniswap Community", "uniswap", "uniswap", "defi"),
     ("Aave Community", "aave", "aave", "defi"),
@@ -46,14 +45,12 @@ DISCORD_CHANNELS: list[tuple[str, str, str, str]] = [
     ("Yearn Community", "yearn", "yearn", "defi"),
     ("Lido Community", "lido", "lido", "defi"),
     ("Rocket Pool Community", "rocketpool", "rocketpool", "defi"),
-
     # ═══ SOLANA ═══
     ("Solana Community", "solana", "solana", "solana"),
     ("Jupiter Community", "jupiter", "jupiter", "solana"),
     ("Helius Community", "helius", "helius", "solana"),
     ("Magic Eden Community", "magiceden", "magiceden", "solana"),
     ("Metaplex Community", "metaplex", "metaplex", "solana"),
-
     # ═══ ETHEREUM / L2 ═══
     ("Ethereum Community", "ethereum", "ethereum", "ethereum"),
     ("Arbitrum Community", "arbitrum", "arbitrum", "ethereum"),
@@ -61,13 +58,11 @@ DISCORD_CHANNELS: list[tuple[str, str, str, str]] = [
     ("Base Community", "base", "base", "ethereum"),
     ("zkSync Community", "zksync", "zksync", "ethereum"),
     ("Polygon Community", "polygon", "polygon", "ethereum"),
-
     # ═══ SCAM WATCH ═══
     ("RugPull Alerts", "rugpull", "rugpull", "scam_watch"),
     ("Honeypot Alerts", "honeypot", "honeypot", "scam_watch"),
     ("Pump & Dump Watch", "pumpdump", "pumpdump", "scam_watch"),
     ("Crypto Scam Reports", "scamreports", "scamreports", "scam_watch"),
-
     # ═══ RESEARCH ═══
     ("Messari Research", "messari", "messari", "research"),
     ("Nansen Research", "nansen", "nansen", "research"),
@@ -75,7 +70,6 @@ DISCORD_CHANNELS: list[tuple[str, str, str, str]] = [
     ("Token Terminal", "tokenterminal", "tokenterminal", "research"),
     ("Dune Analytics", "dune", "dune", "research"),
     ("Glassnode", "glassnode", "glassnode", "research"),
-
     # �══ TRADING �══
     ("Crypto Trading Signals", "crypotrading", "crypotrading", "trading"),
     ("Alts", "alts", "alts", "trading"),
@@ -83,26 +77,49 @@ DISCORD_CHANNELS: list[tuple[str, str, str, str]] = [
     ("Wale Alerts", "walealerts", "walealerts", "trading"),
 ]
 
-# ── Config ──              
+# ── Config ──
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 POLL_INTERVAL = int(os.getenv("DISCORD_POLL_INTERVAL", "60"))  # 1 minute
 MAX_ESSAGES = int(os.getenv("DISCORD_MAX_ESSAGES", "20"))
 _seen_messages: set[str] = set()
 
 SCAM_KEORDS = [
-    "guranteed profit", "risk-free", "100x", "1000x", "moonshot",
-    "to the moon", "financial freedom", "passive income", "get rich quick",
-    "guranteed returns", "never lose", "sure thing", "life changing",
-    "dont miss out", "limited time", "presale", "whitelist", "insider",
-    "pump and dump", "rug pull", "honeypot", "ponzi", "pyramid",
-    "sec ret", "hidden gem", "next big thing", "explosive", "lambo", "moon",
+    "guranteed profit",
+    "risk-free",
+    "100x",
+    "1000x",
+    "moonshot",
+    "to the moon",
+    "financial freedom",
+    "passive income",
+    "get rich quick",
+    "guranteed returns",
+    "never lose",
+    "sure thing",
+    "life changing",
+    "dont miss out",
+    "limited time",
+    "presale",
+    "whitelist",
+    "insider",
+    "pump and dump",
+    "rug pull",
+    "honeypot",
+    "ponzi",
+    "pyramid",
+    "sec ret",
+    "hidden gem",
+    "next big thing",
+    "explosive",
+    "lambo",
+    "moon",
 ]
 
 COIN_PATERN = re.compile(
-    r'\$([A-Z]{2,10})\b'
-    r'|(?<!\w)([AZ]{2,10})(?:\s*coin|\s*token|\s*protocol)?\b'
-    r'(?!\s*[a-z])',
-    re.IGNORECASE
+    r"\$([A-Z]{2,10})\b"
+    r"|(?<!\w)([AZ]{2,10})(?:\s*coin|\s*token|\s*protocol)?\b"
+    r"(?!\s*[a-z])",
+    re.IGNORECASE,
 )
 
 
@@ -114,10 +131,13 @@ async def fetch_discord_messages(channel_id: str) -> list[dict[str, Any]]:
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages?limit={MAX_ESSAGES}"
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            r = await c.get(url, headers={
-                "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
-                "User-Agent": "rugbrain/1.0",
-            })
+            r = await c.get(
+                url,
+                headers={
+                    "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+                    "User-Agent": "rugbrain/1.0",
+                },
+            )
             if r.status_code == 200:
                 return cast(list[dict[str, Any]], r.json())
             logger.debug("discord_fetch_failed channel=%s status=%d", channel_id, r.status_code)
@@ -127,7 +147,9 @@ async def fetch_discord_messages(channel_id: str) -> list[dict[str, Any]]:
         return []
 
 
-async def process_discord_message(msg: dict[str, Any], channel_name: str, category: str) -> dict[str, Any]:
+async def process_discord_message(
+    msg: dict[str, Any], channel_name: str, category: str
+) -> dict[str, Any]:
     """Process a single Discord message: analyze, scrub, index."""
     message_id = msg.get("id", "")
     if message_id in _seen_messages:
@@ -138,7 +160,7 @@ async def process_discord_message(msg: dict[str, Any], channel_name: str, catego
 
     content = msg.get("content", "")
     author = msg.get("author", {}).get("username", "unknown")
-    timestamp = msg.get("timestamp", datetime.now(timezone.utc).isoformat())
+    timestamp = msg.get("timestamp", datetime.now(UTC).isoformat())
 
     if not content or len(content) < 10:
         return {"status": "skipped", "reason": "too_short"}
@@ -165,6 +187,7 @@ async def process_discord_message(msg: dict[str, Any], channel_name: str, catego
     # PII scrub
     try:
         from rugbrain.pii_scrubber import scrub_text
+
         content = await scrub_text(content)
     except Exception:
         pass
@@ -188,7 +211,7 @@ async def process_discord_message(msg: dict[str, Any], channel_name: str, catego
             "coins_mentioned": list(coins.keys())[:10],
             "risk_score": risk_score,
             "scam_keywords": scam_matches[:5],
-            "ingested_at": datetime.now(timezone.utc).isoformat(),
+            "ingested_at": datetime.now(UTC).isoformat(),
         }
 
         store = QdrantVectorStore()
@@ -212,7 +235,7 @@ async def process_discord_message(msg: dict[str, Any], channel_name: str, catego
 async def discord_scan_cycle() -> dict[str, Any]:
     """Scan all Discord channels for new messages."""
     results = []
-    for name, channel_id, guild, category in DISCORD_CHANNELS:
+    for name, channel_id, _guild, category in DISCORD_CHANNELS:
         messages = await fetch_discord_messages(channel_id)
         for msg in messages:
             result = await process_discord_message(msg, name, category)
@@ -220,7 +243,7 @@ async def discord_scan_cycle() -> dict[str, Any]:
                 results.append(result)
         await asyncio.sleep(1)
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "channels_scanned": len(DISCORD_CHANNELS),
         "new_messages": len(results),
         "high_risk": sum(1 for r in results if r.get("risk_score", 0) > 0.3),
@@ -229,12 +252,16 @@ async def discord_scan_cycle() -> dict[str, Any]:
 
 async def discord_scan_loop() -> None:
     """Run Discord scanning in a continuous background loop."""
-    logger.info("discord_scraper_started interval=%ds channels=%d", POLL_INTERVAL, len(DISCORD_CHANNELS))
+    logger.info(
+        "discord_scraper_started interval=%ds channels=%d", POLL_INTERVAL, len(DISCORD_CHANNELS)
+    )
     while True:
         try:
             result = await discord_scan_cycle()
             if result["new_messages"] > 0:
-                logger.info("discord_new count=%d high_risk=%d", result["new_messages"], result["high_risk"])
+                logger.info(
+                    "discord_new count=%d high_risk=%d", result["new_messages"], result["high_risk"]
+                )
         except Exception as exc:
             logger.warning("discord_cycle_failed %s", str(exc)[:80])
         await asyncio.sleep(POLL_INTERVAL)

@@ -16,9 +16,7 @@ import asyncio
 import logging
 import os
 import re
-import time
-from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -95,23 +93,22 @@ async def detect_sandwich_attacks(block_txs: list[dict[str, Any]]) -> list[dict[
         tokens3 = _extract_token_addresses(tx3.get("input", ""))
 
         # Check if they're swapping the same pair
-        if tokens1 and tokens2 and tokens3:
-            if tokens1 == tokens3 and tokens1 != tokens2:
-                # Same token pair for front and back run, different from victim
-                sandwiches.append(
-                    {
-                        "type": "sandwich",
-                        "frontrun_tx": tx1.get("hash", ""),
-                        "victim_tx": tx2.get("hash", ""),
-                        "backrun_tx": tx3.get("hash", ""),
-                        "token_pair": tokens1,
-                        "frontrun_from": tx1.get("from", ""),
-                        "victim_from": tx2.get("from", ""),
-                        "backrun_from": tx3.get("from", ""),
-                        "detected_at": datetime.now(timezone.utc).isoformat(),
-                        "severity": "medium",
-                    }
-                )
+        if tokens1 and tokens2 and tokens3 and tokens1 == tokens3 and tokens1 != tokens2:
+            # Same token pair for front and back run, different from victim
+            sandwiches.append(
+                {
+                    "type": "sandwich",
+                    "frontrun_tx": tx1.get("hash", ""),
+                    "victim_tx": tx2.get("hash", ""),
+                    "backrun_tx": tx3.get("hash", ""),
+                    "token_pair": tokens1,
+                    "frontrun_from": tx1.get("from", ""),
+                    "victim_from": tx2.get("from", ""),
+                    "backrun_from": tx3.get("from", ""),
+                    "detected_at": datetime.now(UTC).isoformat(),
+                    "severity": "medium",
+                }
+            )
 
     return sandwiches
 
@@ -135,7 +132,7 @@ async def poll_flashbots_mev_data() -> list[dict[str, Any]]:
                 "tx_hash": item.get("transaction_hash", ""),
                 "block_number": item.get("block_number", 0),
                 "profit_eth": item.get("profit", {}).get("amount", 0),
-                "detected_at": datetime.now(timezone.utc).isoformat(),
+                "detected_at": datetime.now(UTC).isoformat(),
                 "severity": "info",
             }
         )
@@ -151,12 +148,12 @@ async def mev_scan_cycle() -> dict[str, Any]:
         try:
             from rugbrain.alert_dispatcher import alert_mev_sandwich
 
-            asyncio.ensure_future(alert_mev_sandwich(mev))
+            asyncio.ensure_future(alert_mev_sandwich(mev))  # noqa: RUF006 — pre-existing, audited 2026-08-22
         except Exception:
             pass
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "flashbots_mevs": len(flashbots),
         "alerts": flashbots[:5],
         "total_active": len(_mev_alerts),

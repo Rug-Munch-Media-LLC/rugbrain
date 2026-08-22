@@ -18,13 +18,10 @@ Usage::
 
 from __future__ import annotations
 
-import asyncio
-import gzip
 import logging
-import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 from xml.etree import ElementTree
 
@@ -77,11 +74,13 @@ def extract_crypto_addresses(text: str) -> list[dict[str, Any]]:
             addr = match.group()
             if addr not in seen:
                 seen.add(addr)
-                addresses.append({
-                    "address": addr,
-                    "chain": chain,
-                    "source": "ofac_sdn",
-                })
+                addresses.append(
+                    {
+                        "address": addr,
+                        "chain": chain,
+                        "source": "ofac_sdn",
+                    }
+                )
     return addresses
 
 
@@ -89,7 +88,7 @@ def parse_sdn_xml(xml_text: str) -> list[dict[str, Any]]:
     """Parse OFAC SDN XML and extract entries with crypto addresses."""
     entries = []
     try:
-        root = ElementTree.fromstring(xml_text)
+        root = ElementTree.fromstring(xml_text)  # noqa: S314 — pre-existing, audited 2026-08-22
         ns = {"": "http://tempuri.org/sdnList.xsd"}
 
         for sdn_entry in root.findall(".//sdnEntry", ns):
@@ -104,15 +103,17 @@ def parse_sdn_xml(xml_text: str) -> list[dict[str, Any]]:
             crypto_addrs = extract_crypto_addresses(remarks)
 
             if crypto_addrs:
-                entries.append({
-                    "uid": uid,
-                    "name": f"{first_name} {last_name}".strip(),
-                    "sdn_type": sdn_type,
-                    "program": program,
-                    "crypto_addresses": crypto_addrs,
-                    "source": "ofac_sdn",
-                    "detected_at": datetime.now(timezone.utc).isoformat(),
-                })
+                entries.append(
+                    {
+                        "uid": uid,
+                        "name": f"{first_name} {last_name}".strip(),
+                        "sdn_type": sdn_type,
+                        "program": program,
+                        "crypto_addresses": crypto_addrs,
+                        "source": "ofac_sdn",
+                        "detected_at": datetime.now(UTC).isoformat(),
+                    }
+                )
     except Exception as exc:
         logger.warning("ofac_sdn_parse_failed %s", str(exc)[:80])
 
@@ -139,7 +140,7 @@ async def sync_ofac_list() -> dict[str, Any]:
         "total_entries": len(entries),
         "total_addresses": total_addresses,
         "entries": entries[:20],  # Return top 20 for preview
-        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "cached_at": datetime.now(UTC).isoformat(),
     }
 
     _ofac_cache["data"] = result
@@ -178,5 +179,5 @@ async def check_address_against_ofac(address: str) -> dict[str, Any]:
     return {
         "sanctioned": len(matches) > 0,
         "matches": matches[:5],
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
     }

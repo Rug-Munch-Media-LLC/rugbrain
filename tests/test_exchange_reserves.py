@@ -11,7 +11,7 @@ class TestExchangeReserves:
         assert isinstance(result, dict)
         # Should have exchange names as keys or be empty dict
         if result:
-            name = list(result.keys())[0]
+            name = next(iter(result.keys()))
             assert "btc" in result[name] or "last_verified" in result[name]
 
     def test_get_reserves_known_exchange(self) -> None:

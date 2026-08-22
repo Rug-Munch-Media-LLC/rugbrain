@@ -28,7 +28,7 @@ class TestWalletClustererConfig:
         assert "market_maker" in types
 
     def test_entity_risk_levels(self) -> None:
-        for addr, entity in KNOWN_ENTITIES.items():
+        for _addr, entity in KNOWN_ENTITIES.items():
             assert entity["risk"] in ("low", "medium", "high")
             assert entity["name"]
 

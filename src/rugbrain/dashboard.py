@@ -1,6 +1,5 @@
 """rugbrain Intelligence Dashboard — Streamlit UI for RAG system."""
 
-import json
 import os
 from datetime import datetime
 from typing import Any, cast
@@ -224,6 +223,7 @@ with tab6:
         with st.spinner("Fetching unified feed..."):
             try:
                 import asyncio
+
                 import httpx
 
                 params = {"limit": 20}

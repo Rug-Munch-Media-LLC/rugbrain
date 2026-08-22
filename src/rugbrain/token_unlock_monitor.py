@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -251,11 +251,11 @@ async def get_token_price(token: str) -> float:
 
 async def unlock_scan_cycle() -> dict[str, Any]:
     """Run one token unlock monitoring cycle."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     results = []
 
     for unlock in TOKEN_UNLOCKS:
-        unlock_date = datetime.fromisoformat(unlock["date"]).replace(tzinfo=timezone.utc)
+        unlock_date = datetime.fromisoformat(unlock["date"]).replace(tzinfo=UTC)
         days_until = (unlock_date - now).days
         price = await get_token_price(unlock["token"])
         value_usd = price * unlock["amount"]
@@ -279,7 +279,7 @@ async def unlock_scan_cycle() -> dict[str, Any]:
     cliffs = [r for r in results if r["is_cliff"] and r["days_until"] <= 60]
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "total_unlocks": len(results),
         "imminent_unlocks": len(imminent),
         "upcoming_cliffs": len(cliffs),

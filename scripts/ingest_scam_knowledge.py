@@ -28,7 +28,7 @@ Pipeline guarantees:
   * Checkpointed — progress is tracked in a JSON checkpoint file
     (``RAG_KNOWLEDGE_CHECKPOINT``, default /tmp/rag-knowledge/checkpoint.json)
     keyed by source → file → sha256, so already-ingested files are skipped.
-  * Batched — embeddings are computed 50 at a time through 
+  * Batched — embeddings are computed 50 at a time through
     (OpenAI-compatible /embeddings) and upserts are sent 50 points per call.
 
 Usage:

@@ -9,12 +9,10 @@ Aggregates social media posts from:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -28,16 +26,36 @@ MAX_POSTS = int(os.getenv("SOCIAL_MAX_POSTS", "20"))
 
 # Scam signal keywords
 SCAM_KEYWORDS = [
-    "rug", "honeypot", "scam", "exit scam", "pulled liquidity",
-    "can't sell", "cannot sell", "locked liquidity", "hacked",
-    "exploit", "drain", "fake", "malicious", "phishing",
+    "rug",
+    "honeypot",
+    "scam",
+    "exit scam",
+    "pulled liquidity",
+    "can't sell",
+    "cannot sell",
+    "locked liquidity",
+    "hacked",
+    "exploit",
+    "drain",
+    "fake",
+    "malicious",
+    "phishing",
 ]
 
 # High-value crypto Twitter accounts to track
 TRACKED_ACCOUNTS = [
-    "zachxbt", "tayvano_", "samczsun", "officer_cia",
-    "peckshield", "slowmist_team", "blocksec", "certik",
-    "CyversAlerts", "Crypto_Slack", "0xCygaar", "bertcmiller",
+    "zachxbt",
+    "tayvano_",
+    "samczsun",
+    "officer_cia",
+    "peckshield",
+    "slowmist_team",
+    "blocksec",
+    "certik",
+    "CyversAlerts",
+    "Crypto_Slack",
+    "0xCygaar",
+    "bertcmiller",
 ]
 
 # Rate limiting
@@ -75,16 +93,18 @@ async def fetch_lunarcrush_social() -> list[dict[str, Any]]:
         name = coin.get("name", "")
         score = coin.get("social_score", 0)
         sentiment = coin.get("sentiment", "")
-        posts.append({
-            "source": "lunarcrush",
-            "symbol": symbol,
-            "name": name,
-            "social_score": score,
-            "sentiment": sentiment,
-            "mentions_24h": coin.get("mentions_24h", 0),
-            "contributors_24h": coin.get("contributors_24h", 0),
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-        })
+        posts.append(
+            {
+                "source": "lunarcrush",
+                "symbol": symbol,
+                "name": name,
+                "social_score": score,
+                "sentiment": sentiment,
+                "mentions_24h": coin.get("mentions_24h", 0),
+                "contributors_24h": coin.get("contributors_24h", 0),
+                "detected_at": datetime.now(UTC).isoformat(),
+            }
+        )
 
     return posts
 
@@ -114,7 +134,7 @@ async def ingest_discord_webhook(payload: dict[str, Any]) -> dict[str, Any]:
         "content_preview": content[:200],
         "scam_flags": scam_flags,
         "mentions": mentions,
-        "detected_at": datetime.now(timezone.utc).isoformat(),
+        "detected_at": datetime.now(UTC).isoformat(),
         "severity": "high" if scam_flags else "info",
     }
 
@@ -131,7 +151,7 @@ async def social_sentiment_cycle() -> dict[str, Any]:
             scam_signals.append({**post, "scam_flags": flags})
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "trending_coins": len(posts),
         "scam_signals": len(scam_signals),
         "posts": posts[:10],

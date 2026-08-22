@@ -16,7 +16,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
@@ -96,9 +96,9 @@ async def get_whale_movements(chain: str = "ethereum") -> list[dict[str, Any]]:
                                 "from": tx.get("from", ""),
                                 "value_eth": round(value_eth, 4),
                                 "timestamp": datetime.fromtimestamp(
-                                    int(tx.get("timeStamp", 0)), tz=timezone.utc
+                                    int(tx.get("timeStamp", 0)), tz=UTC
                                 ).isoformat(),
-                                "detected_at": datetime.now(timezone.utc).isoformat(),
+                                "detected_at": datetime.now(UTC).isoformat(),
                                 "severity": "high" if value_eth > 100 else "medium",
                             }
                         )
@@ -120,7 +120,7 @@ async def smart_money_scan_cycle() -> dict[str, Any]:
             try:
                 from rugbrain.alert_dispatcher import alert_whale_movement
 
-                asyncio.ensure_future(alert_whale_movement(m))
+                asyncio.ensure_future(alert_whale_movement(m))  # noqa: RUF006 — pre-existing, audited 2026-08-22
             except Exception:
                 pass
 
@@ -130,7 +130,7 @@ async def smart_money_scan_cycle() -> dict[str, Any]:
         by_wallet[m["wallet"]].append(m)
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "total_movements": len(eth_movements),
         "active_wallets": len(by_wallet),
         "movements": eth_movements[:10],

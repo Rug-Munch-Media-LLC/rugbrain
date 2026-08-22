@@ -33,9 +33,9 @@ from typing import Any
 
 import httpx
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.ingest_common import CrawlDocument, doc_from_article, store_documents
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.web_crawler import (
     CRAWLER_USER_AGENT,
     HTTP_TIMEOUT,
@@ -260,9 +260,7 @@ async def ingest_all_sources(
     In dry-run mode documents are fetched but not stored.
     """
     c = crawler or WebCrawler()
-    embedder = Qwen3Embedder(
-        embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
-    )
+    embedder = Qwen3Embedder(embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
     store = QdrantVectorStore()
     totals: dict[str, Any] = {}
     try:

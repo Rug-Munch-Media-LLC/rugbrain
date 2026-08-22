@@ -124,7 +124,7 @@ async def _fetch_new_deploys(client: httpx.AsyncClient, chain: str) -> int:
         coins = await _get_json(client, COINPAPRIKA_NEW_URL)
         if isinstance(coins, list):
             return len(coins[:50])
-    except Exception:  # noqa: S110
+    except Exception:
         pass
     return 0
 

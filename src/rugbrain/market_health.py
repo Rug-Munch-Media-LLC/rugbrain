@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -37,7 +37,9 @@ async def get_stablecoin_peg() -> dict[str, float]:
     ids = "dai,usd-coin,tether"
     try:
         async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.get(f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd")
+            r = await c.get(
+                f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+            )
             if r.status_code == 200:
                 data = r.json()
                 return {
@@ -56,15 +58,21 @@ async def get_funding_rates() -> list[dict[str, Any]]:
     for symbol in ["BTCUSDT", "ETHUSDT", "SOLUSDT"]:
         try:
             async with httpx.AsyncClient(timeout=5) as c:
-                r = await c.get(f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={symbol}&limit=1")
+                r = await c.get(
+                    f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={symbol}&limit=1"
+                )
                 if r.status_code == 200:
                     data = r.json()
                     if data:
-                        rates.append({
-                            "symbol": symbol,
-                            "funding_rate": float(data[0].get("fundingRate", 0)),
-                            "funding_time": datetime.fromtimestamp(int(data[0].get("fundingTime", 0)) / 1000, tz=timezone.utc).isoformat(),
-                        })
+                        rates.append(
+                            {
+                                "symbol": symbol,
+                                "funding_rate": float(data[0].get("fundingRate", 0)),
+                                "funding_time": datetime.fromtimestamp(
+                                    int(data[0].get("fundingTime", 0)) / 1000, tz=UTC
+                                ).isoformat(),
+                            }
+                        )
         except Exception:
             pass
     return rates
@@ -100,14 +108,12 @@ async def market_health_cycle() -> dict[str, Any]:
         peg_deviations[coin] = round(deviation, 4)
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "stablecoin_pegs": pegs,
         "peg_deviations_pct": peg_deviations,
         "funding_rates": rates,
         "gas_prices": gas,
-        "alerts": [
-            coin for coin, dev in peg_deviations.items() if dev > 0.5
-        ],
+        "alerts": [coin for coin, dev in peg_deviations.items() if dev > 0.5],
     }
 
 

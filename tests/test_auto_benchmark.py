@@ -8,7 +8,6 @@ to verify that the system correctly:
 4. Returns reasonable confidence scores
 """
 
-
 import sys
 import time
 from pathlib import Path
@@ -191,8 +190,7 @@ def test_temporal_decay() -> None:
     sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
     from rugbrain.search.temporal_decay import apply_temporal_decay
 
-
-    now = time.time()
+    time.time()
     results = [
         {"score": 0.9, "metadata": {"ingested_at": "2026-08-18T12:00:00Z"}},  # 1 hour ago (mocked)
         {"score": 0.8, "metadata": {"ingested_at": "2026-08-01T12:00:00Z"}},  # 17 days ago

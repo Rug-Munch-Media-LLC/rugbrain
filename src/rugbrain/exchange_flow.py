@@ -15,7 +15,7 @@ import asyncio
 import logging
 import os
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -94,7 +94,7 @@ async def get_exchange_txns(wallet: str, limit: int = 10) -> list[dict[str, Any]
                                 "to": tx.get("to", ""),
                                 "value_eth": round(value_eth, 4),
                                 "timestamp": datetime.fromtimestamp(
-                                    int(tx.get("timeStamp", 0)), tz=timezone.utc
+                                    int(tx.get("timeStamp", 0)), tz=UTC
                                 ).isoformat(),
                             }
                         )
@@ -124,13 +124,13 @@ async def exchange_flow_cycle() -> dict[str, Any]:
                 "total_balance_eth": round(total_balance, 2),
                 "wallets_monitored": len(wallets),
                 "large_txns_24h": large_txns,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         )
         await asyncio.sleep(1)
 
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "exchanges": results,
         "total_exchange_balance": round(sum(r["total_balance_eth"] for r in results), 2),
     }

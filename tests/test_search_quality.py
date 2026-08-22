@@ -25,15 +25,15 @@ _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-import rugbrain.search.engine as engine_mod  # noqa: E402
-from rugbrain.search.engine import (  # noqa: E402
+import rugbrain.search.engine as engine_mod
+from rugbrain.search.engine import (
     CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     detect_coding_query,
     detect_scam_query,
     resolve_search_collections,
 )
-from rugbrain.search_service import search_coding_knowledge, search_scam_knowledge  # noqa: E402
+from rugbrain.search_service import search_coding_knowledge, search_scam_knowledge
 
 # Acceptance queries from the spec.
 REENTRANCY_QUERY = "how to implement reentrancy guard in Solidity"
@@ -102,7 +102,9 @@ MOCK_RESULTS: dict[str, list[dict[str, object]]] = {
 def _install_mock(query: str, results: list[dict[str, object]]) -> Any:
     """Patch search_multi_collection to return *results* for *query*."""
 
-    async def fake_search(q: Any, collections: Any = None, limit: int = 10, min_similarity: float = 0.4) -> Any:
+    async def fake_search(
+        q: Any, collections: Any = None, limit: int = 10, min_similarity: float = 0.4
+    ) -> Any:
         return [dict(r) for r in results if q == query]
 
     engine_mod.search_multi_collection = fake_search
@@ -223,7 +225,6 @@ def test_mcp_bridge_new_tools_refuse_injection_without_mcp() -> None:
     """resolve_library/query_codebase must fail closed BEFORE any MCP call."""
     import importlib
 
-
     mcp_bridge = importlib.import_module("rugbrain.mcp_bridge")
 
     async def _explode(*args: object, **kwargs: object) -> dict[str, object]:
@@ -257,7 +258,6 @@ def test_mcp_bridge_new_tools_refuse_injection_without_mcp() -> None:
 def test_mcp_bridge_trace_refuses_injection_without_mcp() -> None:
     """trace_codebase must also sanitize its input before MCP dispatch."""
     import importlib
-
 
     mcp_bridge = importlib.import_module("rugbrain.mcp_bridge")
 

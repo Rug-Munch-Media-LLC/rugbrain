@@ -29,8 +29,8 @@ from typing import Any
 
 import httpx
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logger = logging.getLogger(__name__)
 

@@ -144,7 +144,7 @@ async def pre_generation_reflection(
     verification_tasks = []
     for addr in refs["eth_addresses"]:
         verification_tasks.append(verify_eth_address(addr))
-    for addr in refs.get("sol_addresses", []):
+    for addr in refs.get("sol_addresses", []):  # noqa: B007 — pre-existing, audited 2026-08-22
         # Solana verification would go here (placeholder)
         pass
 

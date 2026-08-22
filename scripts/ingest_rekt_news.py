@@ -47,8 +47,8 @@ from typing import Any
 
 import httpx
 
-from rugbrain.qwen_embedders import Qwen3Embedder
 from rugbrain.qdrant_store import QdrantVectorStore
+from rugbrain.qwen_embedders import Qwen3Embedder
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_rekt")
@@ -240,9 +240,7 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = Qwen3Embedder(
-        _url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
-    )
+    embedder = Qwen3Embedder(_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
     store = QdrantVectorStore()
     inserted = 0
     failed = 0

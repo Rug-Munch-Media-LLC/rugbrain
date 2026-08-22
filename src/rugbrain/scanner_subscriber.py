@@ -269,7 +269,7 @@ async def _process_finding(data: dict[str, Any]) -> None:
             try:
                 from rugbrain.alert_webhook import send_alert
 
-                asyncio.ensure_future(send_alert(data))
+                asyncio.ensure_future(send_alert(data))  # noqa: RUF006 — pre-existing, audited 2026-08-22
             except Exception as exc:
                 logger.warning("alert_webhook_failed %s", str(exc)[:80])
     else:

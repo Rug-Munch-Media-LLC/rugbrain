@@ -32,7 +32,7 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -328,7 +328,7 @@ async def fetch_trending_coins(limit: int = DEFAULT_LIMIT) -> list[dict[str, Any
             "price_change_24h": float(coin.get("price_change_24h", 0)),
             "galaxy_score": float(coin.get("galaxy_score", 0)),
             "volatility": float(coin.get("volatility", 0)),
-            "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "scraped_at": datetime.now(UTC).isoformat(),
         }
 
         # Store in per-coin stats
@@ -399,7 +399,7 @@ async def fetch_coin_social(symbol: str) -> dict[str, Any] | None:
         "volatility": float(coin.get("volatility", 0)),
         "reddit_mentions": int(coin.get("reddit_mentions_24h", 0)),
         "twitter_mentions": int(coin.get("twitter_mentions_24h", 0)),
-        "scraped_at": datetime.now(timezone.utc).isoformat(),
+        "scraped_at": datetime.now(UTC).isoformat(),
     }
 
     # Update in-memory stores
@@ -471,7 +471,7 @@ async def fetch_social_feed(limit: int = 20) -> list[dict[str, Any]]:
             + int(post.get("replies", 0)),
             "coin_symbols": post.get("coins", []) or post.get("symbols", []),
             "created_at": post.get("created_at", ""),
-            "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "scraped_at": datetime.now(UTC).isoformat(),
         }
         results.append(entry)
 
@@ -538,7 +538,7 @@ async def _generate_alerts(
                     ),
                     "value": sentiment,
                     "severity": "medium",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
         elif sentiment <= SENTIMENT_BEARISH_THRESHOLD:
@@ -553,7 +553,7 @@ async def _generate_alerts(
                     ),
                     "value": sentiment,
                     "severity": "medium",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -573,7 +573,7 @@ async def _generate_alerts(
                     "value": spike["ratio"],
                     "details": spike,
                     "severity": alert_severity,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -594,7 +594,7 @@ async def _generate_alerts(
                     "value": reversal["change"],
                     "details": reversal,
                     "severity": reversal["severity"],
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 }
             )
 
@@ -658,7 +658,7 @@ async def social_sentiment_full_cycle() -> dict[str, Any]:
     top_symbols = [c["symbol"] for c in trending_coins[:10]]
     if top_symbols:
         detailed_tasks = [fetch_coin_social(sym) for sym in top_symbols]
-        detailed_results = await asyncio.gather(*detailed_tasks)
+        await asyncio.gather(*detailed_tasks)
         # Detailed results are merged into _coin_stats via fetch_coin_social
 
     # Generate alerts from trending coin data
@@ -715,7 +715,7 @@ async def social_sentiment_full_cycle() -> dict[str, Any]:
     _health_state["status"] = "running"
 
     cycle_result: dict[str, Any] = {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "coins_tracked": len(trending_coins),
         "coins_in_history": len(_coin_stats),
         "total_social_volume_24h": total_vol_24h,
@@ -838,7 +838,7 @@ def get_social_sentiment_state() -> dict[str, Any]:
             spikes.append(spike)
 
     return {
-        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "last_updated": datetime.now(UTC).isoformat(),
         "health": _health_state,
         "summary": {
             "coins_tracked": len(_coin_stats),

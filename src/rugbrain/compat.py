@@ -78,7 +78,7 @@ ENTITY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-def extract_entities(text: str) -> list[dict[str, Any]]:  # noqa: F811
+def extract_entities(text: str) -> list[dict[str, Any]]:
     """Extract crypto entities from text using regex patterns."""
     entities = []
     for pattern, entity_type in ENTITY_PATTERNS:

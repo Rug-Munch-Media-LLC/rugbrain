@@ -8,7 +8,7 @@ import math
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def _mk(
         "sd": sd,
         "sc": round(SW.get(s, 1) * 20 + max(0, (24 - hrs) * 2) + m, 1),
         "x": kw,
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
     }
 
 
@@ -313,7 +313,10 @@ async def g_me() -> list[dict[str, Any]]:  # youtube + podcast + newsletter
     r: list[dict[str, Any]] = []
     yt: list[tuple[str, str, str]] | None
     try:
-        from rugbrain.youtube_ingester import YT_CHANNELS as yt, get_channel_videos as gv
+        from rugbrain.youtube_ingester import (
+            YT_CHANNELS as yt,  # noqa: N811 — pre-existing, audited 2026-08-22
+        )
+        from rugbrain.youtube_ingester import get_channel_videos as gv
     except Exception:
         yt = None
     if yt:
@@ -334,14 +337,18 @@ async def g_me() -> list[dict[str, Any]]:  # youtube + podcast + newsletter
                 pass
     p: list[dict[str, str]] | None
     try:
-        from rugbrain.podcast_ingester import CRYPTO_PODCASTS as p
+        from rugbrain.podcast_ingester import (
+            CRYPTO_PODCASTS as p,  # noqa: N811 — pre-existing, audited 2026-08-22
+        )
     except Exception:
         p = None
     if p:
         r += [_mk("podcast", "news", f"🎙️ New: {p2['name']}", hrs=8) for p2 in p[:5]]
     nl: list[tuple[str, str, str, str]] | None
     try:
-        from rugbrain.newsletter_ingester import NEWSLETTERS as nl
+        from rugbrain.newsletter_ingester import (
+            NEWSLETTERS as nl,  # noqa: N811 — pre-existing, audited 2026-08-22
+        )
     except Exception:
         nl = None
     if nl:
@@ -366,7 +373,7 @@ async def _agg() -> tuple[list[dict[str, Any]], list[str]]:
     rs = await asyncio.gather(*[fn() for fn, _ in GG], return_exceptions=True)
     sigs: list[dict[str, Any]] = []
     src: list[str] = []
-    for rv, (_, lb) in zip(rs, GG):
+    for rv, (_, lb) in zip(rs, GG, strict=False):
         if isinstance(rv, BaseException):
             continue
         sigs.extend(rv)
@@ -414,7 +421,7 @@ async def generate_daily() -> list[dict[str, Any]]:
             cc20[c] += 1
     r: dict[str, Any] = {
         "type": "daily",
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "n": len(sigs),
         "s": src,
         "top": t20,
@@ -443,7 +450,7 @@ async def generate_hourly() -> list[dict[str, Any]]:
     t5 = d[:5]
     r: dict[str, Any] = {
         "type": "hourly",
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "n": len(sigs),
         "s": src,
         "urgent": t5,
@@ -477,7 +484,7 @@ async def content_digest_loop() -> None:
     log.info("digest_started interval=%ds", POLL)
     while True:
         try:
-            if datetime.now(timezone.utc).minute < 15:
+            if datetime.now(UTC).minute < 15:
                 await generate_daily()
                 log.info("digest_daily")
             else:

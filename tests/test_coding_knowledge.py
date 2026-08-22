@@ -17,20 +17,20 @@ _SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
 
-from coding_ingest_common import (  # noqa: E402
+from coding_ingest_common import (
     build_coding_doc,
     html_to_text,
     markdown_sections,
     rst_to_text,
 )
 
-from rugbrain.search.engine import (  # noqa: E402
+from rugbrain.search.engine import (
     CODING_COLLECTIONS,
     SCAM_COLLECTIONS,
     detect_coding_query,
     resolve_search_collections,
 )
-from rugbrain.search_service import search_coding_knowledge  # noqa: E402
+from rugbrain.search_service import search_coding_knowledge
 
 # ── Code-intent detection ─────────────────────────────────────────────
 
@@ -110,7 +110,9 @@ def test_search_coding_knowledge_flags_code() -> Any:
     # Patch the underlying search so no live Qdrant is required.
     import rugbrain.search.engine as engine_mod
 
-    async def fake_search(query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4) -> Any:
+    async def fake_search(
+        query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4
+    ) -> Any:
         return list(results)
 
     original = engine_mod.search_multi_collection

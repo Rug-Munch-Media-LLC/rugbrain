@@ -13,7 +13,7 @@ import asyncio
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -48,7 +48,6 @@ NEWSLETTERS: list[tuple[str, str, str, str]] = [
     ("Week in Bitcoin", "https://weekinbitcoin.com", "weekly", "bitcoin"),
     ("Week in L2", "https://weekinl2.com", "weekly", "ethereum"),
     ("Week in ZK", "https://weekinzk.com", "weekly", "ethereum"),
-
     # ═══ RESEARCH NEWSLETTERS ═══
     ("Glassnode Weekly", "https://glassnode.com/newsletter", "weekly", "research"),
     ("CoinMetrics Weekly", "https://coinmetrics.io/newsletter", "weekly", "research"),
@@ -59,7 +58,6 @@ NEWSLETTERS: list[tuple[str, str, str, str]] = [
     ("Arcane Research", "https://arcane.no/newsletter", "weekly", "research"),
     ("K33 Research", "https://k33.com/newsletter", "weekly", "research"),
     ("Bitcoin Magazine Pro", "https://bitcoinmagazine.com/newsletter", "weekly", "bitcoin"),
-
     # ═══ DEFI NEWSLETTERS ═══
     ("DeFi Pulse", "https://defipulse.com/newsletter", "weekly", "defi"),
     ("DeFi Dad", "https://defidad.com/newsletter", "weekly", "defi"),
@@ -67,7 +65,6 @@ NEWSLETTERS: list[tuple[str, str, str, str]] = [
     ("DeFi Weekly", "https://defiweekly.com", "weekly", "defi"),
     ("DeFi Download", "https://defidownload.com", "weekly", "defi"),
     ("DeFi Llama", "https://defillama.com/newsletter", "daily", "defi"),
-
     # ═══ SECURITY NEWSLETTERS ═══
     ("BlockSec Weekly", "https://blocksecteam.com/newsletter", "weekly", "security"),
     ("SlowMist Weekly", "https://slowmist.com/newsletter", "weekly", "security"),
@@ -77,14 +74,12 @@ NEWSLETTERS: list[tuple[str, str, str, str]] = [
     ("Web3 Security Weekly", "https://web3securityweekly.com", "weekly", "security"),
     ("Immunefi Weekly", "https://immunefi.com/newsletter", "weekly", "security"),
     ("Hacken Weekly", "https://hacken.io/newsletter", "weekly", "security"),
-
     # ═══ REGULATORY NEWSLETTERS ═══
     ("Crypto Law Weekly", "https://cryptolaw.com/newsletter", "weekly", "regulation"),
     ("SEC Crypto", "https://www.sec.gov/crypto", "weekly", "regulation"),
     ("CFTC Crypto", "https://www.cftc.gov/crypto", "weekly", "regulation"),
     ("Blockchain Legal", "https://blockchainlegal.com/newsletter", "weekly", "regulation"),
     ("CoinCenter", "https://coincenter.org/newsletter", "weekly", "regulation"),
-
     # ═══ VC / INVESTOR NEWSLETTERS ═══
     ("a16z Crypto", "https://a16z.com/crypto/newsletter", "weekly", "vc"),
     ("Paradigm", "https://paradigm.xyz/newsletter", "weekly", "vc"),
@@ -95,13 +90,11 @@ NEWSLETTERS: list[tuple[str, str, str, str]] = [
     ("Pantera Capital", "https://panteracapital.com/newsletter", "weekly", "vc"),
     ("Coinbase Ventures", "https://www.coinbase.com/ventures/newsletter", "weekly", "vc"),
     ("Binance Research", "https://research.binance.com/newsletter", "weekly", "research"),
-
     # ═══ SOLANA NEWSLETTERS ═══
     ("Solana Daily", "https://solanadaily.com", "daily", "solana"),
     ("Solana News", "https://solana.com/newsletter", "weekly", "solana"),
     ("Solana Compass", "https://solanacompass.com", "weekly", "solana"),
     ("Solana Gems", "https://solanagems.com", "weekly", "solana"),
-
     # ═══ MEME / SCAM NEWSLETTERS ═══
     ("RugWatch", "https://rugwatch.com", "weekly", "scam_watch"),
     ("ScamAlert", "https://scamalert.com", "weekly", "scam_watch"),
@@ -115,7 +108,9 @@ POLL_INTERVAL = int(os.getenv("NEWSLETTER_POLL_INTERVAL", "21600"))  # 6 hours
 SEEN_URLS: set[str] = set()
 FLARESOLVERR_URL = os.getenv("FLARESOLVERR_URL", "http://talos:8191/v1")
 
-COIN_PATTERN = re.compile(r'\$([A-Z]{2,10})\b|(?<!\w)([A-Z]{2,10})(?:\s*coin|\s*token|\s*protocol)?\b', re.IGNORECASE)
+COIN_PATTERN = re.compile(
+    r"\$([A-Z]{2,10})\b|(?<!\w)([A-Z]{2,10})(?:\s*coin|\s*token|\s*protocol)?\b", re.IGNORECASE
+)
 
 
 async def scrape_url(url: str) -> str | None:
@@ -123,16 +118,19 @@ async def scrape_url(url: str) -> str | None:
     try:
         # Try direct fetch with trafilatura-style extraction
         async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
-            r = await c.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml",
-                "Accept-Language": "en-US,en;q=0.9",
-            })
+            r = await c.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                    "Accept": "text/html,application/xhtml+xml",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
             if r.status_code == 200:
                 text = r.text
                 # Simple content extraction (strip HTML tags)
-                text = re.sub(r'<[^>]+>', ' ', text)
-                text = re.sub(r'\s+', ' ', text).strip()
+                text = re.sub(r"<[^>]+>", " ", text)
+                text = re.sub(r"\s+", " ", text).strip()
                 if len(text) > 500:  # Got meaningful content
                     return text[:10000]
     except Exception as exc:
@@ -141,16 +139,19 @@ async def scrape_url(url: str) -> str | None:
     # FlareSolverr fallback for Cloudflare/paywalled sites
     try:
         async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.post(FLARESOLVERR_URL, json={
-                "cmd": "request.get",
-                "url": url,
-                "maxTimeout": 15000,
-            })
+            r = await c.post(
+                FLARESOLVERR_URL,
+                json={
+                    "cmd": "request.get",
+                    "url": url,
+                    "maxTimeout": 15000,
+                },
+            )
             if r.status_code == 200:
                 data = r.json()
                 text = data.get("solution", {}).get("response", "")
-                text = re.sub(r'<[^>]+>', ' ', text)
-                text = re.sub(r'\s+', ' ', text).strip()
+                text = re.sub(r"<[^>]+>", " ", text)
+                text = re.sub(r"\s+", " ", text).strip()
                 if len(text) > 500:
                     return text[:10000]
     except Exception as exc:
@@ -165,7 +166,87 @@ def extract_coins(text: str) -> list[str]:
     coins = set()
     for m in matches:
         coin = (m[0] or m[1]).upper()
-        if len(coin) >= 2 and coin not in ("THE", "FOR", "AND", "THIS", "THAT", "YOU", "NOT", "WITH", "FROM", "HAS", "ARE", "WAS", "WERE", "BEEN", "HAVE", "HAD", "DOES", "DOING", "DONE", "SAYS", "SAID", "THAN", "THEN", "ALSO", "VERY", "JUST", "MORE", "SOME", "SUCH", "ONLY", "WHAT", "WHEN", "WHERE", "WHICH", "WHO", "WHOM", "WHOSE", "WHY", "HOW", "ALL", "EACH", "EVER", "NEW", "NOW", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "MAY", "CAN", "WILL", "MUST", "SHALL", "COULD", "WOULD", "SHOULD", "MIGHT", "ABOUT", "ABOVE", "AFTER", "AGAIN", "AGAINST", "BETWEEN", "BENEATH", "BESIDE", "BEYOND", "DURING", "INSIDE", "OUTSIDE", "UNDER", "UPON", "WITHIN", "WITHOUT"):
+        if len(coin) >= 2 and coin not in (
+            "THE",
+            "FOR",
+            "AND",
+            "THIS",
+            "THAT",
+            "YOU",
+            "NOT",
+            "WITH",
+            "FROM",
+            "HAS",
+            "ARE",
+            "WAS",
+            "WERE",
+            "BEEN",
+            "HAVE",
+            "HAD",
+            "DOES",
+            "DOING",
+            "DONE",
+            "SAYS",
+            "SAID",
+            "THAN",
+            "THEN",
+            "ALSO",
+            "VERY",
+            "JUST",
+            "MORE",
+            "SOME",
+            "SUCH",
+            "ONLY",
+            "WHAT",
+            "WHEN",
+            "WHERE",
+            "WHICH",
+            "WHO",
+            "WHOM",
+            "WHOSE",
+            "WHY",
+            "HOW",
+            "ALL",
+            "EACH",
+            "EVER",
+            "NEW",
+            "NOW",
+            "ONE",
+            "TWO",
+            "THREE",
+            "FOUR",
+            "FIVE",
+            "SIX",
+            "SEVEN",
+            "EIGHT",
+            "NINE",
+            "TEN",
+            "MAY",
+            "CAN",
+            "WILL",
+            "MUST",
+            "SHALL",
+            "COULD",
+            "WOULD",
+            "SHOULD",
+            "MIGHT",
+            "ABOUT",
+            "ABOVE",
+            "AFTER",
+            "AGAIN",
+            "AGAINST",
+            "BETWEEN",
+            "BENEATH",
+            "BESIDE",
+            "BEYOND",
+            "DURING",
+            "INSIDE",
+            "OUTSIDE",
+            "UNDER",
+            "UPON",
+            "WITHIN",
+            "WITHOUT",
+        ):
             coins.add(coin)
     return list(coins)[:20]
 
@@ -190,6 +271,7 @@ async def ingest_newsletter(name: str, url: str, frequency: str, category: str) 
     # PII scrub
     try:
         from rugbrain.pii_scrubber import scrub_text
+
         content = await scrub_text(content)
     except Exception:
         pass
@@ -202,7 +284,7 @@ async def ingest_newsletter(name: str, url: str, frequency: str, category: str) 
         "frequency": frequency,
         "category": category,
         "coins_mentioned": coins,
-        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "ingested_at": datetime.now(UTC).isoformat(),
     }
 
     # Index into Qdrant
@@ -240,20 +322,24 @@ async def newsletter_scan_cycle() -> dict[str, Any]:
         results.append({name: result["status"]})
         await asyncio.sleep(3)  # Rate limit
     return {
-        "scanned_at": datetime.now(timezone.utc).isoformat(),
+        "scanned_at": datetime.now(UTC).isoformat(),
         "total_newsletters": len(NEWSLETTERS),
-        "ingested": sum(1 for r in results if list(r.values())[0] == "ok"),
+        "ingested": sum(1 for r in results if next(iter(r.values())) == "ok"),
         "results": results[:10],
     }
 
 
 async def newsletter_scan_loop() -> None:
     """Run newsletter scanning in a continuous background loop."""
-    logger.info("newsletter_ingester_started interval=%ds newsletters=%d", POLL_INTERVAL, len(NEWSLETTERS))
+    logger.info(
+        "newsletter_ingester_started interval=%ds newsletters=%d", POLL_INTERVAL, len(NEWSLETTERS)
+    )
     while True:
         try:
             result = await newsletter_scan_cycle()
-            logger.info("newsletter_scan ingested=%d/%d", result["ingested"], result["total_newsletters"])
+            logger.info(
+                "newsletter_scan ingested=%d/%d", result["ingested"], result["total_newsletters"]
+            )
         except Exception as exc:
             logger.warning("newsletter_cycle_failed %s", str(exc)[:80])
         await asyncio.sleep(POLL_INTERVAL)
