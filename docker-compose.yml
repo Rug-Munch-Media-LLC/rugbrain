@@ -177,6 +177,14 @@ services:
       - STREAMLIT_SERVER_PORT=8501
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
       - STREAMLIT_SERVER_HEADLESS=true
+    # Override Dockerfile HEALTHCHECK (targets the API's 8012/ready — wrong
+    # service). Streamlit exposes /_stcore/health on its own port.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; r = u.urlopen('http://localhost:8501/_stcore/health', timeout=5); exit(0 if r.status == 200 else 1)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     command: >
       sh -c "pip install --upgrade pip --quiet && pip install streamlit --quiet && python3 -m streamlit run /app/src/rugbrain/dashboard.py --server.port 8501 --server.headless true --server.address 0.0.0.0"
     deploy:
