@@ -7,8 +7,11 @@ integrity) · **Test selection:** `tests/test_guardrails.py`
 
 | Module | Killed | Survived | Score |
 |---|---|---|---|
-| guardrails.py | 188 | 58 (58 pending) | **76%** and climbing toward the 80% target |
-| confidence_scorer.py | 0 | 0 | tests written (19 cases) — rerun pending |
+| guardrails.py | 188 | 58 (+58 in-flight) | **76%** on completed; final pending last workers |
+| confidence_scorer.py | — | — | tests written (19 + 2 regression); mutation rerun queued |
+
+Package-wide live tally at 99.9% processed: 🎉 220 killed · 🙁 ~1017 survived
+(includes partial coverage of alerts/mcp_bridge/etc via guardrail test imports).
 
 ## Status: first run IN PROGRESS (background)
 
