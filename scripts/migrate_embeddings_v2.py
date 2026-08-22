@@ -219,7 +219,7 @@ async def migrate_collection(
                         put = await client.put(
                             f"{V2}/collections/{name}/points",
                             json={"points": points_to_upsert},
-                            timeout=120.0,
+                            timeout=300.0,
                         )
                         put.raise_for_status()
                         break
