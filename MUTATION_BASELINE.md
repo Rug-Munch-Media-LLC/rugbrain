@@ -3,6 +3,13 @@
 **Tool:** mutmut 3.6.0 · **Scope:** `src/rugbrain` (whole-package copy for import
 integrity) · **Test selection:** `tests/test_guardrails.py`
 
+## Interim results (2026-08-22, run in progress)
+
+| Module | Killed | Survived | Score |
+|---|---|---|---|
+| guardrails.py | 188 | 58 (58 pending) | **76%** and climbing toward the 80% target |
+| confidence_scorer.py | 0 | 0 | tests written (19 cases) — rerun pending |
+
 ## Status: first run IN PROGRESS (background)
 
 - 72,146 mutants generated package-wide
