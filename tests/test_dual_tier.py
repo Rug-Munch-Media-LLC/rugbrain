@@ -186,3 +186,73 @@ def test_pick_tier_threshold():
     assert dual.pick_tier("short query here") == "speed"
     long_q = " ".join(["word"] * dual.ROUTING_THRESHOLD_WORDS)
     assert dual.pick_tier(long_q) == "deep"
+
+
+# --- Gateway /embed auto-routing regression (2026-08-23) ---------------------
+# Bug: EmbedReq.tier defaulted to "speed" AND the text was never passed to
+# pick_tier, so /embed ALWAYS hit the speed engine regardless of length.
+# Contract: tier=None -> word-count auto-route; explicit tier still wins.
+
+
+class _FakeEmbedResp:
+    status = 200
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return EMBED_OK
+
+
+class _FakeGatewaySession:
+    """Stands in for aiohttp.ClientSession inside model_gateway endpoints."""
+
+    last_url: str = ""
+
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def post(self, url, json=None, **kw):
+        _FakeGatewaySession.last_url = url
+        return _FakeEmbedResp()
+
+
+def _load_gateway():
+    gw = importlib.import_module("scripts.dual_tier.model_gateway")
+    return gw
+
+
+@pytest.mark.asyncio
+async def test_gateway_embed_autoroutes_long_text(monkeypatch):
+    gw = _load_gateway()
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
+    out = await gw.embed(gw.EmbedReq(text=" ".join(["word"] * 60)))
+    assert out["tier"] == "deep", "long text must auto-route to deep embed"
+    assert "8004" in _FakeGatewaySession.last_url
+
+
+@pytest.mark.asyncio
+async def test_gateway_embed_autoroutes_short_text(monkeypatch):
+    gw = _load_gateway()
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
+    out = await gw.embed(gw.EmbedReq(text="rug pull check"))
+    assert out["tier"] == "speed", "short text must auto-route to speed embed"
+    assert "8007" in _FakeGatewaySession.last_url
+
+
+@pytest.mark.asyncio
+async def test_gateway_embed_explicit_tier_wins(monkeypatch):
+    gw = _load_gateway()
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
+    out = await gw.embed(gw.EmbedReq(text="short", tier="deep"))
+    assert out["tier"] == "deep", "explicit tier must override auto-routing"
+    assert "8004" in _FakeGatewaySession.last_url

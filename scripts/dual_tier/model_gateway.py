@@ -58,7 +58,7 @@ class AskReq(BaseModel):
 class EmbedReq(BaseModel):
     text: str | None = None
     texts: list[str] | None = None
-    tier: str = "speed"  # speed(0.6B) | deep(4B)
+    tier: str | None = None  # None -> auto-route by word count; "speed"|"deep" explicit
 
 
 class RerankReq(BaseModel):
@@ -130,7 +130,7 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
     texts = req.texts or ([req.text] if req.text else [])
     if not texts:
         raise HTTPException(status_code=422, detail="text or texts required")
-    tier = _resolve_tier(req.tier)
+    tier = _resolve_tier(req.tier, texts[0])
     url = ENDPOINTS[f"{tier}_embed"]
     async with (
         aiohttp.ClientSession(timeout=HTTP_TIMEOUT) as http,
