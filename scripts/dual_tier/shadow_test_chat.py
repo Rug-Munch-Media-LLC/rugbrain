@@ -61,7 +61,21 @@ def score_answer(text: str, expect_domain: bool) -> dict[str, Any]:
     }
     if expect_domain:
         checks["domain_terms"] = any(
-            w in text.lower() for w in ("liquidity", "token", "pool", "wallet", "deployer", "dex")
+            w in text.lower()
+            for w in (
+                "liquidity",
+                "token",
+                "pool",
+                "wallet",
+                "deployer",
+                "dex",
+                "mixing",
+                "exchange",
+                "crypto",
+                "blockchain",
+                "mint",
+                "chain",
+            )
         )
     checks["passed"] = all(checks.values())
     return checks
