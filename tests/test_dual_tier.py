@@ -6,7 +6,7 @@ All network and Qdrant interactions are mocked; no live services required.
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -256,3 +256,107 @@ async def test_gateway_embed_explicit_tier_wins(monkeypatch):
     out = await gw.embed(gw.EmbedReq(text="short", tier="deep"))
     assert out["tier"] == "deep", "explicit tier must override auto-routing"
     assert "8004" in _FakeGatewaySession.last_url
+
+
+# --- Cloud fallback + strain breaker (2026-08-23) ---------------------------
+# Doctrine: local canon is 4B/0.6B quantized. Cloud engages only on failure or
+# open breaker; responses carry served_by=cloud + degraded=True. Rerank stays
+# LOCAL (4B -> 0.6B), never cloud.
+
+
+class _RoutingResp:
+    status = 200
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+def _make_routing_session(fail_markers=("8004",)):
+    class Sess:
+        last_urls: ClassVar[list[str]] = []
+
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def post(self, url, json=None, headers=None, **kw):
+            Sess.last_urls.append(url)
+            if any(m in url for m in fail_markers):
+                import aiohttp
+
+                raise aiohttp.ClientError("simulated local outage")
+            if "/embeddings" in url:
+                return _RoutingResp(EMBED_OK)
+            return _RoutingResp(RERANK_OK)
+
+    return Sess
+
+
+@pytest.mark.asyncio
+async def test_deep_embed_cloud_fallback_on_outage(monkeypatch):
+    gw = _load_gateway()
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", _make_routing_session(("8004",)))
+    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "", "deep": "test-key"})
+    out = await gw.embed(gw.EmbedReq(text="forensic query", tier="deep"))
+    assert out["served_by"] == "cloud"
+    assert out["degraded"] is True
+    assert out["tier"] == "deep"
+    assert "qwen3-embedding-8b" in out["cloud_model"]
+
+
+@pytest.mark.asyncio
+async def test_speed_embed_cloud_fallback_uses_main_free_model(monkeypatch):
+    gw = _load_gateway()
+    sess = _make_routing_session(("8007",))
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
+    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "main-key", "deep": ""})
+    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
+    assert out["served_by"] == "cloud" and out["degraded"] is True
+    assert "lfm-2.5-embedding-350m" in out["cloud_model"]
+    assert any("openrouter.ai" in u for u in sess.last_urls)
+
+
+@pytest.mark.asyncio
+async def test_no_cloud_key_fails_loud(monkeypatch):
+    gw = _load_gateway()
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", _make_routing_session(("8004",)))
+    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "", "deep": ""})
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    with _pytest.raises(HTTPException):
+        await gw.embed(gw.EmbedReq(text="x", tier="deep"))
+
+
+@pytest.mark.asyncio
+async def test_rerank_stays_local_and_falls_to_lighter_tier(monkeypatch):
+    gw = _load_gateway()
+    sess = _make_routing_session(("8003",))  # deep reranker down
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
+    out = await gw.rerank(gw.RerankReq(query="rug pull signs", documents=["a", "b"], tier="deep"))
+    assert out["tier"] == "speed" and out.get("degraded") is True
+    assert not any("openrouter.ai" in u for u in sess.last_urls), "rerank must never go cloud"
+
+
+def test_breaker_trips_after_consecutive_failures():
+    gw = _load_gateway()
+    gw._cloud_fails["deep"] = 0
+    gw._breaker_open_until["deep"] = 0.0
+    for _ in range(gw._BREAKER_TRIP):
+        gw._note_failure("deep")
+    assert gw._breaker_open("deep") is True
+    gw._breaker_open_until["deep"] = 0.0  # cleanup
