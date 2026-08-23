@@ -111,3 +111,29 @@ live services needed.
 3. Community chat bot wiring to :8009 pending (rugmunchbot chat_ai lane).
 4. If upstream llama.cpp adds native `instruct` passthrough, migrate the
    query-slot trick to the real field and re-run the A/B.
+
+## 8. Chatbot cutover runbook (OpenRouter → local :8009)
+
+### Pre-cutover gate
+```bash
+# 1. Live stack validation (all must pass):
+RUN_LIVE_TESTS=1 pytest tests/integration/test_dual_tier_live.py -v
+# 2. Shadow A/B vs OpenRouter (does NOT switch anything):
+OPENROUTER_API_KEY=<key> python -m scripts.dual_tier.shadow_test_chat --runs 3
+#    Require: >=90% local pass rate before cutover.
+```
+
+### Cutover (rugmunchbot community chat)
+```bash
+# rugmunchbot chat_ai lane: point chat tier at the local engine.
+# In rugmunchbot env/config: CHAT_PROVIDER=local CHAT_LOCAL_URL=http://172.22.0.1:8009/v1
+# Rollback = flip CHAT_PROVIDER back to openrouter (instant, no restart of llama services).
+```
+
+### Post-migration checklist (embed migration MUST be complete first)
+- [ ] `systemctl enable --now llama-chat llama-speed-embed llama-speed-rerank`
+- [ ] Re-run live integration suite — expect full green incl. latency budgets
+- [ ] `python -m scripts.dual_tier.backfill_speed_vectors` (guarded, resumable)
+- [ ] Verify Qdrant counts: qwen_vector == speed_vector coverage
+- [ ] Shadow test re-run at unloaded host for true latency numbers
+- [ ] Cutover per above; monitor first 24h via :8009 --metrics
