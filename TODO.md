@@ -6,7 +6,7 @@
 - [x] **Reranker deployed**: Qwen3-Reranker-4B Q6_K live on :8003 (llama.cpp). 8B models deleted (39GB freed). Verified: rerank score 0.9978 vs 1.1e-04.
 - [x] **Embedder deployed**: Qwen3-Embedding-4B Q8_0 live on :8004 (llama.cpp). 2560-dim, normalized. Verified: cos(relevant)=0.708 vs cos(irrelevant)=0.023.
 - [x] **Qdrant v2 stood up**: `rmi-qdrant-v2` on :6334, 46 collections at 2560-dim (named `dense`, Cosine).
-- [x] **Infinity/BGE-M3 fully removed**: No process, container, or port :8001 exists. Legacy 1024-dim collections retained read-only on :6333.
+- [x] **llama.cpp Qwen3 embedder/BGE-M3 fully removed**: No process, container, or port :8001 exists. Legacy 1024-dim collections retained read-only on :6333.
 - [x] **rugbrain-api container rebuilt** from fbb8d78 with `RERANKER_URL=http://172.22.0.1:8003`, `QWEN_EMBED_URL=http://172.22.0.1:8004/v1`. Healthy.
 - [x] **BM25 sparse vectors migrated**: 8/8 canonical collections swapped to `*_v2` hybrid (dense + bm25 sparse) via aliases.
 - [x] **RAGAS eval framework deployed**: `/api/v1/eval/run` + Prometheus metrics (`embed_latency`, `embed_requests`) on :8012.

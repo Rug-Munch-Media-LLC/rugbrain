@@ -12,8 +12,8 @@ Scripts import this module directly:
     from ingest_common import embed_batch, content_hash, to_uuid
 
 No secrets: all defaults point at local services (Qdrant / ) and are
-overridable via the standard RAG env vars (QDRANT_URL, INFINITY_URL,
-RAG_INFINITY_EMBED_MODEL).
+overridable via the standard RAG env vars (QDRANT_URL, QWEN_EMBED_URL,
+RAG_EMBED_MODEL).
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 EMBEDDING_DIM = 2560
 
 # Long code texts embed slowly; batch 8 long texts (matches seed_qdrant).
@@ -75,9 +75,9 @@ async def embed_batch(client: httpx.AsyncClient, texts: Sequence[str]) -> list[l
     """
     if not texts:
         return []
-    payload = {"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]}
+    payload = {"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]}
     try:
-        r = await client.post(f"{INFINITY_URL}/embeddings", json=payload, timeout=900.0)
+        r = await client.post(f"{QWEN_EMBED_URL}/embeddings", json=payload, timeout=900.0)
         if r.status_code != 200:
             logger.warning("embed_http_fail status=%d body=%s", r.status_code, r.text[:200])
             return []

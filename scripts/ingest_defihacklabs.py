@@ -24,7 +24,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - git, httpx, numpy
 """
 
@@ -328,7 +328,7 @@ async def ingest_files(
         )
         return total_chunks
 
-    embedder = Qwen3Embedder(_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
+    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"))
     store = QdrantVectorStore()
     inserted = 0
     skipped = 0

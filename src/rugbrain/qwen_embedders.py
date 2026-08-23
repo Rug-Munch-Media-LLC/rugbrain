@@ -27,13 +27,13 @@ class Qwen3Embedder:
     Serves 2560-dim vectors for all RAG ingestion/search paths.
     """
 
-    EMBED_URL = os.getenv("QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
-    MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-    DIMS = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("INFINITY_EMBED_DIMS", "2560")))
+    EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
+    MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+    DIMS = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "2560")))
 
     def __init__(self, embed_url: str | None = None):
         self.url = embed_url or os.getenv(
-            "QWEN_EMBED_URL", os.getenv("INFINITY_URL", self.EMBED_URL)
+            "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", self.EMBED_URL)
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:

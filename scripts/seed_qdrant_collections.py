@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
   - redis-py, httpx, numpy, qdrant-client
   - Staged Postgres dumps in DATA_DIR (default /tmp/rag_seed)
 """
@@ -60,8 +60,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("seed_qdrant")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
 DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108  # nosec B108
@@ -113,8 +113,8 @@ async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list
         return []
     try:
         r = await client.post(
-            f"{INFINITY_URL}/embeddings",
-            json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
+            f"{QWEN_EMBED_URL}/embeddings",
+            json={"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]},
             timeout=900.0,
         )
         if r.status_code != 200:
@@ -916,7 +916,11 @@ async def main() -> None:
 
     os.makedirs(DATA_DIR, exist_ok=True)
     logger.info(
-        "Qdrant=%s =%s model=%s data=%s", QDRANT_URL, INFINITY_URL, INFINITY_MODEL, DATA_DIR
+        "Qdrant=%s =%s model=%s data=%s",
+        QDRANT_URL,
+        QWEN_EMBED_URL,
+        QWEN_EMBED_MODEL_NAME,
+        DATA_DIR,
     )
 
     # Inject limits via env for loaders that accept them

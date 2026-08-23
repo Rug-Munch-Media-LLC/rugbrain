@@ -23,8 +23,8 @@ Scripts import this module directly:
     from coding_ingest_common import build_coding_doc, ingest_coding_docs
 
 No secrets: all defaults point at local services (Qdrant / ) and are
-overridable via the standard RAG env vars (QDRANT_URL, INFINITY_URL,
-RAG_INFINITY_EMBED_MODEL).
+overridable via the standard RAG env vars (QDRANT_URL, QWEN_EMBED_URL,
+RAG_EMBED_MODEL).
 """
 
 from __future__ import annotations

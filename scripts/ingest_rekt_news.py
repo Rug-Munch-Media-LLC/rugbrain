@@ -29,7 +29,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -240,7 +240,7 @@ async def ingest_hacks(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d hacks into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = Qwen3Embedder(_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1"))
+    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"))
     store = QdrantVectorStore()
     inserted = 0
     failed = 0

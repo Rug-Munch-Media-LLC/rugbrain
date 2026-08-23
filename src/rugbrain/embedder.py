@@ -26,7 +26,7 @@ _BACKEND_DIMS: dict[EmbedderBackend, int] = {
 }
 
 # Qwen3-Embedding-4B model id for the llama.cpp backend.
-INFINITY_MODEL: str = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_MODEL_NAME: str = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 
 
 def backend_dim(backend: EmbedderBackend) -> int:
@@ -61,7 +61,7 @@ class DualDimEmbedder:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 f"{self.int_url}/embeddings",
-                json={"model": INFINITY_MODEL, "input": texts},
+                json={"model": QWEN_EMBED_MODEL_NAME, "input": texts},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -76,7 +76,7 @@ class DualDimEmbedder:
                 raise RuntimeError(
                     f"Embedder {self.backend.value} returned {len(vec)}d vector "
                     f"for text[{i}], expected {self.dim}d. "
-                    f"Check that llama.cpp has {INFINITY_MODEL} loaded."
+                    f"Check that llama.cpp has {QWEN_EMBED_MODEL_NAME} loaded."
                 )
         return vectors
 
@@ -94,7 +94,7 @@ def get_embedder() -> DualDimEmbedder:
     """
     return DualDimEmbedder(
         EmbedderBackend.Qwen3_M3,
-        int_url=os.getenv("QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")),
+        int_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"),
     )
 
 

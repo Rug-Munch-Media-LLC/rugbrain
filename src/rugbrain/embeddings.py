@@ -52,15 +52,12 @@ EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI bu
 # Backends
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 # Qwen3-Embedding-4B served by llama.cpp (OpenAI-compatible /embeddings).
-# QWEN_EMBED_URL is canonical; INFINITY_URL kept only as a legacy env fallback
-# so existing deployments upgrade without breaking.
+# QWEN_EMBED_URL is the canonical embedder endpoint (llama.cpp Qwen3-4B).
 QWEN_EMBED_URL = os.getenv(
-    "QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
 ).rstrip("/")
 GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://172.22.0.1:8010")
-QWEN_EMBED_MODEL = os.getenv(
-    "RAG_EMBED_MODEL", os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-)
+QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 

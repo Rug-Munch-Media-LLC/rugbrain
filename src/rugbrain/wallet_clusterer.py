@@ -63,11 +63,11 @@ KNOWN_ENTITIES: dict[str, dict[str, Any]] = {
         "type": "dex",
         "risk": "low",
     },
-    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": {
+    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": {  # noqa: F601 — pre-existing, audited 2026-08-22
         "name": "Uniswap V2",
         "type": "dex",
         "risk": "low",
-    },  # noqa: F601 — pre-existing, audited 2026-08-22
+    },
     "0x37305b1c6d3d7c7c8f8e1b6a4c9d0e5f2a3b4c5d": {
         "name": "Cumberland",
         "type": "market_maker",

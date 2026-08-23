@@ -7,7 +7,7 @@
 **Top-k:** 5
 **Read-only:** GET `/api/v1/search` only — no Qdrant/Redis writes.
 
-> **STATUS: BASELINE BLOCKED — embedder saturated (Infinity inference hangs).**
+> **STATUS: BASELINE BLOCKED — embedder saturated (llama.cpp Qwen3 embedder inference hangs).**
 > Real numbers NOT captured on 2026-08-16. Commands + expected runtime for a
 > clean re-run at the bottom. Do not re-run while `POST /embeddings` on
 > `infinity-rag` (127.0.0.1:8001) takes >60s per call.
@@ -63,7 +63,7 @@ Golden-set composition (44 queries):
 | Probe | Endpoint | Result |
 |-------|----------|--------|
 | embedder health | `GET http://172.22.0.1:8004/v1/health` | 200 OK, 12 ms (HTTP layer healthy — but liveness only, does not exercise model inference) |
-| embedder models | `GET http://172.22.0.1:8004/v1/models` | 200 OK, models served: `Qwen3-Embedding-4B` (reranking served by Qwen3-Reranker-4B on :8003, not Infinity) |
+| embedder models | `GET http://172.22.0.1:8004/v1/models` | 200 OK, models served: `Qwen3-Embedding-4B` (reranking served by Qwen3-Reranker-4B on :8003, not llama.cpp Qwen3 embedder) |
 | **real embedding** | `POST /embeddings` (Qwen3-Embedding-4B, 1 tiny input) | **timed out at 30s** (no response, no log line — inference worker/queue saturated) |
 | **live search** | `GET /api/v1/search?q=how does Uniswap V3 compute swap fees&limit=5` (valid key) | **timed out at 90s** (HTTP 000, no response) |
 | **live search (confirm)** | `GET /api/v1/search?q=reentrancy guard pattern solidity&limit=5` (valid key) | **timed out at 15s** (HTTP 000, no response) |
@@ -72,7 +72,7 @@ Golden-set composition (44 queries):
 Container status: `infinity-rag` Up 5 hours (healthy), `rmi-rag-api` Up 7
 days (healthy). API `/health` reports qdrant=true, redis=true. The hang is
 specifically the **embedding inference step**: the API accepts the search
-request (never logs a completion), and direct `POST /embeddings` to Infinity
+request (never logs a completion), and direct `POST /embeddings` to llama.cpp Qwen3 embedder
 hangs even for a one-line input. This matches the earlier failure mode in the
 old 21-query baseline where `infinity-rag` returned 503
 `embedding_unavailable` — now it hangs instead of failing fast.
@@ -80,7 +80,7 @@ old 21-query baseline where `infinity-rag` returned 503
 Per the operator instruction **do not hammer a saturated embedder**, no
 further probes or eval runs were attempted. `--inprocess` was deliberately NOT
 run either: `rugbrain.search.engine.search_multi_collection` calls
-`get_embedder()` → `INFINITY_URL` (the same saturated Infinity), so it would
+`get_embedder()` → `INFINITY_URL` (the same saturated llama.cpp Qwen3 embedder), so it would
 hang identically on query #1.
 
 ### Harness sanity checks performed (all pass)
@@ -135,7 +135,7 @@ cd /srv/work/repos/rmi-rag
 .venv/bin/python -m rugbrain.eval.retrieval_eval \
   --top-k 5 --endpoint http://localhost:8012 --timeout 180 --json
 
-# In-process engine (no HTTP; same embedder dependency — needs Infinity +
+# In-process engine (no HTTP; same embedder dependency — needs llama.cpp Qwen3 embedder +
 # Qdrant/Redis reachable from the eval process)
 .venv/bin/python -m rugbrain.eval.retrieval_eval --top-k 5 --inprocess
 ```

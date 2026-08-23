@@ -39,8 +39,8 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at INFINITY_URL (default http://172.22.0.1:8004/v1) with the embed
-    model from RAG_INFINITY_EMBED_MODEL (default qwen3-embedding-4b, 2560-dim)
+  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with the embed
+    model from RAG_EMBED_MODEL (default qwen3-embedding-4b, 2560-dim)
   - git, httpx, numpy, yaml (PyYAML)
 """
 
@@ -79,9 +79,9 @@ logger = logging.getLogger("ingest_scam_knowledge")
 # ── Config ─────────────────────────────────────────────────────────────
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("INFINITY_EMBED_DIMS", "1024"))
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", "1024"))
 KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108
 CHECKPOINT_PATH = Path(
     os.getenv("RAG_KNOWLEDGE_CHECKPOINT", str(KNOWLEDGE_DIR / "checkpoint.json"))
@@ -403,8 +403,8 @@ async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
     try:
         async with httpx.AsyncClient(timeout=300.0) as c:
             r = await c.post(
-                f"{INFINITY_URL}/embeddings",
-                json={"model": INFINITY_MODEL, "input": [t[:8000] for t in texts]},
+                f"{QWEN_EMBED_URL}/embeddings",
+                json={"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]},
             )
             if r.status_code != 200:
                 logger.warning("batch_embed_http_fail status=%d", r.status_code)

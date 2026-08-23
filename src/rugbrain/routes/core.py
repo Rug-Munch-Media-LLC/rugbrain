@@ -31,7 +31,7 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
     """Embed text via Qwen3-Embedding-4B and return vector."""
     import httpx
 
-    int_url = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+    int_url = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(

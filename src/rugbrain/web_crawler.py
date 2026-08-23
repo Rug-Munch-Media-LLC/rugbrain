@@ -248,7 +248,7 @@ class WebCrawler:
         """Lazily build the embedder + store singletons."""
         if self._embedder is None:
             self._embedder = Qwen3Embedder(
-                embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
+                embed_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
             )
         if self._store is None:
             self._store = QdrantVectorStore()

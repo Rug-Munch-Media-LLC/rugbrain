@@ -92,9 +92,9 @@ CLICKHOUSE_FALLBACK_DATABASE = os.getenv("CLICKHOUSE_FALLBACK_DATABASE", "wallet
 CRITICAL_ALERTS_TABLE = os.getenv("CLICKHOUSE_CRITICAL_TABLE", "critical_alerts")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
-INFINITY_URL = os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1").rstrip("/")
-INFINITY_MODEL = os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("INFINITY_EMBED_DIMS", "2560")))
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "2560")))
 LIVE_THREATS_COLLECTION = os.getenv("LIVE_THREATS_COLLECTION", "live_threats")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -579,8 +579,8 @@ async def _embed_critical(text: str) -> list[float] | None:
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(
-                f"{INFINITY_URL}/embeddings",
-                json={"model": INFINITY_MODEL, "input": [text[:8000]]},
+                f"{QWEN_EMBED_URL}/embeddings",
+                json={"model": QWEN_EMBED_MODEL_NAME, "input": [text[:8000]]},
             )
             if r.status_code != 200:
                 return None

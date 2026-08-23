@@ -26,7 +26,7 @@ inventory; [TODO.md](TODO.md) for honest current gaps).
 (CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
 via Nitter RSS or SearXNG) and, for each new incident:
 
-1. embeds the incident description (Infinity qwen3-embedding-4b, 2560-dim)
+1. embeds the incident description (llama.cpp Qwen3 embedder qwen3-embedding-4b, 2560-dim)
 2. stores it in Qdrant `security_alerts`
 3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
 4. logs to ClickHouse `rag_security_alerts` for historical tracking
@@ -59,7 +59,7 @@ protocol or a trending scam is immediately flagged.
 
 ## Architecture
 
-- **Embedding:** BGE-M3 (primary, via Infinity, 2560-dim). No hash fallback —
+- **Embedding:** BGE-M3 (primary, via llama.cpp, 2560-dim). No hash fallback —
   fails loud (HTTP 503).
 - **Vector store:** Qdrant (Cosine, 2560-dim), collections created on demand.
 - **Warm store:** Redis — documents, index sets, semantic cache, ingest queues.
@@ -90,7 +90,7 @@ cd rugbrain
 # Install dependencies
 pip install -e .
 
-# Run the seeder (requires Qdrant + Redis + Infinity running)
+# Run the seeder (requires Qdrant + Redis + llama.cpp Qwen3 embedder running)
 python scripts/seed_all.py --dry-run   # preview first
 python scripts/seed_all.py              # seed everything
 
@@ -103,7 +103,7 @@ python -m rugbrain
 ```
 
 Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
-and Infinity with `qwen3-embedding-4b` loaded (`INFINITY_URL`). See `.env.example`.
+and llama.cpp Qwen3 embedder with `qwen3-embedding-4b` loaded (`QWEN_EMBED_URL`). See `.env.example`.
 
 ## Adding a data source
 

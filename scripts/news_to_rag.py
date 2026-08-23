@@ -231,9 +231,7 @@ async def _embed_batch(
             item.get("embedding", []) for item in sorted(items, key=lambda i: i.get("index", 0))
         ]
         if not embeddings or len(embeddings) != len(texts):
-            logger.warning(
-                "_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts)
-            )
+            logger.warning("_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts))
             return None
         for vec in embeddings:
             if len(vec) != EMBED_DIM:
@@ -260,7 +258,7 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     )
     _candidates = _resolve_base(
         "",
-        os.getenv("EMBEDDER_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")),
+        os.getenv("EMBEDDER_URL", os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")),
         "http://172.22.0.1:8004/v1",
     )
 
@@ -424,7 +422,9 @@ async def purge_orphans() -> dict[str, Any]:
     return stats
 
 
-async def run(limit: int, max_chunks: int, embed_model: str, newest_first: bool = True) -> dict[str, Any]:
+async def run(
+    limit: int, max_chunks: int, embed_model: str, newest_first: bool = True
+) -> dict[str, Any]:
     lock = await asyncio.to_thread(open, LOCK_PATH, "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -618,9 +618,7 @@ def main() -> None:
         default=int(os.getenv("NEWS_TO_RAG_MAX_CHUNKS", "4096")),
         help="max chunks per run (default 4096; 0 = unlimited)",
     )
-    parser.add_argument(
-        "--model", default=os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b"))
-    )
+    parser.add_argument("--model", default=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
     parser.add_argument(
         "--oldest-first",
         action="store_true",

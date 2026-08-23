@@ -89,7 +89,7 @@ in `src/app/` (currently being restored — see §7).
                        ▼
         ┌──────────────────────────────────────────────────────┐
         │                 EMBEDDING LAYER                       │
-        │  BGE-M3 (primary, Infinity, 2560-dim)                 │
+        │  BGE-M3 (primary, llama.cpp Qwen3 embedder, 2560-dim)                 │
         │  nomic-embed-text (fallback, 768-dim, backend chain)  │
         │  legacy chain: OpenRouter → LocalBGE → HF (CryptoEmbedder)│
         └──────────────┬───────────────────────────────────────┘
@@ -136,8 +136,8 @@ in `src/app/` (currently being restored — see §7).
                     │                     │
         ┌───────────┴─────────────────────┴──────────────┐
         │              EMBEDDING LAYER                    │
-        │  PRIMARY:  qwen3-embedding-4b via Infinity, 2560-dim        │
-        │  FALLBACK: nomic-embed-text via Infinity, 768-dim │
+        │  PRIMARY:  qwen3-embedding-4b via llama.cpp, 2560-dim        │
+        │  FALLBACK: nomic-embed-text via llama.cpp, 768-dim │
         │  (legacy: OpenRouter → LocalBGE → HF)           │
         └───────────┬─────────────────────────────────────┘
                     │
@@ -161,7 +161,12 @@ in `src/app/` (currently being restored — see §7).
 | rugbrain API | `rugbrain-api` | 8012 | FastAPI service: search, scam-check, health |
 | Qdrant | `rmi-qdrant` | 6333 | Vector store (REST; auto-created collections) |
 | Redis (DragonflyDB) | `rmi-redis` | 6379 | Doc store, queues, semantic cache, rate limits |
-| Infinity | `infinity-rag` | 8001 | Embedding inference (qwen3-embedding-4b, 2560-dim) |
+| Deep embed (Qwen3-Embedding-4B, 2560d) | `qwen-embedder.service` | 8004 | Primary embedding inference |
+| Speed embed (Qwen3-Embedding-0.6B, 1024d) | `llama-speed-embed.service` | 8007 | Interactive/short-query lane |
+| Deep rerank (Qwen3-Reranker-4B) | `qwen-reranker.service` | 8003 | Query-time reranking |
+| Speed rerank (Qwen3-Reranker-0.6B) | `llama-speed-rerank.service` | 8008 | Fast rerank lane |
+| Chat (Qwen3-8B-Instruct Q4_K_M) | `llama-chat.service` | 8009 | Community chat generation |
+| Model Services Gateway | `model_gateway.service` | 8010 | Single door: auto-tier, breaker, cloud fallback |
 | Qwen3 Reranker | `qwen-reranker.service` | 8003 | Cross-encoder reranking — Qwen3-Reranker-8B Q4_K_M (llama.cpp `--rerank`, systemd on host) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |
 | rmi-codebase-mcp | external | — | Code-pattern embeddings (Qdrant) |
@@ -213,14 +218,14 @@ document overwrites the same point instead of duplicating it. Scanner findings
 use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 `pattern-<name>` / `hack-<name>` / `actor-<name>`.
 
-### 3.2 Infinity / BGE-M3 (embedding + reranking)
+### 3.2 llama.cpp Qwen3 embedder / BGE-M3 (embedding + reranking)
 
 | Setting | Value |
 |---------|-------|
-| Primary model | `qwen3-embedding-4b` (2560-dim, Infinity /embeddings) |
+| Primary model | `qwen3-embedding-4b` (2560-dim, llama.cpp Qwen3 embedder /embeddings) |
 | Fallback model | `BAAI/bge-small-en-v1.5` (384-dim) / OpenRouter — used by rmi-backend chain |
-| Container | `infinity-rag` (michaelfeil/infinity) on port 8001 |
-| Concurrency | Infinity native batching (`/embeddings` input arrays) |
+| systemd services | `qwen-embedder.service` :8004 (+ speed/rerank/chat/gateway units) |
+| Concurrency | llama.cpp Qwen3 embedder native batching (`/embeddings` input arrays) |
 | Context | 8,000-char truncation per input; 2560-dim output |
 | Keep-alive | n/a (stateless HTTP server) |
 
@@ -228,23 +233,23 @@ use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 (per T04: hash embeddings returned confidently-wrong results and were removed;
 when both backends fail the API raises `RAGUnavailableError` → HTTP 503):
 
-1. **Infinity qwen3-embedding-4b** — `POST /embeddings` (OpenAI-compatible) with
+1. **llama.cpp Qwen3 embedder qwen3-embedding-4b** — `POST /embeddings` (OpenAI-compatible) with
    `input` truncated to 8,000 chars, L2-normalized to 1024 dims.
 2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 2560-dim resize.
 
-`RAG_EMBED_BACKEND` env can force `infinity` or `openrouter`; default `auto`
-(probe Infinity once per process, cache result).
+`RAG_EMBED_BACKEND` env can force `int` or `openrouter`; default `auto` (int -> gateway -> openrouter, fail loud)
+(probe llama.cpp Qwen3 embedder once per process, cache result).
 
 **Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — still used
-by search/ingest code paths: Infinity → OpenRouter → LocalBGE
+by search/ingest code paths: llama.cpp Qwen3 embedder → OpenRouter → LocalBGE
 (`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`qwen3-embedding-4b`) → hash
 (last resort, deprecated). Specialized heads: `embed_token_scam`,
 `embed_wallet`, `embed_scam_pattern`, `embed_news`, `embed_contract`
 (`ContractCodeEmbedder` — 128-dim structural + 192-dim semantic = 320-dim).
 
-**Batch strategy:** `get_embeddings()` is sequential (Infinity/OpenRouter handle
+**Batch strategy:** `get_embeddings()` is sequential (llama.cpp Qwen3 embedder/OpenRouter handle
 large batches poorly; memory is kept bounded). Seed scripts use `/embeddings`
-with batched `input` arrays; `InfinityBGEEmbedder.embed` sends one request per
+with batched `input` arrays; `Qwen3Embedder.embed` sends one request per
 text (120 s timeout). Embeddings are cached in Redis 24 h
 (`emb:{head}:{sha256(text)[:32]}`).
 
@@ -348,7 +353,7 @@ the API runs open (dev mode — a startup warning is logged).
 | POST | `/api/v1/rag/v2/search` | Semantic/hybrid search | `SearchRequest {query, collection="scam_intel", top_k=5, min_similarity=0, filters}` → `SearchResponse` with hits + scores |
 | POST | `/api/v1/rag/v2/ingest` | Document ingestion | `IngestRequest` → `IngestResult {doc_id, collection, status}` |
 | POST | `/api/v1/rag/v2/feedback` | Scanner→RAG feedback | Records feedback, ingests known scam into `known_scams` |
-| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `infinity:qwen3-embedding-4b`) |
+| GET | `/api/v1/rag/v2/stats` | Collection health | `{total_docs, backend, collections: [{name, vector_count}]}` — `backend` shows active embedder (e.g. `int:qwen3-embedding-4b`) |
 | POST | `/api/v1/rag/v2/bulk-ingest` | Batch ingest | max 500 items/call into one collection |
 
 ### 4.2 rugbrain service (port 8012)
@@ -474,8 +479,8 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    (`seed_threat_intel.py`, idempotent).
 
 ### 6.4 Scaling
-- **Infinity:** stateless OpenAI-compatible server on port 8001; concurrency
-  bounded by Infinity's native batching over `/embeddings` (qwen3-embedding-4b
+- **llama.cpp Qwen3 embedder:** stateless OpenAI-compatible server on port 8001; concurrency
+  bounded by llama.cpp Qwen3 embedder's native batching over `/embeddings` (qwen3-embedding-4b
   2560-dim). Cross-encoder reranking is served separately by the
   self-hosted Qwen3-Reranker-8B (llama.cpp `--rerank`, :8003).
 - **Qdrant:** single node, collections created with default (unsharded)
@@ -511,7 +516,7 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
    (2560-dim); `README-RAG-API.md` still documents nomic-embed-text as primary.
 8. **Code patterns in Qdrant (migration)** — contract-code embeddings now
    migrate from the legacy ChromaDB store into rmi-codebase-mcp Qdrant
-   (qwen3-embedding-4b 2560-dim via Infinity, `security_patterns` collection).
+   (qwen3-embedding-4b 2560-dim via llama.cpp, `security_patterns` collection).
 9. **Test/quality debt** — 1 failing test (`test_qdrant_store.py`), coverage
    ~10% (60% threshold unenforced), 42 ruff errors, `make lint`/`make test`
    not green.
@@ -555,9 +560,10 @@ metrics yet; `rag-monitor` script has a syntax error; health dashboard shows
 |-----|---------|---------|
 | `QDRANT_URL` | `http://rmi-qdrant-v2:6333` | Qdrant REST endpoint |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `rmi-redis` / `6379` | Redis (DragonflyDB) connection |
-| `INFINITY_URL` | `http://172.22.0.1:8004/v1` | Infinity embedding/rerank endpoint |
-| `RAG_INFINITY_EMBED_MODEL` | `qwen3-embedding-4b` | Primary embedder |
-| `RAG_EMBED_BACKEND` | `auto` | `auto` \| `infinity` \| `openrouter` |
+| `QWEN_EMBED_URL` | `http://172.22.0.1:8004/v1` | Deep embedder (llama.cpp Qwen3-4B) endpoint |
+| `GATEWAY_EMBED_URL` | `http://172.22.0.1:8010` | Model Services Gateway (breaker + cloud fallback) |
+| `QWEN_EMBED_DIMS` | `2560` | Deep lane vector dims |
+| `RAG_EMBED_BACKEND` | `auto` | `auto` \| `int` \| `openrouter` |
 | `RAG_EMBED_MODEL` / `RAG_EMBED_VERSION` | `qwen3-embedding-4b` / `1.1` | Embedding version stamp (ADR-0007) |
 | `RAG_COLLECTIONS` | (unset → 3 defaults) | Comma-separated collection list |
 | `RAG_EMBED_DIMS` | (unset → defaults) | `model:dim` map |

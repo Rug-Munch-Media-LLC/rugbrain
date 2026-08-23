@@ -30,7 +30,7 @@ happens in later phases and is subject to the acceptance gates in §7.
    and `app/domains/wallet/neo4j_client.py`). rugbrain never talks to Neo4j; it receives graph
    context as *documents* in the search request/response contract.
 4. **Fail-open for the graph lane, fail-closed for the vector lane.** If Neo4j is down: the graph
-   lane returns zero graph evidence and the search still succeeds on vectors. If Qdrant/Infinity is
+   lane returns zero graph evidence and the search still succeeds on vectors. If Qdrant/llama.cpp Qwen3 embedder is
    down: 503 per existing contract. Rationale: graph evidence is additive enrichment; vectors are
    the primary grounding.
 5. **Latency budget:** the bot chat path has a ~5 s RAG budget (`RAG_SEARCH_TIMEOUT = 5.0` in

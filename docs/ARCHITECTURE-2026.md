@@ -169,7 +169,7 @@ from DeFiHackLabs incident READMEs (`### YYYYMMDD …` headers + `forge test
   patterns" — the data path is Qdrant; rename is cosmetic debt.
 - **Graceful degradation, layered:**
   - MCP down → bridge falls back to RAG's own coding knowledge.
-  - Infinity/embedding down → search 503 per contract (fail-closed vector).
+  - llama.cpp Qwen3 embedder/embedding down → search 503 per contract (fail-closed vector).
   - Neo4j (future GraphRAG) down → zero graph evidence, vector lane intact
     (fail-open graph).
   - Guardrail failure → passthrough, never raise.

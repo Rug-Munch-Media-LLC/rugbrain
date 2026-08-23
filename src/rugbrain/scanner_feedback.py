@@ -85,9 +85,7 @@ async def ingest_scan_result(request: Request, data: dict[str, Any]) -> dict[str
     try:
         from rugbrain.qwen_embedders import Qwen3Embedder
 
-        embedder = Qwen3Embedder(
-            embed_url=os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
-        )
+        embedder = Qwen3Embedder(embed_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"))
         store = QdrantVectorStore()
         doc = doc_from_article(
             title=token_name,
