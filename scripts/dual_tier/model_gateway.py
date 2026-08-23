@@ -74,6 +74,13 @@ def _breaker_open(tier: str) -> bool:
     return time.time() < _breaker_open_until.get(tier, 0.0)
 
 
+def _retry_after(tier: str) -> str:
+    """Cooldown-aware Retry-For hint: remaining breaker window or short default."""
+    if _breaker_open(tier):
+        return str(int(_breaker_open_until[tier] - time.time()) + 1)
+    return "15"
+
+
 async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[float]], str] | None:
     key = _CLOUD_KEYS.get(tier, "")
     model = CLOUD_MODELS.get(tier, "")
@@ -285,7 +292,11 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
                 "model_dims": dims,
                 "embeddings": vecs,
             }
-        raise HTTPException(status_code=502, detail=f"embedder failed: {exc!r}") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"embedder failed: {exc!r}",
+            headers={"Retry-After": _retry_after(tier)},
+        ) from exc
 
 
 @app.post("/rerank")
@@ -320,4 +331,8 @@ async def rerank(req: RerankReq) -> dict[str, Any]:
             return out
         except Exception:
             continue
-    raise HTTPException(status_code=502, detail="all local rerankers failed")
+    raise HTTPException(
+        status_code=502,
+        detail="all local rerankers failed",
+        headers={"Retry-After": _retry_after(tier)},
+    )
