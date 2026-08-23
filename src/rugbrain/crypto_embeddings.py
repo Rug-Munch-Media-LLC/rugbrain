@@ -21,7 +21,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -247,9 +246,8 @@ class CryptoEmbedder:
             except Exception as e:
                 logger.warning("HuggingFace embedding failed: %s", e)
 
-        # Last resort: hash-based
-        logger.warning("Using hash-based fallback embeddings (low quality)")
-        return [self._hash_embed(text) for text in texts]
+        # TOP-100 #23: fail loud — hash vectors poison retrieval silently.
+        raise RuntimeError("CryptoEmbedder: all embedding providers failed (local/openrouter/hf)")
 
     async def _semantic_embed_one(self, text: str, head: str = "semantic") -> list[float]:
         # Check cache first
@@ -259,22 +257,13 @@ class CryptoEmbedder:
             return cached
 
         results = await self._semantic_embed([text], head)
-        vector = results[0] if results else self._hash_embed(text)
+        if not results:
+            raise RuntimeError(f"CryptoEmbedder: no embedding produced for head={head}")
+        vector = results[0]
 
         # Store in cache (24h TTL for semantic embeddings)
         await self._cache_set(cache_key, vector, ttl=86400)
         return vector
-
-    def _hash_embed(self, text: str, dims: int = 2560) -> list[float]:
-        """Deterministic hash-based embedding (emergency fallback)."""
-        vec = np.zeros(dims, dtype=np.float32)
-        words = re.findall(r"\w+", text.lower())
-        for word in words:
-            h = int(hashlib.sha256(word.encode()).hexdigest(), 16)
-            for i in range(min(8, dims)):
-                vec[(h + i) % dims] += 0.01
-        norm = np.linalg.norm(vec)
-        return (vec / norm).tolist() if norm > 0 else vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
 
     async def _cache_key(self, prefix: str, text: str) -> str:
         h = hashlib.sha256(text.encode()).hexdigest()[:32]

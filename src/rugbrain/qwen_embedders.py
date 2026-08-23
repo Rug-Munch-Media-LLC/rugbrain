@@ -54,10 +54,14 @@ class Qwen3Embedder:
                             if len(vec) == self.DIMS:
                                 results.append(vec)
                                 continue
-                except Exception:
-                    logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
-                # Fallback: zero vector
-                results.append([0.0] * self.DIMS)
+                            raise RuntimeError(
+                                f"qwen_embedder dim mismatch: got {len(vec)}, want {self.DIMS}"
+                            )
+                        raise RuntimeError("qwen_embedder returned no data")
+                except RuntimeError:
+                    raise
+                except Exception as exc:
+                    raise RuntimeError(f"qwen_embedder failed: {exc}") from exc
         return results
 
     async def embed_one(self, text: str) -> list[float]:

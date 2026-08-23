@@ -103,13 +103,15 @@ def _int_reachable() -> bool:
 
 
 def _resize(vec: list[float], dim: int) -> list[float]:
-    """Pad or truncate a vector to target dim, then L2 normalize."""
+    """L2-normalize a vector; REJECT dim mismatches (TOP-100 #25).
+
+    Silent zero-pad/truncate masked provider contract drift (a 1024-dim vec
+    silently padded into a 2560-dim index poisons retrieval). Fail loud.
+    """
+    if len(vec) != dim:
+        log.error("embedding_dim_mismatch got=%d want=%d", len(vec), dim)
+        raise ValueError(f"embedding dim mismatch: got {len(vec)}, expected {dim}")
     arr = np.asarray(vec, dtype=np.float32)
-    arr = (
-        arr[:dim]
-        if arr.shape[0] >= dim
-        else np.concatenate([arr, np.zeros(dim - arr.shape[0], dtype=np.float32)])
-    )
     n = float(np.linalg.norm(arr))
     if n > 0:
         arr = arr / n
