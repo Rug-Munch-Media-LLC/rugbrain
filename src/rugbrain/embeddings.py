@@ -57,6 +57,7 @@ _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 QWEN_EMBED_URL = os.getenv(
     "QWEN_EMBED_URL", os.getenv("INFINITY_URL", "http://172.22.0.1:8004/v1")
 ).rstrip("/")
+GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://172.22.0.1:8010")
 QWEN_EMBED_MODEL = os.getenv(
     "RAG_EMBED_MODEL", os.getenv("RAG_INFINITY_EMBED_MODEL", "qwen3-embedding-4b")
 )
@@ -119,7 +120,10 @@ def _resize(vec: list[float], dim: int) -> list[float]:
 
 
 async def _int_embed(
-    text: str, dim: int = EMBEDDING_DIM, query: bool = False
+    text: str,
+    dim: int = EMBEDDING_DIM,
+    query: bool = False,
+    timeout: float = 300.0,  # noqa: ASYNC109 - per-call policy: queries fail fast
 ) -> list[float] | None:
     """Try Qwen3-Embedding-4B via the OpenAI-compatible /embeddings.
 
@@ -131,7 +135,7 @@ async def _int_embed(
     """
     try:
         payload_text = QUERY_INSTRUCT.format(text) if query else text
-        async with httpx.AsyncClient(timeout=300.0) as c:
+        async with httpx.AsyncClient(timeout=timeout) as c:
             r = await c.post(
                 f"{QWEN_EMBED_URL}/embeddings",
                 json={"model": QWEN_EMBED_MODEL, "input": [payload_text[:8000]]},
@@ -147,6 +151,46 @@ async def _int_embed(
             return _resize(vec, dim)
     except Exception as e:
         log.debug("int_embed_failed: %s", e)
+        return None
+
+
+async def _gateway_embed(
+    text: str, dim: int = EMBEDDING_DIM, query: bool = False
+) -> list[float] | None:
+    """Model Services Gateway :8010 lane (breaker + cloud fallback inside).
+
+    Tier is chosen by DIM COMPATIBILITY with the target index: 2560 -> deep
+    lane, anything else -> speed lane. Cloud-served responses are REFUSED for
+    indexing (different model space poisons retrieval) — logged and None'd so
+    the caller falls through / fails loud per T04.
+    """
+    tier = "deep" if dim >= 2048 else "speed"
+    try:
+        payload_text = QUERY_INSTRUCT.format(text) if query else text
+        async with httpx.AsyncClient(timeout=75.0) as c:
+            r = await c.post(
+                f"{GATEWAY_EMBED_URL}/embed",
+                json={"text": payload_text[:8000], "tier": tier},
+            )
+            if r.status_code != 200:
+                return None
+            d = r.json()
+        vecs = d.get("embeddings") or []
+        vec = vecs[0] if vecs else None
+        if not vec:
+            return None
+        if d.get("served_by") == "cloud":
+            log.warning(
+                "gateway_served_cloud tier=%s model=%s dims=%s — refused for "
+                "index use (cross-model space)",
+                tier,
+                d.get("cloud_model"),
+                d.get("model_dims"),
+            )
+            return None
+        return _resize(vec, dim)
+    except Exception as e:
+        log.debug("gateway_embed_failed: %s", e)
         return None
 
 
@@ -197,10 +241,14 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
     # auto: try int -> openrouter, fail loud if both fail
     # Probe is sync (cached per process) — run off the event loop so a slow
     # first probe can never wedge the request handler.
+    q_timeout = 45.0 if query else 300.0
     if await asyncio.to_thread(_int_reachable):
-        v = await _int_embed(text, query=query)
+        v = await _int_embed(text, query=query, timeout=q_timeout)
         if v is not None:
             return v
+    v = await _gateway_embed(text, query=query)
+    if v is not None:
+        return v
     v = await _openrouter_embed(text)
     if v is not None:
         return v

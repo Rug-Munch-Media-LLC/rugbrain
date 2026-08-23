@@ -80,3 +80,72 @@ def test_qwen_embedder_raises_instead_of_zero_vector(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError):
         asyncio.run(e.embed(["hello"]))
+
+
+def test_gateway_lane_refuses_cloud_vectors(monkeypatch) -> None:
+    """Cloud-served gateway responses must NEVER enter local indexes."""
+    import asyncio
+
+    from rugbrain import embeddings as emb
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {
+                "tier": "deep",
+                "served_by": "cloud",
+                "cloud_model": "qwen/qwen3-embedding-8b",
+                "model_dims": 4096,
+                "embeddings": [[0.5] * 4096],
+            }
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, *a, **kw):
+            return FakeResp()
+
+    monkeypatch.setattr(emb.httpx, "AsyncClient", FakeClient)
+    out = asyncio.run(emb._gateway_embed("test", dim=2560))
+    assert out is None, "cloud vector must be refused for index use"
+
+
+def test_gateway_lane_accepts_local_vectors(monkeypatch) -> None:
+    import asyncio
+    import math
+
+    from rugbrain import embeddings as emb
+
+    vec2560 = [1.0] + [0.0] * 2559
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"tier": "deep", "served_by": "local", "embeddings": [vec2560]}
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, *a, **kw):
+            return FakeResp()
+
+    monkeypatch.setattr(emb.httpx, "AsyncClient", FakeClient)
+    out = asyncio.run(emb._gateway_embed("test", dim=2560))
+    assert out is not None and len(out) == 2560
+    assert math.isclose(sum(x * x for x in out), 1.0, rel_tol=1e-4)
