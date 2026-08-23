@@ -1,0 +1,3 @@
+# AI Test Oracle — critical paths (rugbrain guardrails = product-critical)
+tests/test_guardrails
+tests/test_confidence_scorer
