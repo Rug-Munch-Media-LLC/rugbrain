@@ -107,9 +107,8 @@ async def test_non200_marks_unhealthy(monkeypatch):
     monkeypatch.setattr(rr.httpx, "AsyncClient", lambda **k: FakeClient(_resp({}, status=500)))
     scores, method = await rr._score_candidates("q", [{"content": "d"}])
     assert scores == [] and method == "none"
-    # non-200 is per-request transient — health stays as-is; only
-    # transport failures mark the server down.
-    assert rr._health["ok"] is True
+    # unified path records the failure via _post_rerank -> health bad
+    assert rr._health["ok"] is False
 
 
 @pytest.mark.asyncio

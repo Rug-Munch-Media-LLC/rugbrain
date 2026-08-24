@@ -17,7 +17,7 @@ Backend:
     unavailable.
 
 Environment variables:
-  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://127.0.0.1:8003)
+  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://172.22.0.1:8003)
   - ``RERANKER_TIMEOUT`` — per-request timeout in seconds (default: 30)
   - ``RERANKER_ENABLED`` — set "false" to disable reranking entirely
 """
@@ -34,9 +34,41 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
+# ── Dual-tier (2026-08-24): live fast path on the 0.6B server ──
+# Cross-encoders need no shared vector space, so the 0.6B live tier pairs
+# safely with 4B-embedded corpora. Ladder: 0.6B strained/unreachable ->
+# one capped retry on the 4B -> fail-open to pre-rerank order.
+RERANKER_URL_LIVE: str = os.getenv("RERANKER_URL_FAST", "http://172.22.0.1:8008").rstrip("/")
+LIVE_CANDIDATE_CAP: int = int(os.getenv("RERANKER_LIVE_CANDIDATE_CAP", "40"))
+DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
+LIVE_TIMEOUT_S: float = float(os.getenv("RERANKER_LIVE_TIMEOUT", "6.0"))
+_STRAIN_WINDOW_S: float = 120.0
+_STRAIN_THRESHOLD: int = 3
+from collections import defaultdict as _dd
+
+_strain_failures: dict[str, list[float]] = _dd(list)
+
+
+def _is_strained(url: str) -> bool:
+    """True when this endpoint recently failed repeatedly — skip it."""
+    now = time.time()
+    recent = [t for t in _strain_failures.get(url, []) if now - t < _STRAIN_WINDOW_S]
+    _strain_failures[url] = recent
+    return len(recent) >= _STRAIN_THRESHOLD
+
+
+def _record_strain(url: str) -> None:
+    _strain_failures[url].append(time.time())
+
+
+def _clear_strain(url: str | None = None) -> None:
+    if url is None:
+        _strain_failures.clear()
+    else:
+        _strain_failures.pop(url, None)
 
 # Max content chars fed to the cross-encoder per chunk (truncation guard).
 # Server ctx raised 4096 -> 8192 (2026-08-22); query+doc must fit the budget,
@@ -242,60 +274,100 @@ async def _fast_health() -> bool:
     return True  # Allow the actual request to probe
 
 
+async def _post_rerank(
+    url: str,
+    query: str,
+    docs: list[str],
+    timeout: float,  # noqa: ASYNC109 — per-endpoint policy value
+    model_label: str,
+) -> list[dict[str, Any]] | None:
+    """Single POST to a reranker endpoint. None on failure (strain recorded)."""
+    if _is_strained(url):
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{url}/rerank",
+                json={
+                    "query": apply_instruction(query),
+                    "documents": docs,
+                    "top_n": len(docs),
+                },
+            )
+            if resp.status_code != 200:
+                logger.warning("reranker_status=%d url=%s", resp.status_code, url[:40])
+                _record_strain(url)
+                return None
+            data = resp.json()
+            results = data.get("results", [])
+            _clear_strain(url)
+            return results
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as exc:
+        logger.debug("reranker_unavailable url=%s: %s", url[:40], exc)
+        _record_strain(url)
+        return None
+
+
 async def _score_candidates(
     query: str,
     candidates: list[dict[str, Any]],
+    tier: str = "deep",
 ) -> tuple[list[float], str]:
-    """Score candidate chunks against query via the Qwen3 reranker.
+    """Score candidate chunks against query via the Qwen3 reranker tiers.
 
-    Returns (scores, method). On failure returns ([], "none").
+    tier="live": 0.6B fast server first (candidate-capped), strain ladder
+    into the 4B; tier="deep" (default): 4B only. Returns (scores, method).
     """
     if not RERANKER_ENABLED or not candidates:
         return [], "none"
 
-    if not await _fast_health():
-        return [], "none"
-
     docs = [_chunk_text(d) for d in candidates]
-    # Skip empty docs — llama.cpp would still score them but they add noise.
     valid = [(i, t) for i, t in enumerate(docs) if t]
     if not valid:
         return [], "none"
 
-    try:
-        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
-            payload = {
-                "query": apply_instruction(query),
-                "documents": [t for _, t in valid],
-                "top_n": len(valid),
-            }
-            resp = await client.post(f"{RERANKER_URL}/rerank", json=payload)
-            if resp.status_code != 200:
-                logger.warning("reranker_status=%d", resp.status_code)
+    if tier == "live":
+        capped = valid[:LIVE_CANDIDATE_CAP]
+        # 1st rung: 0.6B fast server.
+        results = await _post_rerank(RERANKER_URL_LIVE, query, [t for _, t in capped], LIVE_TIMEOUT_S, "0.6B")
+        served = "qwen3-reranker-0.6b"
+        if results is None:
+            # 2nd rung: 4B deep server, tighter cap.
+            capped = capped[:DEEP_FALLBACK_CAP]
+            results = await _post_rerank(RERANKER_URL, query, [t for _, t in capped], RERANKER_TIMEOUT, "4B-fallback")
+            served = "qwen3-reranker-4b"
+            if results is None:
                 return [], "none"
+        scores: list[float] = [0.0] * len(candidates)
+        for r in results:
+            pos = r.get("index")
+            if isinstance(pos, int) and 0 <= pos < len(capped):
+                orig_idx = capped[pos][0]
+                scores[orig_idx] = float(r.get("relevance_score", 0.0))
+        return scores, served
 
-            data = resp.json()
-            results = data.get("results", [])
+    # ── deep tier (default): 4B only ──
+    if not await _fast_health():
+        return [], "none"
 
-            async with _lock:
-                _health["ok"] = True
-                _health["last_check"] = time.time()
-
-            # Map back to original candidate indices.
-            scores: list[float] = [0.0] * len(candidates)
-            for r in results:
-                pos = r.get("index")
-                if isinstance(pos, int) and 0 <= pos < len(valid):
-                    orig_idx = valid[pos][0]
-                    scores[orig_idx] = float(r.get("relevance_score", 0.0))
-            return scores, "qwen3-reranker-4b"
-
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as exc:
-        logger.debug("reranker_unavailable: %s", exc)
+    results = await _post_rerank(RERANKER_URL, query, [t for _, t in valid], RERANKER_TIMEOUT, "4B")
+    if results is None:
         async with _lock:
             _health["ok"] = False
             _health["last_check"] = time.time()
         return [], "none"
+
+    async with _lock:
+        _health["ok"] = True
+        _health["last_check"] = time.time()
+
+    scores_deep: list[float] = [0.0] * len(candidates)
+    for r in results:
+        pos = r.get("index")
+        if isinstance(pos, int) and 0 <= pos < len(valid):
+            orig_idx = valid[pos][0]
+            scores_deep[orig_idx] = float(r.get("relevance_score", 0.0))
+    return scores_deep, "qwen3-reranker-4b"
 
 
 async def rerank_chunks(
@@ -303,6 +375,7 @@ async def rerank_chunks(
     chunks: list[dict[str, Any]],
     top_n: int = 20,
     keep: int = 5,
+    tier: str = "deep",
 ) -> list[dict[str, Any]]:
     """Re-rank *chunks* against *query* with the Qwen3 cross-encoder, keep the best.
 
@@ -341,7 +414,7 @@ async def rerank_chunks(
     candidates = sorted(chunks, key=_original_score, reverse=True)[:top_n]
 
     t0 = time.perf_counter()
-    scores, method = await _score_candidates(query, candidates)
+    scores, method = await _score_candidates(query, candidates, tier=tier)
     duration_ms = (time.perf_counter() - t0) * 1000
 
     # ── graceful no-op: reranker unavailable ──

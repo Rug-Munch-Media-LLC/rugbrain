@@ -431,7 +431,7 @@ async def run_cycle(max_channels: int = MAX_CHANNELS_PER_CYCLE) -> dict[str, Any
             ]
 
             class _Embedder:
-                async def embed(self, text: str) -> list[float]:
+                async def embed_one(self, text: str) -> list[float]:
                     return await get_embedding(text)
 
             res = await store_documents(crawl_docs, _Embedder(), await get_qdrant_store())

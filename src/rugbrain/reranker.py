@@ -29,7 +29,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 
@@ -44,7 +44,7 @@ class Reranker:
     """Backward-compatible Reranker class wrapping the new async API.
 
     Usage:
-        r = Reranker(url="http://127.0.0.1:8003")
+        r = Reranker(url="http://172.22.0.1:8003")
         results = await r.rerank(query, docs, top_k=5)
     """
 
