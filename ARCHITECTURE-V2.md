@@ -506,3 +506,46 @@ Legacy aliases: `GET /api/v1/search?q=...` — keep during Phase 4 only for the 
 ---
 
 *End of blueprint. Conflicts with the repo's `ARCHITECTURE.md` (the "as-is" doc) are expected — V2 is the "to-be" contract; ARCHITECTURE.md should be updated in Phase 6 to reference this document. §0.1 is the verified as-built record (2026-08-01 final sweep) and takes precedence over the target-state sections where they disagree.*
+
+---
+
+## 0.5 Verified Addendum — 2026-08-24 (dual-tier finalization + dim correction)
+
+**Dimension correction [verified live ×3]:**
+The llama.cpp qwen-embedder serves **MRL-truncated 1024-dim** vectors —
+NOT the native 2560. Every Qdrant collection runs `dense` at 1024.
+All `DIMS`/`EMBEDDING_DIM` defaults across the codebase were corrected
+2560 → 1024 (commit 4e1afa0), and `Qwen3Embedder.embed()` now
+MRL-truncates + renormalizes oversized server output instead of raising
+(the old dim-mismatch raise silently broke scanner_feedback,
+web_crawler, social_intel and sources_registry ingestion).
+
+**Dual-tier rerank shipped in the search lane [commit 192efdd]:**
+`search/rerank.py` now mirrors the backend ladder:
+- live tier: Qwen3-Reranker-0.6B :8008, candidate cap 40, 6s budget
+- strain ladder: 0.6B strained → one capped retry on 4B :8003 (cap 24)
+  → fail-open to pre-rerank order
+- per-endpoint strain breaker: 3 failures / 2min skips a loaded server
+- `rerank_chunks(..., tier="live"|"deep")`; deep default unchanged
+
+**Fast embedder tier class [commit e0fca61]:**
+`Qwen3FastEmbedder` (:8007, 0.6B, 1024-dim) for utility similarity where
+both sides run 0.6B (dedup/clustering/cache-keys). NEVER for corpus
+search — cross-model mismatch returns garbage even at matching dims.
+
+**Localhost default bug fixed [192efdd]:**
+`reranker.py`, `news_ranking.py`, `search/rerank.py`,
+`content_engine.py` defaulted to `127.0.0.1:8003` — connection-refused
+on this host (services bind the docker bridge 172.22.0.1). The deep
+rerank tier had NEVER served from rugbrain. All corrected; sweep found
+no other affected service defaults except content_engine chat URL
+(:8009, also fixed).
+
+**Test coverage added (this session):** 43 contracts across
+qwen_embedders dims/MRL (7), temporal_decay (8), fusion (7),
+query_transform incl. HyDE/multi-query (15), rerank core + dual-tier
+(12) — plus two real bugs fixed (dim breaker, millis-string parse).
+
+**Still open:** sync httpx.Client-in-async blocking issue (§ known
+issues); backend consolidation phases remain NOT DONE as noted above;
+dual_tier pyright errors in committed scripts block the rugbrain CI gate.
