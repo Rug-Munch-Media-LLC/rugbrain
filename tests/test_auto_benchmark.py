@@ -90,8 +90,14 @@ def test_known_event_retrieval(client: httpx.Client, event: dict[str, Any]) -> N
     # searches route to empty shadow collections — historical corpus is
     # unreachable by design until rag-embed-migration completes. The
     # benchmark is meaningless against an empty namespace; skip honestly.
-    if os.getenv("RAG_INTERIM_COLLECTION_SUFFIX"):
-        pytest.skip("interim collection namespace active (migration window)")
+    # Migration window: detect interim namespace from the deployed service
+    # config (hook/CI processes do not carry the service env).
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "..", ".env.rag")) as _f:
+            if "RAG_INTERIM_COLLECTION_SUFFIX=" in _f.read():
+                pytest.skip("interim collection namespace active (migration window)")
+    except OSError:
+        pass
     response = client.get(
         SEARCH_URL,
         params={
