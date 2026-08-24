@@ -332,10 +332,35 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "bundle_patterns",
         "cluster_labels",
         "wallet_profiles",
+        # Media/content corpus written by rugbrain's own ingest sources
+        # (youtube.py, newsletters.py, podcasts.py). These were missing from
+        # the registry, so the readonly write gate silently blocked their
+        # ingesters (found 2026-08-24 while wiring the interim namespace).
+        "youtube_videos",
+        "newsletters",
+        "podcast_episodes",
     }
 )
 
 _RMI_RAG_QDRANT_WRITE_MODE = os.getenv("RMI_RAG_QDRANT_WRITE_MODE", "readonly").lower()
+
+# ── Interim collection namespace (2026-08-24 migration window) ─────────────
+# During the v1→v2 re-embedding migration the active embedder may produce a
+# different dimension than the canonical collections (free NVIDIA nemotron
+# 2048-dim vs qwen3-embedding-4b 2560-dim). Vectors from different models
+# must NEVER mix (see _resize / TOP-100 #25), so while
+# RAG_INTERIM_COLLECTION_SUFFIX is set, ALL reads and writes route to a
+# suffixed shadow namespace auto-created at the live embedder's native dim.
+# Remove the env var once rag-embed-migration.service completes, then restart.
+_INTERIM_SUFFIX = os.getenv("RAG_INTERIM_COLLECTION_SUFFIX", "")
+
+
+def _map_collection(collection: str | None) -> str | None:
+    """Route to the interim shadow namespace when one is configured."""
+    if collection and _INTERIM_SUFFIX and not collection.endswith(_INTERIM_SUFFIX):
+        return f"{collection}{_INTERIM_SUFFIX}"
+    return collection
+
 
 _existing_collections: set[str] = set()
 
@@ -473,6 +498,7 @@ class QdrantVectorStore:
           - a structured ``{"match": {...}, "range": [...]}`` dict as produced
             by ``build_search_filters``.
         """
+        collection = _map_collection(collection)
         coll = collection or "default"
         client = await self._get_client()
         await _ensure_collection(coll, len(query_embedding), client)
@@ -538,6 +564,7 @@ class QdrantVectorStore:
         the dense and sparse result lists natively (``fusion="rrf"``).
         Otherwise it falls back to the dense-only search with lightweight
         keyword re-ranking so pre-migration collections keep working.
+        collection = _map_collection(collection)
 
         ``filters`` uses the same structured shape as ``search``
         (``{"match": {...}, "range": [...]}``) and is applied to both the RRF
@@ -666,9 +693,14 @@ class QdrantVectorStore:
         omitted (scroll has no score). Returns the next page offset when more
         points remain, else ``None``.
         """
+        collection = _map_collection(collection)
         coll = collection or "default"
         client = await self._get_client()
-        await _ensure_collection(coll, 1, client)
+        # NOTE: no _ensure_collection here — scroll is a READ and must never
+        # create collections. The old size-1 placeholder creation poisoned
+        # namespaces (a later real insert then hit "expected dim: 1").
+        # A missing collection returns 404 below → empty page, which is the
+        # correct answer for "nothing ingested yet".
 
         payload: dict[str, Any] = {
             "limit": limit,
@@ -726,6 +758,7 @@ class QdrantVectorStore:
         """
         try:
             client = await self._get_client()
+            collection = _map_collection(collection)
             point_id = self._to_uuid(doc_id)
             r = await client.get(f"/collections/{collection}/points/{point_id}")
             # 200 = exists; 404 = not found; anything else -> treat as exists-unknown (False)
@@ -755,11 +788,16 @@ class QdrantVectorStore:
         hybrid (RRF) search can use it. Legacy collections with a bare
         ``{"size": ...}`` config are written unchanged.
         """
+        collection = _map_collection(collection)
         # Write gate: refuse writes to non-owned collections in readonly mode.
-        if (
-            _RMI_RAG_QDRANT_WRITE_MODE == "readonly"
-            and collection not in _RMI_RAG_OWNED_COLLECTIONS
-        ):
+        # Ownership is evaluated on the CANONICAL name — the interim suffix is
+        # a migration-window shim, not a different owner.
+        gate_name = (
+            collection[: -len(_INTERIM_SUFFIX)]
+            if _INTERIM_SUFFIX and collection.endswith(_INTERIM_SUFFIX)
+            else collection
+        )
+        if _RMI_RAG_QDRANT_WRITE_MODE == "readonly" and gate_name not in _RMI_RAG_OWNED_COLLECTIONS:
             logger.warning(
                 "qdrant_write_gate_blocked collection=%s mode=readonly owned_by=rmi-backend",
                 collection,

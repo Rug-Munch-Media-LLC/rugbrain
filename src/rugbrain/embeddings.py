@@ -30,7 +30,14 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-EMBEDDING_DIM: Final = 2560
+# Migration window (2026-08-24): the interim free embedder
+# (nvidia/nemotron-3-embed-1b:free) produces 2048-dim vectors. Set
+# RAG_EMBED_DIM=2048 alongside RAG_EMBED_BACKEND=openrouter +
+# RAG_INTERIM_COLLECTION_SUFFIX so embed-time validation matches the live
+# backend and the shadow collections it feeds. Remove all three once
+# rag-embed-migration.service completes and the local qwen3-embedding-4b
+# (native 2560) resumes — the default below is the canonical dim.
+EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "2560"))
 
 # Qwen3-Embedding query instruction template. The model was trained with an
 # instruction prefix on the QUERY side and plain text on the DOCUMENT side.
