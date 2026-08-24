@@ -29,7 +29,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -300,7 +300,7 @@ async def _post_rerank(
             data = resp.json()
             results = data.get("results", [])
             _clear_strain(url)
-            return results
+            return cast("list[dict[str, Any]] | None", results)
     except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as exc:
         logger.debug("reranker_unavailable url=%s: %s", url[:40], exc)
         _record_strain(url)

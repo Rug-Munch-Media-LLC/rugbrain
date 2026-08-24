@@ -25,7 +25,6 @@ import logging
 import os
 import random
 import re
-import sys
 import time
 from typing import Any
 
@@ -69,7 +68,8 @@ CANDIDATES: list[str] = [
 def _load_state() -> dict[str, Any]:
     try:
         with open(STATE_FILE) as f:
-            return json.load(f)
+            loaded: dict[str, Any] = json.load(f)
+            return loaded
     except (OSError, json.JSONDecodeError):
         return {}
 

@@ -85,13 +85,13 @@ async def backfill(batch_size: int, sleep_secs: float) -> None:
                 await client.update_vectors(
                     collection_name=COLLECTION,
                     vector_name="speed_vector",
-                    points=models.Batch(ids=ids, vectors=embeddings),  # type: ignore[arg-type] -- qdrant-client Batch stubs are stricter than runtime
+                    points=models.Batch(ids=ids, vectors=embeddings),  # type: ignore[arg-type]  # qdrant-client Batch stubs stricter than runtime
                 )
                 # Mark AFTER the vector landed (crash-safe resume).
                 await client.set_payload(
                     collection_name=COLLECTION,
                     payload={MARKER_FIELD: True},
-                    points=models.PointIdsList(points=ids),
+                    points=models.PointIdsList(points=ids),  # type: ignore[arg-type]
                 )
                 done += len(todo)
 
