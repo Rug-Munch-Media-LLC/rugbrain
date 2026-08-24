@@ -1,0 +1,104 @@
+# Embedding & Reranking Stack — Unified Configuration Reference
+
+> **The one doc** for how every product in the fleet embeds and reranks.
+> Verified live 2026-08-24. If code and this doc disagree, fix the code.
+
+## Model Inventory (self-hosted llama.cpp on Talos)
+
+| Service | Port | Model | Output Dims | Role |
+|---------|------|-------|-------------|------|
+| qwen-embedder | :8004 | qwen3-embedding-4b Q8_0 | **1024** (MRL-truncated) | Corpus embeddings + search queries |
+| llama-speed-embed | :8007 | qwen3-embedding-0.6b | 1024 | Utility similarity (dedup/clustering/cache-keys) |
+| qwen-reranker | :8003 | qwen3-reranker-4b | scores | Deep rerank (background quality) |
+| qwen-reranker-fast | :8008 | qwen3-reranker-0.6b | scores | Live rerank (consumer latency) |
+| model gateway | :8010 | — | — | Strain breaker + cloud fallback lanes |
+| chat | :8009 | qwen3-8b-instruct | — | LLM generation only |
+
+**All endpoints bind the docker bridge (`172.22.0.1`), NOT 127.0.0.1.**
+Stale localhost defaults have caused two production incidents — see
+"Incident History".
+
+## The Two Iron Rules
+
+1. **Cross-model mismatch**: same dims ≠ same space. A 0.6B query against
+   a 4B-embedded collection returns confident garbage. Corpus search and
+   ingestion are DEEP-tier only; the fast tier serves utility tasks where
+   both sides run 0.6B.
+2. **Free-first always**: local servers → OpenRouter paid (backup acct)
+   → OpenRouter free (main acct). Cloud is a fallback, never a default.
+
+## Tier Matrix Per Product
+
+| Product | Embed deep | Embed fast | Rerank live | Rerank deep | Cloud fallback |
+|---------|-----------|------------|-------------|-------------|----------------|
+| **rmi-backend** (`app/rate_limiter.py`) | `qwen3_4b_local` :8004 | `qwen3_06b_local` :8007 | — (uses rugbrain) | `rerank.py` ladder | OR paid 8B → free LFM |
+| **rugbrain** (`search/rerank.py`, `qwen_embedders.py`) | `Qwen3Embedder` :8004 | `Qwen3FastEmbedder` :8007 | `tier="live"` :8008 cap40/6s | `tier="deep"` :8003 | strain ladder → fail-open |
+| **rugmunchbot** (vendored router) | :8004 via rpc_router | — | — | — | DataBus gateway final rung |
+| **lite-chain-indexer** | own pools (:8004-class) | — | — | — | pool rotation + autotune |
+
+## Fallback Ladders
+
+### Embedding (rmi-backend dispatcher)
+```
+qwen3_4b_local (:8004, prio 120)
+→ qwen3_06b_local (:8007, prio 110)          # fast-tier tasks only
+→ qwen3_8b_openrouter_paid (prio 20)         # OPENROUTER_BACKUP_API_KEY
+→ qwen3_free_openrouter: LFM-350M (prio 15)  # OPENROUTER_API_KEY
+→ hash (deterministic last resort)
+```
+Every vector passes `normalize_dims()` → collection dim 1024 (MRL
+truncate + renormalize); undersized batches dropped loudly.
+
+### Reranking (rugbrain `search/rerank.py` + backend `rag/rerank.py`)
+```
+LIVE tier:  0.6B :8008 (cap 40 candidates, 6s budget)
+  ↓ strained/unreachable
+DEEP retry: 4B :8003 (cap 24, 30s)
+  ↓ both down
+FAIL-OPEN:  pre-rerank order preserved (search never breaks)
+```
+Protections: per-endpoint strain breaker (3 fails / 2min), autotune
+soft-spacing (indexer), quota ledger (bot router).
+
+## Environment Variables
+
+| Var | Default | Used by |
+|-----|---------|---------|
+| `QWEN_EMBED_URL` | http://172.22.0.1:8004/v1 | backend dispatcher, rugbrain |
+| `QWEN_FAST_URL` | http://172.22.0.1:8007/v1 | backend dispatcher |
+| `RERANKER_URL` | http://172.22.0.1:8003 | backend + rugbrain rerank |
+| `RERANKER_URL_FAST` | http://172.22.0.1:8008 | rugbrain + backend live tier |
+| `RERANKER_LIVE_CANDIDATE_CAP` | 40 | live candidate cap |
+| `RERANKER_LIVE_TIMEOUT` | 6.0 | live budget (s) |
+| `RPC_ERROR_RATE_DAMPING` | 2.0 | indexer P2C success damping |
+| `OPENROUTER_BACKUP_API_KEY` | gopass | paid embedding fallback |
+| `OPENROUTER_API_KEY` | gopass | free embedding fallback |
+
+## Incident History (learned the hard way)
+
+1. **2560-dim ingestion breaker** (2026-08-24): server serves MRL 1024;
+   code demanded 2560 → every ingestion embed raised. Fix: DIMS=1024 +
+   truncate-oversized policy. Lesson: dims come from the LIVE server,
+   not the model card.
+2. **localhost defaults** (2026-08-24): 127.0.0.1:8003 refused — services
+   bind the bridge IP. RugBrain's deep rerank had never served. Lesson:
+   defaults must match deployment reality; verified by curl, not docs.
+3. **Dictionary citations** (2026-08-23): SearXNG matched filler words
+   ("give") → irrelevant pages cited as sources. Fix: query cleaning +
+   keyword-overlap filter + source-integrity prompt rules.
+
+## Verification Commands
+
+```bash
+# All four servers serving correct models/dims:
+curl -s http://172.22.0.1:8004/v1/embeddings -H 'Content-Type: application/json' \
+  -d '{"input":["t"],"model":"qwen3-embedding-4b"}' | jq '.data[0].embedding | length'   # 1024
+curl -s -X POST http://172.22.0.1:8008/rerank -H 'Content-Type: application/json' \
+  -d '{"query":"rug","documents":["a","b"]}' | jq '.results[0].relevance_score'
+
+# Dispatcher order (backend):
+python3 -c "from app.rate_limiter import configure_providers; configure_providers(True)"
+
+# Migration health:
+systemctl is-active migrate-embeds.service
+```
