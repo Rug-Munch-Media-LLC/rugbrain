@@ -35,7 +35,7 @@ async def test_exact_dim_accepted(monkeypatch):
         async def __aexit__(self, *exc):
             return None
 
-        async def post(self, url, json=None):  # noqa: A002
+        async def post(self, url, json=None):
             return Resp()
 
     monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
@@ -62,7 +62,7 @@ async def test_oversized_vector_mrl_truncated_and_renormalized(monkeypatch):
         async def __aexit__(self, *exc):
             return None
 
-        async def post(self, url, json=None):  # noqa: A002
+        async def post(self, url, json=None):
             return Resp()
 
     monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
@@ -89,7 +89,7 @@ async def test_undersized_vector_rejected(monkeypatch):
         async def __aexit__(self, *exc):
             return None
 
-        async def post(self, url, json=None):  # noqa: A002
+        async def post(self, url, json=None):
             return Resp()
 
     monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
@@ -135,7 +135,7 @@ async def test_fast_embedder_mrl_truncates(monkeypatch):
         async def __aexit__(self, *exc):
             return None
 
-        async def post(self, url, json=None):  # noqa: A002
+        async def post(self, url, json=None):
             assert ":8007" in url
             return Resp()
 
