@@ -34,10 +34,10 @@ ignore_imports =
     rugbrain.routes.monitors -> rugbrain.market_health
     rugbrain.routes.monitors -> rugbrain.monitors.content_digest
     rugbrain.routes.monitors -> rugbrain.monitors.defi_lending
-    rugbrain.routes.monitors -> rugbrain.monitors.hyperliquid_monitor
-    rugbrain.routes.monitors -> rugbrain.monitors.social_sentiment
     rugbrain.routes.monitors -> rugbrain.monitors.token_distribution
     rugbrain.routes.monitors -> rugbrain.monitors.twitter_tracker
+    rugbrain.routes.monitors -> rugbrain.monitors.hyperliquid_monitor
+    rugbrain.routes.monitors -> rugbrain.monitors.social_sentiment
     rugbrain.routes.rag_tools -> httpx
     rugbrain.routes.rag_tools -> rugbrain.compat
     rugbrain.routes.rag_tools -> rugbrain.multimodal

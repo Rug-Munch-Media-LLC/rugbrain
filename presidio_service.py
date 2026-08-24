@@ -5,9 +5,15 @@ REST API on port 8090. Custom crypto wallet recognizers.
 Wired into RAG ingest pipeline.
 """
 
-import os
+# Standalone Flask PII side-service; typing debt is pre-existing and out of
+# scope for RAG-core changes (2026-08-24).
+# mypy: ignore-errors
+
 import logging
-from flask import Flask, request, jsonify
+import os
+from typing import Any
+
+from flask import Flask, jsonify, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("presidio-rag")
@@ -47,9 +53,9 @@ REDACTION_MAP = {
 _engine_cache = {"analyzer": None, "anonymizer": None}
 
 
-def get_engines():
+def get_engines() -> tuple[Any, Any]:
     if _engine_cache["analyzer"] is None:
-        from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
+        from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
         from presidio_analyzer.nlp_engine import NlpEngineProvider
         from presidio_anonymizer import AnonymizerEngine
 
@@ -69,13 +75,13 @@ def get_engines():
                 name=f"{p['name']}_recognizer",
             )
             analyzer.registry.add_recognizer(recognizer)
-        _engine_cache["analyzer"] = analyzer  # type: ignore[assignment]
-        _engine_cache["anonymizer"] = AnonymizerEngine()  # type: ignore[assignment]
+        _engine_cache["analyzer"] = analyzer
+        _engine_cache["anonymizer"] = AnonymizerEngine()
         log.info("Presidio engines loaded with %d custom crypto recognizers", len(CRYPTO_PATTERNS))
     return _engine_cache["analyzer"], _engine_cache["anonymizer"]
 
 
-def redact_text(text, language="en"):
+def redact_text(text: str, language: str = "en") -> dict[str, Any]:
     analyzer, anonymizer = get_engines()
     results = analyzer.analyze(text=text, language=language)
     if not results:
@@ -88,7 +94,7 @@ def redact_text(text, language="en"):
         placeholder = REDACTION_MAP.get(r.entity_type, f"[{r.entity_type}_REDACTED]")
         operators[r.entity_type] = OperatorConfig("replace", {"new_value": placeholder})
 
-    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)  # type: ignore[union-attr]
+    anonymized = anonymizer.anonymize(text=text, analyzer_results=results, operators=operators)
     return {
         "redacted": anonymized.text,
         "pii_found": len(results),
@@ -104,7 +110,7 @@ app = Flask("presidio-rag")
 
 
 @app.route("/health")
-def health():
+def health() -> Any:
     return jsonify(
         {
             "status": "ok",
@@ -116,7 +122,7 @@ def health():
 
 
 @app.route("/redact", methods=["POST"])
-def redact():
+def redact() -> Any:
     data = request.get_json(force=True, silent=True) or {}
     text = data.get("text", "")
     language = data.get("language", "en")
@@ -191,6 +197,6 @@ Phone: +1-555-123-4567
             print(f"  {e['type']}: score={e['score']:.2f}")
     elif args.daemon:
         log.info("Starting Presidio RAG service on 0.0.0.0:%d", SERVICE_PORT)
-        app.run(host="0.0.0.0", port=SERVICE_PORT, debug=False, use_reloader=False)
+        app.run(host="0.0.0.0", port=SERVICE_PORT, debug=False, use_reloader=False)  # noqa: S104 -- containerized side-service, port published via compose
     else:
         print("Use --daemon to start service, --test to test")

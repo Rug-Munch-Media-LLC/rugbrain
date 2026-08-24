@@ -680,7 +680,7 @@ class QdrantVectorStore:
 
     async def scroll(
         self,
-        collection: str,
+        collection: str | None,
         limit: int = 100,
         offset: str | None = None,
         filters: dict[str, Any] | None = None,
@@ -746,7 +746,7 @@ class QdrantVectorStore:
         """
         return str(uuid.uuid5(uuid.NAMESPACE_DNS, doc_id))
 
-    async def has_point(self, doc_id: str, collection: str) -> bool:
+    async def has_point(self, doc_id: str, collection: str | None) -> bool:
         """Return True when a deterministic point for *doc_id* already exists.
 
         Used by the shared ingest path (``ingest_common.store_documents``) to
@@ -770,7 +770,7 @@ class QdrantVectorStore:
     async def insert(
         self,
         doc_id: str,
-        collection: str,
+        collection: str | None,
         embedding: list[float],
         content: str = "",
         metadata: dict[str, Any] | None = None,
@@ -788,7 +788,7 @@ class QdrantVectorStore:
         hybrid (RRF) search can use it. Legacy collections with a bare
         ``{"size": ...}`` config are written unchanged.
         """
-        collection = _map_collection(collection)
+        collection = _map_collection(collection) or "default"
         # Write gate: refuse writes to non-owned collections in readonly mode.
         # Ownership is evaluated on the CANONICAL name — the interim suffix is
         # a migration-window shim, not a different owner.

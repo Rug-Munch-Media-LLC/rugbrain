@@ -70,12 +70,16 @@ def pick_tier(query: str) -> str:
 class DualTierRetriever:
     """Word-count routed retrieval over the two Qwen3 embedding/rerank tiers."""
 
-    def __init__(self, qdrant=None, http: aiohttp.ClientSession | None = None):
+    def __init__(
+        self,
+        qdrant: Any = None,
+        http: aiohttp.ClientSession | None = None,
+    ) -> None:
         self._qdrant = qdrant
         self._http = http
 
     # ── internals ─────────────────────────────────────────────────────────
-    def _qdrant_client(self):
+    def _qdrant_client(self) -> Any:
         if self._qdrant is None:
             from qdrant_client import AsyncQdrantClient
 
@@ -86,7 +90,9 @@ class DualTierRetriever:
     async def _embed(http: aiohttp.ClientSession, url: str, text: str) -> list[float]:
         async with http.post(f"{url}/v1/embeddings", json={"input": text}) as resp:
             resp.raise_for_status()
-            return (await resp.json())["data"][0]["embedding"]
+            data: list[dict[str, Any]] = (await resp.json())["data"]
+            vec: list[float] = data[0]["embedding"]
+            return vec
 
     @staticmethod
     async def _rerank(
