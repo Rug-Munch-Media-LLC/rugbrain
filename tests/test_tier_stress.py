@@ -14,11 +14,10 @@ Production-readiness proofs:
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
-
 from lite_indexer.rpc import autotune as at
+
 from rugbrain.search import rerank as rr
 
 
@@ -64,7 +63,6 @@ async def test_concurrent_strain_recording_deterministic_breaker(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_concurrent_autotune_no_corruption(monkeypatch):
-    from lite_indexer.rpc import autotune as at
 
     monkeypatch.setattr(at, "AUTOTUNE_ENABLED", True)
     at.reset()
