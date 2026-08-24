@@ -131,7 +131,8 @@ class MultiEmbedder:
                 headers=headers,
             )
             r.raise_for_status()
-            vec = r.json()["data"][0]["embedding"]
+            data: list[dict[str, Any]] = r.json()["data"]
+            vec: list[float] = data[0]["embedding"]
         # normalize to the backend's declared dim (truncate-down only)
         if len(vec) > be.dim:
             cut = vec[: be.dim]

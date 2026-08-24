@@ -210,7 +210,7 @@ class DualTierRetriever:
             http.post(f"{ENDPOINTS['chat']}/v1/chat/completions", json=body) as resp,
         ):
             resp.raise_for_status()
-            return (await resp.json())["choices"][0]["message"]["content"]
+            return str((await resp.json())["choices"][0]["message"]["content"])
 
     async def ask(self, query: str) -> dict[str, Any]:
         """Convenience: retrieve + generate in one call."""

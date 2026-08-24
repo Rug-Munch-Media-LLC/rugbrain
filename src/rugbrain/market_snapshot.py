@@ -305,3 +305,17 @@ __all__ = [
     "fetch_top_dex_pairs",
     "fetch_tvl_changes",
 ]
+
+
+async def _job_market_snapshot(dry_run: bool) -> dict[str, Any]:
+    """Build + store the at-a-glance market snapshot (includes fear & greed).
+
+    Restored 2026-08-24: dropped during a refactor while
+    tests/test_ingest_continuous.py::test_job_market_snapshot_wiring still
+    exercised it via run_due("market_snapshot").
+    """
+    snapshot = await build_market_snapshot()
+    stored = False
+    if not dry_run:
+        stored = MarketSnapshotStore().store(snapshot)
+    return {"source": "market_snapshot", "snapshot_at": snapshot["generated_at"], "stored": stored}
