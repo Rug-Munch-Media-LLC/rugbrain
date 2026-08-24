@@ -55,12 +55,10 @@ class Qwen3Embedder:
                                 results.append(vec)
                                 continue
                             if len(vec) > self.DIMS:
-                                # MRL truncate + renormalize to collection dim
-                                cut = vec[: self.DIMS]
-                                norm = sum(x * x for x in cut) ** 0.5
-                                results.append(
-                                    [x / norm for x in cut] if norm else cut
-                                )
+                                # MRL truncate + renormalize (dim_policy)
+                                from rugbrain.dim_policy import normalize_dims
+
+                                results.append(normalize_dims(vec, self.DIMS))
                                 continue
                             raise RuntimeError(
                                 f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.DIMS}"
