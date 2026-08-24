@@ -77,6 +77,28 @@ class Qwen3Embedder:
         return results[0]
 
 
+class Qwen3FastEmbedder(Qwen3Embedder):
+    """Fast utility tier — Qwen3-Embedding-0.6B on :8007.
+
+    For near-duplicate detection, clustering, cache keys and internal
+    similarity tools where BOTH sides of a comparison run on 0.6B.
+    NEVER for corpus search: a 0.6B query against a 4B-embedded
+    collection is a cross-model mismatch (same dims, different space).
+
+    Inherits all dim-handling (MRL truncate + renormalize) from
+    :class:`Qwen3Embedder`.
+    """
+
+    MODEL = "qwen3-embedding-0.6b"
+    EMBED_URL = os.getenv("QWEN_FAST_URL", "http://172.22.0.1:8007/v1")
+    DIMS = int(os.getenv("QWEN_FAST_DIMS", "1024"))
+
+    def __init__(self, embed_url: str | None = None):
+        # Bypass parent __init__ (it pins the deep URL/model); rebind ours.
+        super().__init__(embed_url=embed_url or self.EMBED_URL)
+        self.model = self.MODEL
+
+
 class OpenRouterEmbedder:
     """OpenRouter embedding API - NVIDIA Nemotron primary, qwen3-embedding-4b fallback."""
 

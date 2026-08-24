@@ -95,3 +95,50 @@ async def test_undersized_vector_rejected(monkeypatch):
     monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
     with pytest.raises(RuntimeError, match="dim mismatch"):
         await e.embed(["hello"])
+
+
+# ── Fast tier (0.6B) ──────────────────────────────────────────────────
+
+
+def test_fast_embedder_targets_speed_server():
+    from rugbrain.qwen_embedders import Qwen3FastEmbedder
+
+    e = Qwen3FastEmbedder()
+    assert ":8007" in e.url
+    assert e.MODEL == "qwen3-embedding-0.6b"
+    assert e.DIMS == 1024
+
+
+def test_fast_embedder_is_deep_embedder_subtype():
+    """Inherits MRL dim-handling from the deep embedder."""
+    from rugbrain.qwen_embedders import Qwen3Embedder, Qwen3FastEmbedder
+
+    assert issubclass(Qwen3FastEmbedder, Qwen3Embedder)
+
+
+@pytest.mark.asyncio
+async def test_fast_embedder_mrl_truncates(monkeypatch):
+    from rugbrain.qwen_embedders import Qwen3FastEmbedder
+
+    e = Qwen3FastEmbedder()
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"embedding": [1.0] * 2048}]}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def post(self, url, json=None):  # noqa: A002
+            assert ":8007" in url
+            return Resp()
+
+    monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
+    out = await e.embed(["utility text"])
+    assert len(out[0]) == 1024
