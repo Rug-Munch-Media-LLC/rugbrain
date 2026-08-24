@@ -8,6 +8,7 @@ to verify that the system correctly:
 4. Returns reasonable confidence scores
 """
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -85,6 +86,12 @@ def client() -> Any:
 @pytest.mark.parametrize("event", KNOWN_EVENTS)
 def test_known_event_retrieval(client: httpx.Client, event: dict[str, Any]) -> None:
     """Test that the RAG system retrieves relevant results for known events."""
+    # Migration window (2026-08-24): with RAG_INTERIM_COLLECTION_SUFFIX set,
+    # searches route to empty shadow collections — historical corpus is
+    # unreachable by design until rag-embed-migration completes. The
+    # benchmark is meaningless against an empty namespace; skip honestly.
+    if os.getenv("RAG_INTERIM_COLLECTION_SUFFIX"):
+        pytest.skip("interim collection namespace active (migration window)")
     response = client.get(
         SEARCH_URL,
         params={
