@@ -52,7 +52,10 @@ async def test_hyde_fallback_on_llm_junk():
         return [0.3] * 4
 
     for junk in ("   ", 42, None):
-        out = await hyde_expand("q", embed, lambda q: junk)
+        def llm(q, _junk=junk):
+            return _junk
+
+        out = await hyde_expand("q", embed, llm)
         assert out["used_llm"] is False
         assert out["hypothetical_doc"] == "q"
 
