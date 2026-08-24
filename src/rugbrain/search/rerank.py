@@ -28,6 +28,7 @@ import asyncio
 import logging
 import os
 import time
+from collections import defaultdict
 from typing import Any
 
 import httpx
@@ -47,9 +48,7 @@ DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 LIVE_TIMEOUT_S: float = float(os.getenv("RERANKER_LIVE_TIMEOUT", "6.0"))
 _STRAIN_WINDOW_S: float = 120.0
 _STRAIN_THRESHOLD: int = 3
-from collections import defaultdict as _dd
-
-_strain_failures: dict[str, list[float]] = _dd(list)
+_strain_failures: dict[str, list[float]] = defaultdict(list)
 
 
 def _is_strained(url: str) -> bool:

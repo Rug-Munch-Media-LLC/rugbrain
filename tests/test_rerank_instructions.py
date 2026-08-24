@@ -81,7 +81,7 @@ async def test_rerank_chunks_filters_noise_when_enough_strong(monkeypatch):
     """Sub-floor docs are dropped only when >= keep strong candidates remain."""
     chunks = [{"id": f"d{i}", "content": f"doc {i}", "score": 1.0 - i * 0.01} for i in range(6)]
 
-    async def fake_score(query, candidates):
+    async def fake_score(query, candidates, tier="deep", **kwargs):
         # d0-d3 strong evidence, d4/d5 confident noise.
         scores = [0.95, 0.9, 0.85, 0.8, 0.05, 0.02]
         return scores[: len(candidates)], "qwen3-reranker-4b"
@@ -97,7 +97,7 @@ async def test_rerank_chunks_keeps_full_set_when_signal_thin(monkeypatch):
     """Without enough above-floor candidates, nothing is dropped."""
     chunks = [{"id": f"d{i}", "content": f"doc {i}", "score": 1.0 - i * 0.01} for i in range(4)]
 
-    async def fake_score(query, candidates):
+    async def fake_score(query, candidates, tier="deep", **kwargs):
         return [0.4, 0.08, 0.05, 0.02][: len(candidates)], "qwen3-reranker-4b"
 
     monkeypatch.setattr(rerank_mod, "_score_candidates", fake_score)
