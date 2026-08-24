@@ -27,6 +27,7 @@ ignore_imports =
     rugbrain.routes.ingest -> rugbrain.qdrant_store
     rugbrain.routes.content -> rugbrain.content_engine
     rugbrain.routes.search_federated -> rugbrain.multi_embedder
+    rugbrain.routes.content -> rugbrain.trending
     rugbrain.routes.intel -> rugbrain.endpoints
     rugbrain.routes.intel -> rugbrain.evaluation
     rugbrain.routes.intel -> rugbrain.fear_index
