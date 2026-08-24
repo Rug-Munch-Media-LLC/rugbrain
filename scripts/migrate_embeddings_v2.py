@@ -197,18 +197,25 @@ async def migrate_collection(
             offset += len(points)
             continue
 
-        # Embed the entire batch in one call (embedder handles 128+ texts fine).
-        # The embedder's internal batch_size=2048 handles this efficiently.
+        # Embed the batch with ADAPTIVE SPLITTING (added 2026-08-24):
+        # oversized docs can exceed the embedder's per-request window and
+        # time out identically forever. On a timeout-class failure we HALVE
+        # the working slice and retry immediately; a single doc that still
+        # fails is skipped (logged) so one monster document can never wedge
+        # the whole migration. Non-timeout errors keep the original
+        # backoff/retry semantics.
+        work_t, work_i, work_p = texts, ids, payloads
+        _pending_slices: list[tuple[list, list, list]] = []
         consecutive_failures = 0
         while True:
             try:
-                vecs = await _embed_batch(client, texts)
+                vecs = await _embed_batch(client, work_t)
                 points_to_upsert = []
                 for i, vec in enumerate(vecs):
-                    point = {"id": ids[i], "payload": payloads[i]}
+                    point = {"id": work_i[i], "payload": work_p[i]}
                     vector: dict[str, Any] = {"dense": vec}
                     if supports_sparse and not skip_sparse:
-                        sp = await _sparse_for(texts[i])
+                        sp = await _sparse_for(work_t[i])
                         if sp is not None:
                             vector["bm25"] = sp
                     point["vector"] = vector
@@ -232,8 +239,11 @@ async def migrate_collection(
                         else:
                             raise
                 stats["upserted"] += len(points_to_upsert)
-                offset += len(points)
+                offset += len(work_t)
                 consecutive_failures = 0
+                if _pending_slices:
+                    work_t, work_i, work_p = _pending_slices.pop()
+                    continue  # process remaining slice(s) of this batch
                 break  # success — move to next scroll
             except _EmbedHTTPError as e:
                 # Fail fast on permanent errors (bad model/dims/auth);
@@ -256,6 +266,39 @@ async def migrate_collection(
                     raise
                 await asyncio.sleep(wait)
             except Exception as e:
+                # Timeout-class failure on a multi-doc slice → HALVE it.
+                if (
+                    isinstance(e, (TimeoutError, asyncio.TimeoutError))
+                    or "timeout" in str(e).lower()
+                    or "ReadTimeout" in type(e).__name__
+                ):
+                    if len(work_t) > 1:
+                        mid = max(1, len(work_t) // 2)
+                        logger.warning(
+                            "batch_split %s offset=%d: %d docs -> %d+%d (%r)",
+                            name,
+                            offset,
+                            len(work_t),
+                            mid,
+                            len(work_t) - mid,
+                            e,
+                        )
+                        right_t, right_i, right_p = work_t[mid:], work_i[mid:], work_p[mid:]
+                        work_t, work_i, work_p = work_t[:mid], work_i[:mid], work_p[:mid]
+                        # stash the remainder; after current slice succeeds we
+                        # must process it before advancing offset.
+                        _pending_slices.extend([(right_t, right_i, right_p)])
+                        continue
+                    logger.error(
+                        "doc_SKIP %s offset=%d: single doc exceeds embedder budget (%r) — skipping",
+                        name,
+                        offset,
+                        e,
+                    )
+                    stats["skipped_oversized"] = stats.get("skipped_oversized", 0) + 1
+                    offset += 1
+                    consecutive_failures = 0
+                    break
                 consecutive_failures += 1
                 logger.error(
                     "batch_retry %s offset=%d (%d consec): %r — retrying in 15s",
