@@ -541,10 +541,12 @@ rerank tier had NEVER served from rugbrain. All corrected; sweep found
 no other affected service defaults except content_engine chat URL
 (:8009, also fixed).
 
-**Test coverage added (this session):** 43 contracts across
+**Test coverage added (this session):** 50 contracts across
 qwen_embedders dims/MRL (7), temporal_decay (8), fusion (7),
 query_transform incl. HyDE/multi-query (15), rerank core + dual-tier
-(12) — plus two real bugs fixed (dim breaker, millis-string parse).
+(12), rrf_fusion (7) — plus two real bugs fixed (dim breaker,
+millis-string parse) and the event-loop wedge confirmed already fixed
+(asyncio.to_thread probe).
 
 **Still open:** sync httpx.Client-in-async blocking issue (§ known
 issues); backend consolidation phases remain NOT DONE as noted above;
