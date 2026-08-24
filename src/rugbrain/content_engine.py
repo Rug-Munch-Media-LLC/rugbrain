@@ -24,6 +24,7 @@ Quality bar (enforced in prompts AND fallback templates):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -117,7 +118,11 @@ async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
     seen: dict[str, dict[str, Any]] = {}
     for collection in ("threat_intel_v2", "news_v2"):
         try:
-            results = await store.search(embedding, collection=collection, limit=limit // 2)
+            # interim embedder (nemotron) yields lower cosine scores than
+            # qwen — keep the floor low; importance rerank does the triage
+            results = await store.search(
+                embedding, collection=collection, limit=limit // 2, min_similarity=0.15
+            )
         except Exception as e:
             logger.debug("content_probe_failed collection=%s err=%s", collection, str(e)[:80])
             continue
@@ -204,33 +209,36 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
     drafts: dict[str, list[dict[str, Any]]] = {"main": [], "alerts": [], "news": [], "scans": []}
 
     alert_stories = [s for s in stories if s["severity"] in ("critical", "high")]
-    for s in alert_stories[:5]:
-        drafts["alerts"].append(
-            {
-                "text": await _compose(s),
-                "story_ref": s["source"],
-                "mirror": False,
-                "kind": s["kind"],
-            }
-        )
-
     main_pool = [s for s in stories if s not in alert_stories[:5]]
-    for s in main_pool[:MAX_MAIN_PER_CYCLE]:
-        text = await _compose(s)
-        if s.get("url"):
-            text += f"\n\nFull coverage: {s['url']}"
-        drafts["main"].append(
-            {"text": text, "story_ref": s["source"], "mirror": True, "kind": s["kind"]}
-        )
-
     news_pool = [s for s in main_pool[MAX_MAIN_PER_CYCLE:] if s["severity"] != "low"]
+
+    # Write ALL posts concurrently under one hard deadline — the local chat
+    # model shares CPU with the migration; serialized calls stall the endpoint.
+    async def _timed_compose(story: dict[str, Any]) -> str:
+        try:
+            return await asyncio.wait_for(_compose(story), timeout=25.0)
+        except Exception:
+            return _template_post(story)
+
+    jobs: list[tuple[str, dict[str, Any], asyncio.Task]] = []
+    for s in alert_stories[:5]:
+        jobs.append(("alerts", s, asyncio.ensure_future(_timed_compose(s))))
+    for s in main_pool[:MAX_MAIN_PER_CYCLE]:
+        jobs.append(("main", s, asyncio.ensure_future(_timed_compose(s))))
     for s in news_pool[:6]:
-        drafts["news"].append(
+        jobs.append(("news", s, asyncio.ensure_future(_timed_compose(s))))
+
+    done, _pending = await asyncio.wait([j[2] for j in jobs], timeout=40.0)
+    for channel, story, task in jobs:
+        text = task.result() if task in done else _template_post(story)
+        if channel == "main" and story.get("url"):
+            text += f"\n\nFull coverage: {story['url']}"
+        drafts[channel].append(
             {
-                "text": await _compose(s),
-                "story_ref": s["source"],
-                "mirror": False,
-                "kind": s["kind"],
+                "text": text,
+                "story_ref": story["source"],
+                "mirror": channel == "main",
+                "kind": story.get("kind", "story"),
             }
         )
 
