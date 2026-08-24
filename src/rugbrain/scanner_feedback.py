@@ -11,7 +11,7 @@ discovering similar tokens. Provides a bidirectional feedback channel:
 
 All embeddings use the existing Qwen3-Embedding-4B pipeline via
 ``rugbrain.embeddings.get_embedding()`` so the feedback collection shares
-the same 2560-dim vector space as the main threat_intel_v2 collection.
+the same 1024-dim vector space as the main threat_intel_v2 collection.
 """
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ async def find_similar_tokens(
 ) -> dict[str, Any]:
     """Find similar tokens via vector similarity search.
 
-    Embeds the token address + chain into the 2560-dim vector space and
+    Embeds the token address + chain into the 1024-dim vector space and
     returns the nearest neighbors from the feedback collection, scoring
     by cosine similarity. Useful for discovering tokens with similar
     risk profiles, deployer patterns, or scam signals::

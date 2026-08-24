@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 # backend and the shadow collections it feeds. Remove all three once
 # rag-embed-migration.service completes and the local qwen3-embedding-4b
 # (native 2560) resumes — the default below is the canonical dim.
-EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "2560"))
+EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "1024"))
 
 # Qwen3-Embedding query instruction template. The model was trained with an
 # instruction prefix on the QUERY side and plain text on the DOCUMENT side.

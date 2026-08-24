@@ -60,7 +60,7 @@ log = logging.getLogger("rugbrain.alerts")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "2560")))
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "1024")))
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))

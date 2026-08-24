@@ -2,7 +2,7 @@ from rugbrain.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING
 
 
 def test_embedding_dim() -> None:
-    assert EMBEDDING_DIM == 2560
+    assert EMBEDDING_DIM == 1024
 
 
 def test_model_name() -> None:
@@ -11,7 +11,7 @@ def test_model_name() -> None:
 
 def test_version_stamp() -> None:
     assert "qwen3-embedding-4b" in EMBED_VERSION_STAMP
-    assert "2560" in EMBED_VERSION_STAMP
+    assert "1024" in EMBED_VERSION_STAMP
     assert ":" in EMBED_VERSION_STAMP
 
 

@@ -24,12 +24,12 @@ OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
 class Qwen3Embedder:
     """llama.cpp Qwen3-Embedding-4B provider (OpenAI-compatible /embeddings).
 
-    Serves 2560-dim vectors for all RAG ingestion/search paths.
+    Serves 1024-dim vectors for all RAG ingestion/search paths.
     """
 
     EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
     MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-    DIMS = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "2560")))
+    DIMS = int(os.getenv("QWEN_EMBED_DIMS", "1024"))
 
     def __init__(self, embed_url: str | None = None):
         self.url = embed_url or os.getenv(
@@ -54,8 +54,16 @@ class Qwen3Embedder:
                             if len(vec) == self.DIMS:
                                 results.append(vec)
                                 continue
+                            if len(vec) > self.DIMS:
+                                # MRL truncate + renormalize to collection dim
+                                cut = vec[: self.DIMS]
+                                norm = sum(x * x for x in cut) ** 0.5
+                                results.append(
+                                    [x / norm for x in cut] if norm else cut
+                                )
+                                continue
                             raise RuntimeError(
-                                f"qwen_embedder dim mismatch: got {len(vec)}, want {self.DIMS}"
+                                f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.DIMS}"
                             )
                         raise RuntimeError("qwen_embedder returned no data")
                 except RuntimeError:
@@ -118,7 +126,7 @@ class HuggingFaceEmbedder:
 
     BASE = "https://api-inference.huggingface.co/models"
     MODEL = "qwen3-embedding-4b"
-    DIMS = int(os.getenv("HF_EMBED_DIMS", "2560"))
+    DIMS = int(os.getenv("HF_EMBED_DIMS", "1024"))
 
     def __init__(self, token: str | None = None):
         self.token = token or HF_TOKEN
