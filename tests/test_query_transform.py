@@ -11,11 +11,9 @@ from __future__ import annotations
 import pytest
 
 from rugbrain.search.query_transform import (
-    _MAX_SYNONYM_VARIANTS,
     _invoke_llm,
     expand_synonyms,
 )
-
 
 # ── expand_synonyms ───────────────────────────────────────────────────
 
