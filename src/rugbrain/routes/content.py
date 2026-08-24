@@ -56,3 +56,11 @@ async def get_drafts(
 async def ack_posted(body: AckBody) -> dict[str, Any]:
     logger.info("content_ack cycle=%s posted=%d", body.cycle_id, len(body.posted))
     return {"status": "ok", "cycle_id": body.cycle_id, "acked": len(body.posted)}
+
+
+@router.get("/trending")
+async def get_trending() -> dict[str, Any]:
+    """Trending shill-scam detection: velocity-scored tokens across sources."""
+    from rugbrain.trending import trending_report
+
+    return await trending_report()

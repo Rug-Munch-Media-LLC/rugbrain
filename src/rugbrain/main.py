@@ -134,7 +134,12 @@ class RAGAuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        if api_key != RMI_RAG_API_KEY:
+        # Rotation support: RMI_RAG_API_KEY may hold "new,old" during a
+        # zero-downtime rollover — any listed key validates. Constant-time.
+        import hmac as _hmac
+
+        _valid_keys = [k.strip() for k in RMI_RAG_API_KEY.split(",") if k.strip()]
+        if not any(_hmac.compare_digest(api_key.encode(), k.encode()) for k in _valid_keys):
             logger.warning("auth_failed path=%s reason=invalid_api_key", path)
             return JSONResponse(
                 status_code=401,
