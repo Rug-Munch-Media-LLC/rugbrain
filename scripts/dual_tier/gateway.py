@@ -60,8 +60,9 @@ class CryptoRAGGateway:
     async def _embed(self, http: aiohttp.ClientSession, url: str, text: str) -> list[float]:
         async with http.post(f"{url}/v1/embeddings", json={"input": text}) as resp:
             resp.raise_for_status()
-            data = await resp.json()
-            return data["data"][0]["embedding"]
+            data: list[dict[str, Any]] = (await resp.json())["data"]
+            vec: list[float] = data[0]["embedding"]
+            return vec
 
     async def _rerank(
         self, http: aiohttp.ClientSession, url: str, query: str, docs: list[dict[str, Any]]
@@ -102,7 +103,7 @@ class CryptoRAGGateway:
                 collection_name=COLLECTION, query=vec, using=vector, limit=limit
             )
             candidates = [
-                {"text": p.payload.get("text", ""), "meta": p.payload.get("metadata", {})}
+                {"text": (p.payload or {}).get("text", ""), "meta": (p.payload or {}).get("metadata", {})}
                 for p in hits.points
             ]
             contexts = await self._rerank(http, rerank_url, query, candidates)

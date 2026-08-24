@@ -68,10 +68,10 @@ async def backfill(batch_size: int, sleep_secs: float) -> None:
             if not points:
                 break
 
-            todo = [p for p in points if not (p.payload or {}).get(MARKER_FIELD)]
+            todo = [p for p in points if not ((p.payload or {}) if p.payload else {}).get(MARKER_FIELD)]
             skipped += len(points) - len(todo)
             if todo:
-                texts = [p.payload.get("text", "") for p in todo]
+                texts = [(p.payload or {}).get("text", "") for p in todo]
                 ids = [str(p.id) for p in todo]
                 async with session.post(
                     f"{SPEED_EMBED}/v1/embeddings", json={"input": texts}
@@ -85,7 +85,7 @@ async def backfill(batch_size: int, sleep_secs: float) -> None:
                 await client.update_vectors(
                     collection_name=COLLECTION,
                     vector_name="speed_vector",
-                    points=models.Batch(ids=ids, vectors=embeddings),
+                    points=models.Batch(ids=ids, vectors=embeddings),  # type: ignore[arg-type] -- qdrant-client Batch stubs are stricter than runtime
                 )
                 # Mark AFTER the vector landed (crash-safe resume).
                 await client.set_payload(
