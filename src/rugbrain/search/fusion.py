@@ -58,7 +58,10 @@ def _parse_date(value: Any) -> datetime | None:
         if not text:
             return None
         try:
-            return datetime.fromtimestamp(float(text), tz=UTC)
+            ts = float(text)
+            if ts > 1e12:  # epoch millis (string form)
+                ts = ts / 1000.0
+            return datetime.fromtimestamp(ts, tz=UTC)
         except (OverflowError, OSError, ValueError):
             pass
         try:

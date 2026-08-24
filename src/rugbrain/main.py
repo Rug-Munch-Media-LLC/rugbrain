@@ -36,6 +36,8 @@ from rugbrain.endpoints import router as rag_router  # noqa: E402
 from rugbrain.endpoints import scam_check_router  # noqa: E402
 from rugbrain.metrics import metrics_router  # noqa: E402
 from rugbrain.news_feed import news_feed_router  # noqa: E402
+from rugbrain.routes.content import router as content_router  # noqa: E402
+from rugbrain.routes.search_federated import router as federated_router  # noqa: E402
 from rugbrain.scanner_feedback import scanner_feedback_router  # noqa: E402
 from rugbrain.sentiment_engine import sentiment_router  # noqa: E402
 from rugbrain.system_health import router as health_router  # noqa: E402
@@ -655,6 +657,8 @@ app.include_router(sentiment_router)  # /api/v1/sentiment/*
 app.include_router(alerts_router)  # /api/v1/alerts/* — real-time exploits + webhooks
 app.include_router(news_feed_router)  # /api/v1/news/feed, /story, /trending, /topics
 app.include_router(health_router)  # /api/v1/health/full — aggregated dashboard
+app.include_router(content_router)  # /api/v1/content/* — distribution drafts
+app.include_router(federated_router)  # /api/v1/search/federated — multi-backend reader
 
 
 # ── Health endpoints ──────────────────────────────────────────────────
