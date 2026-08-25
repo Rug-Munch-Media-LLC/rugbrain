@@ -58,6 +58,21 @@ SYNONYM_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 _MAX_SYNONYM_VARIANTS = 4
 
 
+def _glossary_pattern(term: str) -> str:
+    """Word-boundary regex for a glossary term, tolerating a simple English
+    plural suffix (``s`` / ``es``).
+
+    The old bare ``\\bterm\\b`` missed every plural — "are there honeypots
+    here?" produced zero expansion because ``honeypots`` has no trailing
+    word boundary before the word-char ``s``. Real queries pluralize these
+    terms constantly, so the matcher accepts an optional ``e?s`` tail while
+    keeping the leading/trailing boundaries (substring controls like
+    "sandwiched" still never match). Detection and substitution share this
+    pattern so a plural match is always substituted whole.
+    """
+    return rf"\b{re.escape(term)}(?:e?s)?\b"
+
+
 def expand_synonyms(query: str, max_variants: int = _MAX_SYNONYM_VARIANTS) -> list[str]:
     """Expand *query* with curated crypto term aliases (lightweight, no LLM).
 
@@ -80,7 +95,7 @@ def expand_synonyms(query: str, max_variants: int = _MAX_SYNONYM_VARIANTS) -> li
         if len(variants) >= max_variants:
             break
         members = (term, *aliases)
-        matched = next((m for m in members if re.search(rf"\b{re.escape(m)}\b", q_lower)), None)
+        matched = next((m for m in members if re.search(_glossary_pattern(m), q_lower)), None)
         if matched is None:
             continue
         cluster = list(dict.fromkeys(members))
@@ -89,7 +104,7 @@ def expand_synonyms(query: str, max_variants: int = _MAX_SYNONYM_VARIANTS) -> li
         replacement = " ".join(cluster)
         if replacement.lower() == matched.lower():
             continue
-        variant = re.sub(rf"\b{re.escape(matched)}\b", replacement, q, flags=re.IGNORECASE)
+        variant = re.sub(_glossary_pattern(matched), replacement, q, flags=re.IGNORECASE)
         if variant != q and variant not in variants:
             variants.append(variant)
     return variants[:max_variants]

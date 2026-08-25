@@ -51,6 +51,31 @@ def test_word_boundary_no_substring_match():
     assert all("mev" not in v for v in out)
 
 
+def test_plural_terms_match_word_boundary():
+    """Glossary word-boundary bug (2026-08-25): plurals never matched.
+
+    "honeypots" has no trailing \\b before the word-char 's', so real
+    queries like "are there honeypots here?" silently produced zero
+    expansion. Simple English plurals must hit the singular cluster.
+    """
+    out = expand_synonyms("are there honeypots here?")
+    assert len(out) >= 2
+    assert any("rug pull" in v for v in out[1:])
+
+    out = expand_synonyms("flashloans explained")
+    assert len(out) >= 2
+    assert any("flash loan" in v for v in out[1:])
+
+
+def test_plural_multiword_term_matches():
+    # multi-word canonical term with trailing plural: "rug pulls detected"
+    out = expand_synonyms("rug pulls detected")
+    assert len(out) >= 2
+    assert any("honeypot" in v for v in out[1:])
+    # the plural form is substituted whole (no dangling "s" on the cluster)
+    assert not any("pulls honeypot" in v for v in out[1:])
+
+
 # ── _invoke_llm ───────────────────────────────────────────────────────
 
 
