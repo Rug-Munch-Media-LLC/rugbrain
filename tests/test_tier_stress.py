@@ -26,7 +26,12 @@ lite_indexer_mod = pytest.importorskip(
     "lite_indexer", reason="optional lite-indexer package not installed"
 )
 
-at = lite_indexer_mod.rpc.autotune
+# rpc became a package and its __init__ no longer re-exports autotune —
+# import the submodule directly (importorskip keeps the optional-dep contract
+# and keeps pyright away from a hard import of an uninstalled package).
+at = pytest.importorskip(
+    "lite_indexer.rpc.autotune", reason="optional lite-indexer autotune not installed"
+)
 
 from rugbrain.search import rerank as rr
 

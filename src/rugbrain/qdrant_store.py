@@ -694,13 +694,17 @@ class QdrantVectorStore:
         points remain, else ``None``.
         """
         collection = _map_collection(collection)
+        base_collection = collection or "default"
         coll = collection or "default"
         client = await self._get_client()
         # NOTE: no _ensure_collection here — scroll is a READ and must never
         # create collections. The old size-1 placeholder creation poisoned
         # namespaces (a later real insert then hit "expected dim: 1").
         # A missing collection returns 404 below → empty page, which is the
-        # correct answer for "nothing ingested yet".
+        # correct answer for "nothing ingested yet". Exception: when the
+        # interim suffix routed us to a shadow twin that was never created
+        # (legacy collections with no _i mirror), read through to the
+        # canonical namespace once instead of warning-spamming every cycle.
 
         payload: dict[str, Any] = {
             "limit": limit,
@@ -714,6 +718,12 @@ class QdrantVectorStore:
 
         try:
             r = await client.post(f"/collections/{coll}/points/scroll", json=payload)
+            if r.status_code == 404 and coll != base_collection:
+                # Shadow twin doesn't exist for this legacy collection —
+                # read through to the canonical namespace (still read-only).
+                logger.debug("qdrant_scroll_shadow_missing read_through base=%s", base_collection)
+                coll = base_collection
+                r = await client.post(f"/collections/{coll}/points/scroll", json=payload)
             if r.status_code != 200:
                 logger.warning("qdrant_scroll_failed status=%d body=%s", r.status_code, r.text)
                 return [], None

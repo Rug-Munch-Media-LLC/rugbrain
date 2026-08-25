@@ -47,7 +47,7 @@ log = logging.getLogger("rugbrain.fear_index")
 # ── Configuration ───────────────────────────────────────────────────────
 FEAR_INDEX_POLL_SECONDS = int(os.getenv("FEAR_INDEX_POLL_SECONDS", "300"))
 FNG_URL = os.getenv("FEAR_GREED_URL", "https://api.alternative.me/fng/?limit=1")
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8089/search")
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8889/search")
 SEARXNG_QUERY = os.getenv("FEAR_SOCIAL_QUERY", "bitcoin ethereum crypto market")
 ONCHAIN_SIGNALS_URL = os.getenv("ONCHAIN_SIGNALS_URL", "")
 
