@@ -135,3 +135,48 @@ class TestLandscape:
         with patch("httpx.AsyncClient.get", new=fake_get):
             out = await me.landscape(["http://dead:6333"])
         assert "_error" in out["instances"]["http://dead:6333"]
+
+
+class TestDimDrivenResolution:
+    @pytest.mark.asyncio
+    async def test_unmapped_collection_resolves_by_actual_dim(self, me: MultiEmbedder):
+        """A 2560 collection under a nemotron default must resolve qwen4b."""
+        me.default_backend = "nemotron"  # simulate live container default
+        me._dim_cache["wallet_v2"] = 2560
+        be, dim = me.backend_for("wallet_v2")
+        assert be.name == "qwen4b"
+        assert dim == 2560
+
+    @pytest.mark.asyncio
+    async def test_2048_collection_resolves_nemotron(self, me: MultiEmbedder):
+        me._dim_cache["news_v2_i"] = 2048
+        be, dim = me.backend_for("news_v2_i")
+        assert be.name == "nemotron"
+        assert dim == 2048
+
+    @pytest.mark.asyncio
+    async def test_1024_collection_resolves_speed_lane(self, me: MultiEmbedder):
+        me._dim_cache["old_stuff"] = 1024
+        be, dim = me.backend_for("old_stuff")
+        assert be.name == "qwen06b"
+        assert dim == 1024
+
+    @pytest.mark.asyncio
+    async def test_resolve_collections_prewarms_cache(self, me: MultiEmbedder):
+        async def fake_dim(collection: str) -> int | None:
+            # mirror real actual_dim: fetch AND write the cache
+            dim = {"wallet_v2": 2560}.get(collection)
+            me._dim_cache[collection] = dim
+            return dim
+
+        with patch.object(me, "actual_dim", side_effect=fake_dim):
+            await me.resolve_collections(["wallet_v2", "unknown_coll"])
+        assert me._dim_cache["wallet_v2"] == 2560
+        assert me._dim_cache["unknown_coll"] is None
+        be, _ = me.backend_for("wallet_v2")
+        assert be.name == "qwen4b"
+
+    def test_qdrant_urls_rest_only_and_deduped(self):
+        urls = MultiEmbedder._qdrant_rest_urls()
+        assert all(u.endswith(":6333") for u in urls)  # no gRPC :6334
+        assert len(urls) == len(set(urls))

@@ -135,6 +135,66 @@ class MultiEmbedder:
         self.collection_map = _parse_collection_map()
         # sensible defaults when a collection isn't mapped
         self.default_backend = os.getenv("RAG_DEFAULT_BACKEND", "qwen4b")
+        # Actual-dim awareness: lazily fetched from Qdrant per unknown
+        # collection, cached for the process lifetime. This is what makes
+        # the reader recognize ANY vector space, not just mapped ones.
+        self._dim_cache: dict[str, int | None] = {}
+
+    @staticmethod
+    def _qdrant_rest_urls() -> list[str]:
+        """REST endpoints to probe for actual collection dims (deduped).
+
+        Qdrant :6333 = REST, :6334 = gRPC — only REST is probed here.
+        """
+        urls: list[str] = []
+        env_urls = os.getenv(
+            "RAG_QDRANT_URLS",
+            f"{os.getenv('QDRANT_URL', 'http://rmi-qdrant-v2:6333')},http://127.0.0.1:6333",
+        )
+        for u in env_urls.split(","):
+            u = u.strip().rstrip("/")
+            if u and ":" in u and u not in urls and u.endswith(":6333"):
+                urls.append(u)
+        return urls or ["http://rmi-qdrant-v2:6333"]
+
+    async def actual_dim(self, collection: str) -> int | None:
+        """ACTUAL vector dim of *collection* from Qdrant (cached)."""
+        if collection in self._dim_cache:
+            return self._dim_cache[collection]
+        dim: int | None = None
+        import httpx
+
+        for base in self._qdrant_rest_urls():
+            try:
+                async with httpx.AsyncClient(timeout=6) as c:
+                    d = (await c.get(f"{base}/collections/{collection}")).json().get("result", {})
+                    cfg = d.get("config", {}).get("params", {}).get("vectors", {})
+                    if isinstance(cfg, dict) and "dense" in cfg:
+                        dim = cfg["dense"].get("size")
+                    elif isinstance(cfg, dict):
+                        dim = cfg.get("size")
+                    if isinstance(dim, int):
+                        break
+            except Exception:
+                continue
+        self._dim_cache[collection] = dim
+        return dim
+
+    def _backend_for_dim(self, dim: int | None) -> tuple[Backend, int]:
+        """Pick the backend whose native space matches an ACTUAL dim."""
+        if dim == 2560:
+            be = self.backends["qwen4b"]
+            return be, be.dim
+        if dim == 2048:
+            be = self.backends["nemotron"]
+            return be, be.dim
+        if dim == 1024:
+            # legacy qwen4b-truncated OR qwen06b fast-lane — same declared
+            # dim; prefer the speed lane for queries (free, local, warm).
+            be = self.backends["qwen06b"]
+            return be, be.dim
+        be = self.backends[self.default_backend]
+        return be, be.dim
 
     def backend_for(self, collection: str) -> tuple[Backend, int]:
         if collection in self.collection_map:
@@ -143,8 +203,18 @@ class MultiEmbedder:
             if be is None:
                 raise KeyError(f"unknown backend '{bname}' for {collection}")
             return be, dim
+        # Unmapped: resolve by ACTUAL dim when we've seen it (sync path uses
+        # the cache only; federated_search pre-warms via resolve_collections).
+        cached = self._dim_cache.get(collection)
+        if cached is not None:
+            return self._backend_for_dim(cached)
         be = self.backends[self.default_backend]
         return be, be.dim
+
+    async def resolve_collections(self, collections: list[str]) -> list[str]:
+        """Pre-warm actual-dim cache so backend_for() resolves by reality."""
+        await asyncio.gather(*(self.actual_dim(c) for c in collections))
+        return collections
 
     async def embed(self, text: str, backend_name: str) -> list[float]:
         """Embed via *backend_name*, falling back to a same-space remote when
@@ -296,6 +366,11 @@ class MultiEmbedder:
     ) -> list[dict[str, Any]]:
         """Embed once per distinct backend, search each collection, RRF-merge."""
         from collections import defaultdict
+
+        # Recognize ANY vector space: resolve unmapped collections by their
+        # ACTUAL dims before grouping, so a 2560 corpus never gets queried
+        # with a 2048 nemotron vector (and vice versa) regardless of env.
+        await self.resolve_collections(collections)
 
         groups: dict[str, list[tuple[str, int]]] = defaultdict(list)
         for coll in collections:
