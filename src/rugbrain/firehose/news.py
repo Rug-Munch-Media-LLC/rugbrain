@@ -13,7 +13,12 @@ logger = logging.getLogger("rag.firehose")
 
 
 async def pull_news_rss(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    """Pull latest news from DataBus news provider (200+ RSS feeds)."""
+    """Pull latest news from DataBus news provider (200+ RSS feeds).
+
+    Standalone fallback (2026-08-25): when the backend DataBus is unreachable
+    or returns nothing, fetch the primary upstream RSS feeds directly —
+    RugBrain must ingest without rmi-backend being up.
+    """
     docs: list[dict[str, Any]] = []
     try:
         resp = await client.get(
@@ -46,6 +51,17 @@ async def pull_news_rss(client: httpx.AsyncClient) -> list[dict[str, Any]]:
     except Exception as e:
         logger.warning("News RSS pull failed: %s", e)
 
+    if not docs:
+        # Backend down / empty → direct upstream adapters (standalone mode).
+        try:
+            from rugbrain.firehose.direct_sources import fetch_news_direct
+
+            docs = await fetch_news_direct(limit=20)
+            if docs:
+                logger.info("news pulled via DIRECT rss fallback: %d docs", len(docs))
+        except Exception as e:  # noqa: BLE001 — fail-open to empty
+            logger.warning("direct news fallback failed: %s", e)
+
     return docs
 
 
@@ -70,5 +86,16 @@ async def pull_prediction_markets(client: httpx.AsyncClient) -> list[dict[str, A
                 )
     except Exception as e:
         logger.warning("Prediction market pull failed: %s", e)
+
+    if not docs:
+        # Backend down / empty → Polymarket gamma API directly (standalone).
+        try:
+            from rugbrain.firehose.direct_sources import fetch_prediction_markets_direct
+
+            docs = await fetch_prediction_markets_direct(limit=10)
+            if docs:
+                logger.info("prediction markets pulled via DIRECT fallback: %d docs", len(docs))
+        except Exception as e:  # noqa: BLE001 — fail-open to empty
+            logger.warning("direct prediction-market fallback failed: %s", e)
 
     return docs
