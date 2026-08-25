@@ -18,8 +18,15 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
-OR_PRIMARY_EMBED = os.getenv("RAG_PRIMARY_EMBED_MODEL", "openrouter/your-model-here")
-OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
+# 2026-08-25: defaults were placeholders ("openrouter/your-model-here") — if
+# RAG_PRIMARY_EMBED_MODEL was unset, the cloud rung fired at a nonexistent
+# model. Default to the verified-live free slug; also honor the env var name
+# .env.rag actually ships (RAG_OPENROUTER_EMBED_MODEL).
+OR_PRIMARY_EMBED = os.getenv(
+    "RAG_PRIMARY_EMBED_MODEL",
+    os.getenv("RAG_OPENROUTER_EMBED_MODEL", "nvidia/nemotron-3-embed-1b:free"),
+)
+OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "qwen3-embedding-4b")
 
 
 class Qwen3Embedder:
