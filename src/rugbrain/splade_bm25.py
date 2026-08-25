@@ -441,7 +441,9 @@ class BM25Index:
                 entry = {
                     "id": doc_id,
                     "bm25_score": round(score, 6),
-                    "collection": doc_id.split(":")[1] if ":" in doc_id else "unknown",
+                    # doc ids are "<collection>:<numeric-id>" — the collection
+                    # name is the PREFIX. [1] returned the numeric id (bug).
+                    "collection": doc_id.split(":")[0] if ":" in doc_id else "unknown",
                 }
                 if hasattr(self, "_metadata") and doc_id in self._metadata:
                     entry["metadata"] = self._metadata[doc_id]
@@ -513,7 +515,7 @@ class BM25Index:
                 entry = {
                     "id": doc_id,
                     "sparse_score": round(score, 6),
-                    "collection": doc_id.split(":")[1] if ":" in doc_id else "unknown",
+                    "collection": doc_id.split(":")[0] if ":" in doc_id else "unknown",
                 }
                 if hasattr(self, "_metadata") and doc_id in self._metadata:
                     entry["metadata"] = self._metadata[doc_id]
