@@ -141,6 +141,9 @@ class MultiEmbedder:
         # collection, cached for the process lifetime. This is what makes
         # the reader recognize ANY vector space, not just mapped ones.
         self._dim_cache: dict[str, int | None] = {}
+        # collections whose vectors are NAMED (e.g. {"dense": [...]}) —
+        # their search bodies must use {"vector": {"dense": vec}}.
+        self._named_vector_collections: set[str] = set()
 
     @staticmethod
     def _qdrant_rest_urls() -> list[str]:
@@ -173,6 +176,7 @@ class MultiEmbedder:
                     cfg = d.get("config", {}).get("params", {}).get("vectors", {})
                     if isinstance(cfg, dict) and "dense" in cfg:
                         dim = cfg["dense"].get("size")
+                        self._named_vector_collections.add(collection)
                     elif isinstance(cfg, dict):
                         dim = cfg.get("size")
                     if isinstance(dim, int):
@@ -349,6 +353,8 @@ class MultiEmbedder:
                         # collections instead of falling to the default.
                         if isinstance(dim, int):
                             self._dim_cache.setdefault(name, dim)
+                        if isinstance(cfg, dict) and "dense" in cfg:
+                            self._named_vector_collections.add(name)
                         resolved_be, resolved_dim = self.backend_for(name)
                         entry_out: dict[str, Any] = {
                             "dim": dim,
@@ -414,8 +420,11 @@ class MultiEmbedder:
             hits: list[dict[str, Any]] = []
             async with httpx.AsyncClient(timeout=20.0) as c:
                 for coll in colls:
+                    vector_field: dict[str, Any] | list[float] = (
+                        {"dense": vec} if coll in self._named_vector_collections else vec
+                    )
                     body: dict[str, Any] = {
-                        "vector": vec,
+                        "vector": vector_field,
                         "limit": limit_per,
                         "with_payload": True,
                     }
