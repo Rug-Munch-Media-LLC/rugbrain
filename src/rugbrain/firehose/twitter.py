@@ -90,4 +90,17 @@ async def pull_social_sentiment(client: httpx.AsyncClient) -> list[dict[str, Any
     except Exception as e:
         logger.warning("Social pull failed: %s", e)
 
+    if not docs:
+        # Backend down / empty → standalone sentiment adapter (Fear & Greed).
+        # NOTE: ct_rundown and scam_monitor have no free direct equivalent —
+        # they stay backend-optional by design (fail-open to empty).
+        try:
+            from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
+
+            docs = await fetch_social_sentiment_direct()
+            if docs:
+                logger.info("social sentiment pulled via DIRECT fallback: %d docs", len(docs))
+        except Exception as e:  # noqa: BLE001 — fail-open to empty
+            logger.warning("direct social-sentiment fallback failed: %s", e)
+
     return docs

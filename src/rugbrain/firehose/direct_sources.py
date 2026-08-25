@@ -33,6 +33,37 @@ _NEWS_FEEDS: tuple[tuple[str, str], ...] = (
 )
 
 _POLYMARKET_GAMMA = "https://gamma-api.polymarket.com/markets"
+_FNG_URL = "https://api.alternative.me/fng/"  # free, no auth
+
+
+async def fetch_social_sentiment_direct() -> list[dict[str, Any]]:
+    """Daily crypto sentiment summary without the backend.
+
+    Uses the alternative.me Fear & Greed Index (free, no auth) as the
+    standalone stand-in for the DataBus social_metrics daily summary.
+    Same doc shape: collection=social_sentiment, type=daily_summary.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+            resp = await client.get(_FNG_URL, params={"limit": 1})
+        if resp.status_code != 200:
+            return []
+        rows = resp.json().get("data") or []
+        if not rows:
+            return []
+        row = rows[0]
+        value = row.get("value", "?")
+        classification = row.get("value_classification", "?")
+        return [
+            {
+                "collection": "social_sentiment",
+                "content": f"Social metrics: Sentiment {value} ({classification}), Trending: []",
+                "metadata": {"source": "fear_greed", "type": "daily_summary"},
+            }
+        ]
+    except Exception as exc:  # noqa: BLE001 — fail-open to empty
+        logger.debug("direct fear-greed fetch failed err=%s", exc)
+        return []
 
 
 def _text_of(node: ET.Element | None) -> str:

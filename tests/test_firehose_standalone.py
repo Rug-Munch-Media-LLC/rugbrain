@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from rugbrain.firehose import news as fh_news
+from rugbrain.firehose import twitter as fh_twitter
 from rugbrain.firehose.direct_sources import (
     fetch_news_direct,
     fetch_prediction_markets_direct,
@@ -156,3 +157,37 @@ def test_polymarket_prices_handle_string_encoded_list():
     prices = '["0.62","0.38"]'
     parsed = _json.loads(prices) if isinstance(prices, str) else prices
     assert parsed == ["0.62", "0.38"]
+
+
+@pytest.mark.asyncio
+async def test_social_sentiment_falls_back_to_fear_greed(monkeypatch):
+    """Dead backend → Fear & Greed adapter produces the daily_summary doc."""
+    from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
+
+    async def fake_direct():
+        return [
+            {
+                "collection": "social_sentiment",
+                "content": "Social metrics: Sentiment 74 (Greed), Trending: []",
+                "metadata": {"source": "fear_greed", "type": "daily_summary"},
+            }
+        ]
+
+    monkeypatch.setattr(
+        "rugbrain.firehose.direct_sources.fetch_social_sentiment_direct",
+        fake_direct,
+    )
+    docs = await fh_twitter.pull_social_sentiment(_dead_backend_client())
+    assert len(docs) == 1
+    assert docs[0]["metadata"]["source"] == "fear_greed"
+    assert docs[0]["metadata"]["type"] == "daily_summary"
+
+
+@pytest.mark.asyncio
+async def test_live_fear_greed_reachable():
+    """Live probe (cheap, no key): alternative.me answers with a value."""
+    from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
+
+    docs = await fetch_social_sentiment_direct()
+    assert docs, "fear-greed direct fetch returned empty"
+    assert "Sentiment" in docs[0]["content"]
