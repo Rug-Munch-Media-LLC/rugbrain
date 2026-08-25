@@ -38,6 +38,9 @@ CHAT_URL = os.getenv("RAG_CHAT_URL", "http://172.22.0.1:8009/v1/chat/completions
 CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "qwen3-8b-instruct")
 CHAT_TIMEOUT = float(os.getenv("RAG_CHAT_TIMEOUT", "45"))
 
+_drafts_cache: dict[str, Any] = {"ts": 0.0, "data": None}
+DRAFTS_CACHE_TTL = int(os.getenv("RAG_DRAFTS_CACHE_TTL", "1800"))  # 30 min
+
 SCANNER_BASE = os.getenv("RMI_SCANNER_BASE_URL", "https://rugmunch.io/scan")
 
 MAX_MAIN_PER_CYCLE = int(os.getenv("RAG_CONTENT_MAX_MAIN", "3"))
@@ -56,18 +59,38 @@ WRITER_SYSTEM_PROMPT = (
 
 async def _write_post(notes: str) -> str | None:
     try:
+        # 2026-08-25: optional Bearer auth so RAG_CHAT_URL can point at a
+        # hosted OpenAI-compatible provider (OpenRouter/DeepSeek) while the
+        # local llama.cpp writer is CPU-starved. Unset = local writer,
+        # behavior unchanged. Switch back by removing RAG_CHAT_* from
+        # .env.rag and recreating the container.
+        api_key = os.getenv("RAG_CHAT_API_KEY", "")
+        headers = None
+        payload: dict[str, Any] = {
+            "model": CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": WRITER_SYSTEM_PROMPT},
+                {"role": "user", "content": notes[:6000]},
+            ],
+            "temperature": 0.4,
+            "max_tokens": 320,
+        }
+        if api_key:
+            # Hosted-provider mode: Bearer auth + explicit UA (gateways
+            # behind Cloudflare historically block python-httpx UAs) +
+            # reasoning-off so reasoning-class models don't burn the token
+            # budget before writing content.
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "User-Agent": "opencode/1.0",
+            }
+            payload["reasoning"] = {"enabled": False}
+            payload["max_tokens"] = 700
         async with httpx.AsyncClient(timeout=CHAT_TIMEOUT) as c:
             r = await c.post(
                 CHAT_URL,
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": WRITER_SYSTEM_PROMPT},
-                        {"role": "user", "content": notes[:6000]},
-                    ],
-                    "temperature": 0.4,
-                    "max_tokens": 320,
-                },
+                headers=headers,
+                json=payload,
             )
             if r.status_code != 200:
                 return None
@@ -203,6 +226,10 @@ async def select_scans(limit: int = 3) -> list[dict[str, Any]]:
 
 
 async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list[dict[str, Any]]]:
+    if _drafts_cache["data"] is not None and time.time() - _drafts_cache["ts"] < DRAFTS_CACHE_TTL:
+        logger.debug("drafts_cache_hit age=%.0fs", time.time() - _drafts_cache["ts"])
+        return _drafts_cache["data"]
+
     started = time.time()
     stories = await _recent_stories()
 
@@ -253,4 +280,6 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
         len(drafts["scans"]),
         time.time() - started,
     )
+    _drafts_cache["ts"] = time.time()
+    _drafts_cache["data"] = drafts
     return drafts
