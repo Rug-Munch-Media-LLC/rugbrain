@@ -54,9 +54,12 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
         )
     last_exc: Exception | None = None
     for name, url in attempts:
+        # Local probe must fail FAST so the remote fallback engages inside
+        # the caller's budget (a wedged :8004 otherwise eats 30s).
+        timeout = 8.0 if name == "local" else 30.0
         headers = {"Authorization": f"Bearer {or_key}"} if name == "openrouter" else {}
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 r = await client.post(
                     url,
                     json={"input": request.text, "model": model},
