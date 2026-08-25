@@ -34,6 +34,10 @@ RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003")
 # re-ranks results from ANY vector space (space-agnostic by construction).
 RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", "http://172.22.0.1:8008")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
+# First-hit on the CPU 0.6B lane measured 7.8s cold (2026-08-25); a 20s
+# caller-side cap made every consumer rerank fail-open. 45s covers cold
+# start + 20-doc batches with margin.
+RERANK_CALL_TIMEOUT = float(os.getenv("RERANK_CALL_TIMEOUT", "45"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 
 _health: dict[str, Any] = {"ok": False, "last_check": 0.0, "latency_ms": 0}
@@ -229,7 +233,7 @@ async def rerank_tiered(
     if not RERANKER_ENABLED or not documents:
         return []
     try:
-        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=RERANK_CALL_TIMEOUT) as client:
             payload: dict[str, Any] = {
                 "query": query,
                 "documents": documents,
