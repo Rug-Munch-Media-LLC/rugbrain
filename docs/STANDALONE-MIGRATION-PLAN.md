@@ -26,12 +26,29 @@ retunes embedder quota → prints verification checklist.
 
 | Unit / cron | Action |
 |---|---|
-| `rmi-rag-permanence.{service,timer}` | rewrite paths → rugbrain; rename unit `rugbrain-permanence.*` |
-| `rmi-rag-firehose.{service,timer}` | same treatment → `rugbrain-firehose.*` |
-| `/etc/cron.d/rugbrain-sec-edgar` | ✅ DONE this commit — `cd rugbrain && docker compose run rag-ingest …` |
+| `rmi-rag-permanence.{service,timer}` | ✅ DONE — replaced by `rugbrain-permanence.*` (paths → rugbrain, After=rugbrain-api) |
+| `rmi-rag-firehose.{service,timer}` | ✅ DONE — dead units removed (no service file; firehose cycles in-container) |
+| `/etc/cron.d/rugbrain-sec-edgar` | ✅ DONE — `cd rugbrain && docker compose run rag-ingest …` |
 | `rag-embed-migration.service` | ✅ disabled (old duplicate writer; migrate-embeds is canonical) |
 | `migrate-embeds.service` | disable + remove AFTER migration completes (gate in flip script) |
 | `mcp-codebase-ingest.service` | points at rmi-codebase-mcp (not rmi-rag) — no change |
+
+### Old qdrant (:6333) — BLOCKED on backend, not ours
+
+Correction (2026-08-25 audit): `rmi-backend` runs with
+`QDRANT_URL=http://rmi-qdrant:6333` — the docker alias `rmi-qdrant` IS the old
+container (`44b1b2f902a8_rmi-qdrant`, host port 6333). The v2 container is
+`rmi-qdrant-v2` (host 6334). Decommissioning the old instance therefore
+requires **rmi-backend to migrate its collections + re-point to
+`rmi-qdrant-v2` first** — a backend-scope project. RugBrain itself already
+talks to v2 exclusively. Do NOT stop the old container until backend moves.
+
+### Shadow-`_i` decision (recorded)
+
+- `news_v2_i` (~7264 pts @2048d): real unique content from the interim window
+  → **backfill** post-flip via `scripts/backfill_shadow_i.py --collection news_v2_i`
+- `threat_intel_v2_i` (~147 pts): same treatment, small
+- all other `_i` shells (0 pts): delete outright at flip cleanup
 
 ## Phase 3 — sever the backend cord (the actual "stand alone" work)
 
