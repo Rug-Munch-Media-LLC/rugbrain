@@ -396,6 +396,11 @@ class MultiEmbedder:
         """Embed once per distinct backend, search each collection, RRF-merge."""
         from collections import defaultdict
 
+        # Self-sufficient qdrant target: callers (HTTP route) may not pass a
+        # URL — an empty one made every fan-out search die on a relative URL.
+        if not qdrant_url:
+            qdrant_url = self._qdrant_rest_urls()[0]
+
         # Recognize ANY vector space: resolve unmapped collections by their
         # ACTUAL dims before grouping, so a 2560 corpus never gets queried
         # with a 2048 nemotron vector (and vice versa) regardless of env.
