@@ -20,6 +20,7 @@ Design (per DESIGN.md M4):
 from __future__ import annotations
 
 import asyncio
+import itertools
 import logging
 import os
 import time
@@ -67,6 +68,22 @@ GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://172.22.0.1:8010")
 QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
+
+# ── NVIDIA NIM direct tier (free credits, separate quota from OpenRouter) ──
+# Both models output 2048d → drop-in compatible with the shadow `_i`
+# collections. Tried in order; 429/5xx rotates to the next model.
+NIM_URL = os.getenv("NVIDIA_EMBED_URL", "https://integrate.api.nvidia.com/v1/embeddings").rstrip(
+    "/"
+)
+NIM_KEY = os.getenv("NVIDIA_API_KEY") or os.getenv("NVIDIA_NIM_API_KEY", "")
+NIM_MODELS = [
+    m.strip()
+    for m in os.getenv(
+        "NVIDIA_EMBED_MODELS",
+        "nvidia/nemotron-3-embed-1b,nvidia/llama-nemotron-embed-vl-1b-v2",
+    ).split(",")
+    if m.strip()
+]
 
 
 class RAGUnavailableError(Exception):
@@ -198,33 +215,106 @@ async def _gateway_embed(
         return None
 
 
-async def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
-    """Try OpenRouter Nemotron. Returns None on any failure.
+def _or_key_pool() -> list[str]:
+    """OpenRouter key pool for the free tier.
 
-    Async (httpx.AsyncClient) so a slow upstream never blocks the event loop.
+    ``OPENROUTER_API_KEYS`` (comma-separated) wins; falls back to the single
+    legacy ``OPENROUTER_API_KEY``. Multiple accounts multiply free-tier budget
+    and give 429 failover (2026-08-25 migration-window directive: use both).
     """
-    key = os.getenv("OPENROUTER_API_KEY")
-    if not key:
+    keys = [k.strip() for k in os.getenv("OPENROUTER_API_KEYS", "").split(",") if k.strip()]
+    if not keys:
+        single = os.getenv("OPENROUTER_API_KEY", "").strip()
+        if single:
+            keys = [single]
+    return keys
+
+
+_OR_KEY_CURSOR = itertools.count()
+
+
+async def _openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+    """Try OpenRouter Nemotron across the account key pool. None on total failure.
+
+    Round-robin start spreads load across accounts; a 429 rotates to the next
+    key before giving up. Async (httpx.AsyncClient) so a slow upstream never
+    blocks the event loop.
+    """
+    keys = _or_key_pool()
+    if not keys:
         return None
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(
-                OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {key}"},
-                json={"model": OPENROUTER_MODEL, "input": text[:8000]},
-            )
-            if r.status_code != 200:
-                return None
-            data = r.json().get("data", [])
-            if not data:
-                return None
-            vec = data[0].get("embedding")
-            if not vec:
-                return None
-            return _resize(vec, dim)
-    except Exception as e:
-        log.debug("openrouter_embed_failed: %s", e)
+    start = next(_OR_KEY_CURSOR) % len(keys)
+    ordered = keys[start:] + keys[:start]
+    for i, key in enumerate(ordered):
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as c:
+                r = await c.post(
+                    OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={"model": OPENROUTER_MODEL, "input": text[:8000]},
+                )
+                if r.status_code == 429:
+                    log.warning(
+                        "openrouter_rate_limited key_tail=%s trying_next=%s",
+                        key[-4:],
+                        i + 1 < len(ordered),
+                    )
+                    continue
+                if r.status_code != 200:
+                    log.debug("openrouter_embed_http_%s", r.status_code)
+                    return None
+                data = r.json().get("data", [])
+                if not data:
+                    return None
+                vec = data[0].get("embedding")
+                if not vec:
+                    return None
+                return _resize(vec, dim)
+        except Exception as e:
+            log.debug("openrouter_embed_failed: %s", e)
+            continue
+    return None
+
+
+async def _nim_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
+    """NVIDIA NIM direct tier — free credits independent of OpenRouter.
+
+    Tries NIM_MODELS in order (429/5xx rotates). Returns None on total
+    failure so the caller can fail loud per T04.
+    """
+    if not NIM_KEY or not NIM_MODELS:
         return None
+    for model in NIM_MODELS:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as c:
+                r = await c.post(
+                    NIM_URL,
+                    headers={"Authorization": f"Bearer {NIM_KEY}"},
+                    json={
+                        "input": [text[:8000]],
+                        "model": model,
+                        "input_type": "query",
+                        "encoding_format": "float",
+                        "truncate": "END",
+                    },
+                )
+                if r.status_code in (429, 500, 502, 503):
+                    log.warning("nim_rate_limited model=%s trying_next", model)
+                    continue
+                if r.status_code != 200:
+                    log.debug("nim_embed_http_%s model=%s", r.status_code, model)
+                    continue
+                data = r.json().get("data", [])
+                if not data:
+                    continue
+                vec = data[0].get("embedding")
+                if not vec:
+                    continue
+                return _resize(vec, dim)
+        except Exception as e:
+            log.debug("nim_embed_failed model=%s: %s", model, e)
+            continue
+    return None
 
 
 async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
@@ -240,7 +330,13 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
         v = await _openrouter_embed(text)
         if v is not None:
             return v
-        raise RAGUnavailableError("openrouter backend failed and hash fallback removed per T04")
+        # Never-go-down: OR pool dry (1k/day/account cap) → NIM free tier.
+        v = await _nim_embed(text)
+        if v is not None:
+            return v
+        raise RAGUnavailableError(
+            "openrouter + nim backends failed and hash fallback removed per T04"
+        )
 
     # auto: try int -> openrouter, fail loud if both fail
     # Probe is sync (cached per process) — run off the event loop so a slow
@@ -256,9 +352,12 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
     v = await _openrouter_embed(text)
     if v is not None:
         return v
+    v = await _nim_embed(text)
+    if v is not None:
+        return v
 
     raise RAGUnavailableError(
-        "no embedding backend available (int unreachable, openrouter failed). "
+        "no embedding backend available (int unreachable, openrouter + nim failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
         f"Verify: QWEN_EMBED_URL={QWEN_EMBED_URL} qwen3-embedding-4b loaded?"
     )

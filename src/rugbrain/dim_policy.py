@@ -24,6 +24,29 @@ from typing import Final
 
 COLLECTION_DIM: Final = 1024
 
+# Native output dims per embedding model (model-card truth, verified live
+# 2026-08-25 against :8004/:8007/OpenRouter). Single source of truth for
+# "which dim does this model produce" — modules must derive defaults from
+# here instead of hardcoding stale numbers.
+MODEL_DIMS: Final[dict[str, int]] = {
+    "qwen3-embedding-4b": 2560,
+    "qwen3-embedding-0.6b": 1024,
+    # OpenRouter :free AND NVIDIA NIM direct — same model, two quotas.
+    "nvidia/nemotron-3-embed-1b": 2048,
+    # NIM direct backup #2 (vision-language embed, text works fine).
+    "nvidia/llama-nemotron-embed-vl-1b-v2": 2048,
+}
+
+
+def native_dims(model: str) -> int | None:
+    """Native output dim for *model*, or None when unknown."""
+    return MODEL_DIMS.get(model.strip().lower())
+
+
+def default_dim_for_model(model: str, fallback: int = COLLECTION_DIM) -> int:
+    """Registry-aware default dim; *fallback* when model is unknown."""
+    return native_dims(model) or fallback
+
 
 def normalize_dims(
     vector: list[float],

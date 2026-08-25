@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from rugbrain.dim_policy import default_dim_for_model
 from rugbrain.feature_extractors import extract_contract_features
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,14 @@ OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "local/your-local-model")
 class Qwen3Embedder:
     """llama.cpp Qwen3-Embedding-4B provider (OpenAI-compatible /embeddings).
 
-    Serves 1024-dim vectors for all RAG ingestion/search paths.
+    Serves native 2560-dim vectors (registry: dim_policy.MODEL_DIMS) for all
+    RAG ingestion/search paths. Default derives from the configured model
+    instead of a stale hardcoded number; env still wins.
     """
 
     EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
     MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-    DIMS = int(os.getenv("QWEN_EMBED_DIMS", "1024"))
+    DIMS = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(MODEL))
 
     def __init__(self, embed_url: str | None = None):
         self.url = embed_url or os.getenv(

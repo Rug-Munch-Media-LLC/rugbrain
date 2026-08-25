@@ -59,6 +59,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from rugbrain.alerts import AlertBus
+from rugbrain.dim_policy import default_dim_for_model, normalize_dims
 
 log = logging.getLogger("rugbrain.realtime_alerts")
 
@@ -94,7 +95,10 @@ CRITICAL_ALERTS_TABLE = os.getenv("CLICKHOUSE_CRITICAL_TABLE", "critical_alerts"
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("QWEN_EMBED_DIMS", "1024")))
+# Registry-aware default (native dim of the configured model); env still wins.
+# 2026-08-25: was hardcoded 1024 while :8004 serves native 2560; live_threats
+# had 0 points so the dim upgrade is migration-free.
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(QWEN_EMBED_MODEL_NAME))
 LIVE_THREATS_COLLECTION = os.getenv("LIVE_THREATS_COLLECTION", "live_threats")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -590,11 +594,9 @@ async def _embed_critical(text: str) -> list[float] | None:
             vec = data[0].get("embedding", [])
             if not isinstance(vec, list) or not vec:
                 return None
-            arr = [float(x) for x in vec[:EMBEDDING_DIM]]
-            norm = sum(x * x for x in arr) ** 0.5
-            if norm > 0:
-                arr = [x / norm for x in arr]
-            return arr
+            # Central dim policy: MRL-truncate oversize + L2 renormalize;
+            # undersize raises (no silent truncation of short vectors).
+            return normalize_dims([float(x) for x in vec], EMBEDDING_DIM)
     except Exception as e:
         log.debug("live_threat_embed_failed: %s", e)
         return None
@@ -623,9 +625,18 @@ async def store_qdrant_live_threat(alert: CriticalAlert) -> bool:
     try:
         embedding = await _embed_critical(alert.text())
         if not embedding:
-            # Keep the point in the collection even when llama.cpp is down —
-            # the payload still carries full threat context.
-            embedding = [0.0] * EMBEDDING_DIM
+            # 2026-08-25 quality fix: do NOT store zero vectors — a [0.0]*N
+            # vector has no direction, so cosine similarity against it is
+            # undefined and poisons nearest-neighbor ranking for every real
+            # query. The alert still flows through ClickHouse/Telegram lanes;
+            # only the vector index skips this point.
+            log.warning(
+                "live_threat_skipped_no_embedding id=%s source=%s (embedder down; "
+                "point NOT indexed to avoid zero-vector poisoning)",
+                alert.id,
+                alert.source,
+            )
+            return False
         async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=30.0) as client:
             if not await _ensure_live_collection(client):
                 return False

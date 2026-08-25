@@ -54,7 +54,14 @@ class Backend:
 
 
 def _default_backends() -> dict[str, Backend]:
-    q4_dim = int(os.getenv("QWEN_EMBED_DIMS", os.getenv("RAG_EMBED_DIM", "1024")))
+    # Registry-aware: native dim of the configured model beats stale hardcoded
+    # 1024 (qwen3-embedding-4b serves native 2560 on :8004 since 2026-08-24).
+    from rugbrain.dim_policy import default_dim_for_model
+
+    _model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+    q4_dim = int(
+        os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or default_dim_for_model(_model)
+    )
     return {
         "qwen4b": Backend(
             "qwen4b",
