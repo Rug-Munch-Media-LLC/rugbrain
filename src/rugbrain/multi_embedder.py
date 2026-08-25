@@ -248,9 +248,9 @@ class MultiEmbedder:
             except Exception as e:
                 last_err = e
                 logger.warning(
-                    "embed_failed backend=%s err=%s — trying fallback",
+                    "embed_failed backend=%s err=%r — trying fallback",
                     name,
-                    str(e)[:80],
+                    repr(e)[:120],
                 )
         raise RuntimeError(f"all embed backends failed for '{backend_name}' {tried}: {last_err}")
 
@@ -420,8 +420,12 @@ class MultiEmbedder:
             hits: list[dict[str, Any]] = []
             async with httpx.AsyncClient(timeout=20.0) as c:
                 for coll in colls:
+                    # Qdrant search API names vectors as {name, vector};
+                    # the {"dense": [...]} shorthand is upsert-only.
                     vector_field: dict[str, Any] | list[float] = (
-                        {"dense": vec} if coll in self._named_vector_collections else vec
+                        {"name": "dense", "vector": vec}
+                        if coll in self._named_vector_collections
+                        else vec
                     )
                     body: dict[str, Any] = {
                         "vector": vector_field,
