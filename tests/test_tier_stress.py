@@ -19,10 +19,14 @@ import pytest
 
 # lite-indexer is an optional external dependency (source code treats it as
 # try/except-optional); skip these stress contracts when it is not installed
-# instead of failing collection for the whole suite.
-pytest.importorskip("lite_indexer", reason="optional lite-indexer package not installed")
+# instead of failing collection for the whole suite. importorskip returns the
+# module — dynamic attribute access keeps pyright clean (no hard import of an
+# uninstalled package).
+lite_indexer_mod = pytest.importorskip(
+    "lite_indexer", reason="optional lite-indexer package not installed"
+)
 
-from lite_indexer.rpc import autotune as at
+at = lite_indexer_mod.rpc.autotune
 
 from rugbrain.search import rerank as rr
 
