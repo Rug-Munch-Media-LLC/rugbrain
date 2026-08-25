@@ -76,3 +76,4 @@ coverage/
 
 /data
 mutants/
+.venv-link
