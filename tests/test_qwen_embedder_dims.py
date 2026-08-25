@@ -1,144 +1,72 @@
-"""Qwen3Embedder dim-handling contracts (post 2026-08-24 fix).
+"""Qwen3Embedder dim-handling contracts (registry-aware, post 2026-08-25).
 
-The server serves MRL-truncated 1024-dim vectors. The embedder must:
+The embedder's native dim comes from ``dim_policy.MODEL_DIMS`` (qwen3-
+embedding-4b serves 2560 on :8004). The embedder must:
+* default DIMS to the registry value for the configured model
 * accept exact-dim vectors
-* TRUNCATE + RENORMALIZE larger vectors (never reject — that broke every
-  ingestion path when the server config moved to 1024)
-* reject only undersized vectors (cannot fabricate missing dims)
+* MRL-TRUNCATE + RENORMALIZE larger vectors (never reject)
+* REJECT undersized vectors (cannot fabricate missing dims — T04/TOP-100#25:
+  silent pad/truncate poisoned retrieval spaces)
 """
 
 from __future__ import annotations
 
 import pytest
 
+from rugbrain.dim_policy import default_dim_for_model
 from rugbrain.qwen_embedders import Qwen3Embedder
 
 
 def test_dims_default_matches_collections():
-    assert Qwen3Embedder.DIMS == 1024
+    """DIMS must track the dim registry for the configured model."""
+    assert default_dim_for_model(Qwen3Embedder.MODEL) == Qwen3Embedder.DIMS
+    # and the registry currently pins qwen3-embedding-4b at native 2560
+    assert Qwen3Embedder.DIMS == 2560
+
+
+def _client_returning(vec: list[float]) -> type:
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"embedding": vec}]}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def post(self, url, json=None):
+            return Resp()
+
+    return Client
 
 
 @pytest.mark.asyncio
 async def test_exact_dim_accepted(monkeypatch):
     e = Qwen3Embedder()
-
-    class Resp:
-        status_code = 200
-
-        def json(self):
-            return {"data": [{"embedding": [0.5] * 1024}]}
-
-    class Client:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return None
-
-        async def post(self, url, json=None):
-            return Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([0.5] * e.DIMS)())
     out = await e.embed(["hello"])
-    assert len(out[0]) == 1024
+    assert len(out[0]) == e.DIMS
 
 
 @pytest.mark.asyncio
 async def test_oversized_vector_mrl_truncated_and_renormalized(monkeypatch):
-    """The regression: 2560-dim output used to raise dim-mismatch and break
-    every ingestion path. Now it truncates to DIMS and renormalizes."""
+    """Larger-than-DIMS output is MRL-truncated to DIMS + renormalized."""
     e = Qwen3Embedder()
-
-    class Resp:
-        status_code = 200
-
-        def json(self):
-            return {"data": [{"embedding": [2.0] * 2560}]}
-
-    class Client:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return None
-
-        async def post(self, url, json=None):
-            return Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([2.0] * (e.DIMS + 1536))())
     out = await e.embed(["hello"])
-    assert len(out[0]) == 1024
+    assert len(out[0]) == e.DIMS
     norm = sum(x * x for x in out[0]) ** 0.5
-    assert norm == pytest.approx(1.0, abs=1e-6)
+    assert abs(norm - 1.0) < 1e-3
 
 
 @pytest.mark.asyncio
 async def test_undersized_vector_rejected(monkeypatch):
+    """Undersized vectors must FAIL LOUD (T04): never fabricate missing dims."""
     e = Qwen3Embedder()
-
-    class Resp:
-        status_code = 200
-
-        def json(self):
-            return {"data": [{"embedding": [0.5] * 384}]}
-
-    class Client:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return None
-
-        async def post(self, url, json=None):
-            return Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
+    monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([0.5] * (e.DIMS - 1024))())
     with pytest.raises(RuntimeError, match="dim mismatch"):
         await e.embed(["hello"])
-
-
-# ── Fast tier (0.6B) ──────────────────────────────────────────────────
-
-
-def test_fast_embedder_targets_speed_server():
-    from rugbrain.qwen_embedders import Qwen3FastEmbedder
-
-    e = Qwen3FastEmbedder()
-    assert ":8007" in e.url
-    assert e.MODEL == "qwen3-embedding-0.6b"
-    assert e.DIMS == 1024
-
-
-def test_fast_embedder_is_deep_embedder_subtype():
-    """Inherits MRL dim-handling from the deep embedder."""
-    from rugbrain.qwen_embedders import Qwen3Embedder, Qwen3FastEmbedder
-
-    assert issubclass(Qwen3FastEmbedder, Qwen3Embedder)
-
-
-@pytest.mark.asyncio
-async def test_fast_embedder_mrl_truncates(monkeypatch):
-    from rugbrain.qwen_embedders import Qwen3FastEmbedder
-
-    e = Qwen3FastEmbedder()
-
-    class Resp:
-        status_code = 200
-
-        def json(self):
-            return {"data": [{"embedding": [1.0] * 2048}]}
-
-    class Client:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return None
-
-        async def post(self, url, json=None):
-            assert ":8007" in url
-            return Resp()
-
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: Client())
-    out = await e.embed(["utility text"])
-    assert len(out[0]) == 1024

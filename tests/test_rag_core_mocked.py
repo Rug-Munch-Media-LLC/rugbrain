@@ -32,10 +32,11 @@ def _fresh_embedder_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("_QWEN_OK", raising=False)
 
 
-def _embed_response(dim: int = 8) -> dict[str, Any]:
-    # Deliberately short vector: _resize() must pad to EMBEDDING_DIM and
-    # L2-normalize, which these tests also verify.
-    return {"data": [{"index": 0, "embedding": [0.5] * dim}]}
+def _embed_response(dim: int | None = None) -> dict[str, Any]:
+    # Full-dim vector: _resize() REJECTS dim mismatches since T04/TOP-100#25
+    # (silent pad/truncate poisoned retrieval spaces). It L2-normalizes only.
+    d = dim if dim is not None else embeddings_mod.EMBEDDING_DIM
+    return {"data": [{"index": 0, "embedding": [0.5] * d}]}
 
 
 @pytest.mark.asyncio

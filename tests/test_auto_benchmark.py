@@ -17,8 +17,19 @@ from typing import Any
 import httpx
 import pytest
 
-RAG_API = "http://127.0.0.1:8012"
-API_KEY = "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M"
+# Live-stack contract tests: need the FULL RAG API running (default
+# :8012). Excluded from CI via -m "not integration"; run explicitly
+# against a deployed stack with RAG_BENCHMARK_API_KEY set.
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not os.getenv("RAG_BENCHMARK_API_KEY"),
+        reason="RAG_BENCHMARK_API_KEY not set (no live RAG stack)",
+    ),
+]
+
+RAG_API = os.getenv("RAG_BENCHMARK_URL", "http://127.0.0.1:8012")
+API_KEY = os.getenv("RAG_BENCHMARK_API_KEY", "")
 HEADERS = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
 SEARCH_URL = f"{RAG_API}/api/v1/search"
 CONFIDENCE_URL = f"{RAG_API}/api/v1/rag/confidence"
