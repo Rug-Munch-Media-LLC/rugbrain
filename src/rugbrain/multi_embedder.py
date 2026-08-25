@@ -259,9 +259,16 @@ class MultiEmbedder:
             if key:
                 headers["Authorization"] = f"Bearer {key}"
         timeout = float(os.getenv("RAG_EMBED_TIMEOUT", "20"))
+        # URL conventions vary by backend: llamacpp entries end at /v1 while
+        # OpenRouter entries carry the full /embeddings path. Normalize.
+        url = (
+            be.url
+            if be.url.rstrip("/").endswith("/embeddings")
+            else be.url.rstrip("/") + "/embeddings"
+        )
         async with httpx.AsyncClient(timeout=timeout) as c:
             r = await c.post(
-                be.url,
+                url,
                 json={"model": be.model, "input": text[:8000]},
                 headers=headers,
             )
