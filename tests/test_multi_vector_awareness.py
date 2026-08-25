@@ -42,7 +42,7 @@ class TestSameSpaceFallbacks:
     async def test_embed_falls_back_when_local_fails(self, me: MultiEmbedder):
         calls: list[str] = []
 
-        async def fake_once(text: str, be):
+        async def fake_once(text: str, be, target_dim=None):
             calls.append(be.name)
             if be.name == "qwen4b":
                 raise RuntimeError("local saturated")
@@ -55,7 +55,7 @@ class TestSameSpaceFallbacks:
 
     @pytest.mark.asyncio
     async def test_embed_disabled_fallback_raises(self, me: MultiEmbedder):
-        async def fake_once(text: str, be):
+        async def fake_once(text: str, be, target_dim=None):
             raise RuntimeError("down")
 
         with (
@@ -69,7 +69,7 @@ class TestSameSpaceFallbacks:
     async def test_embed_no_fallback_on_success(self, me: MultiEmbedder):
         calls: list[str] = []
 
-        async def fake_once(text: str, be):
+        async def fake_once(text: str, be, target_dim=None):
             calls.append(be.name)
             return [0.2] * be.dim
 

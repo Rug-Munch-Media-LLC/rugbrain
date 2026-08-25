@@ -59,9 +59,11 @@ def _default_backends() -> dict[str, Backend]:
     from rugbrain.dim_policy import default_dim_for_model
 
     _model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-    q4_dim = int(
-        os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or default_dim_for_model(_model)
-    )
+    # Registry FIRST: the model's native dim is physical truth. The legacy
+    # global RAG_EMBED_DIM (2048 from the nemotron era) lied about qwen4b and
+    # caused 56 landscape mismatches — it no longer participates here.
+    # QWEN_EMBED_DIMS remains as an explicit, deliberate override.
+    q4_dim = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(_model))
     return {
         "qwen4b": Backend(
             "qwen4b",
@@ -216,13 +218,17 @@ class MultiEmbedder:
         await asyncio.gather(*(self.actual_dim(c) for c in collections))
         return collections
 
-    async def embed(self, text: str, backend_name: str) -> list[float]:
+    async def embed(
+        self, text: str, backend_name: str, target_dim: int | None = None
+    ) -> list[float]:
         """Embed via *backend_name*, falling back to a same-space remote when
         the primary fails (local :8004 saturates under migration load).
 
         Fallbacks are same-model by construction (SAME_SPACE_FALLBACKS), so
         the vector stays comparable with the target collection's space.
-        Disable with RAG_QUERY_REMOTE_FALLBACK=0.
+        ``target_dim`` pins the output to an exact collection dim (MRL
+        truncate-down, e.g. 1024 legacy collections on the native-2560
+        model). Disable remote fallback with RAG_QUERY_REMOTE_FALLBACK=0.
         """
         tried: list[str] = []
         chain: list[str] = [backend_name]
@@ -234,7 +240,7 @@ class MultiEmbedder:
                 continue
             tried.append(name)
             try:
-                return await self._embed_once(text, self.backends[name])
+                return await self._embed_once(text, self.backends[name], target_dim)
             except Exception as e:
                 last_err = e
                 logger.warning(
@@ -244,7 +250,9 @@ class MultiEmbedder:
                 )
         raise RuntimeError(f"all embed backends failed for '{backend_name}' {tried}: {last_err}")
 
-    async def _embed_once(self, text: str, be: Backend) -> list[float]:
+    async def _embed_once(
+        self, text: str, be: Backend, target_dim: int | None = None
+    ) -> list[float]:
         headers: dict[str, str] = {}
         if be.api_key_env:
             key = os.getenv(be.api_key_env, "")
@@ -260,9 +268,11 @@ class MultiEmbedder:
             r.raise_for_status()
             data: list[dict[str, Any]] = r.json()["data"]
             vec: list[float] = data[0]["embedding"]
-        # normalize to the backend's declared dim (truncate-down only)
-        if len(vec) > be.dim:
-            cut = vec[: be.dim]
+        # normalize to the target collection dim (MRL truncate-down only);
+        # falls back to the backend's declared native dim.
+        out_dim = target_dim or be.dim
+        if len(vec) > out_dim:
+            cut = vec[:out_dim]
             norm = sum(x * x for x in cut) ** 0.5
             vec = [x / norm for x in cut] if norm else cut
         return vec
@@ -378,20 +388,25 @@ class MultiEmbedder:
         # with a 2048 nemotron vector (and vice versa) regardless of env.
         await self.resolve_collections(collections)
 
-        groups: dict[str, list[tuple[str, int]]] = defaultdict(list)
+        # Group by (backend, TARGET DIM) — one backend can legitimately serve
+        # multiple spaces (qwen4b native 2560 AND MRL-truncated 1024 legacy);
+        # each distinct dim gets its own query vector.
+        groups: dict[tuple[str, int], list[str]] = defaultdict(list)
         for coll in collections:
             be, dim = self.backend_for(coll)
-            groups[be.name].append((coll, dim))
+            groups[(be.name, dim)].append(coll)
 
-        async def _one_backend(bname: str, colls: list[tuple[str, int]]) -> list[dict[str, Any]]:
+        async def _one_backend(
+            bname: str, target_dim: int, colls: list[str]
+        ) -> list[dict[str, Any]]:
             try:
-                vec = await self.embed(query, bname)
+                vec = await self.embed(query, bname, target_dim=target_dim)
             except Exception as e:
                 logger.warning("fed_embed_failed backend=%s err=%s", bname, str(e)[:80])
                 return []
             hits: list[dict[str, Any]] = []
             async with httpx.AsyncClient(timeout=20.0) as c:
-                for coll, _dim in colls:
+                for coll in colls:
                     body: dict[str, Any] = {
                         "vector": vec,
                         "limit": limit_per,
@@ -423,7 +438,9 @@ class MultiEmbedder:
                         logger.debug("fed_search_failed coll=%s err=%s", coll, str(e)[:60])
             return hits
 
-        results = await asyncio.gather(*(_one_backend(b, cs) for b, cs in groups.items()))
+        results = await asyncio.gather(
+            *(_one_backend(bname, tdim, colls) for (bname, tdim), colls in groups.items())
+        )
 
         # Reciprocal-rank fusion across backend groups (avoids raw-score bias)
         k = 60
