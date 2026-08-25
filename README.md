@@ -145,3 +145,7 @@ See [OPEN-CORE.md](OPEN-CORE.md) for details.
 
 This repo follows Rug Munch Media standards:
 https://github.com/RugMunchMedia/standards
+
+## FAQ
+
+See [docs/FAQ.md](docs/FAQ.md) for frequently asked questions.
