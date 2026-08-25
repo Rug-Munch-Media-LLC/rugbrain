@@ -30,6 +30,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003")
+# Consumer/fast lane: qwen3-reranker-0.6B on :8008 — text-in/score-out, so it
+# re-ranks results from ANY vector space (space-agnostic by construction).
+RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", "http://172.22.0.1:8008")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 
@@ -209,6 +212,40 @@ def get_reranker() -> Reranker:
 
 
 # ── Main async API (new, decoupled) ─────────────────────────────
+
+
+async def rerank_tiered(
+    query: str,
+    documents: list[str],
+    top_k: int = 10,
+    *,
+    tier: str = "fast",
+    raw: bool = False,
+) -> list[dict[str, Any]]:
+    """Tier-aware rerank: 'fast' -> 0.6B (:8008, consumer), 'deep' -> 4B
+    (:8003, big-corpus analysis). Fail-open: returns original order when a
+    lane is unavailable."""
+    url = RERANK_FAST_URL if tier == "fast" else RERANKER_URL
+    if not RERANKER_ENABLED or not documents:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
+            payload: dict[str, Any] = {
+                "query": query,
+                "documents": documents,
+                "top_n": top_k if not raw else len(documents),
+            }
+            resp = await client.post(f"{url}/rerank", json=payload)
+            if resp.status_code != 200:
+                logger.warning("reranker_status=%d url=%s", resp.status_code, url)
+                return []
+            data = resp.json()
+            results: list[dict[str, Any]] = data.get("results", [])
+            results.sort(key=lambda r: r["relevance_score"], reverse=True)
+            return results if raw else results[:top_k]
+    except Exception as exc:
+        logger.warning("reranker_unreachable url=%s err=%s", url, str(exc)[:80])
+        return []
 
 
 async def rerank(

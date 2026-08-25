@@ -392,6 +392,7 @@ class MultiEmbedder:
         limit_per: int = 8,
         min_similarity: float = 0.0,
         qdrant_url: str = "",
+        rerank_tier: str = "fast",
     ) -> list[dict[str, Any]]:
         """Embed once per distinct backend, search each collection, RRF-merge."""
         from collections import defaultdict
@@ -484,6 +485,29 @@ class MultiEmbedder:
             item = dict(best[key])
             item["rrf"] = round(s, 6)
             merged.append(item)
+
+        # Tier-aware rerank of the merged cross-space results. Rerankers are
+        # TEXT-based — space-agnostic — so one pass covers every backend.
+        # 'fast' = 0.6B consumer lane (:8008); 'deep' = 4B (:8003);
+        # 'off' skips. Fail-open: RRF order survives any reranker outage.
+        if rerank_tier in ("fast", "deep") and merged:
+            try:
+                from rugbrain.reranker import rerank_tiered
+
+                docs = [str(m.get("content", ""))[:1500] for m in merged]
+                scored = await rerank_tiered(
+                    query, docs, top_k=len(merged), tier=rerank_tier, raw=True
+                )
+                if scored:
+                    reranked: list[dict[str, Any]] = []
+                    for r in scored:
+                        item = dict(merged[r["index"]])
+                        item["rerank_score"] = round(r["relevance_score"], 6)
+                        item["rerank_tier"] = rerank_tier
+                        reranked.append(item)
+                    return reranked
+            except Exception as e:
+                logger.warning("fed_rerank_failed tier=%s err=%s", rerank_tier, str(e)[:80])
         return merged
 
 

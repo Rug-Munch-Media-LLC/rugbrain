@@ -26,12 +26,17 @@ async def federated_search(
         description="comma-separated collections (each routed by its backend map entry)",
     ),
     limit: int = Query(default=10, ge=1, le=50),
+    rerank: str = Query(
+        default="fast",
+        pattern="^(fast|deep|off)$",
+        description="rerank lane: fast=0.6B consumer (:8008), deep=4B (:8003), off",
+    ),
 ) -> dict[str, Any]:
     from rugbrain.multi_embedder import get_multi_embedder
 
     colls = [c.strip() for c in collections.split(",") if c.strip()]
     me = get_multi_embedder()
-    results = await me.federated_search(q, colls, limit_per=limit)
+    results = await me.federated_search(q, colls, limit_per=limit, rerank_tier=rerank)
     return {
         "query": q,
         "collections": colls,
