@@ -18,6 +18,10 @@ router: APIRouter = APIRouter(tags=["rag-optimization"])
 
 class EmbedRequest(BaseModel):
     text: str
+    # Target dim (MRL truncate-down, L2-renormalized). Consumers embedding
+    # into a specific collection pass its dim (e.g. news_v2=2560); omit to
+    # get the model's native output.
+    dimensions: int | None = None
 
 
 @router.get("/health")
@@ -41,6 +45,10 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
             if r.status_code == 200:
                 data = r.json()
                 vec = data.get("data", [{}])[0].get("embedding", [])
+                if request.dimensions and len(vec) > request.dimensions:
+                    from rugbrain.dim_policy import normalize_dims
+
+                    vec = normalize_dims(vec, request.dimensions)
                 return {"embedding": vec, "dim": len(vec)}
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Embedder unavailable: {e}") from e
