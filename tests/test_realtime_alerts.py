@@ -141,11 +141,11 @@ async def test_deliver_webhooks_signed(monkeypatch: pytest.MonkeyPatch) -> Any:
     received: dict[str, Any] = {}
 
     async def fake_post(
-            url: Any,
-            content: Any = None,
-            headers: Any = None,
-            **kwargs: Any,
-        ) -> Any:
+        url: Any,
+        content: Any = None,
+        headers: Any = None,
+        **kwargs: Any,
+    ) -> Any:
         received["url"] = url
         received["content"] = content
         received["headers"] = headers
@@ -296,9 +296,7 @@ class _FakeCh:
         self._rows = rows_by_contains
         self.queries: list[str] = []
 
-    def query(
-            self, sql: Any, parameters: Any = None, settings: Any = None
-        ) -> Any:
+    def query(self, sql: Any, parameters: Any = None, settings: Any = None) -> Any:
         self.queries.append(sql)
         rows = []
         for needle, hits in self._rows.items():
@@ -386,8 +384,13 @@ _RPC_BLOCK = {
 
 def _rpc_handler(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ra, "ETH_RPC_URL", "https://example.invalid/rpc")
-    monkeypatch.setattr(ra, "ETH_PRICE_USD", 3000.0)
     monkeypatch.setattr(ra, "LARGE_TX_USD", 1_000_000.0)
+
+    async def fake_eth_price(_symbol: str) -> float:
+        assert _symbol == "ethereum"
+        return 3000.0
+
+    monkeypatch.setattr(ra, "resolve_native_price", fake_eth_price)
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -406,7 +409,8 @@ async def test_poll_ethereum_rpc_filters_large(monkeypatch: pytest.MonkeyPatch) 
         alerts = await ra.poll_ethereum_rpc(client)
     assert len(alerts) == 1
     assert alerts[0].tx_hash == "0xaaa"
-    assert alerts[0].amount_usd == pytest.approx(100_000_000, rel=1e-3)
+    # 10^21 wei = 1000 ETH at the mocked $3000 -> $3,000,000
+    assert alerts[0].amount_usd == pytest.approx(3_000_000, rel=1e-3)
 
 
 @pytest.mark.asyncio
@@ -419,9 +423,14 @@ async def test_poll_ethereum_rpc_disabled_when_no_url() -> None:
 @pytest.mark.asyncio
 async def test_poll_solana_rpc(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(ra, "SOLANA_RPC_URL", "https://example.invalid/sol")
-    monkeypatch.setattr(ra, "SOL_PRICE_USD", 150.0)
     monkeypatch.setattr(ra, "LARGE_TX_USD", 1_000_000.0)
-    # Threshold: 1e6 / 150 * 1e9 lamports ≈ 6.67e12 — craft a bigger delta.
+
+    async def fake_sol_price(_symbol: str) -> float:
+        assert _symbol == "solana"
+        return 150.0
+
+    monkeypatch.setattr(ra, "resolve_native_price", fake_sol_price)
+    # Threshold: 1e6 / 150 * 1e9 lamports ≈ 6.67e12 — delta below is 7e12.
     block = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -429,8 +438,8 @@ async def test_poll_solana_rpc(monkeypatch: pytest.MonkeyPatch) -> Any:
             "transactions": [
                 {
                     "meta": {
-                        "preBalances": [1_000_000_000, 100],
-                        "postBalances": [0, 1_000_000_100],
+                        "preBalances": [7_000_000_000_000, 100],
+                        "postBalances": [0, 7_000_000_000_100],
                     },
                     "transaction": {"signatures": ["sig1"]},
                 },
@@ -544,10 +553,10 @@ async def test_monitor_pipeline_runs_every_step(monkeypatch: pytest.MonkeyPatch)
         return True
 
     async def fake_deliver(
-            alert: Any,
-            registry: Any = None,
-            client: Any = None,
-        ) -> Any:
+        alert: Any,
+        registry: Any = None,
+        client: Any = None,
+    ) -> Any:
         calls["wh"] += 1
         return {"delivered": 1, "failed": 0, "errors": []}
 
@@ -584,10 +593,10 @@ async def test_monitor_dedup_skips_second_alert(monkeypatch: pytest.MonkeyPatch)
             pass
 
     async def fake_deliver(
-            alert: Any,
-            registry: Any = None,
-            client: Any = None,
-        ) -> Any:
+        alert: Any,
+        registry: Any = None,
+        client: Any = None,
+    ) -> Any:
         return {"delivered": 0, "failed": 0, "errors": []}
 
     async def fake_tg(alert: Any) -> Any:
@@ -621,3 +630,44 @@ async def test_start_stop_monitor_idempotent() -> None:
     assert await ra.start_realtime_monitor() is True
     await ra.stop_realtime_monitor()
     assert not ra.is_realtime_monitor_running()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Live native-asset pricing (2026-08-25 — ends frozen-price alerts)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.asyncio
+async def test_resolve_price_caches_within_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Second call inside the TTL window must NOT re-fetch."""
+    ra._price_cache.clear()
+    calls = {"n": 0}
+
+    async def fake_fetch(symbol: str) -> float:
+        calls["n"] += 1
+        return 123.0
+
+    monkeypatch.setattr(ra, "_fetch_live_price", fake_fetch)
+    first = await ra.resolve_native_price("solana")
+    second = await ra.resolve_native_price("solana")
+    assert first == second == 123.0
+    assert calls["n"] == 1
+    ra._price_cache.clear()
+
+
+@pytest.mark.asyncio
+async def test_resolve_price_falls_back_to_env_constant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live fetch failure -> env constant; both unavailable -> 0 (stand down)."""
+    ra._price_cache.clear()
+
+    async def boom(_symbol: str) -> float:
+        raise RuntimeError("coingecko down")
+
+    monkeypatch.setattr(ra, "_fetch_live_price", boom)
+    monkeypatch.setattr(ra, "SOL_PRICE_USD", 210.0)
+    assert await ra.resolve_native_price("solana") == 210.0
+
+    ra._price_cache.clear()  # drop the 210 entry before testing the 0 path
+    monkeypatch.setattr(ra, "SOL_PRICE_USD", 0.0)
+    assert await ra.resolve_native_price("solana") == 0.0
+    ra._price_cache.clear()

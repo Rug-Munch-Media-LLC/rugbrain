@@ -125,8 +125,8 @@ async def test_crawl_many_bounded_concurrency(monkeypatch: pytest.MonkeyPatch) -
 # ── Entry points (store mocked to avoid network) ─────────────────────────
 
 
-def _fake_store_fn(stored: list[list[dict[str, Any]]]) -> Any:
-    async def fake_store(docs: list[dict[str, Any]], collection: str) -> dict[str, int]:
+def _fake_store_fn(stored: list[list[Any]]) -> Any:
+    async def fake_store(docs: list[Any], collection: str) -> dict[str, int]:
         stored.append(docs)
         return {"inserted": len(docs), "failed": 0, "chunks": len(docs)}
 
@@ -214,7 +214,7 @@ async def test_crawl_social_sentiment_via_searxng(monkeypatch: pytest.MonkeyPatc
     )
     result = await mod.crawl_social_sentiment(c, limit=30)
     assert result["inserted"] == len(mod.X_ACCOUNTS)
-    assert stored and stored[0][0]["source"].startswith("x:")
+    assert stored and stored[0][0].source.startswith("x:")
 
 
 @respx.mock
@@ -242,7 +242,7 @@ async def test_crawl_github_audits(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     result = await mod.crawl_github_audits(c, limit=15)
     assert result["inserted"] == 1
-    assert stored and stored[0][0]["metadata"]["repo"] == "org/audit-repo"
+    assert stored and stored[0][0].metadata["repo"] == "org/audit-repo"
 
 
 @respx.mock

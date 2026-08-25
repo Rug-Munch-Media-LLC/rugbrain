@@ -51,7 +51,9 @@ def _fake_score_factory(
 ) -> Any:
     """Build an async ``_score_candidates`` stand-in returning *scores*."""
 
-    async def fake_score(query: str, candidates: list[dict[str, Any]]) -> tuple[list[float], str]:
+    async def fake_score(
+        query: str, candidates: list[dict[str, Any]], tier: str = "deep"
+    ) -> tuple[list[float], str]:
         if seen is not None:
             seen.append(candidates)
         return list(scores), method
@@ -67,7 +69,9 @@ def test_rerank_module_imports_cleanly() -> None:
     import rugbrain.search.rerank  # noqa: F401
 
 
-def test_rerank_chunks_noop_fallback_orders_by_original_score(monkeypatch: pytest.MonkeyPatch) -> Any:
+def test_rerank_chunks_noop_fallback_orders_by_original_score(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     """Scorer unavailable -> docs keep original ordering, tagged 'none'."""
     monkeypatch.setattr(rerank_mod, "_score_candidates", _fake_score_factory([], method="none"))
 
@@ -242,7 +246,9 @@ async def _fake_keyword_search(
     ]
 
 
-def test_search_multi_collection_hybrid_surfaces_keyword_only_hits(monkeypatch: pytest.MonkeyPatch) -> Any:
+def test_search_multi_collection_hybrid_surfaces_keyword_only_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     """hybrid=True fuses the keyword lane; keyword-only hits survive truncation."""
     monkeypatch.setattr(engine_mod, "search_similar", _fake_search_similar)
     monkeypatch.setattr(engine_mod, "_hybrid_keyword_search", _fake_keyword_search)
@@ -428,9 +434,7 @@ def _patch_three_pillar_externals(monkeypatch: pytest.MonkeyPatch) -> Any:
             {"id": "vb", "similarity": 0.85, "content": "vector b", "collection": "coll_b"},
         ]
 
-    async def fake_splade(
-        query: str, collections: list[str] | None = None, limit: int = 20
-    ) -> Any:
+    async def fake_splade(query: str, collections: list[str] | None = None, limit: int = 20) -> Any:
         return []
 
     monkeypatch.setattr(engine_mod, "get_embedder", fake_get_embedder)
@@ -484,7 +488,9 @@ def test_three_pillar_search_hybrid_off_skips_keyword_lane(monkeypatch: pytest.M
     assert {r["id"] for r in out["results"]} == {"va", "vb"}
 
 
-def test_three_pillar_search_rerank_applies_before_truncation(monkeypatch: pytest.MonkeyPatch) -> Any:
+def test_three_pillar_search_rerank_applies_before_truncation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     _patch_three_pillar_externals(monkeypatch)
 
     async def fake_rerank_chunks(

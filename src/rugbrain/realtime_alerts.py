@@ -123,11 +123,69 @@ ORACLE_VOLUME_USD = float(os.getenv("REALTIME_ORACLE_VOLUME_USD", "2000000"))
 # policy: no hardcoded RPC URLs in code; supply via env on the host).
 ETH_RPC_URL = os.getenv("ETH_RPC_URL", "").strip()
 SOLANA_RPC_URL = os.getenv("SOLANA_RPC_URL", "").strip()
+# ETH/SOL prices are LIVE (CoinGecko, TTL-cached) — the old import-time
+# constants displayed a frozen price "for days" (or 0, silently disabling
+# the monitors). Env values remain only as offline fallback.
 ETH_PRICE_USD = float(os.getenv("ETH_PRICE_USD", "0"))
 SOL_PRICE_USD = float(os.getenv("SOL_PRICE_USD", "0"))
 ETH_LARGE_TX_WEI = float(os.getenv("ETH_LARGE_TX_WEI", "0"))  # fallback when price unset
 SOLANA_LARGE_TX_LAMPORTS = float(os.getenv("SOLANA_LARGE_TX_LAMPORTS", "0"))
 RPC_MAX_TXS = int(os.getenv("REALTIME_RPC_MAX_TXS", "200"))
+
+# ── Live native-asset pricing (2026-08-25) ────────────────────────────────
+# CoinGecko simple-price, no auth, free tier (10-30 req/min). Polls run on
+# block cadence, so a 120s TTL keeps us far under any limit while every
+# alert computes USD at a CURRENT price. Fail-open: on fetch error we fall
+# back to the env constant (and if that is 0 too, the monitor stands down
+# rather than printing nonsense).
+_PRICE_TTL_S = int(os.getenv("REALTIME_PRICE_TTL_S", "120"))
+_price_cache: dict[str, tuple[float, float]] = {}  # symbol -> (price, monotonic_ts)
+
+_COINGECKO_IDS = {"ethereum": "ethereum", "solana": "solana"}
+
+
+async def _fetch_live_price(symbol: str) -> float:
+    """Fetch the current USD price for *symbol* from CoinGecko (no auth).
+
+    Raises on network/parse failure — callers handle the fallback.
+    """
+    cg_id = _COINGECKO_IDS.get(symbol)
+    if not cg_id:
+        return 0.0
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient(timeout=5.0) as client:
+        r = await client.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": cg_id, "vs_currencies": "usd"},
+        )
+        r.raise_for_status()
+        return float(r.json()[cg_id]["usd"])
+
+
+async def resolve_native_price(symbol: str) -> float:
+    """Current USD price for *symbol*: live (TTL-cached) → env fallback.
+
+    Returns 0.0 when both sources are unavailable; callers stand down on 0
+    instead of computing nonsense USD amounts.
+    """
+    import time as _time
+
+    now = _time.monotonic()
+    cached = _price_cache.get(symbol)
+    if cached and now - cached[1] < _PRICE_TTL_S:
+        return cached[0]
+    try:
+        price = await _fetch_live_price(symbol)
+    except Exception as e:
+        log.debug("live_price_fetch_failed symbol=%s: %s", symbol, str(e)[:80])
+        price = 0.0
+    if price <= 0:
+        price = ETH_PRICE_USD if symbol == "ethereum" else SOL_PRICE_USD
+    if price > 0:
+        _price_cache[symbol] = (price, now)
+    return price
+
 
 WEBHOOK_REDIS_PREFIX = "rag:webhooks:"
 SEEN_REDIS_PREFIX = "rag:exploit:seen:"
@@ -1085,9 +1143,10 @@ async def poll_ethereum_rpc(client: httpx.AsyncClient) -> list[CriticalAlert]:
     """Large native-value transactions on the latest Ethereum block."""
     if not ETH_RPC_URL:
         return []
+    eth_price = await resolve_native_price("ethereum")
     threshold_wei = ETH_LARGE_TX_WEI
-    if ETH_PRICE_USD > 0:
-        threshold_wei = LARGE_TX_USD / ETH_PRICE_USD * 1e18
+    if eth_price > 0:
+        threshold_wei = LARGE_TX_USD / eth_price * 1e18
     if threshold_wei <= 0:
         return []
     candidates: list[CriticalAlert] = []
@@ -1102,7 +1161,7 @@ async def poll_ethereum_rpc(client: httpx.AsyncClient) -> list[CriticalAlert]:
                 continue
             if value_wei < threshold_wei:
                 continue
-            usd = value_wei * ETH_PRICE_USD / 1e18 if ETH_PRICE_USD > 0 else 0.0
+            usd = value_wei * eth_price / 1e18 if eth_price > 0 else 0.0
             candidates.append(
                 CriticalAlert.from_candidate(
                     title=f"Large ETH transfer ({usd:,.0f} USD)",
@@ -1127,9 +1186,10 @@ async def poll_solana_rpc(client: httpx.AsyncClient) -> list[CriticalAlert]:
     """Large balance deltas on the latest Solana block."""
     if not SOLANA_RPC_URL:
         return []
+    sol_price = await resolve_native_price("solana")
     threshold_lamports = SOLANA_LARGE_TX_LAMPORTS
-    if SOL_PRICE_USD > 0:
-        threshold_lamports = LARGE_TX_USD / SOL_PRICE_USD * 1e9
+    if sol_price > 0:
+        threshold_lamports = LARGE_TX_USD / sol_price * 1e9
     if threshold_lamports <= 0:
         return []
     candidates: list[CriticalAlert] = []
@@ -1161,7 +1221,7 @@ async def poll_solana_rpc(client: httpx.AsyncClient) -> list[CriticalAlert]:
                 continue
             if max_delta < threshold_lamports:
                 continue
-            usd = max_delta * SOL_PRICE_USD / 1e9 if SOL_PRICE_USD > 0 else 0.0
+            usd = max_delta * sol_price / 1e9 if sol_price > 0 else 0.0
             sigs = (tx.get("transaction") or {}).get("signatures") or []
             candidates.append(
                 CriticalAlert.from_candidate(
