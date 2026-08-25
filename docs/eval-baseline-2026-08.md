@@ -119,7 +119,7 @@ well under 60s for a single input. Do not start while the embedder is
 saturated.
 
 ```bash
-cd /srv/work/repos/rmi-rag
+cd ~/rugbrain
 
 # Baseline (rerank=false), live endpoint — requires RMI_RAG_API_KEY in env
 # (set via: set -a; source .env.rag; set +a)

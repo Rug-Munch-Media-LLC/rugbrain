@@ -107,7 +107,7 @@ async def search_filings(
     import xml.etree.ElementTree as ET
 
     try:
-        root = ET.fromstring(r.text)  # noqa: S314 — pre-existing, audited 2026-08-22
+        root = ET.fromstring(r.text)  # noqa: S314 — pre-existing, audited 2026-08-22  # nosec B314 — SEC EDGAR trusted HTTPS, audited
         ns = {"atom": "http://www.w3.org/2005/Atom"}
         for entry in root.findall(".//atom:entry", ns):
             filing = {

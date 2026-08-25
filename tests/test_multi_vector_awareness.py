@@ -123,9 +123,12 @@ class TestLandscape:
         assert w["inferred_backend"] == "qwen4b"
         assert n["dim"] == 2048
         assert n["inferred_backend"] == "nemotron"
-        # default resolution for unmapped collections is qwen4b@registry-dim;
-        # news_v2_i at 2048 must surface as a MISMATCH against that.
-        assert any(m["collection"] == "news_v2_i" for m in out["mismatches"])
+        # Dim-driven resolution (2026-08-25): landscape seeds the actual dim
+        # into the cache BEFORE resolving, so news_v2_i correctly resolves
+        # nemotron@2048 — NO false mismatch for unmapped collections.
+        assert n["configured_backend"] == "nemotron"
+        assert n["configured_dim"] == 2048
+        assert not any(m["collection"] == "news_v2_i" for m in out["mismatches"])
 
     @pytest.mark.asyncio
     async def test_landscape_survives_instance_down(self, me: MultiEmbedder):
@@ -180,3 +183,36 @@ class TestDimDrivenResolution:
         urls = MultiEmbedder._qdrant_rest_urls()
         assert all(u.endswith(":6333") for u in urls)  # no gRPC :6334
         assert len(urls) == len(set(urls))
+
+
+class TestLandscapeTrueMismatch:
+    @pytest.mark.asyncio
+    async def test_explicit_env_misconfig_still_flags(self):
+        """An EXPLICIT wrong env map entry must still surface as MISMATCH."""
+        me = MultiEmbedder()
+        me.collection_map["wallet_v2"] = ("nemotron", 2048)  # wrong on purpose
+
+        class FakeResp:
+            def __init__(self, data):
+                self._d = data
+
+            def json(self):
+                return self._d
+
+        async def fake_get(self, url, **kw):
+            if url.endswith("/collections"):
+                return FakeResp({"result": {"collections": [{"name": "wallet_v2"}]}})
+            return FakeResp(
+                {
+                    "result": {
+                        "config": {"params": {"vectors": {"dense": {"size": 2560}}}},
+                        "points_count": 100,
+                    }
+                }
+            )
+
+        with patch("httpx.AsyncClient.get", new=fake_get):
+            out = await me.landscape(["http://qdrant-test:6333"])
+        assert any(m["collection"] == "wallet_v2" for m in out["mismatches"])
+        entry = out["instances"]["http://qdrant-test:6333"]["wallet_v2"]
+        assert entry["MISMATCH"] is True

@@ -1,6 +1,7 @@
-// RugMunch fleet commitlint — canonical type set + rugbrain's extra
-// 'migrate' type (schema/data migrations). ops:/security: are
-// fleet-mandated types (AGENTS.md) — do not remove.
+// RugMunch fleet commitlint — canonical config (2026-08-23)
+// Types match AGENTS.md convention. NOTE: ops: and security: are
+// FLEET-MANDATED types (AGENTS.md, fleet-infra rules) — do not remove
+// them or convention-compliant commits fail CI.
 module.exports = {
 	extends: ["@commitlint/config-conventional"],
 	rules: {
@@ -21,7 +22,6 @@ module.exports = {
 				"revert",
 				"ops",
 				"security",
-				"migrate",
 			],
 		],
 		"scope-case": [2, "always", "lower-case"],

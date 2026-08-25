@@ -70,7 +70,7 @@ done
 
 ### Create / verify the collection
 ```bash
-cd /srv/work/repos/rmi-rag && .venv/bin/python -m scripts.dual_tier.schema_setup
+cd ~/rugbrain && .venv/bin/python -m scripts.dual_tier.schema_setup
 ```
 
 ### Backfill speed_vector (AFTER embed-migration completes)

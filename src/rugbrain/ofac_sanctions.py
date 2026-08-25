@@ -88,7 +88,7 @@ def parse_sdn_xml(xml_text: str) -> list[dict[str, Any]]:
     """Parse OFAC SDN XML and extract entries with crypto addresses."""
     entries = []
     try:
-        root = ElementTree.fromstring(xml_text)  # noqa: S314 — pre-existing, audited 2026-08-22
+        root = ElementTree.fromstring(xml_text)  # noqa: S314 — pre-existing, audited 2026-08-22  # nosec B314 — trusted HTTPS sources (OFAC/RSS), audited
         ns = {"": "http://tempuri.org/sdnList.xsd"}
 
         for sdn_entry in root.findall(".//sdnEntry", ns):

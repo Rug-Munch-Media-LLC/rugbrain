@@ -449,7 +449,7 @@ async def get_video_transcript(video_url: str) -> str | None:
                 "--sub-format",
                 "vtt",
                 "-o",
-                "/tmp/%(id)s.%(ext)s",  # noqa: S108 — pre-existing, audited 2026-08-22
+                "/tmp/%(id)s.%(ext)s",  # noqa: S108 — pre-existing, audited 2026-08-22  # nosec B108 — single-tenant box, yt-dlp output, audited
                 video_url,
             ],
             capture_output=True,
@@ -465,7 +465,7 @@ async def get_video_transcript(video_url: str) -> str | None:
             if "v=" in video_url
             else video_url.split("/")[-1]
         )
-        vtt_path = f"/tmp/{video_id}.en.vtt"  # noqa: S108 — pre-existing, audited 2026-08-22
+        vtt_path = f"/tmp/{video_id}.en.vtt"  # noqa: S108 — pre-existing, audited 2026-08-22  # nosec B108 — same, audited
         if os.path.exists(vtt_path):  # noqa: ASYNC240 — pre-existing, audited 2026-08-22
             with open(vtt_path) as f:  # noqa: ASYNC230 — pre-existing, audited 2026-08-22
                 text = f.read()

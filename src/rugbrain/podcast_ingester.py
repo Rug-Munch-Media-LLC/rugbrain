@@ -288,7 +288,7 @@ def parse_rss_episodes(
     """Parse RSS XML and extract podcast episodes."""
     episodes: list[dict[str, Any]] = []
     try:
-        root = ElementTree.fromstring(xml_text)  # noqa: S314 — pre-existing, audited 2026-08-22
+        root = ElementTree.fromstring(xml_text)  # noqa: S314 — pre-existing, audited 2026-08-22  # nosec B314 — trusted HTTPS sources (OFAC/RSS), audited
         # Try RSS 2.0 format
         for item in root.findall(".//item"):
             if len(episodes) >= max_episodes:

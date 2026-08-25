@@ -326,6 +326,12 @@ class MultiEmbedder:
                             dim = None
                         count = detail.get("points_count")
                         total += count or 0
+                        # Judge configuration against REALITY: seed the dim
+                        # cache with the actual dim we just read, so
+                        # backend_for() resolves dim-driven for unmapped
+                        # collections instead of falling to the default.
+                        if isinstance(dim, int):
+                            self._dim_cache.setdefault(name, dim)
                         resolved_be, resolved_dim = self.backend_for(name)
                         entry_out: dict[str, Any] = {
                             "dim": dim,
