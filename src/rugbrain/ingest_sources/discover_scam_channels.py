@@ -139,12 +139,12 @@ async def join_and_register(client: Any, username: str, state: dict[str, Any]) -
     # register into sweep list
     existing = set()
     try:
-        with open(CHANNELS_FILE) as f:
+        with open(CHANNELS_FILE) as f:  # noqa: ASYNC230 — tiny local config read
             existing = {ln.strip() for ln in f if ln.strip()}
     except OSError:
         pass
     if username not in existing:
-        with open(CHANNELS_FILE, "a") as f:
+        with open(CHANNELS_FILE, "a") as f:  # noqa: ASYNC230 — tiny local config append
             f.write(username + "\n")
 
     inv = state.setdefault("inventory", [])
@@ -192,7 +192,7 @@ async def run(join_count: int = 0) -> dict[str, Any]:
             joined += 1
             report["joined"].append(cand["username"])
             # jitter between joins — never rapid-fire
-            await asyncio.sleep(random.uniform(45, 120))
+            await asyncio.sleep(random.Random().uniform(45, 120))  # noqa: S311 — join jitter, not crypto
     _save_state(state)
     await client.disconnect()
     report["joined_count"] = joined

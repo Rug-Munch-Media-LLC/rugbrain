@@ -33,7 +33,7 @@ def _clean_strain_and_health():
 async def test_live_caps_candidates_and_hits_fast_server(monkeypatch):
     calls: list[tuple[str, int]] = []
 
-    async def fake_post(url, query, docs, timeout, label):
+    async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         calls.append((url, len(docs)))
         return [{"index": i, "relevance_score": 0.9} for i in range(len(docs))]
 
@@ -50,7 +50,7 @@ async def test_live_caps_candidates_and_hits_fast_server(monkeypatch):
 async def test_live_ladder_falls_back_to_deep(monkeypatch):
     calls: list[tuple[str, int]] = []
 
-    async def fake_post(url, query, docs, timeout, label):
+    async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         calls.append((url, len(docs)))
         if url == rr.RERANKER_URL_LIVE:
             return None
@@ -67,7 +67,7 @@ async def test_live_ladder_falls_back_to_deep(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_both_tiers_down_fail_open(monkeypatch):
-    async def none_post(url, query, docs, timeout, label):
+    async def none_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         return None
 
     monkeypatch.setattr(rr, "_post_rerank", none_post)
@@ -79,7 +79,7 @@ async def test_both_tiers_down_fail_open(monkeypatch):
 async def test_deep_default_single_shot(monkeypatch):
     calls: list[str] = []
 
-    async def fake_post(url, query, docs, timeout, label):
+    async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         calls.append(url)
         return [{"index": 0, "relevance_score": 0.7}]
 
@@ -110,7 +110,7 @@ def test_strain_breaker_skips_failing_endpoint(monkeypatch):
 
     called: list[str] = []
 
-    async def spy_post(url, query, docs, timeout, label):
+    async def spy_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         called.append(url)
         return None
 
