@@ -16,6 +16,12 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+
+# lite-indexer is an optional external dependency (source code treats it as
+# try/except-optional); skip these stress contracts when it is not installed
+# instead of failing collection for the whole suite.
+pytest.importorskip("lite_indexer", reason="optional lite-indexer package not installed")
+
 from lite_indexer.rpc import autotune as at
 
 from rugbrain.search import rerank as rr
@@ -26,7 +32,9 @@ async def test_50_concurrent_live_scorings_complete(monkeypatch):
     """Parallel consumers hammering the ladder: every call resolves."""
     rr._clear_strain()
 
-    async def flaky_post(url, query, docs, timeout, label):
+    # Signature mirror of rr._post_rerank — the timeout param name is part
+    # of the mocked contract, so ASYNC109's asyncio.timeout advice can't apply.
+    async def flaky_post(url, query, docs, timeout, label):  # noqa: ASYNC109
         await asyncio.sleep(0.001)
         if url == rr.RERANKER_URL_LIVE and len(docs) % 2 == 0:
             return None  # even-sized batches strain the fast server

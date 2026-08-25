@@ -7,6 +7,7 @@ HTTP providers so no external service is contacted.
 from __future__ import annotations
 
 import importlib as _il
+import time
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -19,7 +20,10 @@ mod = market_context
 
 
 def _transport(
-    fear: dict[str, Any], chains: list[dict[str, Any]], new: list[dict[str, Any]], hacks: list[dict[str, Any]]
+    fear: dict[str, Any],
+    chains: list[dict[str, Any]],
+    new: list[dict[str, Any]],
+    hacks: list[dict[str, Any]],
 ) -> httpx.MockTransport:
     """Build a MockTransport that routes by URL suffix."""
 
@@ -62,9 +66,6 @@ def _fresh_client(*a: Any, **k: Any) -> Any:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="_fetch_fear_index now calls rugbrain.fear_index.get_fear_index which creates its own HTTP connections — mock transport bypassed"
-)
 async def test_build_market_mood() -> None:
     transport = _transport(
         fear={"data": [{"value": "20"}]},
@@ -83,6 +84,15 @@ async def test_build_market_mood() -> None:
 
     with (
         patch("httpx.AsyncClient", side_effect=lambda *a, **k: _fresh_client(transport=transport)),
+        # Fear seam mocked directly: _fetch_fear_index delegates to
+        # rugbrain.fear_index.get_fear_index which opens its own real
+        # connections (ClickHouse/Redis/HTTP) — never contact them here.
+        patch.object(
+            mod,
+            "_fetch_fear_index",
+            new_callable=AsyncMock,
+            return_value={"value": 20.0, "classification": "fearful"},
+        ),
         patch.object(mod, "_MOOD_CACHE", {}),
     ):
         mood = await mod.build_market_mood(chain="ethereum")
@@ -97,9 +107,6 @@ async def test_build_market_mood() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="_fetch_fear_index calls rugbrain.fear_index.get_fear_index (bypasses mock transport)"
-)
 async def test_build_market_mood_fail_open() -> None:
     """Provider outage yields neutral values, not an exception."""
     transport = httpx.MockTransport(
@@ -108,6 +115,14 @@ async def test_build_market_mood_fail_open() -> None:
 
     with (
         patch("httpx.AsyncClient", side_effect=lambda *a, **k: _fresh_client(transport=transport)),
+        patch.object(
+            mod,
+            "_fetch_fear_index",
+            new_callable=AsyncMock,
+            # Model the seam's real degradation contract: provider outage
+            # yields the neutral default (fail-open), never a raise.
+            return_value={"value": 50.0, "classification": "neutral"},
+        ),
         patch.object(mod, "_MOOD_CACHE", {}),
     ):
         mood = await mod.build_market_mood(chain="ethereum")
@@ -130,6 +145,24 @@ async def test_build_token_market_context() -> None:
 
     with (
         patch("httpx.AsyncClient", side_effect=lambda *a, **k: _fresh_client(transport=transport)),
+        # All provider seams mocked: keeps the test hermetic (no real
+        # ClickHouse/Redis/HTTP from fear_index) and immune to cross-test
+        # event-loop pollution. Freshness stays on the dexscreener transport
+        # above — its classification is what this test verifies.
+        patch.object(
+            mod,
+            "_fetch_fear_index",
+            new_callable=AsyncMock,
+            return_value={"value": 80.0, "classification": "greedy"},
+        ),
+        patch.object(
+            mod,
+            "_fetch_chain_activity",
+            new_callable=AsyncMock,
+            return_value={"tvl": 5e10, "tvl_change_24h": 2.0},
+        ),
+        patch.object(mod, "_fetch_new_deploys", new_callable=AsyncMock, return_value=1),
+        patch.object(mod, "_fetch_recent_exploits", new_callable=AsyncMock, return_value=[]),
         patch(
             "rugbrain.market_context._fetch_social_signals",
             new_callable=AsyncMock,
@@ -183,10 +216,30 @@ async def test_build_token_market_context_deployer_freshness_new() -> Any:
         return httpx.Response(404, json={})
 
     with (
+        # side_effect FACTORY (not return_value): every httpx.AsyncClient(...)
+        # call must yield a FRESH client instance. A single shared instance
+        # raises "Cannot open a client instance more than once" when both the
+        # outer context client and the freshness fetcher open one.
         patch(
             "httpx.AsyncClient",
-            return_value=httpx.AsyncClient(transport=httpx.MockTransport(handler=handler)),
+            side_effect=lambda *a, **k: _fresh_client(
+                transport=httpx.MockTransport(handler=handler)
+            ),
         ),
+        patch.object(
+            mod,
+            "_fetch_fear_index",
+            new_callable=AsyncMock,
+            return_value={"value": 50.0, "classification": "neutral"},
+        ),
+        patch.object(
+            mod,
+            "_fetch_chain_activity",
+            new_callable=AsyncMock,
+            return_value={"tvl": 0, "tvl_change_24h": 0.0},
+        ),
+        patch.object(mod, "_fetch_new_deploys", new_callable=AsyncMock, return_value=0),
+        patch.object(mod, "_fetch_recent_exploits", new_callable=AsyncMock, return_value=[]),
         patch(
             "rugbrain.market_context._fetch_social_signals",
             new_callable=AsyncMock,
@@ -204,3 +257,66 @@ async def test_build_token_market_context_deployer_freshness_new() -> Any:
         ctx = await mod.build_token_market_context(address=address, chain="ethereum")
 
     assert ctx["deployer_freshness"] == "new"
+
+
+# ── Direct _fetch_deployer_freshness classification units ────────────────
+# Hermetic: exercise the classification logic through its own HTTP seam
+# without going through build_token_market_context's gather.
+
+
+def _dexscreener_transport(pair_created_at: int | None) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "dexscreener" not in str(request.url):
+            return httpx.Response(404, json={})
+        if pair_created_at is None:
+            return httpx.Response(200, json={"pairs": []})
+        return httpx.Response(
+            200,
+            json={"pairs": [{"pairCreatedAt": pair_created_at, "baseToken": {"symbol": "T"}}]},
+        )
+
+    return httpx.MockTransport(handler=handler)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("created_ms", "expected"),
+    [
+        (int(time.time() * 1000) - 24 * 3600 * 1000, "new"),  # 24h old → new
+        (1_600_000_000_000, "established"),  # ~Sep 2020 → established
+    ],
+)
+async def test_fetch_deployer_freshness_classification(created_ms: int, expected: str) -> Any:
+    transport = _dexscreener_transport(created_ms)
+    with patch(
+        "httpx.AsyncClient",
+        side_effect=lambda *a, **k: _fresh_client(transport=transport),
+    ):
+        result = await mod._fetch_deployer_freshness("0x" + "c" * 40, "ethereum")
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_fetch_deployer_freshness_unknown_on_provider_error() -> Any:
+    """Non-2xx provider response degrades to unknown, never raises."""
+    transport = httpx.MockTransport(
+        handler=lambda request: httpx.Response(500, json={"error": "boom"})
+    )
+    with patch(
+        "httpx.AsyncClient",
+        side_effect=lambda *a, **k: _fresh_client(transport=transport),
+    ):
+        result = await mod._fetch_deployer_freshness("0x" + "d" * 40, "ethereum")
+    assert result == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_fetch_deployer_freshness_unknown_on_empty_pairs() -> Any:
+    """No pairs data → unknown (no age signal available)."""
+    transport = _dexscreener_transport(None)
+    with patch(
+        "httpx.AsyncClient",
+        side_effect=lambda *a, **k: _fresh_client(transport=transport),
+    ):
+        result = await mod._fetch_deployer_freshness("0x" + "e" * 40, "ethereum")
+    assert result == "unknown"
