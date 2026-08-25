@@ -121,13 +121,19 @@ def _template_post(story: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-async def _compose(story: dict[str, Any]) -> str:
+async def _compose(story: dict[str, Any]) -> tuple[str, str]:
+    """Write one post. Returns ``(text, writer)`` where writer is "llm" or
+    "template" (2026-08-25 WO-3: the bot's quality gate drops template
+    output — a dead writer must degrade to silence, never to slop)."""
     notes = (
         f"Story notes:\n{story.get('content', '')[:3000]}\n\n"
         f"Severity: {story.get('severity', 'medium')}\n"
         f"Source link: {story.get('url') or '(none provided)'}"
     )
-    return await _write_post(notes) or _template_post(story)
+    written = await _write_post(notes)
+    if written:
+        return written, "llm"
+    return _template_post(story), "template"
 
 
 async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
@@ -241,11 +247,11 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
 
     # Write ALL posts concurrently under one hard deadline — the local chat
     # model shares CPU with the migration; serialized calls stall the endpoint.
-    async def _timed_compose(story: dict[str, Any]) -> str:
+    async def _timed_compose(story: dict[str, Any]) -> tuple[str, str]:
         try:
             return await asyncio.wait_for(_compose(story), timeout=25.0)
         except Exception:
-            return _template_post(story)
+            return _template_post(story), "template"
 
     jobs: list[tuple[str, dict[str, Any], asyncio.Task]] = []
     for s in alert_stories[:5]:
@@ -257,7 +263,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
 
     done, _pending = await asyncio.wait([j[2] for j in jobs], timeout=40.0)
     for channel, story, task in jobs:
-        text = task.result() if task in done else _template_post(story)
+        text, writer = task.result() if task in done else (_template_post(story), "template")
         if channel == "main" and story.get("url"):
             text += f"\n\nFull coverage: {story['url']}"
         drafts[channel].append(
@@ -266,6 +272,11 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
                 "story_ref": story["source"],
                 "mirror": channel == "main",
                 "kind": story.get("kind", "story"),
+                # WO-3 quality-gate fields (2026-08-25): the bot drops
+                # writer=="template" drafts and anything scoring under
+                # RMI_RAG_POST_MIN_SCORE. Template output never posts.
+                "writer": writer,
+                "score": float(story.get("importance") or 0.0),
             }
         )
 
