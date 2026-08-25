@@ -89,7 +89,7 @@ NIM_MODELS = [
 class RAGUnavailableError(Exception):
     """Raised when no embedding backend is reachable. The RAG endpoint
     translates this to HTTP 503 + an explicit empty-result body.
-    See T04 in MINIMAX_M3_TASKS.md."""
+    Policy: fail loud (T04) — no hash fallback, no silent empty results."""
 
 
 def _int_reachable() -> bool:
