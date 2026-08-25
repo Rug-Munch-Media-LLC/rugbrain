@@ -85,7 +85,29 @@ def _default_backends() -> dict[str, Backend]:
             model=os.getenv("RAG_OPENROUTER_FREE_MODEL", "nvidia/nemotron-3-embed-1b:free"),
             api_key_env="OPENROUTER_API_KEY",
         ),
+        # Same-model remote for the qwen4b space (OpenRouter hosts the exact
+        # same qwen3-embedding-4b, verified 2560-dim 2026-08-25). Used ONLY as
+        # a query-time fallback when the local :8004 is saturated/wedged —
+        # same model ⇒ same vector space ⇒ results stay comparable.
+        # Disable with RAG_QUERY_REMOTE_FALLBACK=0.
+        "or_qwen4b": Backend(
+            "or_qwen4b",
+            "openrouter",
+            os.getenv("OR_QWEN_EMBED_URL", "https://openrouter.ai/api/v1/embeddings"),
+            q4_dim,
+            model=os.getenv("OR_QWEN_EMBED_MODEL", "qwen/qwen3-embedding-4b"),
+            api_key_env="OPENROUTER_API_KEY",
+        ),
     }
+
+
+# Query-time same-space fallback chains: when the primary backend fails
+# (timeout/5xx/429) try the next that serves the SAME model family, so the
+# produced vector remains comparable with the target collection's space.
+SAME_SPACE_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "qwen4b": ("or_qwen4b",),
+    "or_qwen4b": ("qwen4b",),
+}
 
 
 def _parse_collection_map() -> dict[str, tuple[str, int]]:
@@ -125,13 +147,41 @@ class MultiEmbedder:
         return be, be.dim
 
     async def embed(self, text: str, backend_name: str) -> list[float]:
-        be = self.backends[backend_name]
+        """Embed via *backend_name*, falling back to a same-space remote when
+        the primary fails (local :8004 saturates under migration load).
+
+        Fallbacks are same-model by construction (SAME_SPACE_FALLBACKS), so
+        the vector stays comparable with the target collection's space.
+        Disable with RAG_QUERY_REMOTE_FALLBACK=0.
+        """
+        tried: list[str] = []
+        chain: list[str] = [backend_name]
+        if os.getenv("RAG_QUERY_REMOTE_FALLBACK", "1") != "0":
+            chain.extend(SAME_SPACE_FALLBACKS.get(backend_name, ()))
+        last_err: Exception | None = None
+        for name in chain:
+            if name not in self.backends:
+                continue
+            tried.append(name)
+            try:
+                return await self._embed_once(text, self.backends[name])
+            except Exception as e:
+                last_err = e
+                logger.warning(
+                    "embed_failed backend=%s err=%s — trying fallback",
+                    name,
+                    str(e)[:80],
+                )
+        raise RuntimeError(f"all embed backends failed for '{backend_name}' {tried}: {last_err}")
+
+    async def _embed_once(self, text: str, be: Backend) -> list[float]:
         headers: dict[str, str] = {}
         if be.api_key_env:
             key = os.getenv(be.api_key_env, "")
             if key:
                 headers["Authorization"] = f"Bearer {key}"
-        async with httpx.AsyncClient(timeout=45.0) as c:
+        timeout = float(os.getenv("RAG_EMBED_TIMEOUT", "20"))
+        async with httpx.AsyncClient(timeout=timeout) as c:
             r = await c.post(
                 be.url,
                 json={"model": be.model, "input": text[:8000]},
@@ -146,6 +196,90 @@ class MultiEmbedder:
             norm = sum(x * x for x in cut) ** 0.5
             vec = [x / norm for x in cut] if norm else cut
         return vec
+
+    async def landscape(self, qdrant_urls: list[str] | None = None) -> dict[str, Any]:
+        """Live introspection of the ENTIRE vector landscape.
+
+        Reads every collection's ACTUAL dim + point count from each Qdrant
+        instance, infers the producing backend from the dim registry, and
+        flags mismatches against this MultiEmbedder's configured resolution.
+        This is the human/agent-readable answer to 'what vectors do we have
+        and can we query them all?'
+        """
+        import time
+
+        urls = qdrant_urls or [
+            u.strip()
+            for u in os.getenv(
+                "RAG_QDRANT_URLS", "http://127.0.0.1:6333,http://127.0.0.1:6334"
+            ).split(",")
+            if u.strip()
+        ]
+        t0 = time.monotonic()
+
+        def _infer(dim: int | None) -> str:
+            if dim == 2560:
+                return "qwen4b"
+            if dim == 2048:
+                return "nemotron"
+            if dim == 1024:
+                return "legacy-1024 (qwen4b-trunc or qwen06b)"
+            if dim is None:
+                return "unnamed/multivector-config"
+            return f"unknown-dim-{dim}"
+
+        out: dict[str, Any] = {
+            "instances": {},
+            "mismatches": [],
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        total = 0
+        for url in urls:
+            cols: dict[str, Any] = {}
+            try:
+                async with httpx.AsyncClient(timeout=10) as c:
+                    lst = (await c.get(f"{url}/collections")).json()["result"]["collections"]
+                    for entry in lst:
+                        name = entry["name"]
+                        detail = (await c.get(f"{url}/collections/{name}")).json().get("result", {})
+                        cfg = detail.get("config", {}).get("params", {}).get("vectors", {})
+                        if isinstance(cfg, dict) and "dense" in cfg:
+                            dim = cfg["dense"].get("size")
+                        elif isinstance(cfg, dict):
+                            dim = cfg.get("size")
+                        else:
+                            dim = None
+                        count = detail.get("points_count")
+                        total += count or 0
+                        resolved_be, resolved_dim = self.backend_for(name)
+                        entry_out: dict[str, Any] = {
+                            "dim": dim,
+                            "points": count,
+                            "inferred_backend": _infer(dim),
+                            "configured_backend": resolved_be.name,
+                            "configured_dim": resolved_dim,
+                        }
+                        if isinstance(dim, int) and dim != resolved_dim:
+                            entry_out["MISMATCH"] = True
+                            out["mismatches"].append(
+                                {
+                                    "url": url,
+                                    "collection": name,
+                                    "actual_dim": dim,
+                                    "configured_dim": resolved_dim,
+                                    "hint": (
+                                        "searches against this collection will fail; "
+                                        "fix RAG_COLLECTION_BACKENDS or reindex"
+                                    ),
+                                }
+                            )
+                        cols[name] = entry_out
+            except Exception as e:
+                cols["_error"] = str(e)[:200]
+            out["instances"][url] = cols
+        out["total_points"] = total
+        out["elapsed_ms"] = round((time.monotonic() - t0) * 1000, 1)
+        return out
 
     async def federated_search(
         self,

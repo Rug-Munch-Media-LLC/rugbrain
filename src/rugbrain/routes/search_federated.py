@@ -47,3 +47,19 @@ def _qdrant_base() -> str:
     return os.getenv("QDRANT_URL", os.getenv("QDRANT_FALLBACK", "http://127.0.0.1:6334")).rstrip(
         "/"
     )
+
+
+@router.get("/vector-landscape")
+async def vector_landscape() -> dict[str, Any]:
+    """Live map of EVERY vector space in the fleet.
+
+    For each Qdrant instance: every collection's actual dim + point count,
+    the inferred producing backend (2560=qwen4b, 2048=nemotron,
+    1024=legacy-trunc/qwen06b), the configured resolution, and MISMATCH
+    flags where searches would fail. The single answer to 'what vectors do
+    we have and can we query them all?'
+    """
+    from rugbrain.multi_embedder import get_multi_embedder
+
+    me = get_multi_embedder()
+    return await me.landscape()
