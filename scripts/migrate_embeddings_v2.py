@@ -123,6 +123,35 @@ async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list
     return [d["embedding"] for d in data]
 
 
+async def _embed_batch_resilient(
+    client: httpx.AsyncClient, texts: list[str]
+) -> tuple[list[list[float]], list[int]]:
+    """Embed a batch, surviving context-overflow poison items (2026-08-26).
+
+    On HTTP 400 exceed_context_size: bisect the batch; a single offending
+    item gets its text hard-truncated (3500 chars ≈ <900 tokens) and
+    retried once. Returns (vectors, indices_dropped). Never raises for
+    overflow — this bug crash-looped the migration for hours.
+    """
+    try:
+        vecs = await _embed_batch(client, texts)
+        return vecs, []
+    except _EmbedHTTPError as e:
+        if "exceed_context" not in str(e) or len(texts) == 1:
+            # single poison item -> truncate hard and retry once
+            t = texts[0][:3500]
+            try:
+                return await _embed_batch(client, [t]), []
+            except _EmbedHTTPError:
+                logger.warning("poison item dropped (unembeddable even truncated)")
+                return [], [0]
+        mid = len(texts) // 2
+        left_v, left_d = await _embed_batch_resilient(client, texts[:mid])
+        right_v, right_d = await _embed_batch_resilient(client, texts[mid:])
+        dropped = left_d + [mid + d for d in right_d]
+        return left_v + right_v, dropped
+
+
 async def _embed_query(client: httpx.AsyncClient, query: str) -> list[float]:
     resp = await client.post(
         f"{EMBEDDER}/v1/embeddings", json=_embed_payload([INSTRUCT.format(query)])
@@ -207,9 +236,21 @@ async def migrate_collection(
         work_t, work_i, work_p = texts, ids, payloads
         _pending_slices: list[tuple[list, list, list]] = []
         consecutive_failures = 0
+        _ctx_truncated = False  # local flag — never stored in payloads
         while True:
             try:
-                vecs = await _embed_batch(client, work_t)
+                vecs, dropped_idx = await _embed_batch_resilient(client, work_t)
+                if dropped_idx:
+                    logger.warning(
+                        "%s: dropped %d unembeddable docs at offset=%d",
+                        name,
+                        len(dropped_idx),
+                        offset,
+                    )
+                    keep = [i for i in range(len(work_t)) if i not in set(dropped_idx)]
+                    work_t = [work_t[i] for i in keep]
+                    work_i = [work_i[i] for i in keep]
+                    work_p = [work_p[i] for i in keep]
                 points_to_upsert = []
                 for i, vec in enumerate(vecs):
                     point = {"id": work_i[i], "payload": work_p[i]}
@@ -249,6 +290,47 @@ async def migrate_collection(
                 # Fail fast on permanent errors (bad model/dims/auth);
                 # back off harder on rate limits.
                 if 400 <= e.status < 500 and e.status != 429:
+                    # 2026-08-26: exceed_context_size is NOT fatal — it means
+                    # this slice's token count overflowed the embedder window.
+                    # Halve multi-doc slices (same as timeouts); a single doc
+                    # that alone overflows gets truncated to the char budget
+                    # and retried once, then skipped. Crash-restarting on the
+                    # same offset forever starves the shared embedder.
+                    msg = str(e)
+                    if "exceed" in msg.lower() and "context" in msg.lower():
+                        if len(work_t) > 1:
+                            half = max(1, len(work_t) // 2)
+                            logger.warning(
+                                "batch_split_ctx %s offset=%d: %d docs over ctx — halving to %d",
+                                name,
+                                offset,
+                                len(work_t),
+                                half,
+                            )
+                            _pending_slices.append((work_t[half:], work_i[half:], work_p[half:]))
+                            work_t, work_i, work_p = work_t[:half], work_i[:half], work_p[:half]
+                            continue
+                        if not _ctx_truncated:
+                            logger.warning(
+                                "doc_TRUNCATE %s offset=%d: single doc over ctx — retrying at 60%% chars",
+                                name,
+                                offset,
+                            )
+                            _ctx_truncated = True
+                            work_t = [work_t[0][: int(len(work_t[0]) * 0.6)]]
+                            work_i, work_p = [work_i[0]], [work_p[0]]
+                            continue
+                        logger.error(
+                            "doc_SKIP %s offset=%d: still over ctx after truncate — skipping",
+                            name,
+                            offset,
+                        )
+                        offset += len(work_t)
+                        consecutive_failures = 0
+                        if _pending_slices:
+                            work_t, work_i, work_p = _pending_slices.pop()
+                            continue
+                        break
                     logger.error("batch_FATAL %s offset=%d: %s", name, offset, e)
                     raise
                 consecutive_failures += 1
@@ -370,7 +452,10 @@ async def main() -> int:
     async with _httpx.AsyncClient(
         timeout=900.0,
         headers=headers,
-        limits=_httpx.Limits(max_keepalive_connections=0, max_connections=50),
+        # keepalive>0: with 0, concurrent sends raced client connection
+        # teardown -> 'Cannot send a request, as the client has been
+        # closed' crash-restart loops (~400 items lost per cycle).
+        limits=_httpx.Limits(max_keepalive_connections=20, max_connections=50),
     ) as client:
         cols = [
             c["name"]
