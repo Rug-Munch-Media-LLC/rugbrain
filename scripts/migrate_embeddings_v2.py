@@ -242,10 +242,7 @@ async def migrate_collection(
                 vecs, dropped_idx = await _embed_batch_resilient(client, work_t)
                 if dropped_idx:
                     logger.warning(
-                        "%s: dropped %d unembeddable docs at offset=%d",
-                        name,
-                        len(dropped_idx),
-                        offset,
+                        "%s: dropped %d unembeddable docs at offset=%d", name, len(dropped_idx), offset
                     )
                     keep = [i for i in range(len(work_t)) if i not in set(dropped_idx)]
                     work_t = [work_t[i] for i in keep]

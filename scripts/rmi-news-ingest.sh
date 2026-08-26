@@ -82,6 +82,14 @@ else
 fi
 
 # ── Step 2: news → embed → Qdrant ───────────────────────────────────
+# ── Step 1.5: DataBus aggregate -> news_items (200 sources, reranked) ──
+log "step=aggregate_sync dir=$RMI_BACKEND_DIR"
+(
+  cd "$RMI_BACKEND_DIR" \
+    && JWT_SECRET="$(cat /srv/secrets/jwt_secret 2>/dev/null | head -1)" \
+    .venv/bin/python scripts/backfill_news_items_from_aggregate.py 120
+) || echo "aggregate_sync failed (non-fatal)" >&2
+
 log "step=news_to_rag dir=$RAG_DIR"
 if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
