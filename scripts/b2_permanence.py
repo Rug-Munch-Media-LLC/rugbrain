@@ -85,8 +85,12 @@ from b2_common import (
 logger = logging.getLogger("b2_permanence")
 
 # Qdrant fallback chain (mirrors src/rugbrain/qdrant_store.py)
-DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333")
-DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")
+# 2026-08-29: was http://rmi-qdrant-v2:6333 — this script runs on the HOST via
+# systemd (not inside the Docker network), so the container alias never
+# resolved and the fallback chain landed on 127.0.0.1:6333, the decommissioned
+# legacy v1 instance (empty). Production rmi-qdrant-v2 publishes 6333->6334.
+DEFAULT_QDRANT_HOST = os.getenv("QDRANT_URL", "http://127.0.0.1:6334")
+DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6334")
 
 MANIFEST_NAME = "manifest.json"
 LATEST_NAME = "latest.json"
