@@ -13,7 +13,11 @@ serves them back through semantic, hybrid, and entity-aware search. Powers
 the scanner's **Known Scam Patterns** check, the bot's `/research` and
 `/investigate` commands, and the frontend's AI chat / wallet forensics.
 
-**Status:** live service, 40+ Qdrant collections populated (see
+**Status:** DEPRECATED — do not develop, deploy, or file issues here.
+Canonical repo: **`rugbrain`** (`/srv/work/repos/rugbrain`). The runtime
+services (`rag-api`, `rag-consumer`) execute `rugbrain` code via this venv's
+`rugbrain.pth` path shim; this checkout exists only so that venv keeps
+resolving. 40+ Qdrant collections remain live (see
 [docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) for the live
 inventory; [TODO.md](TODO.md) for honest current gaps).
 
