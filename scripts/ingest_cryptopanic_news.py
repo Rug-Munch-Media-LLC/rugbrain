@@ -168,10 +168,16 @@ async def fetch_and_parse(client: httpx.AsyncClient, feed_url: str) -> list[dict
     return items
 
 
-async def run(days: int | None, dry_run: bool, feed_url: str | None) -> dict[str, Any]:
+async def run(
+    days: int | None,
+    dry_run: bool,
+    feed_url: str | None,
+    feeds_file: str | None = None,
+) -> dict[str, Any]:
     stats: dict[str, Any] = {
         "collection": "news_v2 (via Postgres news_items + news_to_rag.py)",
         "source": SOURCE,
+        "feeds": 0,
         "feed_items": 0,
         "new": 0,
         "duplicate": 0,
@@ -179,7 +185,28 @@ async def run(days: int | None, dry_run: bool, feed_url: str | None) -> dict[str
         "blocked": False,
         "dry_run": dry_run,
     }
-    url = feed_url or _resolve_feed_url()
+    # Multi-feed mode: --feeds-file with one "URL [Source Name]" per line
+    # (blank lines / # comments ignored). Falls back to the single CryptoPanic
+    # feed when not provided (backward compatible).
+    feeds: list[tuple[str, str]] = []
+    if feeds_file:
+        with open(feeds_file, encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(None, 1)
+                url = parts[0]
+                name = (
+                    parts[1].strip()
+                    if len(parts) > 1
+                    else re.sub(r"^https?://", "", url).split("/")[0]
+                )
+                feeds.append((url, name))
+        logger.info("feeds_file_loaded count=%d path=%s", len(feeds), feeds_file)
+    if not feeds:
+        feeds = [(feed_url or _resolve_feed_url(), SOURCE)]
+    stats["feeds"] = len(feeds)
     pg_host = os.getenv("POSTGRES_HOST", "127.0.0.1")
     pg_port = int(os.getenv("POSTGRES_PORT", "5432"))
     pg_user = os.getenv("POSTGRES_USER", "rmi")
@@ -204,76 +231,86 @@ async def run(days: int | None, dry_run: bool, feed_url: str | None) -> dict[str
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            try:
-                items = await fetch_and_parse(client, url)
-            except Exception as e:  # blocked or network
-                msg = str(e)
-                if "blocked" in msg:
-                    stats["blocked"] = True
-                    logger.warning("cryptopanic_blocked: %s", msg)
-                else:
-                    stats["errors"] += 1
-                    logger.warning("cryptopanic_fetch_failed err=%s", msg[:200])
-                return stats
-            stats["feed_items"] = len(items)
-
             cutoff: datetime | None = None
             if days:
                 cutoff = datetime.now(UTC) - timedelta(days=days)
 
-            for it in items:
-                title = it["title"]
-                link = it["link"] or it["guid"]
-                if not title or not link:
-                    stats["errors"] += 1
-                    continue
-                pub_ts = 0.0
-                if it["pubDate"]:
-                    with contextlib.suppress(ValueError, TypeError):
-                        pub_ts = parsedate_to_datetime(it["pubDate"]).timestamp()
-                if cutoff is not None and pub_ts and pub_ts < cutoff.timestamp():
-                    continue
-                pub_dt = datetime.fromtimestamp(pub_ts, tz=UTC) if pub_ts else datetime.now(UTC)
-                text = f"{title} {it['description']}"
-                chains = _detect_chains(text)
-                tickers = _extract_tickers(text)
-                news_id = _stable_news_id(link)
-
-                if dry_run:
-                    stats["new"] += 1
-                    continue
-
-                assert conn is not None
+            for feed_idx, (url, feed_source) in enumerate(feeds):
                 try:
-                    existing = await conn.fetchval(
-                        "SELECT 1 FROM news_items WHERE news_id=$1", news_id
-                    )
-                    if existing:
-                        stats["duplicate"] += 1
+                    items = await fetch_and_parse(client, url)
+                except Exception as e:  # blocked or network — per-feed fail-open
+                    msg = str(e)
+                    if "blocked" in msg:
+                        stats["blocked"] = True
+                        logger.warning("feed_blocked url=%s err=%s", url, msg[:150])
+                    else:
+                        stats["errors"] += 1
+                        logger.warning("feed_fetch_failed url=%s err=%s", url, msg[:150])
+                    continue
+                stats["feed_items"] += len(items)
+
+                for it in items:
+                    title = it["title"]
+                    link = it["link"] or it["guid"]
+                    if not title or not link:
+                        stats["errors"] += 1
                         continue
-                    await conn.execute(
-                        """
-                        INSERT INTO news_items (
-                            news_id, url, title, summary, body_markdown,
-                            source, published_at, ingested_at,
-                            chains_mentioned, tokens_mentioned, sentiment_score
-                        ) VALUES ($1,$2,$3,$4,NULL,$5,$6,now(),$7,$8,NULL)
-                        """,
-                        news_id,
-                        link[:2048],
-                        title[:500],
-                        (it["description"] or "")[:2000],
-                        SOURCE,
-                        pub_dt,
-                        chains,
-                        tickers,
+                    pub_ts = 0.0
+                    if it["pubDate"]:
+                        with contextlib.suppress(ValueError, TypeError):
+                            pub_ts = parsedate_to_datetime(it["pubDate"]).timestamp()
+                    if cutoff is not None and pub_ts and pub_ts < cutoff.timestamp():
+                        continue
+                    pub_dt = datetime.fromtimestamp(pub_ts, tz=UTC) if pub_ts else datetime.now(UTC)
+                    text = f"{title} {it['description']}"
+                    chains = _detect_chains(text)
+                    tickers = _extract_tickers(text)
+                    news_id = _stable_news_id(link)
+
+                    if dry_run:
+                        stats["new"] += 1
+                        continue
+
+                    assert conn is not None
+                    try:
+                        existing = await conn.fetchval(
+                            "SELECT 1 FROM news_items WHERE news_id=$1", news_id
+                        )
+                        if existing:
+                            stats["duplicate"] += 1
+                            continue
+                        await conn.execute(
+                            """
+                            INSERT INTO news_items (
+                                news_id, url, title, summary, body_markdown,
+                                source, published_at, ingested_at,
+                                chains_mentioned, tokens_mentioned, sentiment_score
+                            ) VALUES ($1,$2,$3,$4,NULL,$5,$6,now(),$7,$8,NULL)
+                            """,
+                            news_id,
+                            link[:2048],
+                            title[:500],
+                            (it["description"] or "")[:2000],
+                            feed_source,
+                            pub_dt,
+                            chains,
+                            tickers,
+                        )
+                        stats["new"] += 1
+                    except (asyncpg.PostgresError, ValueError, TypeError) as e:
+                        stats["errors"] += 1
+                        logger.warning("item_insert_fail news_id=%s err=%s", news_id, str(e)[:150])
+                if conn is not None and not dry_run:
+                    await conn.execute("COMMIT")
+                if (feed_idx + 1) % 25 == 0:
+                    logger.info(
+                        "feeds_progress done=%d/%d new=%d dup=%d errors=%d",
+                        feed_idx + 1,
+                        len(feeds),
+                        stats["new"],
+                        stats["duplicate"],
+                        stats["errors"],
                     )
-                    stats["new"] += 1
-                except (asyncpg.PostgresError, ValueError, TypeError) as e:
-                    stats["errors"] += 1
-                    logger.warning("item_insert_fail news_id=%s err=%s", news_id, str(e)[:150])
-            if conn is not None:
-                await conn.execute("COMMIT")
     finally:
         if conn is not None:
             await conn.close()
@@ -306,9 +343,14 @@ def main() -> None:
     parser.add_argument(
         "--feed-url", default=None, help="override feed URL (public RSS or API RSS with token)"
     )
+    parser.add_argument(
+        "--feeds-file",
+        default=None,
+        help="multi-feed mode: file with one 'URL [Source Name]' per line (# comments ok)",
+    )
     args = parser.parse_args()
 
-    stats = asyncio.run(run(args.days, args.dry_run, args.feed_url))
+    stats = asyncio.run(run(args.days, args.dry_run, args.feed_url, args.feeds_file))
     import json
 
     print(json.dumps(stats, indent=2, default=str))

@@ -9,8 +9,10 @@ The box runs FOUR local models with strict job assignments:
     - qwen3-embedding-0.6B    :8007  1024-dim          (BOTH sides internal only)
     - qwen3-reranker-0.6B     :8008  consumer rerank lane
 
-Cloud fallback ladder (embeddings): local → gateway → OpenRouter nemotron
-(2048-d, MRL-truncated) → NIM free tier → fail LOUD (T04: no hash fallback).
+Cloud fallback ladder (embeddings, 2026-08-29 consolidation): DeepInfra
+(same qwen3-embedding-4b model ⇒ 2560-d index-compatible) → local :8004 →
+fail LOUD (T04: no hash fallback). Gateway / OpenRouter / NIM are legacy
+lanes, explicit RAG_EMBED_BACKEND overrides only.
 Rerank ladder: fast (:8008) → deep (:8003) → original order (fail-open).
 
 These tests pin the PURPOSE ROUTING so a refactor can never silently swap
@@ -21,7 +23,6 @@ in the documented order.
 
 from __future__ import annotations
 
-import inspect
 import os
 from pathlib import Path
 
@@ -61,14 +62,17 @@ def test_fast_embedder_never_imported_by_search_paths():
 
     A 0.6B query against a 4B-embedded collection is a cross-model space
     mismatch — Qdrant rejects it and search silently returns empty. The only
-    legitimate 0.6B consumers are internal-similarity tools (near_dup).
+    legitimate 0.6B consumers are internal-similarity tools (near_dup) and,
+    since 2026-08-29, the LEGACY speed helpers in embeddings.py
+    (get_embedding_fast / get_query_embedding_speed — legacy reads only;
+    retirement of those callers tracked separately). New WRITE paths must
+    never touch the 0.6B embed tier.
     """
     search_modules = [
         "src/rugbrain/search/engine.py",
         "src/rugbrain/search/dual_tier.py",
         "src/rugbrain/routes/search_federated.py",
         "src/rugbrain/routes/core.py",
-        "src/rugbrain/embeddings.py",
     ]
     root = Path(__file__).resolve().parents[1]
     offenders = []
@@ -150,43 +154,65 @@ async def test_rerank_live_lane_ladder_fast_then_deep(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_auto_ladder_order_int_gateway_or_nim(monkeypatch):
-    """auto tries int → gateway → openrouter → nim, in that order, fail-loud."""
+async def test_auto_ladder_order_deepinfra_then_int(monkeypatch):
+    """auto tries DeepInfra → local :8004, in that order, fail-loud (2026-08-29)."""
     from rugbrain import embeddings as emb
 
     order: list[str] = []
 
-    async def _int(text, query=False, timeout=300.0):
+    async def _di(text, dim=emb.EMBEDDING_DIM, query=False, timeout=30.0):  # noqa: ASYNC109 - mirrors prod signature
+        order.append("deepinfra")
+        return None
+
+    async def _int(text, query=False, timeout=300.0):  # noqa: ASYNC109 - mirrors prod signature
         order.append("int")
         return None
+
+    def _probe_sync():
+        order.append("probe")
+        return True
+
+    async def _probe_async():
+        order.append("probe")
+        return True
+
+    monkeypatch.setattr(emb, "_BACKEND", "auto")
+    monkeypatch.setattr(emb, "_deepinfra_embed", _di)
+    monkeypatch.setattr(emb, "_int_embed", _int)
+    # rmi-rag probes sync (_int_reachable); rugbrain uses _int_reachable_async.
+    # Exactly one of the two is invoked by the auto chain.
+    monkeypatch.setattr(emb, "_int_reachable", _probe_sync)
+    monkeypatch.setattr(emb, "_int_reachable_async", _probe_async, raising=False)
+
+    with pytest.raises(emb.RAGUnavailableError):
+        await emb._get_embedding_impl("ladder probe")
+
+    assert order == ["deepinfra", "probe", "int"], order
+
+
+@pytest.mark.asyncio
+async def test_auto_ladder_deepinfra_succeeds_before_local(monkeypatch):
+    """DeepInfra is the primary: a healthy remote lane short-circuits before
+    the local probe is even reached."""
+    from rugbrain import embeddings as emb
+
+    order: list[str] = []
+
+    async def _di(text, dim=emb.EMBEDDING_DIM, query=False, timeout=30.0):  # noqa: ASYNC109 - mirrors prod signature
+        order.append("deepinfra")
+        return [0.1] * emb.EMBEDDING_DIM
 
     def _reachable():
         order.append("probe")
         return True
 
-    async def _gw(text, query=False):
-        order.append("gateway")
-        return None
-
-    async def _or(text):
-        order.append("openrouter")
-        return None
-
-    async def _nim(text):
-        order.append("nim")
-        return None
-
     monkeypatch.setattr(emb, "_BACKEND", "auto")
-    monkeypatch.setattr(emb, "_int_embed", _int)
+    monkeypatch.setattr(emb, "_deepinfra_embed", _di)
     monkeypatch.setattr(emb, "_int_reachable", _reachable)
-    monkeypatch.setattr(emb, "_gateway_embed", _gw)
-    monkeypatch.setattr(emb, "_openrouter_embed", _or)
-    monkeypatch.setattr(emb, "_nim_embed", _nim)
 
-    with pytest.raises(emb.RAGUnavailableError):
-        await emb._get_embedding_impl("ladder probe")
-
-    assert order == ["probe", "int", "gateway", "openrouter", "nim"], order
+    vec = await emb._get_embedding_impl("ladder probe")
+    assert order == ["deepinfra"], order
+    assert len(vec) == emb.EMBEDDING_DIM
 
 
 @pytest.mark.asyncio
@@ -218,7 +244,7 @@ async def test_int_mode_never_silently_degrades(monkeypatch):
     """T04 contract: explicit int backend failing raises instead of degrading."""
     from rugbrain import embeddings as emb
 
-    async def _int(text, query=False, timeout=300.0):
+    async def _int(text, query=False, timeout=300.0):  # noqa: ASYNC109 - mirrors prod signature
         return None
 
     monkeypatch.setattr(emb, "_BACKEND", "int")
@@ -255,12 +281,12 @@ async def test_live_four_local_models_alive_and_wired():
                 failures.append(f"{name}: HTTP {r.status_code} {r.text[:100]}")
                 return
             check(r.json())
-        except Exception as exc:  # noqa: BLE001 — diagnostic collects all
+        except Exception as exc:
             failures.append(f"{name}: {type(exc).__name__}: {str(exc)[:80]}")
 
     await probe(
         "deep-embed :8004",
-        "http://172.22.0.1:8004/v1/embeddings",
+        "http://127.0.0.1:8004/v1/embeddings",
         {"model": "qwen3-embedding-4b", "input": ["tier smoke"]},
         lambda d: (lambda n: n == 2560 or failures.append(f"deep-embed dim {n} != 2560"))(
             len(d["data"][0]["embedding"])
@@ -268,7 +294,7 @@ async def test_live_four_local_models_alive_and_wired():
     )
     await probe(
         "speed-embed :8007",
-        "http://172.22.0.1:8007/v1/embeddings",
+        "http://127.0.0.1:8007/v1/embeddings",
         {"model": "qwen3-embedding-0.6b", "input": ["tier smoke"]},
         lambda d: (lambda n: n == 1024 or failures.append(f"speed-embed dim {n} != 1024"))(
             len(d["data"][0]["embedding"])
@@ -276,7 +302,7 @@ async def test_live_four_local_models_alive_and_wired():
     )
     await probe(
         "deep-rerank :8003",
-        "http://172.22.0.1:8003/v1/rerank",
+        "http://127.0.0.1:8003/v1/rerank",
         {
             "query": "rug pull",
             "documents": ["honeypot scam token", "defi yield protocol"],
@@ -291,7 +317,7 @@ async def test_live_four_local_models_alive_and_wired():
     )
     await probe(
         "fast-rerank :8008",
-        "http://172.22.0.1:8008/v1/rerank",
+        "http://127.0.0.1:8008/v1/rerank",
         {
             "query": "rug pull",
             "documents": ["honeypot scam token", "defi yield protocol"],

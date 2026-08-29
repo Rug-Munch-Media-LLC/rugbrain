@@ -34,7 +34,7 @@ logger = logging.getLogger("reembed")
 
 LEGACY = os.getenv("LEGACY_QDRANT", "http://127.0.0.1:6333")
 V2 = os.getenv("V2_QDRANT", "http://127.0.0.1:6334")
-EMBEDDER = os.getenv("EMBEDDER_URL", "http://172.22.0.1:8004")
+EMBEDDER = os.getenv("EMBEDDER_URL", "http://127.0.0.1:8004")
 # API-embedder support: when EMBEDDER_MODEL is set the payload carries
 # model/dimensions (DashScope compatible-mode); EMBEDDER_API_KEY adds the
 # Authorization header. Unset → local llama.cpp (ignores both fields).

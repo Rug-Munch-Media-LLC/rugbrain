@@ -59,7 +59,7 @@ log = logging.getLogger("rugbrain.alerts")
 # ── Configuration ────────────────────────────────────────────────────────
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
-QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 # Registry-aware default (native dim of the configured model); env still wins.
 # 2026-08-25: was hardcoded 1024 while :8004 serves native 2560 — full-fidelity

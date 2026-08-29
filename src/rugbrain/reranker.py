@@ -29,10 +29,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003")
 # Consumer/fast lane: qwen3-reranker-0.6B on :8008 — text-in/score-out, so it
 # re-ranks results from ANY vector space (space-agnostic by construction).
-RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", "http://172.22.0.1:8008")
+RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", "http://127.0.0.1:8008")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 # First-hit on the CPU 0.6B lane measured 7.8s cold (2026-08-25); a 20s
 # caller-side cap made every consumer rerank fail-open. 45s covers cold
@@ -51,7 +51,7 @@ class Reranker:
     """Backward-compatible Reranker class wrapping the new async API.
 
     Usage:
-        r = Reranker(url="http://172.22.0.1:8003")
+        r = Reranker(url="http://127.0.0.1:8003")
         results = await r.rerank(query, docs, top_k=5)
     """
 

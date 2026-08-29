@@ -33,7 +33,7 @@ pytestmark = [
     ),
 ]
 
-BASE = os.getenv("DUAL_TIER_HOST", "http://172.22.0.1")
+BASE = os.getenv("DUAL_TIER_HOST", "http://127.0.0.1")
 SPEED_EMBED = f"{BASE}:8007"
 SPEED_RERANK = f"{BASE}:8008"
 DEEP_EMBED = f"{BASE}:8004"

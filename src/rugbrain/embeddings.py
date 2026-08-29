@@ -5,8 +5,16 @@ confidently-wrong results (non-semantic vectors). When all neural
 backends fail, the RAG system now fails LOUDLY instead of returning
 gibberish.
 
-Tier 1: Qwen3-Embedding-4B (2560d, self-hosted, zero cost) - strong quality
-Tier 2: OpenRouter NVIDIA Nemotron (2048d, free tier) - if API key set
+Tier 1: DeepInfra Qwen/Qwen3-Embedding-4B (2560d, hosted, keyed) - CANONICAL primary
+Tier 2: Qwen3-Embedding-4B (2560d, local llama.cpp :8004) - same-model fallback
+
+2026-08-29 embed consolidation (locked doctrine): ONE canonical embedder for
+all new writes — qwen3-embedding-4b @ 2560-dim, DeepInfra primary + local
+:8004 fallback (same model ⇒ same vector space, fallback stays
+index-compatible). The 0.6b speed-embed tier is retired for NEW writes;
+gateway (:8010) / OpenRouter / NVIDIA NIM remain only as explicit
+``RAG_EMBED_BACKEND`` overrides below (legacy lanes). The 0.6b RERANK
+ladder is text-based and unaffected.
 
 Design (per DESIGN.md M4):
 - Single async API: `await get_embedding(text) -> list[float]`
@@ -31,14 +39,11 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-# Migration window (2026-08-24): the interim free embedder
-# (nvidia/nemotron-3-embed-1b:free) produces 2048-dim vectors. Set
-# RAG_EMBED_DIM=2048 alongside RAG_EMBED_BACKEND=openrouter +
-# RAG_INTERIM_COLLECTION_SUFFIX so embed-time validation matches the live
-# backend and the shadow collections it feeds. Remove all three once
-# rag-embed-migration.service completes and the local qwen3-embedding-4b
-# (native 2560) resumes — the default below is the canonical dim.
-EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "1024"))
+# 2026-08-29 CONSOLIDATION: canonical corpus dim is the 4B native 2560
+# (DeepInfra + local :8004 both serve it — see dim_policy.MODEL_DIMS). The
+# interim RAG_EMBED_DIM=2048 (nemotron migration era) is retired; override
+# only if you truly run a different corpus dim.
+EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "2560"))
 
 # Qwen3-Embedding query instruction template. The model was trained with an
 # instruction prefix on the QUERY side and plain text on the DOCUMENT side.
@@ -62,9 +67,9 @@ _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 # Qwen3-Embedding-4B served by llama.cpp (OpenAI-compatible /embeddings).
 # QWEN_EMBED_URL is the canonical embedder endpoint (llama.cpp Qwen3-4B).
 QWEN_EMBED_URL = os.getenv(
-    "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
+    "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
 ).rstrip("/")
-GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://172.22.0.1:8010")
+GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://127.0.0.1:8010")
 QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
@@ -175,6 +180,72 @@ async def _int_embed(
         return None
 
 
+# ── DeepInfra hosted lane (2026-08-29 consolidation) ─────────────────────────
+# CANONICAL primary: DeepInfra hosts the exact same Qwen3-Embedding-4B the
+# local :8004 serves — 2560-dim, same vector space, always warm, no local
+# CPU contention. Key: DEEPINFRA_API_KEY env var, else
+# a file at DEEPINFRA_KEY_FILE (pattern: the deepinfra_embed embed lane).
+DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+
+
+def _deepinfra_ready() -> bool:
+    """DeepInfra lane configured? Key resolvable from env or secrets file."""
+    try:
+        from rugbrain.multi_embedder import _load_api_key
+
+        return bool(_load_api_key("DEEPINFRA_API_KEY"))
+    except Exception:
+        return False
+
+
+async def _deepinfra_embed(
+    text: str,
+    dim: int = EMBEDDING_DIM,
+    query: bool = False,
+    timeout: float = 30.0,  # noqa: ASYNC109 - per-call policy: queries fail fast
+) -> list[float] | None:
+    """DeepInfra Qwen/Qwen3-Embedding-4B (2560-dim) — CANONICAL primary lane.
+
+    Same model as local :8004 ⇒ identical vector space, so fallback between
+    the two lanes never breaks index compatibility. Larger-than-target
+    vectors are MRL-truncate-down (mirrors multi_embedder); undersized ones
+    fail loud via _resize per T04. Returns None on any failure so the chain
+    falls through to the next lane.
+    """
+    try:
+        from rugbrain.multi_embedder import _load_api_key
+
+        key = _load_api_key("DEEPINFRA_API_KEY")
+        if not key:
+            log.debug("deepinfra_embed_skipped no_api_key")
+            return None
+        payload_text = QUERY_INSTRUCT.format(text) if query else text
+        async with httpx.AsyncClient(timeout=timeout) as c:
+            r = await c.post(
+                DEEPINFRA_EMBED_URL,
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": DEEPINFRA_EMBED_MODEL, "input": [payload_text[:8000]]},
+            )
+            if r.status_code != 200:
+                log.debug("deepinfra_embed_http_%s", r.status_code)
+                return None
+            data = r.json().get("data", [])
+            if not data:
+                return None
+            vec = data[0].get("embedding")
+            if not vec or not isinstance(vec, list):
+                return None
+        if len(vec) > dim:
+            cut = vec[:dim]
+            norm = sum(x * x for x in cut) ** 0.5
+            vec = [x / norm for x in cut] if norm else cut
+        return _resize(vec, dim)
+    except Exception as e:
+        log.debug("deepinfra_embed_failed: %s", e)
+        return None
+
+
 async def _gateway_embed(
     text: str, dim: int = EMBEDDING_DIM, query: bool = False
 ) -> list[float] | None:
@@ -201,14 +272,23 @@ async def _gateway_embed(
         if not vec:
             return None
         if d.get("served_by") == "cloud":
-            log.warning(
-                "gateway_served_cloud tier=%s model=%s dims=%s — refused for "
-                "index use (cross-model space)",
-                tier,
-                d.get("cloud_model"),
-                d.get("model_dims"),
-            )
-            return None
+            # 2026-08-29 consolidation: the gateway's deep cloud lane is now
+            # DeepInfra Qwen/Qwen3-Embedding-4B — the SAME model as local
+            # :8004 ⇒ its vectors are index-compatible. Cross-model cloud
+            # (legacy qwen3-8b / liquid / nemotron lanes) is still refused:
+            # a different model space poisons retrieval.
+            cloud_model = str(d.get("cloud_model", ""))
+            same_model = cloud_model.split("/")[-1].lower() == "qwen3-embedding-4b"
+            if not same_model:
+                log.warning(
+                    "gateway_served_cloud tier=%s model=%s dims=%s — refused for "
+                    "index use (cross-model space)",
+                    tier,
+                    d.get("cloud_model"),
+                    d.get("model_dims"),
+                )
+                return None
+            log.info("gateway deep lane served by same-model cloud (deepinfra) — index-compatible")
         return _resize(vec, dim)
     except Exception as e:
         log.debug("gateway_embed_failed: %s", e)
@@ -318,14 +398,31 @@ async def _nim_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] | None:
 
 
 async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
-    """Core embedding resolution (separated for latency instrumentation)."""
+    """Core embedding resolution (separated for latency instrumentation).
+
+    2026-08-29 consolidation: auto = DeepInfra → local :8004 → fail loud.
+    Both lanes serve the SAME qwen3-embedding-4b ⇒ one 2560 vector space,
+    so fallback never breaks index compatibility. Gateway (:8010),
+    OpenRouter and NIM are DROPPED from auto — legacy lanes kept only for
+    the explicit ``RAG_EMBED_BACKEND`` overrides below.
+    """
 
     # Explicit backend override
+    if _BACKEND == "deepinfra":
+        v = await _deepinfra_embed(text, query=query)
+        if v is not None:
+            return v
+        raise RAGUnavailableError("deepinfra backend failed and hash fallback removed per T04")
     if _BACKEND == "int":
         v = await _int_embed(text, query=query)
         if v is not None:
             return v
         raise RAGUnavailableError("int backend failed and hash fallback removed per T04")
+    if _BACKEND == "gateway":
+        v = await _gateway_embed(text, query=query)
+        if v is not None:
+            return v
+        raise RAGUnavailableError("gateway backend failed and hash fallback removed per T04")
     if _BACKEND == "openrouter":
         v = await _openrouter_embed(text)
         if v is not None:
@@ -337,29 +434,29 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
         raise RAGUnavailableError(
             "openrouter + nim backends failed and hash fallback removed per T04"
         )
+    if _BACKEND == "nim":
+        v = await _nim_embed(text)
+        if v is not None:
+            return v
+        raise RAGUnavailableError("nim backend failed and hash fallback removed per T04")
 
-    # auto: try int -> openrouter, fail loud if both fail
+    # auto (2026-08-29): DeepInfra primary → local :8004 fallback → fail loud.
     # Probe is sync (cached per process) — run off the event loop so a slow
     # first probe can never wedge the request handler.
     q_timeout = 45.0 if query else 300.0
+    v = await _deepinfra_embed(text, query=query, timeout=q_timeout)
+    if v is not None:
+        return v
     if await asyncio.to_thread(_int_reachable):
         v = await _int_embed(text, query=query, timeout=q_timeout)
         if v is not None:
             return v
-    v = await _gateway_embed(text, query=query)
-    if v is not None:
-        return v
-    v = await _openrouter_embed(text)
-    if v is not None:
-        return v
-    v = await _nim_embed(text)
-    if v is not None:
-        return v
 
     raise RAGUnavailableError(
-        "no embedding backend available (int unreachable, openrouter + nim failed). "
+        "no embedding backend available (deepinfra + local :8004 failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
-        f"Verify: QWEN_EMBED_URL={QWEN_EMBED_URL} qwen3-embedding-4b loaded?"
+        f"Verify: DEEPINFRA_API_KEY set? QWEN_EMBED_URL={QWEN_EMBED_URL} "
+        "qwen3-embedding-4b loaded?"
     )
 
 
@@ -405,8 +502,9 @@ def current_backend() -> str:
     """Which tier is currently active? For observability."""
     if _BACKEND != "auto":
         return _BACKEND
+    # auto chain (2026-08-29): DeepInfra primary → local :8004 fallback.
+    if _deepinfra_ready():
+        return "deepinfra"
     if _int_reachable():
         return "int"
-    if os.getenv("OPENROUTER_API_KEY"):
-        return "openrouter"
     return "unavailable"

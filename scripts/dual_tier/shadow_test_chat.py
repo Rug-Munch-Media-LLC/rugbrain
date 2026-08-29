@@ -29,7 +29,7 @@ from typing import Any
 
 import aiohttp
 
-LOCAL_URL = os.getenv("CHAT_URL", "http://172.22.0.1:8009")
+LOCAL_URL = os.getenv("CHAT_URL", "http://127.0.0.1:8009")
 OPENROUTER_URL = os.getenv("OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_SHADOW_MODEL", "tngtech/deepseek-r1d-671b:free")
 

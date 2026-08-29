@@ -41,7 +41,7 @@ class DualDimEmbedder:
     def __init__(
         self,
         backend: EmbedderBackend,
-        int_url: str = "http://172.22.0.1:8004/v1",
+        int_url: str = "http://127.0.0.1:8004/v1",
     ) -> None:
         self.backend = backend
         self.int_url = int_url.rstrip("/")
@@ -94,7 +94,7 @@ def get_embedder() -> DualDimEmbedder:
     """
     return DualDimEmbedder(
         EmbedderBackend.Qwen3_M3,
-        int_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"),
+        int_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
     )
 
 

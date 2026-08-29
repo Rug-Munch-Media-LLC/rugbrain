@@ -36,7 +36,7 @@ Run (host or inside a container with Postgres/Qdrant/reachable):
 Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
   QDRANT_URL   (default http://127.0.0.1:6334, falls back to 127.0.0.1)
-  EMBEDDER_URL (default http://172.22.0.1:8004/v1, falls back to 127.0.0.1)
+  EMBEDDER_URL (default http://127.0.0.1:8004/v1, falls back to 127.0.0.1)
   RAG_EMBED_MODEL (default qwen3-embedding-4b)
 """
 
@@ -258,8 +258,8 @@ async def _resolve_and_connect() -> tuple[asyncpg.Connection, str, str]:
     )
     _candidates = _resolve_base(
         "",
-        os.getenv("EMBEDDER_URL", os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")),
-        "http://172.22.0.1:8004/v1",
+        os.getenv("EMBEDDER_URL", os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")),
+        "http://127.0.0.1:8004/v1",
     )
 
     # Postgres: try configured host, then loopback

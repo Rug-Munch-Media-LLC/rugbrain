@@ -8,7 +8,7 @@ before truncation.
 
 Backend:
   * Qwen3-Reranker-4B Q6_K served by llama.cpp ``--rerank`` on Talos
-    (http://172.22.0.1:8003 from inside the container, 127.0.0.1:8003 on
+    (http://127.0.0.1:8003 from inside the container, 127.0.0.1:8003 on
     the host). HTTP-only — no torch, no sentence-transformers, no local
     model weights in the container.
   * Graceful no-op — if the reranker server is unreachable, documents are
@@ -17,7 +17,7 @@ Backend:
     unavailable.
 
 Environment variables:
-  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://172.22.0.1:8003)
+  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://127.0.0.1:8003)
   - ``RERANKER_TIMEOUT`` — per-request timeout in seconds (default: 30)
   - ``RERANKER_ENABLED`` — set "false" to disable reranking entirely
 """
@@ -35,14 +35,14 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://172.22.0.1:8003").rstrip("/")
+RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
 # ── Dual-tier (2026-08-24): live fast path on the 0.6B server ──
 # Cross-encoders need no shared vector space, so the 0.6B live tier pairs
 # safely with 4B-embedded corpora. Ladder: 0.6B strained/unreachable ->
 # one capped retry on the 4B -> fail-open to pre-rerank order.
-RERANKER_URL_LIVE: str = os.getenv("RERANKER_URL_FAST", "http://172.22.0.1:8008").rstrip("/")
+RERANKER_URL_LIVE: str = os.getenv("RERANKER_URL_FAST", "http://127.0.0.1:8008").rstrip("/")
 LIVE_CANDIDATE_CAP: int = int(os.getenv("RERANKER_LIVE_CANDIDATE_CAP", "40"))
 DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 LIVE_TIMEOUT_S: float = float(os.getenv("RERANKER_LIVE_TIMEOUT", "6.0"))

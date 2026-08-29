@@ -25,7 +25,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b loaded
   - httpx
 """
 
@@ -442,7 +442,7 @@ async def store_alerts(
     if dry_run:
         return len(incidents), 0
 
-    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"))
+    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"))
     store = QdrantVectorStore()
     stored = failed = 0
 

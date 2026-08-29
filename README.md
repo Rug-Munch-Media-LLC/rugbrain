@@ -1,5 +1,11 @@
 # RugBrain — Crypto Intelligence RAG Engine
 
+> ⛔ **LEGACY / DEPRECATED (2026-08-29) — SUPERSEDED BY the `rugbrain` repo.**
+> This checkout is retained as a historical working copy only. All source
+> edits, deploys, and issues now belong in the `rugbrain` repo (canonical).
+> This venv's `rugbrain.pth` already resolves `import rugbrain` to
+> `rugbrain/src` — the live implementation exists only there.
+
 RugBrain (formerly RugSense / RMI RAG) is the RAG layer for Rug Munch
 Intelligence. It embeds scam patterns, news/social intel, wallet/entity
 intelligence, and **real-time crypto security incidents** into vectors and

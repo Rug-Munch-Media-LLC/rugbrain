@@ -10,7 +10,7 @@ USAGE POLICY (which tier serves which workload):
 | Batch research / re-scoring jobs           | deep  | quality over speed                 |
 | Ingestion                                  | BOTH  | dual vectors written per document  |
 
-Tier endpoints (llama.cpp on Talos, all bound to 172.22.0.1):
+Tier endpoints (llama.cpp on Talos, all bound to 127.0.0.1):
   speed embed   :8007  Qwen3-Embedding-0.6B Q8_0  (1024-dim)
   speed rerank  :8008  Qwen3-Reranker-0.6B  Q8_0
   deep embed    :8004  Qwen3-Embedding-4B   Q8_0   (2560-dim, pre-existing)
@@ -35,11 +35,11 @@ from rugbrain.search.rerank import apply_instruction
 
 # ── configuration ────────────────────────────────────────────────────────────
 ENDPOINTS = {
-    "chat": os.getenv("CHAT_URL", "http://172.22.0.1:8009"),
-    "deep_embed": os.getenv("DEEP_EMBED_URL", "http://172.22.0.1:8004"),
-    "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://172.22.0.1:8003"),
-    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://172.22.0.1:8007"),
-    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://172.22.0.1:8008"),
+    "chat": os.getenv("CHAT_URL", "http://127.0.0.1:8009"),
+    "deep_embed": os.getenv("DEEP_EMBED_URL", "http://127.0.0.1:8004"),
+    "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://127.0.0.1:8003"),
+    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007"),
+    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8008"),
 }
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")

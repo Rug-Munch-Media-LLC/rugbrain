@@ -2,7 +2,9 @@ from rugbrain.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING
 
 
 def test_embedding_dim() -> None:
-    assert EMBEDDING_DIM == 1024
+    # Registry-driven since the dim-policy work: qwen3-embedding-4b serves
+    # its native 2560 on :8004 (was hard-padded to 1024 pre-migration).
+    assert EMBEDDING_DIM == 2560
 
 
 def test_model_name() -> None:
@@ -11,7 +13,7 @@ def test_model_name() -> None:
 
 def test_version_stamp() -> None:
     assert "qwen3-embedding-4b" in EMBED_VERSION_STAMP
-    assert "1024" in EMBED_VERSION_STAMP
+    assert "2560" in EMBED_VERSION_STAMP
     assert ":" in EMBED_VERSION_STAMP
 
 
@@ -75,6 +77,12 @@ def test_qwen_embedder_raises_instead_of_zero_vector(monkeypatch) -> None:
 
     from rugbrain.qwen_embedders import Qwen3Embedder
 
+    # 2026-08-29: qwen_embedders gained a DeepInfra-first batch lane (same
+    # model family). This test pins the LOCAL failure contract, so pin the
+    # local lane — an unreachable local server must raise, never silently
+    # succeed via the remote or emit a zero vector.
+    monkeypatch.setattr(Qwen3Embedder, "_local_only", True, raising=False)
+    monkeypatch.setenv("RAG_EMBED_BACKEND", "local")
     e = Qwen3Embedder(embed_url="http://127.0.0.1:1/v1")  # nothing listens here
     import asyncio
 

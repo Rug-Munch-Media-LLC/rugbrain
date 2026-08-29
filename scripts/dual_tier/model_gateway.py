@@ -1,14 +1,18 @@
 """Model Services Gateway — platform-wide access to the Qwen3 model lineup.
 
 ONE integration point for every RugMunch component that needs embeddings,
-reranking, retrieval, or generation. Runs on Talos :8010 (172.22.0.1).
+reranking, retrieval, or generation. Runs on Talos :8010 (127.0.0.1).
 
 Endpoints:
   GET  /health              aggregate health of all five engines
   POST /retrieve            {query, top_k?, collection?, tier?}
                             word-count routed dual-tier retrieval
   POST /ask                 {query, collection?} -> retrieve + generate
-  POST /embed               {text|texts, tier=speed|deep} -> vectors
+  POST /embed               {text|texts, tier?} -> vectors
+                            (None tier -> canonical deep lane; "speed" =
+                            LEGACY 0.6b read lane, local-only; DeepInfra
+                            Qwen3-Embedding-4B @2560 deep fallback —
+                            index-compatible)
   POST /rerank              {query, documents[], tier?} -> scored+ordered
                             (vertical instructions auto-applied)
 
@@ -42,20 +46,32 @@ app = FastAPI(title="RugMunch Model Services Gateway", version="1.0.0")
 _retriever = DualTierRetriever()
 HTTP_TIMEOUT = aiohttp.ClientTimeout(total=float(os.getenv("GATEWAY_TIMEOUT", "300")))
 
-# --- Cloud fallback (two-account doctrine, 2026-08-23) ----------------------
-# LOCAL CANON: deep = Qwen3-Embedding-4B :8004 (2560-dim), speed = 0.6B :8007.
-# Cloud lanes engage ONLY when local fails/breaker opens; responses are labeled
-# degraded and are NOT index-compatible with locally built collections.
-#   speed lane -> liquid/lfm-2.5-embedding-350m:free  via OR MAIN (free)
-#   deep lane  -> qwen/qwen3-embedding-8b             via OR BACKUP (reserve acct)
-CLOUD_EMBED_BASE = os.getenv("CLOUD_EMBED_BASE", "https://openrouter.ai/api/v1")
-CLOUD_MAIN_KEY = os.getenv("CLOUD_EMBED_KEY_MAIN", "")
-CLOUD_BACKUP_KEY = os.getenv("CLOUD_EMBED_KEY_BACKUP", "")
-CLOUD_MODELS = {
-    "speed": os.getenv("CLOUD_EMBED_SPEED_MODEL", "liquid/lfm-2.5-embedding-350m:free"),
-    "deep": os.getenv("CLOUD_EMBED_DEEP_MODEL", "qwen/qwen3-embedding-8b"),
-}
-_CLOUD_KEYS = {"speed": CLOUD_MAIN_KEY, "deep": CLOUD_BACKUP_KEY}
+# --- Cloud fallback (2026-08-29 embed consolidation) ------------------------
+# CANONICAL DEEP LANE: DeepInfra Qwen/Qwen3-Embedding-4B — the exact same
+# model the local :8004 serves (2560-dim, SAME vector space), so DeepInfra
+# responses ARE index-compatible with locally built collections. The old
+# OpenRouter two-account doctrine (liquid 350m speed / qwen3-embedding-8b
+# deep) is retired: qwen3-embedding-8b is consumer-chat space, never
+# index-compatible with the 4B corpus.
+# 0.6B SPEED EMBED LANE: LEGACY READS ONLY — no cloud fallback. The 0.6b
+# embed tier is retired for NEW writes (the 0.6b RERANK ladder is text-based
+# and unaffected). Set DEEPINFRA_API_KEY (env) or DEEPINFRA_KEY_FILE.
+DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
+
+
+def _deepinfra_key() -> str:
+    """DeepInfra API key: env var first, secrets-file fallback (never raises)."""
+    key = os.getenv("DEEPINFRA_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        with open(DEEPINFRA_KEY_FILE, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
+
 
 _cloud_fails: dict[str, int] = {"deep": 0, "speed": 0}
 _BREAKER_TRIP = int(os.getenv("GATEWAY_BREAKER_TRIP", "3"))
@@ -82,24 +98,32 @@ def _retry_after(tier: str) -> str:
 
 
 async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[float]], str] | None:
-    key = _CLOUD_KEYS.get(tier, "")
-    model = CLOUD_MODELS.get(tier, "")
-    if not key or not model:
+    """DeepInfra lane — DEEP tier ONLY.
+
+    Same model as the local deep lane ⇒ index-compatible. The speed tier
+    has NO cloud lane: the 0.6b embed model is retired for writes
+    (legacy reads are local-only); cross-model cloud fallback may never
+    stand in for a tier (TOP-100 #25).
+    """
+    if tier != "deep":
+        return None
+    key = _deepinfra_key()
+    if not key:
         return None
     try:
         async with (
             aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as http,
             http.post(
-                f"{CLOUD_EMBED_BASE}/embeddings",
+                DEEPINFRA_EMBED_URL,
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": model, "input": texts},
+                json={"model": DEEPINFRA_EMBED_MODEL, "input": texts},
             ) as resp,
         ):
             if resp.status != 200:
                 return None
             data = await resp.json()
         vecs = normalize_embeddings(data)
-        return len(vecs[0]), vecs, model
+        return len(vecs[0]), vecs, DEEPINFRA_EMBED_MODEL
     except Exception:
         return None
 
@@ -110,11 +134,13 @@ async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[floa
 # optional `index`, float lists vs base64-packed floats. Callers must consume
 # ANY engine's output without knowing the source; unknown shapes fail loud.
 ENGINE_REGISTRY: dict[str, dict[str, Any]] = {
-    # key = f"{tier}_{served_by}"; dims are canonical for compatibility checks
+    # key = f"{tier}_{served_by}"; dims are canonical for compatibility checks.
+    # 2026-08-29: deep_cloud = DeepInfra Qwen3-Embedding-4B @2560 — same model
+    # as deep_local ⇒ index-compatible. speed_cloud is GONE (0.6b speed embed
+    # lane is LEGACY READS ONLY, local-only, no cloud fallback).
     "deep_local": {"dims": 2560, "model": "qwen3-embedding-4b"},
-    "speed_local": {"dims": 1024, "model": "qwen3-embedding-0.6b"},
-    "deep_cloud": {"dims": 4096, "model": "qwen/qwen3-embedding-8b"},
-    "speed_cloud": {"dims": 1024, "model": "liquid/lfm-2.5-embedding-350m"},
+    "speed_local": {"dims": 1024, "model": "qwen3-embedding-0.6b"},  # LEGACY READS ONLY
+    "deep_cloud": {"dims": 2560, "model": "Qwen/Qwen3-Embedding-4B"},  # DeepInfra
 }
 
 
@@ -164,7 +190,8 @@ class AskReq(BaseModel):
 class EmbedReq(BaseModel):
     text: str | None = None
     texts: list[str] | None = None
-    tier: str | None = None  # None -> auto-route by word count; "speed"|"deep" explicit
+    tier: str | None = None  # None -> deep (canonical, 2026-08-29);
+    # "speed" = LEGACY 0.6b read lane (local-only, no cloud fallback)
 
 
 class RerankReq(BaseModel):
@@ -236,7 +263,11 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
     texts = req.texts or ([req.text] if req.text else [])
     if not texts:
         raise HTTPException(status_code=422, detail="text or texts required")
-    tier = _resolve_tier(req.tier, texts[0])
+    # 2026-08-29 consolidation: /embed defaults to the CANONICAL deep lane
+    # (qwen3-embedding-4b @2560, DeepInfra fallback — index-compatible).
+    # Explicit tier="speed" is honored but is the LEGACY 0.6b read lane
+    # (local-only, no cloud fallback — do not index new writes with it).
+    tier = req.tier if req.tier in ("speed", "deep") else "deep"
     url = ENDPOINTS[f"{tier}_embed"]
     if _breaker_open(tier):
         cloud = await _cloud_embed(tier, texts)
@@ -247,9 +278,11 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
                 "served_by": "cloud",
                 "cloud_model": model_id,
                 "degraded": True,
+                "index_compatible": True,  # same model as local deep lane
                 "warning": (
                     f"{tier} breaker open (repeated local failures); served by "
-                    f"cloud {model_id} — do NOT index against local collections"
+                    f"DeepInfra {model_id} — same model as the local deep lane "
+                    f"(index-compatible)"
                 ),
                 "model_dims": dims,
                 "embeddings": vecs,
@@ -265,13 +298,16 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
             data = await resp.json()
         vecs = normalize_embeddings(data)
         _cloud_fails[tier] = 0  # healthy again — reset strain counter
-        return {
+        out = {
             "tier": tier,
             "served_by": "local",
             "model": ENGINE_REGISTRY.get(f"{tier}_local", {}).get("model"),
             "model_dims": len(vecs[0]),
             "embeddings": vecs,
         }
+        if tier == "speed":
+            out["legacy"] = True  # 0.6b speed embed — LEGACY READS ONLY
+        return out
     except Exception as exc:
         _note_failure(tier)
         cloud = await _cloud_embed(tier, texts)
@@ -282,12 +318,14 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
                 "served_by": "cloud",
                 "cloud_model": model_id,
                 "degraded": True,
-                # Cloud vectors are NOT index-compatible with locally built
-                # collections (different model space). For fresh same-model
-                # lanes / non-retrieval use only. Retrieval code must reject.
+                # DeepInfra serves the SAME qwen3-embedding-4b as the local
+                # deep lane — index-compatible (unlike the retired OpenRouter
+                # qwen3-8b lane).
+                "index_compatible": True,
                 "warning": (
-                    f"local {tier} embedder unavailable ({exc!r}); served by cloud "
-                    f"{model_id} — do NOT index against local collections"
+                    f"local {tier} embedder unavailable ({exc!r}); served by "
+                    f"DeepInfra {model_id} — same model as local deep lane "
+                    f"(index-compatible)"
                 ),
                 "model_dims": dims,
                 "embeddings": vecs,

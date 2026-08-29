@@ -1,17 +1,30 @@
 """Multi-embedder federation — RAG reads (and writes) across ALL backends.
 
-Backends in the fleet (2026-08-24 directive: "able to read all methods"):
-    qwen4b      local llama.cpp :8004  (deep lane; server serves MRL-truncated
-                                        vectors — dim comes from env/config)
-    qwen06b     local llama.cpp :8007  (fast lane, 1024-dim)
-    nemotron    OpenRouter nvidia/nemotron-3-embed-1b:free (2048-dim, $0)
-    openrouter  any OpenRouter embeddings model (paid, e.g. qwen3-embedding-4b)
+Backends in the fleet (2026-08-29 embed consolidation directive):
+    deepinfra   DeepInfra Qwen/Qwen3-Embedding-4B (2560-dim) — CANONICAL
+                primary. Same model as local ⇒ same vector space.
+    qwen4b      local llama.cpp :8004  (canonical FALLBACK; server serves
+                native 2560 — dim comes from env/config)
+    qwen06b     local llama.cpp :8007  (1024-dim) — LEGACY READS ONLY.
+                The 0.6b speed-tier is retired for NEW writes; it remains
+                registered solely so existing 1024-dim collections stay
+                readable.
+    nemotron    OpenRouter nvidia/nemotron-3-embed-1b:free (2048-dim) —
+                LEGACY READS ONLY (interim migration `_i` collections).
+    or_qwen4b   OpenRouter qwen3-embedding-4b (2560) — legacy remote lane,
+                kept only for old RAG_COLLECTION_BACKENDS mappings.
 
-Why federation: vectors from different models are NOT comparable and cannot
-mix inside one collection (TOP-100 #25). But the CORPUS legitimately spans
-multiple collections built by different backends over time (canonical v2,
-interim _i shadow namespaces, speed-lane collections). A reader that only
-speaks ONE backend is blind to the rest.
+CANONICAL EMBEDDER (one, for all new writes):
+    qwen3-embedding-4b @ 2560-dim, DeepInfra primary + local :8004 fallback
+    (EMBED_CHAINS["qwen4b"]). Both lanes are the SAME model, so the vector
+    space is identical regardless of which lane serves the request.
+
+Why federation survives: vectors from different models are NOT comparable
+and cannot mix inside one collection (TOP-100 #25). But the CORPUS
+legitimately spans multiple collections built by different backends over
+time (canonical v2 2560, interim _i 2048, legacy 1024). A reader that only
+speaks ONE backend is blind to the rest — so legacy backends stay
+registered for READS while every WRITE goes through the canonical chain.
 
 Federated search:
     1. Registry maps each collection -> (backend, dim) via
@@ -25,7 +38,8 @@ Federated search:
        provenance.
 
 Ingest side: callers pick a backend explicitly (or default); the store's
-per-collection ensure/create handles whatever dim results.
+per-collection ensure/create handles whatever dim results. New collections
+MUST be created at 2560 (canonical) — see docs/EMBED-CONSOLIDATION.md.
 """
 
 from __future__ import annotations
@@ -46,11 +60,45 @@ logger = logging.getLogger("rugbrain.multi_embedder")
 @dataclass(frozen=True)
 class Backend:
     name: str
-    kind: str  # "llamacpp" | "openrouter"
+    kind: str  # "llamacpp" | "deepinfra" | "openrouter"
     url: str  # completions-compatible embeddings endpoint base
     dim: int
     model: str = ""
     api_key_env: str = ""
+
+
+# Secrets-file fallback for the DeepInfra lane (env var wins). Same pattern
+# as rmi-codebase-mcp/scripts/deepinfra_embed.py; override path via env.
+_DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
+
+
+def _load_api_key(env_var: str = "DEEPINFRA_API_KEY") -> str:
+    """API key for a remote backend: env var first, secrets-file fallback.
+
+    Only ``DEEPINFRA_API_KEY`` has a file fallback
+    (``DEEPINFRA_KEY_FILE`` — pattern from
+    rmi-codebase-mcp/scripts/deepinfra_embed.py). Any other env name returns
+    "" when unset: callers treat an empty key as "no auth header" and the
+    provider chain simply falls through to the next lane (no raise — a
+    missing OpenRouter key must not take down the local lanes).
+    """
+    val = os.getenv(env_var, "").strip()
+    if val:
+        return val
+    if env_var == "DEEPINFRA_API_KEY":
+        try:
+            with open(_DEEPINFRA_KEY_FILE, encoding="utf-8") as fh:
+                key = fh.read().strip()
+            if key:
+                return key
+        except OSError as exc:
+            logger.warning(
+                "deepinfra_key_unavailable env=%s file=%s err=%r",
+                env_var,
+                _DEEPINFRA_KEY_FILE,
+                exc,
+            )
+    return ""
 
 
 def _default_backends() -> dict[str, Backend]:
@@ -65,20 +113,37 @@ def _default_backends() -> dict[str, Backend]:
     # QWEN_EMBED_DIMS remains as an explicit, deliberate override.
     q4_dim = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(_model))
     return {
+        # CANONICAL PRIMARY (2026-08-29): DeepInfra hosts the exact same
+        # qwen3-embedding-4b the local :8004 serves — 2560-dim, same vector
+        # space, always warm, no local CPU contention. Fast fallback story:
+        # DeepInfra first, local :8004 second (EMBED_CHAINS below).
+        "deepinfra": Backend(
+            "deepinfra",
+            "deepinfra",
+            os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings"),
+            q4_dim,
+            model=os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
+            api_key_env="DEEPINFRA_API_KEY",
+        ),
+        # CANONICAL FALLBACK lane for the 2560 space.
         "qwen4b": Backend(
             "qwen4b",
             "llamacpp",
-            os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1"),
+            os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
             q4_dim,
             model=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"),
         ),
+        # LEGACY READS ONLY — the 0.6b/1024 speed-tier is retired for new
+        # writes (2026-08-29). Kept so existing 1024-dim collections remain
+        # queryable.
         "qwen06b": Backend(
             "qwen06b",
             "llamacpp",
-            os.getenv("QWEN_SPEED_URL", "http://172.22.0.1:8007/v1"),
+            os.getenv("QWEN_SPEED_URL", "http://127.0.0.1:8007/v1"),
             int(os.getenv("QWEN_SPEED_DIMS", "1024")),
             model=os.getenv("RAG_EMBED_SPEED_MODEL", "qwen3-embedding-0.6b"),
         ),
+        # LEGACY READS ONLY — interim 2048 `_i` shadow collections.
         "nemotron": Backend(
             "nemotron",
             "openrouter",
@@ -87,11 +152,9 @@ def _default_backends() -> dict[str, Backend]:
             model=os.getenv("RAG_OPENROUTER_FREE_MODEL", "nvidia/nemotron-3-embed-1b:free"),
             api_key_env="OPENROUTER_API_KEY",
         ),
-        # Same-model remote for the qwen4b space (OpenRouter hosts the exact
-        # same qwen3-embedding-4b, verified 2560-dim 2026-08-25). Used ONLY as
-        # a query-time fallback when the local :8004 is saturated/wedged —
-        # same model ⇒ same vector space ⇒ results stay comparable.
-        # Disable with RAG_QUERY_REMOTE_FALLBACK=0.
+        # LEGACY remote lane for the qwen4b space (kept ONLY so old
+        # RAG_COLLECTION_BACKENDS entries naming or_qwen4b still resolve).
+        # The canonical remote lane is now deepinfra.
         "or_qwen4b": Backend(
             "or_qwen4b",
             "openrouter",
@@ -103,13 +166,23 @@ def _default_backends() -> dict[str, Backend]:
     }
 
 
-# Query-time same-space fallback chains: when the primary backend fails
-# (timeout/5xx/429) try the next that serves the SAME model family, so the
-# produced vector remains comparable with the target collection's space.
-SAME_SPACE_FALLBACKS: dict[str, tuple[str, ...]] = {
-    "qwen4b": ("or_qwen4b",),
-    "or_qwen4b": ("qwen4b",),
+# Provider chains per backend, in try-order. Every lane inside a chain
+# serves the SAME model family ⇒ same vector space ⇒ results stay
+# comparable with the target collection (no cross-family fallback, ever).
+# Canonical (2026-08-29): DeepInfra primary, local :8004 fallback.
+EMBED_CHAINS: dict[str, tuple[str, ...]] = {
+    "qwen4b": ("deepinfra", "qwen4b"),
+    "deepinfra": ("deepinfra", "qwen4b"),
+    "or_qwen4b": ("or_qwen4b", "qwen4b"),
 }
+
+# Backends that hit a remote HTTP API (used by RAG_QUERY_REMOTE_FALLBACK=0
+# to strip remote lanes and force a fully-local chain).
+_REMOTE_BACKENDS = frozenset({"deepinfra", "or_qwen4b", "nemotron"})
+
+# Deprecated alias (pre-2026-08-29 name). Kept so any external importer or
+# ops script referencing it doesn't break; new code uses EMBED_CHAINS.
+SAME_SPACE_FALLBACKS = EMBED_CHAINS
 
 
 def _parse_collection_map() -> dict[str, tuple[str, int]]:
@@ -225,19 +298,25 @@ class MultiEmbedder:
     async def embed(
         self, text: str, backend_name: str, target_dim: int | None = None
     ) -> list[float]:
-        """Embed via *backend_name*, falling back to a same-space remote when
-        the primary fails (local :8004 saturates under migration load).
+        """Embed via the provider chain for *backend_name*, falling back
+        within the SAME model family (DeepInfra ⇄ local :8004 for the
+        canonical 2560 space) so the vector stays comparable with the
+        target collection's space.
 
-        Fallbacks are same-model by construction (SAME_SPACE_FALLBACKS), so
-        the vector stays comparable with the target collection's space.
         ``target_dim`` pins the output to an exact collection dim (MRL
         truncate-down, e.g. 1024 legacy collections on the native-2560
-        model). Disable remote fallback with RAG_QUERY_REMOTE_FALLBACK=0.
+        model). Set RAG_QUERY_REMOTE_FALLBACK=0 to strip remote lanes and
+        force a fully-local chain (local :8004 only for the qwen4b space).
         """
+        if os.getenv("RAG_QUERY_REMOTE_FALLBACK", "1") == "0":
+            chain = tuple(
+                n
+                for n in EMBED_CHAINS.get(backend_name, (backend_name,))
+                if n not in _REMOTE_BACKENDS
+            ) or (backend_name,)
+        else:
+            chain = EMBED_CHAINS.get(backend_name, (backend_name,))
         tried: list[str] = []
-        chain: list[str] = [backend_name]
-        if os.getenv("RAG_QUERY_REMOTE_FALLBACK", "1") != "0":
-            chain.extend(SAME_SPACE_FALLBACKS.get(backend_name, ()))
         last_err: Exception | None = None
         for name in chain:
             if name not in self.backends:
@@ -259,7 +338,7 @@ class MultiEmbedder:
     ) -> list[float]:
         headers: dict[str, str] = {}
         if be.api_key_env:
-            key = os.getenv(be.api_key_env, "")
+            key = _load_api_key(be.api_key_env)
             if key:
                 headers["Authorization"] = f"Bearer {key}"
         timeout = float(os.getenv("RAG_EMBED_TIMEOUT", "20"))

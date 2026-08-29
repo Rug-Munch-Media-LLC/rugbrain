@@ -30,11 +30,11 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")
 
 ENDPOINTS = {
-    "chat": os.getenv("CHAT_URL", "http://172.22.0.1:8009"),
-    "deep_embed": os.getenv("DEEP_EMBED_URL", "http://172.22.0.1:8004"),
-    "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://172.22.0.1:8003"),
-    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://172.22.0.1:8007"),
-    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://172.22.0.1:8008"),
+    "chat": os.getenv("CHAT_URL", "http://127.0.0.1:8009"),
+    "deep_embed": os.getenv("DEEP_EMBED_URL", "http://127.0.0.1:8004"),
+    "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://127.0.0.1:8003"),
+    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007"),
+    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8008"),
 }
 
 ROUTING_THRESHOLD_WORDS = int(os.getenv("ROUTING_THRESHOLD_WORDS", "45"))

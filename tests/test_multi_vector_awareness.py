@@ -1,8 +1,10 @@
-"""Tests for multi_embedder: same-space fallback chain + vector landscape.
+"""Tests for multi_embedder: embed chain + vector landscape.
 
-Covers the 2026-08-25 multi-vector awareness work:
-- embed() falls back local qwen4b -> OpenRouter same-model (same space)
-  when local is saturated, and does NOT fall back across model families
+Covers the 2026-08-29 embed consolidation:
+- embed() walks the EMBED_CHAINS provider chain — DeepInfra primary,
+  local :8004 fallback for the canonical qwen4b space — and does NOT
+  fall back across model families
+- RAG_QUERY_REMOTE_FALLBACK=0 strips remote lanes to a fully-local chain
 - landscape() reads ACTUAL dims from qdrant, infers backends, flags
   mismatches between reality and configuration
 """
@@ -13,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from rugbrain.multi_embedder import SAME_SPACE_FALLBACKS, MultiEmbedder
+from rugbrain.multi_embedder import EMBED_CHAINS, SAME_SPACE_FALLBACKS, MultiEmbedder
 
 
 @pytest.fixture
@@ -21,37 +23,62 @@ def me() -> MultiEmbedder:
     return MultiEmbedder()
 
 
-class TestSameSpaceFallbacks:
-    def test_qwen4b_falls_back_to_or_qwen4b_only(self):
-        chain = SAME_SPACE_FALLBACKS["qwen4b"]
-        assert chain == ("or_qwen4b",)
+class TestEmbedChains:
+    def test_qwen4b_chain_is_deepinfra_then_local(self):
+        """Canonical 2560 space: DeepInfra primary, local :8004 fallback."""
+        chain = EMBED_CHAINS["qwen4b"]
+        assert chain == ("deepinfra", "qwen4b")
+
+    def test_deepinfra_alias_chain(self):
+        """Backend-name lookups resolve to the same canonical chain."""
+        assert EMBED_CHAINS["deepinfra"] == ("deepinfra", "qwen4b")
+
+    def test_same_space_fallbacks_alias(self):
+        """Deprecated pre-2026-08-29 name must keep pointing at EMBED_CHAINS."""
+        assert SAME_SPACE_FALLBACKS is EMBED_CHAINS
 
     def test_no_cross_family_fallback(self):
         """nemotron must NEVER fall back to qwen (different semantic space)."""
-        assert "nemotron" not in SAME_SPACE_FALLBACKS
-        assert "qwen06b" not in SAME_SPACE_FALLBACKS
+        assert "nemotron" not in EMBED_CHAINS
+        assert "qwen06b" not in EMBED_CHAINS
 
-    def test_or_qwen4b_is_same_model(self, me: MultiEmbedder):
-        """The remote fallback must serve the SAME model as local qwen4b."""
+    def test_deepinfra_is_same_model_as_local(self, me: MultiEmbedder):
+        """The remote primary must serve the SAME model as local qwen4b."""
         local = me.backends["qwen4b"]
-        remote = me.backends["or_qwen4b"]
-        assert local.model.split("/")[-1] == remote.model.split("/")[-1]
+        remote = me.backends["deepinfra"]
+        assert local.model.split("/")[-1].lower() == remote.model.split("/")[-1].lower()
         assert remote.dim == local.dim
 
     @pytest.mark.asyncio
-    async def test_embed_falls_back_when_local_fails(self, me: MultiEmbedder):
+    async def test_embed_falls_back_when_remote_fails(self, me: MultiEmbedder):
         calls: list[str] = []
 
         async def fake_once(text: str, be, target_dim=None):
             calls.append(be.name)
-            if be.name == "qwen4b":
-                raise RuntimeError("local saturated")
+            if be.name == "deepinfra":
+                raise RuntimeError("remote 5xx")
             return [0.1] * be.dim
 
         with patch.object(me, "_embed_once", side_effect=fake_once):
             vec = await me.embed("query", "qwen4b")
-        assert calls == ["qwen4b", "or_qwen4b"]
-        assert len(vec) == me.backends["or_qwen4b"].dim
+        assert calls == ["deepinfra", "qwen4b"]
+        assert len(vec) == me.backends["qwen4b"].dim
+
+    @pytest.mark.asyncio
+    async def test_embed_strips_remote_lanes_when_disabled(self, me: MultiEmbedder):
+        """RAG_QUERY_REMOTE_FALLBACK=0 → fully-local chain (deepinfra gone)."""
+        calls: list[str] = []
+
+        async def fake_once(text: str, be, target_dim=None):
+            calls.append(be.name)
+            return [0.1] * be.dim
+
+        with (
+            patch.dict("os.environ", {"RAG_QUERY_REMOTE_FALLBACK": "0"}),
+            patch.object(me, "_embed_once", side_effect=fake_once),
+        ):
+            await me.embed("query", "qwen4b")
+        assert calls == ["qwen4b"]
 
     @pytest.mark.asyncio
     async def test_embed_disabled_fallback_raises(self, me: MultiEmbedder):
@@ -75,7 +102,7 @@ class TestSameSpaceFallbacks:
 
         with patch.object(me, "_embed_once", side_effect=fake_once):
             await me.embed("query", "qwen4b")
-        assert calls == ["qwen4b"]
+        assert calls == ["deepinfra"]
 
 
 class TestLandscape:

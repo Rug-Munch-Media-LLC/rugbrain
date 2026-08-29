@@ -188,10 +188,11 @@ def test_pick_tier_threshold():
     assert dual.pick_tier(long_q) == "deep"
 
 
-# --- Gateway /embed auto-routing regression (2026-08-23) ---------------------
-# Bug: EmbedReq.tier defaulted to "speed" AND the text was never passed to
-# pick_tier, so /embed ALWAYS hit the speed engine regardless of length.
-# Contract: tier=None -> word-count auto-route; explicit tier still wins.
+# --- Gateway /embed routing regression (2026-08-23, updated 2026-08-29) ------
+# 2026-08-23 bug: EmbedReq.tier defaulted to "speed" AND the text was never
+# passed to pick_tier, so /embed ALWAYS hit the speed engine.
+# 2026-08-29 consolidation: tier=None -> CANONICAL deep lane; explicit
+# tier="speed" is the LEGACY 0.6b read lane (local-only, no cloud fallback).
 
 
 class _FakeEmbedResp:
@@ -232,20 +233,23 @@ def _load_gateway():
 
 
 @pytest.mark.asyncio
-async def test_gateway_embed_autoroutes_long_text(monkeypatch):
+async def test_gateway_embed_defaults_to_deep(monkeypatch):
+    """tier=None routes to the CANONICAL deep lane (2026-08-29 doctrine)."""
     gw = _load_gateway()
     monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
-    out = await gw.embed(gw.EmbedReq(text=" ".join(["word"] * 60)))
-    assert out["tier"] == "deep", "long text must auto-route to deep embed"
+    out = await gw.embed(gw.EmbedReq(text="rug pull check"))
+    assert out["tier"] == "deep", "None tier must default to the canonical deep lane"
     assert "8004" in _FakeGatewaySession.last_url
 
 
 @pytest.mark.asyncio
-async def test_gateway_embed_autoroutes_short_text(monkeypatch):
+async def test_gateway_embed_explicit_speed_is_legacy_local_only(monkeypatch):
+    """Explicit speed = LEGACY 0.6b read lane: local-only, marked legacy."""
     gw = _load_gateway()
     monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
-    out = await gw.embed(gw.EmbedReq(text="rug pull check"))
-    assert out["tier"] == "speed", "short text must auto-route to speed embed"
+    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
+    assert out["tier"] == "speed"
+    assert out.get("legacy") is True, "speed lane responses must be marked legacy"
     assert "8007" in _FakeGatewaySession.last_url
 
 
@@ -258,10 +262,11 @@ async def test_gateway_embed_explicit_tier_wins(monkeypatch):
     assert "8004" in _FakeGatewaySession.last_url
 
 
-# --- Cloud fallback + strain breaker (2026-08-23) ---------------------------
-# Doctrine: local canon is 4B/0.6B quantized. Cloud engages only on failure or
-# open breaker; responses carry served_by=cloud + degraded=True. Rerank stays
-# LOCAL (4B -> 0.6B), never cloud.
+# --- Cloud fallback + strain breaker (2026-08-23, updated 2026-08-29) --------
+# Doctrine 2026-08-29: the DEEP cloud lane is DeepInfra Qwen/Qwen3-Embedding-4B
+# @2560 — the SAME model as local :8004 ⇒ index-compatible. The SPEED lane has
+# NO cloud fallback (0.6b embed retired for writes; legacy reads are local
+# only). Rerank stays LOCAL (4B -> 0.6B), never cloud.
 
 
 class _RoutingResp:
@@ -308,33 +313,43 @@ def _make_routing_session(fail_markers=("8004",)):
 
 @pytest.mark.asyncio
 async def test_deep_embed_cloud_fallback_on_outage(monkeypatch):
+    """Deep outage -> DeepInfra same-model lane (index-compatible)."""
     gw = _load_gateway()
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", _make_routing_session(("8004",)))
-    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "", "deep": "test-key"})
+    sess = _make_routing_session(("8004",))
+    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
     out = await gw.embed(gw.EmbedReq(text="forensic query", tier="deep"))
     assert out["served_by"] == "cloud"
     assert out["degraded"] is True
     assert out["tier"] == "deep"
-    assert "qwen3-embedding-8b" in out["cloud_model"]
+    assert out["cloud_model"] == "Qwen/Qwen3-Embedding-4B"
+    assert out["index_compatible"] is True, "DeepInfra deep lane must be index-compatible"
+    assert any("deepinfra.com" in u for u in sess.last_urls)
 
 
 @pytest.mark.asyncio
-async def test_speed_embed_cloud_fallback_uses_main_free_model(monkeypatch):
+async def test_speed_lane_never_goes_cloud(monkeypatch):
+    """0.6b speed lane is LEGACY READS ONLY: outage must NOT hit DeepInfra."""
     gw = _load_gateway()
     sess = _make_routing_session(("8007",))
     monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
-    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "main-key", "deep": ""})
-    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
-    assert out["served_by"] == "cloud" and out["degraded"] is True
-    assert "lfm-2.5-embedding-350m" in out["cloud_model"]
-    assert any("openrouter.ai" in u for u in sess.last_urls)
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    with _pytest.raises(HTTPException):
+        await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
+    assert not any("deepinfra.com" in u for u in sess.last_urls), (
+        "speed embed must never use the cloud lane"
+    )
 
 
 @pytest.mark.asyncio
 async def test_no_cloud_key_fails_loud(monkeypatch):
     gw = _load_gateway()
     monkeypatch.setattr(gw.aiohttp, "ClientSession", _make_routing_session(("8004",)))
-    monkeypatch.setattr(gw, "_CLOUD_KEYS", {"speed": "", "deep": ""})
+    monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
+    monkeypatch.setattr(gw, "_deepinfra_key", lambda: "")
     import pytest as _pytest
     from fastapi import HTTPException
 

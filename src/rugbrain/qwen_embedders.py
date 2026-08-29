@@ -37,7 +37,7 @@ class Qwen3Embedder:
     instead of a stale hardcoded number; env still wins.
     """
 
-    EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
+    EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
     MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
     DIMS = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(MODEL))
 
@@ -98,7 +98,7 @@ class Qwen3FastEmbedder(Qwen3Embedder):
     """
 
     MODEL = "qwen3-embedding-0.6b"
-    EMBED_URL = os.getenv("QWEN_FAST_URL", "http://172.22.0.1:8007/v1")
+    EMBED_URL = os.getenv("QWEN_FAST_URL", "http://127.0.0.1:8007/v1")
     DIMS = int(os.getenv("QWEN_FAST_DIMS", "1024"))
 
     def __init__(self, embed_url: str | None = None):

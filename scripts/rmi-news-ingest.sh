@@ -9,7 +9,7 @@
 #
 #   */15 * * * * /bin/bash /path/to/rugbrain/scripts/rmi-news-ingest.sh >> /var/log/rmi-news-ingest.log 2>&1
 #
-# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from /srv/rmi-infra/.env.secrets.
+# Secrets: reads POSTGRES_PASSWORD / REDIS_PASSWORD from RMI_SECRETS_FILE (if set).
 set -euo pipefail
 
 # ── Concurrency guard: never run two ingests at once ─────────────────
@@ -53,10 +53,10 @@ if [ -f "$LOG_FILE" ]; then
   fi
 fi
 
-RAG_DIR="${RMI_RAG_DIR:-/srv/work/repos/rmi-rag}"
+RAG_DIR="${RMI_RAG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # news_to_rag imports rugbrain.* from the RAG repo's own venv.
 RAG_PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
-SECRETS="${RMI_SECRETS_FILE:-/srv/rmi-infra/.env.secrets}"
+SECRETS="${RMI_SECRETS_FILE:-}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
 
@@ -70,38 +70,38 @@ fi
 
 # ── Step 1: RugBrain-native RSS ingest into Postgres ────────────────
 # (replaces the retired rmi-backend RSS ingest — fully independent)
-log "step=ingest_cryptopanic dir=$RAG_DIR"
+# Multi-feed mode (2026-08-29): data/rss_feeds.txt carries the 177-feed
+# list (security firms, L1/L2 blogs, regulators, mainstream crypto press).
+# Falls back to the single CryptoPanic feed when the file is absent.
+FEEDS_FILE="${RMI_FEEDS_FILE:-$RAG_DIR/data/rss_feeds.txt}"
+FEED_ARGS=(--days "${RMI_NEWS_DAYS:-7}")
+if [ -f "$FEEDS_FILE" ]; then
+  FEED_ARGS+=(--feeds-file "$FEEDS_FILE")
+fi
+log "step=ingest_cryptopanic dir=$RAG_DIR feeds_file=$FEEDS_FILE"
 if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      "$RAG_PYTHON" scripts/ingest_cryptopanic_news.py --days 7)
+      "$RAG_PYTHON" scripts/ingest_cryptopanic_news.py "${FEED_ARGS[@]}")
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      python3 scripts/ingest_cryptopanic_news.py --days 7)
+      python3 scripts/ingest_cryptopanic_news.py "${FEED_ARGS[@]}")
 fi
 
 # ── Step 2: news → embed → Qdrant ───────────────────────────────────
-# ── Step 1.5: DataBus aggregate -> news_items (200 sources, reranked) ──
-log "step=aggregate_sync dir=$RMI_BACKEND_DIR"
-(
-  cd "$RMI_BACKEND_DIR" \
-    && JWT_SECRET="$(cat /srv/secrets/jwt_secret 2>/dev/null | head -1)" \
-    .venv/bin/python scripts/backfill_news_items_from_aggregate.py 120
-) || echo "aggregate_sync failed (non-fatal)" >&2
-
 log "step=news_to_rag dir=$RAG_DIR"
 if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-      EMBEDDER_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+      EMBEDDER_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
       "$RAG_PYTHON" scripts/news_to_rag.py)
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
       QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-      EMBEDDER_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+      EMBEDDER_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
       python3 scripts/news_to_rag.py)
 fi
 

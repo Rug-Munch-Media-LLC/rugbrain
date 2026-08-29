@@ -27,7 +27,7 @@ if ! flock -n 200; then
 fi
 trap 'flock -u 200 2>/dev/null || true' EXIT
 
-RAG_DIR="${RMI_RAG_DIR:-/path/to/rugbrain}"
+RAG_DIR="${RMI_RAG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 PYTHON="${RMI_RAG_PYTHON:-$RAG_DIR/.venv/bin/python}"
 
 log() { echo "[$(date -u +%FT%TZ)] $*"; }
@@ -39,13 +39,25 @@ fi
 log "step=defillama_hacks"
 (cd "$RAG_DIR" &&
   QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-    INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+    INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
     "$PYTHON" scripts/ingest_defillama_hacks.py --days 90)
 
 log "step=regulation_enforcement"
 (cd "$RAG_DIR" &&
   QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
-    INFINITY_URL="${INFINITY_URL:-http://172.22.0.1:8004/v1}" \
+    INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
     "$PYTHON" scripts/ingest_regulation_enforcement.py --days 90)
+
+# ── step=ingest_all_sources (2026-08-29) ─────────────────────────────
+# Full 48-source registry (CertiK alerts, SlowMist archive, CISA KEV,
+# OpenPhish, URLHaus, OpenSanctions, blacklists, OSSF malicious packages,
+# DeFiHackLabs, Rekt, DeFiLlama, MEV, bridges, EIPs, …) → Qdrant.
+# Idempotent: deterministic doc_ids + has_point skip, so each 6h run only
+# embeds NEW docs. DeepInfra qwen3-4b first, local llama.cpp fallback.
+log "step=ingest_all_sources"
+(cd "$RAG_DIR" &&
+  QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+    QWEN_EMBED_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
+    "$PYTHON" scripts/ingest_all_sources.py)
 
 log "step=done"

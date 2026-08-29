@@ -39,7 +39,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://172.22.0.1:8004/v1) with the embed
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with the embed
     model from RAG_EMBED_MODEL (default qwen3-embedding-4b, 2560-dim)
   - git, httpx, numpy, yaml (PyYAML)
 """
@@ -79,7 +79,7 @@ logger = logging.getLogger("ingest_scam_knowledge")
 # ── Config ─────────────────────────────────────────────────────────────
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
-QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1").rstrip("/")
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", "1024"))
 KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108

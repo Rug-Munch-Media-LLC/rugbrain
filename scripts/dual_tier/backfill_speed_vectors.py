@@ -32,7 +32,7 @@ from qdrant_client import AsyncQdrantClient, models
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")
-SPEED_EMBED = os.getenv("SPEED_EMBED_URL", "http://172.22.0.1:8007")
+SPEED_EMBED = os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007")
 MARKER_FIELD = "speed_embedded"
 
 

@@ -32,37 +32,42 @@ async def health() -> dict[str, str]:
 
 @router.post("/embed")
 async def embed_text(request: EmbedRequest) -> dict[str, Any]:
-    """Embed text via Qwen3-Embedding-4B and return vector.
+    """Embed text via Qwen3-Embedding-4B and return the vector.
 
-    Same-space fallback: local :8004 saturated (migration) -> OpenRouter
-    qwen/qwen3-embedding-4b (verified identical 2560-dim space).
+    Canonical chain (2026-08-29 consolidation): DeepInfra primary — the
+    SAME qwen3-embedding-4b model as local :8004, so its 2560-dim vectors
+    are index-compatible — then local llama.cpp :8004 fallback, then fail
+    loud (502). The retired OpenRouter remote lane is gone.
     """
     import httpx
 
-    int_url = os.getenv("QWEN_EMBED_URL", "http://172.22.0.1:8004/v1")
+    from rugbrain.multi_embedder import _load_api_key
+
+    int_url = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
     model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-    attempts: list[tuple[str, str]] = [
-        ("local", f"{int_url.rstrip('/')}/embeddings"),
-    ]
-    or_key = os.getenv("OPENROUTER_API_KEY", "")
-    if or_key:
+    attempts: list[tuple[str, str, str, str]] = []  # (name, url, model, bearer)
+    di_key = _load_api_key("DEEPINFRA_API_KEY")
+    if di_key:
         attempts.append(
             (
-                "openrouter",
-                os.getenv("OR_QWEN_EMBED_URL", "https://openrouter.ai/api/v1/embeddings"),
+                "deepinfra",
+                os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings"),
+                os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
+                di_key,
             )
         )
+    attempts.append(("local", f"{int_url.rstrip('/')}/embeddings", model, ""))
     last_exc: Exception | None = None
-    for name, url in attempts:
+    for name, url, req_model, bearer in attempts:
         # Local probe must fail FAST so the remote fallback engages inside
         # the caller's budget (a wedged :8004 otherwise eats 30s).
-        timeout = 8.0 if name == "local" else 30.0
-        headers = {"Authorization": f"Bearer {or_key}"} if name == "openrouter" else {}
+        timeout = 20.0 if name == "deepinfra" else 8.0
+        headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 r = await client.post(
                     url,
-                    json={"input": request.text, "model": model},
+                    json={"input": request.text, "model": req_model},
                     headers=headers,
                 )
                 if r.status_code == 200:
@@ -72,7 +77,7 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
                         from rugbrain.dim_policy import normalize_dims
 
                         vec = normalize_dims(vec, request.dimensions)
-                    return {"embedding": vec, "dim": len(vec)}
+                    return {"embedding": vec, "dim": len(vec), "served_by": name}
                 last_exc = RuntimeError(f"{name} HTTP {r.status_code}")
         except Exception as e:
             last_exc = e
