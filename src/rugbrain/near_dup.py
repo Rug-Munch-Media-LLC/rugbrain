@@ -53,7 +53,7 @@ class NearDuplicateIndex:
         nb = sum(x * x for x in b) ** 0.5
         if na == 0 or nb == 0:
             return 0.0
-        return dot / (na * nb)
+        return dot / (na * nb)  # type: ignore[no-any-return]  # sum() over generator is Any
 
     def _evict(self, now: float) -> None:
         cutoff = now - self.ttl_s

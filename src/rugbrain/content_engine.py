@@ -234,7 +234,7 @@ async def select_scans(limit: int = 3) -> list[dict[str, Any]]:
 async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list[dict[str, Any]]]:
     if _drafts_cache["data"] is not None and time.time() - _drafts_cache["ts"] < DRAFTS_CACHE_TTL:
         logger.debug("drafts_cache_hit age=%.0fs", time.time() - _drafts_cache["ts"])
-        return _drafts_cache["data"]
+        return _drafts_cache["data"]  # type: ignore[no-any-return]  # cached drafts are typed Any
 
     started = time.time()
     stories = await _recent_stories()
@@ -253,7 +253,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
         except Exception:
             return _template_post(story), "template"
 
-    jobs: list[tuple[str, dict[str, Any], asyncio.Task]] = []
+    jobs: list[tuple[str, dict[str, Any], asyncio.Task[Any]]] = []
     for s in alert_stories[:5]:
         jobs.append(("alerts", s, asyncio.ensure_future(_timed_compose(s))))
     for s in main_pool[:MAX_MAIN_PER_CYCLE]:

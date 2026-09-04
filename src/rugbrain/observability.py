@@ -85,13 +85,15 @@ async def _save_local_metrics() -> None:
         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
 
 
-def trace_embedding(duration_ms: float, dims: int = 1024, model: str = "qwen3-embedding-4b") -> None:
+def trace_embedding(
+    duration_ms: float, dims: int = 1024, model: str = "qwen3-embedding-4b"
+) -> None:
     """Record an embedding operation."""
     _metrics.embedding_calls += 1
     _metrics.embedding_total_ms += duration_ms
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
                 name="rag.embedding",
                 metadata={"duration_ms": duration_ms, "dims": dims, "model": model},
             )
@@ -109,7 +111,7 @@ def trace_retrieval(
         _metrics.cache_misses += 1
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
                 name="rag.retrieval",
                 metadata={
                     "duration_ms": duration_ms,
@@ -126,7 +128,7 @@ def trace_reranker(
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
                 name="rag.reranker",
                 metadata={
                     "duration_ms": duration_ms,
@@ -142,7 +144,7 @@ def trace_ingest(docs: int, collection: str) -> None:
     _metrics.ingest_docs += docs
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(
+            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
                 name="rag.ingest",
                 metadata={"docs": docs, "collection": collection},
             )
@@ -155,7 +157,9 @@ def trace_error(error_type: str, detail: str = "") -> None:
 
 
 @asynccontextmanager
-async def timed_embedding(dims: int = 1024, model: str = "qwen3-embedding-4b") -> AsyncIterator[None]:
+async def timed_embedding(
+    dims: int = 1024, model: str = "qwen3-embedding-4b"
+) -> AsyncIterator[None]:
     """Context manager for timing embedding operations."""
     t0 = time.time()
     try:

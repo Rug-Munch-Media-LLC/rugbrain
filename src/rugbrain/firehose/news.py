@@ -59,7 +59,7 @@ async def pull_news_rss(client: httpx.AsyncClient) -> list[dict[str, Any]]:
             docs = await fetch_news_direct(limit=20)
             if docs:
                 logger.info("news pulled via DIRECT rss fallback: %d docs", len(docs))
-        except Exception as e:  # noqa: BLE001 — fail-open to empty
+        except Exception as e:
             logger.warning("direct news fallback failed: %s", e)
 
     return docs
@@ -95,7 +95,7 @@ async def pull_prediction_markets(client: httpx.AsyncClient) -> list[dict[str, A
             docs = await fetch_prediction_markets_direct(limit=10)
             if docs:
                 logger.info("prediction markets pulled via DIRECT fallback: %d docs", len(docs))
-        except Exception as e:  # noqa: BLE001 — fail-open to empty
+        except Exception as e:
             logger.warning("direct prediction-market fallback failed: %s", e)
 
     return docs

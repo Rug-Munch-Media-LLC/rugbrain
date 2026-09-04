@@ -61,7 +61,7 @@ async def fetch_social_sentiment_direct() -> list[dict[str, Any]]:
                 "metadata": {"source": "fear_greed", "type": "daily_summary"},
             }
         ]
-    except Exception as exc:  # noqa: BLE001 — fail-open to empty
+    except Exception as exc:
         logger.debug("direct fear-greed fetch failed err=%s", exc)
         return []
 
@@ -89,7 +89,7 @@ async def fetch_news_direct(limit: int = 20) -> list[dict[str, Any]]:
                 resp = await client.get(url)
                 if resp.status_code != 200:
                     continue
-                root = ET.fromstring(resp.text)
+                root = ET.fromstring(resp.text)  # nosec S314 — parses RSS from configured feeds, not user input
                 items = root.findall(".//item")[:per_feed]
                 for item in items:
                     title = _text_of(item.find("title"))
@@ -111,7 +111,7 @@ async def fetch_news_direct(limit: int = 20) -> list[dict[str, Any]]:
                             },
                         }
                     )
-            except Exception as exc:  # noqa: BLE001 — one dead feed never kills the pull
+            except Exception as exc:
                 logger.debug("direct news feed failed source=%s err=%s", source, exc)
     return docs[:limit]
 
@@ -153,6 +153,6 @@ async def fetch_prediction_markets_direct(limit: int = 10) -> list[dict[str, Any
                     "metadata": {"source": "polymarket", "type": "prediction"},
                 }
             )
-    except Exception as exc:  # noqa: BLE001 — fail-open to empty
+    except Exception as exc:
         logger.debug("direct polymarket fetch failed err=%s", exc)
     return docs

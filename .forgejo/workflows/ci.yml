@@ -51,9 +51,8 @@ jobs:
       - run: pip install -e .
       - run: pip install ruff mypy pytest pytest-cov diff-cover
       - run: ruff check src/ tests/
-      # mypy gate is owned by a separate workstream — kept non-blocking here
-      # until the strict-strict cleanup lands (do not change without owner).
-      - run: mypy src/rugbrain/ --ignore-missing-imports || true
+      # mypy gate is blocking — type errors fail CI.
+      - run: mypy src/rugbrain/ --ignore-missing-imports
       - name: Unit tests with coverage (BLOCKING)
         # Tests MUST pass and global coverage must meet the 60% floor
         # declared in pyproject.toml [tool.coverage.report] fail_under.

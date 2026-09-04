@@ -100,7 +100,7 @@ async def pull_social_sentiment(client: httpx.AsyncClient) -> list[dict[str, Any
             docs = await fetch_social_sentiment_direct()
             if docs:
                 logger.info("social sentiment pulled via DIRECT fallback: %d docs", len(docs))
-        except Exception as e:  # noqa: BLE001 — fail-open to empty
+        except Exception as e:
             logger.warning("direct social-sentiment fallback failed: %s", e)
 
     return docs

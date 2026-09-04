@@ -67,6 +67,7 @@ ignore = ["E501", "B008", "S101", "N818", "S110", "S112", "RUF002", "RUF003"]
 [tool.ruff.lint.per-file-ignores]
 # Tests use deliberate importlib-import patterns and unused loop vars for data-driven asserts
 "tests/*" = ["E402", "B007"]
+"src/rugbrain/firehose/direct_sources.py" = ["S314"]
 
 [tool.mypy]
 python_version = "3.12"

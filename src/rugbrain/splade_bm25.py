@@ -592,7 +592,7 @@ async def build_bm25_from_redis(
             batch_size = 500
             for i in range(0, len(sample), batch_size):
                 batch = sample[i : i + batch_size]
-                keys = [f"rag:{coll}:{did}" for did in batch]  # type: ignore[str-bytes-safe]  # smembers ids are str at runtime (decode_responses=True); redis types them bytes|str
+                keys = [f"rag:{coll}:{did}" for did in batch]
                 pipe = r.pipeline()
                 for k in keys:
                     pipe.get(k)
@@ -606,7 +606,7 @@ async def build_bm25_from_redis(
                         content = doc.get("content", "") or ""
                         metadata = doc.get("metadata", {}) or {}
                         # Use collection:doc_id as the index key
-                        doc_key = f"{coll}:{did}"  # type: ignore[str-bytes-safe]  # did is str at runtime (decode_responses=True); redis types smembers bytes|str
+                        doc_key = f"{coll}:{did}"
                         index.add_document(doc_key, content, metadata)
                         total_indexed += 1
                     except (json.JSONDecodeError, Exception):
@@ -617,7 +617,7 @@ async def build_bm25_from_redis(
             logger.warning("BM25 indexing for %s failed: %s", coll, e)
 
     index.build()
-    await r.aclose()  # redis.asyncio stub
+    await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
 
     logger.info(
         f"BM25 index built: {total_indexed} docs, {len(index.df)} unique terms, avg doc length {index.avg_dl:.1f}"

@@ -226,7 +226,7 @@ with tab6:
 
                 import httpx
 
-                params = {"limit": 20}
+                params: dict[str, Any] = {"limit": 20}
                 if feed_source != "all":
                     params["sources"] = feed_source
 

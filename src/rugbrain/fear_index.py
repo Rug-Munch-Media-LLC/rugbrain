@@ -594,7 +594,7 @@ async def _redis_get() -> str | None:
             value = await r.get(CACHE_KEY)
             return str(value) if value is not None else None
         finally:
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
     except Exception:
         return None
 
@@ -623,7 +623,7 @@ async def _cache_set(snapshot: dict[str, Any]) -> None:
         try:
             await r.set(CACHE_KEY, json.dumps(snapshot), ex=CACHE_TTL)
         finally:
-            await r.aclose()
+            await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
     except Exception as e:
         log.debug("fear_index_cache_write_failed: %s", e)
 

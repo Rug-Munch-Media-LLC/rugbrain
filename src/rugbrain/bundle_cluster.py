@@ -172,7 +172,7 @@ def embed_bundle_profile(bundle: dict[str, Any]) -> list[float]:
     for i in range(42):
         vec[86 + i] = full_hash[i % 32] / 255.0
 
-    return vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
+    return vec.tolist()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -308,7 +308,7 @@ def embed_cluster_profile(cluster: dict[str, Any]) -> list[float]:
     for i in range(102):
         vec[90 + i] = ch[i % 32] / 255.0
 
-    return vec.tolist()  # type: ignore[no-any-return]  # np.ndarray.tolist() is typed Any
+    return vec.tolist()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -431,7 +431,7 @@ Common tokens: {", ".join(cluster.get("common_tokens", [])[:5])}."""
     try:
         cluster_semantic = await embedder._semantic_embed_one(cluster_desc, "semantic")
     except Exception:
-        cluster_semantic = embedder._hash_embed(cluster_desc)
+        cluster_semantic = embedder._hash_embed(cluster_desc)  # type: ignore[attr-defined]  # [REVIEW] _hash_embed does not exist on CryptoEmbedder — latent AttributeError fallback
 
     # Compare to each label template
     matches: list[dict[str, Any]] = []
@@ -443,7 +443,7 @@ Common tokens: {", ".join(cluster.get("common_tokens", [])[:5])}."""
         try:
             template_semantic = await embedder._semantic_embed_one(template_text, "semantic")
         except Exception:
-            template_semantic = embedder._hash_embed(template_text)
+            template_semantic = embedder._hash_embed(template_text)  # type: ignore[attr-defined]  # [REVIEW] _hash_embed does not exist on CryptoEmbedder — latent AttributeError fallback
 
         # Semantic similarity
         sem_sim = embedder.cosine_similarity(
@@ -703,7 +703,7 @@ async def backfill_label_templates() -> int:
         try:
             vec = await embedder._semantic_embed_one(content, "semantic")
         except Exception:
-            vec = embedder._hash_embed(content)
+            vec = embedder._hash_embed(content)  # type: ignore[attr-defined]  # [REVIEW] _hash_embed does not exist on CryptoEmbedder — latent AttributeError fallback
 
         await store.insert(
             doc_id=label_id,

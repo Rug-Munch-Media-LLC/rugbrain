@@ -213,7 +213,7 @@ def detect_campaigns(msgs: list[dict[str, Any]], min_channels: int = 4) -> list[
 def _load_state() -> dict[str, Any]:
     try:
         with open(STATE_FILE) as f:
-            return json.load(f)
+            return json.load(f)  # type: ignore[no-any-return]  # json.load returns Any
     except (OSError, json.JSONDecodeError):
         return {"channels": {}, "seen_hashes": []}
 
