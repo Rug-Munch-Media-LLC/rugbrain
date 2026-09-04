@@ -79,6 +79,15 @@ jobs:
             coverage.xml
             coverage.lcov
 
+  docker-lint:
+    runs-on: docker-x64
+    container:
+      image: hadolint/hadolint:latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Hadolint Dockerfile
+        run: hadolint --failure-threshold error Dockerfile
+
   security:
     runs-on: docker-x64
     container:
