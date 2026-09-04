@@ -88,6 +88,16 @@ jobs:
       - name: Hadolint Dockerfile
         run: hadolint --failure-threshold error Dockerfile
 
+  # ── Container scan (trivy) ────────────────────────────────────
+  container-scan:
+    runs-on: docker-x64
+    container:
+      image: aquasec/trivy:latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Trivy scan Dockerfile
+        run: trivy fs --severity CRITICAL,HIGH --exit-code 1 .
+
   security:
     runs-on: docker-x64
     container:
