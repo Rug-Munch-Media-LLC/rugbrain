@@ -1,5 +1,7 @@
 # RugBrain — Crypto Intelligence RAG Engine
 
+> ⚠️ **DEPRECATED**: This repo is superseded by [rugbrain](https://git.rugmunch.io/RugMunchMedia/rugbrain). Do not add new code here. See `DEPRECATION.md` for details.
+
 > ⛔ **LEGACY / DEPRECATED (2026-08-29) — SUPERSEDED BY the `rugbrain` repo.**
 > This checkout is retained as a historical working copy only. All source
 > edits, deploys, and issues now belong in the `rugbrain` repo (canonical).
