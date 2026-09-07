@@ -1675,6 +1675,15 @@ async def search_coding_knowledge(
         r["has_code_snippet"] = bool(_CODE_MARKER_RE.search(content.lower()))
         r["code_blocks"] = extract_code_blocks(content)
         r["code_answer"] = format_code_answer(content)
+
+    # Crypto Code Mode: merge ContextCrypto collection hits (codebase_reference
+    # + security_patterns) for crypto-CODE queries. Degrades silently.
+    try:
+        from rugbrain.crypto_code_retrieval import augment_coding_results
+
+        results = await augment_coding_results(query, results, limit=limit)
+    except Exception as exc:  # best-effort enrichment, never breaks coding search
+        logger.debug("crypto_code_augment_failed err=%s", exc)
     return {
         "query": query,
         "collections": colls,

@@ -596,3 +596,51 @@ async def scam_check(
         "confidence": confidence,
         "total_matches": len(matches),
     }
+
+# ── Crypto Code Mode (ContextCrypto collections) ──────────────────────
+
+
+
+
+# ── Crypto Code Mode (ContextCrypto collections) ──────────────────────
+
+
+@router.get("/search/crypto-code")
+async def search_crypto_code_endpoint(
+    q: str = Query(..., min_length=2, description="crypto-CODE question (contracts, exploits, testing)"),
+    limit: int = Query(default=10, ge=1, le=50),
+    verdict: str | None = Query(
+        default=None,
+        pattern="^(clean|malicious|defense|weakness|mixed|unknown)$",
+        description="ContextCrypto verdict filter",
+    ),
+    library_id: str | None = Query(default=None, description="codebase_reference library filter"),
+    category: str | None = Query(default=None, description="category filter (Reentrancy, Flash-Loan, ...)"),
+    severity: str | None = Query(
+        default=None,
+        pattern="^(critical|high|medium|low|informational|info|unknown)$",
+        description="security_patterns severity filter",
+    ),
+    ecosystem: str | None = Query(default=None, description="ecosystem filter (EVM, Solana, ...)"),
+    force: bool = Query(default=False, description="bypass the crypto-code classifier"),
+) -> dict[str, Any]:
+    """Crypto Code Mode — hybrid retrieval over the ContextCrypto collections.
+
+    Queries classified as crypto-CODE questions (contract patterns, exploit
+    PoCs, testing guidance) are answered from ``codebase_reference`` and
+    ``security_patterns`` with full source attribution (library, file path,
+    verdict label, reason_why). Non-code queries are rejected with
+    ``routed=false`` so general RAG stays unchanged.
+    """
+    from rugbrain.crypto_code_retrieval import search_crypto_code
+
+    return await search_crypto_code(
+        q,
+        top_k=limit,
+        verdict=verdict,
+        library_id=library_id,
+        category=category,
+        severity=severity,
+        ecosystem=ecosystem,
+        force=force,
+    )
