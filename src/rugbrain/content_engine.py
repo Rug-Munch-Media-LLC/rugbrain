@@ -28,6 +28,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -136,6 +137,24 @@ async def _compose(story: dict[str, Any]) -> tuple[str, str]:
     return _template_post(story), "template"
 
 
+def _story_age_hours(story: dict[str, Any]) -> float | None:
+    """Age of a story in hours from its ``ts`` field, or None if undated/bad.
+
+    Stale-news incident (2026-08-26): undated or malformed timestamps must
+    be treated as "no recency signal" so the caller can fail closed.
+    """
+    ts = story.get("ts")
+    if not ts:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(ts))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - parsed).total_seconds() / 3600.0
+
+
 async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
     from rugbrain.embeddings import get_query_embedding
     from rugbrain.qdrant_store import get_qdrant_store
@@ -145,12 +164,14 @@ async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
         "security exploit hack rug pull scam alert important development"
     )
     seen: dict[str, dict[str, Any]] = {}
-    for collection in ("threat_intel_v2", "news_v2"):
+    # Only news_v2 (dated) is probed. threat_intel_v2 is an undated historical
+    # KB — including it re-introduces the stale-news incident (2026-08-26).
+    for collection in ("news_v2",):
         try:
             # interim embedder (nemotron) yields lower cosine scores than
             # qwen — keep the floor low; importance rerank does the triage
             results = await store.search(
-                embedding, collection=collection, limit=limit // 2, min_similarity=0.15
+                embedding, collection=collection, limit=limit, min_similarity=0.15
             )
         except Exception as e:
             logger.debug("content_probe_failed collection=%s err=%s", collection, str(e)[:80])
@@ -169,6 +190,7 @@ async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
                 "importance": float(md.get("importance") or 0),
                 "kind": md.get("kind", "story"),
                 "collection": collection,
+                "ts": md.get("ts") or r.get("ts"),
             }
     ranked = sorted(
         seen.values(),
@@ -277,6 +299,9 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
                 # RMI_RAG_POST_MIN_SCORE. Template output never posts.
                 "writer": writer,
                 "score": float(story.get("importance") or 0.0),
+                # stale-news fix (2026-08-26): carry the story ts so the bot's
+                # recency gate can reject undated/stale drafts fail-closed.
+                "ts": story.get("ts"),
             }
         )
 
