@@ -179,3 +179,108 @@ jobs:
         run: |
           pip install schemathesis
           st run --url "${SCHEMA_URL:-http://rmi-backend:8000/openapi.json}" --checks all --max-examples 50 || echo "::warning::API contract violations found"
+
+  # ── SAST (semgrep) ────────────────────────────────────────────
+  # BLOCKING. Mirrors the rmi-backend gate: community rules, ERROR
+  # severity only. Findings are triaged with inline `nosemgrep` — never
+  # blanket-excluded.
+  semgrep:
+    runs-on: docker-x64
+    container:
+      image: nikolaik/python-nodejs:python3.12-nodejs22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install semgrep
+        run: pip install semgrep
+      - name: Semgrep SAST scan
+        run: |
+          semgrep scan --config=auto \
+            --severity=ERROR \
+            --error \
+            --exclude='tests/' \
+            --exclude='.venv/' \
+            --sarif \
+            --output=semgrep.sarif \
+            src/rugbrain/
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
+
+  # ── SBOM (CycloneDX) ──────────────────────────────────────────
+  # Generates a source-tree SBOM with syft (via anchore/sbom-action) and
+  # verifies it is a parseable CycloneDX document before upload.
+  sbom:
+    runs-on: docker-x64
+    needs: quality
+    container:
+      image: nikolaik/python-nodejs:python3.12-nodejs22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output: sbom.cyclonedx.json
+      - name: Verify SBOM (blocking — bad SBOM = broken gate)
+        run: |
+          python3 - <<'EOF'
+          import json
+          with open('sbom.cyclonedx.json') as f:
+              sbom = json.load(f)
+          assert sbom.get('bomFormat') == 'CycloneDX', 'not a CycloneDX document'
+          print(f"SBOM OK — {len(sbom.get('components', []))} components")
+          EOF
+      - uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
+
+  # ── Sign image (cosign keyless, main only) ──────────────────
+  # Mirrors the rmi-backend sign-image gate. Preconditions (fleet infra):
+  # the docker-x64 job container mounts the Docker socket, the
+  # registry.rugmunch.io hostname resolves from the runner, and Forgejo
+  # OIDC issues workflow tokens for this repo (git.rugmunch.io issuer).
+  sign-image:
+    runs-on: docker-x64
+    needs: quality
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.3'
+      - name: Set up Docker BuildKit
+        run: |
+          echo "DOCKER_BUILDKIT=1" >> $GITHUB_ENV
+          echo "BUILDKIT_PROGRESS=plain" >> $GITHUB_ENV
+      - name: Pull build cache
+        run: docker pull registry.rugmunch.io/rugbrain:buildcache || echo "No cache image yet — building from scratch"
+      - name: Build Docker image with cache
+        run: |
+          docker build \
+            --cache-from registry.rugmunch.io/rugbrain:buildcache \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -t registry.rugmunch.io/rugbrain:${{ github.sha }} \
+            .
+      - name: Push cache image
+        run: |
+          docker tag registry.rugmunch.io/rugbrain:${{ github.sha }} registry.rugmunch.io/rugbrain:buildcache
+          docker push registry.rugmunch.io/rugbrain:buildcache
+      - name: Push release image
+        run: docker push registry.rugmunch.io/rugbrain:${{ github.sha }}
+      - name: Sign image with keyless (OIDC)
+        run: |
+          cosign sign --yes registry.rugmunch.io/rugbrain:${{ github.sha }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+      - name: Verify signature
+        run: |
+          cosign verify \
+            --certificate-identity "https://git.rugmunch.io/RugMunchMedia/rugbrain/.forgejo/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://git.rugmunch.io" \
+            registry.rugmunch.io/rugbrain:${{ github.sha }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"
