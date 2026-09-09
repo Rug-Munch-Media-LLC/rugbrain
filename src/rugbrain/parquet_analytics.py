@@ -239,27 +239,17 @@ def _sql_quote(value: str) -> str:
 def _configure_b2_secret(con: Any) -> None:
     """Create the B2 S3-compatible secret from environment credentials.
 
-    Values come from env at runtime and are SQL-quoted via ``_sql_quote``;
-    the key/secret are alphanumeric B2 credentials, never literals here.
+    Values come from env at runtime and are bound as prepared-statement
+    parameters (``?``) — DuckDB supports parameter binding for
+    ``CREATE SECRET``, so no SQL string interpolation is involved.
     """
     key_id, key, _bucket, endpoint = _env_b2_credentials()
     region = endpoint.removeprefix("s3.").removesuffix(".backblazeb2.com") or "us-east-005"
-    sql = (
-        "CREATE SECRET b2_permanence (TYPE S3, "
-        + "KEY_ID "
-        + _sql_quote(key_id)
-        + ", "
-        + "SECRET "
-        + _sql_quote(key)
-        + ", "
-        + "ENDPOINT "
-        + _sql_quote(endpoint)
-        + ", "
-        + "REGION "
-        + _sql_quote(region)
-        + ", URL_STYLE 'path')"
+    con.execute(
+        "CREATE SECRET b2_permanence (TYPE S3, KEY_ID ?, SECRET ?, ENDPOINT ?, "
+        "REGION ?, URL_STYLE 'path')",
+        [key_id, key, endpoint, region],
     )
-    con.execute(sql)
 
 
 def run_snapshot_query(
@@ -307,16 +297,29 @@ def run_snapshot_query(
             con.close()
 
 
+def _parquet_view_sql(view_name: str, parquet_arg_sql: str) -> str:
+    """DDL for a read-only VIEW over one ``read_parquet(...)`` argument.
+
+    ``view_name`` is a fixed internal identifier (snapshots / chain_events /
+    chain_dex) and ``parquet_arg_sql`` MUST be a fully SQL-quoted literal
+    produced by ``_sql_quote`` / ``_sql_list`` — never raw input. DuckDB does
+    not accept prepared parameters in DDL statements (``CREATE VIEW ... AS
+    SELECT * FROM read_parquet(?)`` fails with "can't be prepared"), so the
+    file/glob argument has to be inlined as an escaped literal; quote-doubling
+    is the injection boundary and the inputs are trusted env/FS paths, not
+    caller SQL.
+    """
+    return (
+        "CREATE OR REPLACE VIEW " + view_name + " AS "  # noqa: S608  # nosec B608
+        "SELECT * FROM read_parquet(" + parquet_arg_sql + ")"
+    )
+
+
 def _create_snapshots_view(con: Any, glob_path: str) -> None:
     """Create the read-only ``snapshots`` VIEW over *glob_path*."""
     # glob_path is derived from env bucket/date or the caller (glob_override),
     # never from the user query; SQL-quoted via _sql_quote.
-    sql = (
-        "CREATE OR REPLACE VIEW snapshots AS SELECT * FROM read_parquet("  # noqa: S608  # nosec B608
-        + _sql_quote(glob_path)
-        + ")"
-    )
-    con.execute(sql)
+    con.execute(_parquet_view_sql("snapshots", _sql_quote(glob_path)))
 
 
 def _fetch_rows(con: Any, query: str, limit: int, source: str, glob_path: str) -> dict[str, Any]:

@@ -41,6 +41,7 @@ from typing import Any
 from rugbrain.parquet_analytics import (
     MAX_RESULTS,
     _connect_duckdb,
+    _parquet_view_sql,
     json_safe_row,
     validate_read_only_sql,
 )
@@ -260,15 +261,14 @@ def _create_chain_views(con: Any, files: list[Path]) -> list[str]:
     dex = [str(p) for p in files if _file_kind(p) == "dex"]
     created: list[str] = []
     if events:
-        con.execute(
-            "CREATE OR REPLACE VIEW chain_events AS "  # noqa: S608  # nosec B608
-            "SELECT * FROM read_parquet(" + _sql_list(events) + ")"
-        )
+        # Paths come from the local FS (rclone-downloaded B2 prefix filtered
+        # to *.parquet, or internal test overrides) — never from the caller's
+        # SQL. _sql_list quote-escapes each path; see _parquet_view_sql for
+        # why the DDL inlines literals instead of using prepared parameters.
+        con.execute(_parquet_view_sql("chain_events", _sql_list(events)))
         created.append("chain_events")
     if dex:
-        con.execute(
-            "CREATE OR REPLACE VIEW chain_dex AS SELECT * FROM read_parquet(" + _sql_list(dex) + ")"  # noqa: S608  # nosec B608
-        )
+        con.execute(_parquet_view_sql("chain_dex", _sql_list(dex)))
         created.append("chain_dex")
     return created
 

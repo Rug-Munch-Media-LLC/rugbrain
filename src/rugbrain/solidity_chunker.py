@@ -162,7 +162,6 @@ def chunk_solidity_ast(
     source: str,
     target_size: int = TARGET_CHUNK_SIZE,
     max_size: int = MAX_CHUNK_SIZE,
-    min_size: int = MIN_CHUNK_SIZE,
 ) -> list[str]:
     """
     Chunk Solidity source code using AST-aware boundaries.
