@@ -1,12 +1,14 @@
 # RugBrain — Crypto Intelligence RAG Engine
 
-> ⚠️ **DEPRECATED**: This repo is superseded by [rugbrain](https://git.rugmunch.io/RugMunchMedia/rugbrain). Do not add new code here. See `DEPRECATION.md` for details.
-
-> ⛔ **LEGACY / DEPRECATED (2026-08-29) — SUPERSEDED BY the `rugbrain` repo.**
-> This checkout is retained as a historical working copy only. All source
-> edits, deploys, and issues now belong in the `rugbrain` repo (canonical).
-> This venv's `rugbrain.pth` already resolves `import rugbrain` to
-> `rugbrain/src` — the live implementation exists only there.
+> ✅ **CANONICAL (LIVE)** — This repo is the deployed, maintained RAG service
+> (`rugbrain-api:8012`, container `rugbrain-api` on the shared `rmi_network`).
+> All new RAG code, bug fixes, and deploys belong here.
+>
+> The older **`rmi-rag`** repo is **ARCHIVED / DEPRECATED** — it shares ~274
+> byte-identical files with this repo and must not receive new code, deploys,
+> or issues (see that repo's `DEPRECATION.md` / this repo's `DEPRECATION.md`
+> notice). Do not "sync" files between the two — that perpetuates the
+> duplication this consolidation ends.
 
 RugBrain (formerly RugSense / RMI RAG) is the RAG layer for Rug Munch
 Intelligence. It embeds scam patterns, news/social intel, wallet/entity
@@ -15,11 +17,10 @@ serves them back through semantic, hybrid, and entity-aware search. Powers
 the scanner's **Known Scam Patterns** check, the bot's `/research` and
 `/investigate` commands, and the frontend's AI chat / wallet forensics.
 
-**Status:** DEPRECATED — do not develop, deploy, or file issues here.
-Canonical repo: **`rugbrain`** (`/srv/work/repos/rugbrain`). The runtime
-services (`rag-api`, `rag-consumer`) execute `rugbrain` code via this venv's
-`rugbrain.pth` path shim; this checkout exists only so that venv keeps
-resolving. 40+ Qdrant collections remain live (see
+**Status:** LIVE / canonical. Embedding: Qwen3-Embedding-4B (2560-dim) —
+DeepInfra hosted (`EMBED_PROVIDER=deepinfra`, massive-scale lane) with local
+llama.cpp (`:8004`) as the same-model fallback (`EMBED_PROVIDER=local`). 40+
+Qdrant collections remain live (see
 [docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) for the live
 inventory; [TODO.md](TODO.md) for honest current gaps).
 
@@ -38,7 +39,8 @@ inventory; [TODO.md](TODO.md) for honest current gaps).
 (CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
 via Nitter RSS or SearXNG) and, for each new incident:
 
-1. embeds the incident description (llama.cpp Qwen3 embedder qwen3-embedding-4b, 2560-dim)
+1. embeds the incident description (Qwen3-Embedding-4B, 2560-dim — DeepInfra
+   hosted when `EMBED_PROVIDER=deepinfra`, else local llama.cpp)
 2. stores it in Qdrant `security_alerts`
 3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
 4. logs to ClickHouse `rag_security_alerts` for historical tracking
@@ -71,8 +73,9 @@ protocol or a trending scam is immediately flagged.
 
 ## Architecture
 
-- **Embedding:** BGE-M3 (primary, via llama.cpp, 2560-dim). No hash fallback —
-  fails loud (HTTP 503).
+- **Embedding:** Qwen3-Embedding-4B (2560-dim) — DeepInfra hosted primary
+  (`EMBED_PROVIDER=deepinfra`) with local llama.cpp `:8004` same-model
+  fallback (`EMBED_PROVIDER=local`). No hash fallback — fails loud (HTTP 503).
 - **Vector store:** Qdrant (Cosine, 2560-dim), collections created on demand.
 - **Warm store:** Redis — documents, index sets, semantic cache, ingest queues.
 - **Retrieval:** three-pillar search (dense + sparse/BM25-SPLADE + entity)

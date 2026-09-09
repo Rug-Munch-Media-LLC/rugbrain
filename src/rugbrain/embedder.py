@@ -1,8 +1,9 @@
-"""RAG Embedder — Qwen3-Embedding-4B primary (llama.cpp).
+"""RAG Embedder — Qwen3-Embedding-4B (DeepInfra hosted primary / llama.cpp local).
 
-Qwen3-Embedding-4B (2560d) is the primary embedding model, served by llama.cpp's
-OpenAI-compatible ``/embeddings`` endpoint (port 8085/8086).
-qwen3-embedding-4b (2560d) is retired. All Qdrant collections are 2560d Cosine.
+Qwen3-Embedding-4B (2560d) is the primary embedding model. Provider is chosen
+via ``EMBED_PROVIDER``: ``deepinfra`` (hosted DeepInfra, massive-scale) or
+``local`` (llama.cpp OpenAI-compatible ``/embeddings``, ``QWEN_EMBED_URL``).
+All Qdrant collections are 2560d Cosine.
 """
 
 from __future__ import annotations
@@ -87,15 +88,51 @@ class DualDimEmbedder:
 
 
 # ── Factory ────────────────────────────────────────────────────────────
-def get_embedder() -> DualDimEmbedder:
-    """Return the canonical embedder (qwen3-embedding-4b, 2560d, via Qwen3).
+class DeepInfraEmbedder:
+    """Hosted DeepInfra Qwen3-Embedding-4B adapter (DualDimEmbedder interface).
+
+    Used when ``EMBED_PROVIDER=deepinfra`` (or auto with ``DEEPINFRA_API_KEY``
+    set). Same model as the local llama.cpp lane ⇒ same 2560-dim vector space.
+    """
+
+    def __init__(self) -> None:
+        from rugbrain.qwen_embedders import Qwen3Embedder
+
+        self._impl = Qwen3Embedder(provider="deepinfra")
+        self.dim = self._impl.DIMS
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return await self._impl.embed(texts)
+
+    async def embed_one(self, text: str) -> list[float]:
+        return await self._impl.embed_one(text)
+
+
+def get_embedder() -> DualDimEmbedder | DeepInfraEmbedder:
+    """Return the canonical embedder (qwen3-embedding-4b, 2560d).
+
+    Provider selected by ``EMBED_PROVIDER``:
+      * ``deepinfra`` — hosted DeepInfra Qwen/Qwen3-Embedding-4B (massive-scale
+        lane; requires DEEPINFRA_API_KEY).
+      * ``local``     — llama.cpp (:8004, ``QWEN_EMBED_URL``) fallback.
+      * unset         — auto: DeepInfra when ``DEEPINFRA_API_KEY`` is present,
+        otherwise local llama.cpp.
 
     Async interface: ``await embedder.embed([texts])`` or ``await embedder.embed_one(text)``.
     """
-    return DualDimEmbedder(
-        EmbedderBackend.Qwen3_M3,
-        int_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
-    )
+    from rugbrain.qwen_embedders import DEEPINFRA_API_KEY
+
+    provider = os.getenv("EMBED_PROVIDER", "").strip().lower()
+    if not provider:
+        provider = "deepinfra" if DEEPINFRA_API_KEY else "local"
+    if provider == "deepinfra":
+        return DeepInfraEmbedder()
+    if provider == "local":
+        return DualDimEmbedder(
+            EmbedderBackend.Qwen3_M3,
+            int_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
+        )
+    raise RuntimeError(f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|local)")
 
 
 # ── Migration helpers ──────────────────────────────────────────────────

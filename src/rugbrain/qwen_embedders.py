@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Embedding provider classes — Qwen3-Embedding-4B via llama.cpp (primary),
-OpenRouter/HuggingFace (external fallbacks), and specialized contract embedder.
+Embedding provider classes — Qwen3-Embedding-4B via DeepInfra (hosted primary)
+or llama.cpp (local fallback), OpenRouter/HuggingFace (external fallbacks),
+and specialized contract embedder.
 """
 
 import asyncio
@@ -18,6 +19,20 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
+
+# ── DeepInfra hosted embedding lane (EMBED_PROVIDER=deepinfra) ──────────
+# DeepInfra hosts the SAME Qwen3-Embedding-4B model as the local llama.cpp
+# :8004 lane, so both lanes produce identical 2560-dim vectors and are
+# interchangeable per collection (dim_policy.MODEL_DIMS). DeepInfra is the
+# massive-scale lane: benchmarked 2026-08-29 at ~23 ms/doc vs ~1947 ms/doc
+# for local llama.cpp (see scripts/reembed_deepinfra.py). Endpoint shape
+# confirmed via DeepInfra docs (OpenAI-compatible /embeddings; the same
+# schema is served at /v1/embeddings and /v1/openai/embeddings). Key comes
+# from env (DEEPINFRA_API_KEY, supplied via .env.rag / gopass) — never
+# hardcoded.
+DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "")
+DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
 # 2026-08-25: defaults were placeholders ("openrouter/your-model-here") — if
 # RAG_PRIMARY_EMBED_MODEL was unset, the cloud rung fired at a nonexistent
 # model. Default to the verified-live free slug; also honor the env var name
@@ -30,23 +45,97 @@ OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "qwen3-embedding-4b")
 
 
 class Qwen3Embedder:
-    """llama.cpp Qwen3-Embedding-4B provider (OpenAI-compatible /embeddings).
+    """Qwen3-Embedding-4B provider — DeepInfra hosted or local llama.cpp.
 
-    Serves native 2560-dim vectors (registry: dim_policy.MODEL_DIMS) for all
-    RAG ingestion/search paths. Default derives from the configured model
-    instead of a stale hardcoded number; env still wins.
+    Provider selection (``EMBED_PROVIDER`` env):
+      * ``deepinfra`` — hosted DeepInfra ``Qwen/Qwen3-Embedding-4B``
+        (2560-dim). The massive-scale lane (~80x faster than local llama.cpp).
+        Requires ``DEEPINFRA_API_KEY``; raises at construction if missing.
+      * ``local``     — llama.cpp ``/embeddings`` (``QWEN_EMBED_URL``,
+        default http://127.0.0.1:8004/v1). Canonical same-model fallback.
+      * unset         — auto: DeepInfra when ``DEEPINFRA_API_KEY`` is set,
+        otherwise local llama.cpp.
+
+    Both lanes serve the same Qwen3-Embedding-4B model, so vectors are
+    interchangeable for the 2560-dim collections. A subclass/embed_url that
+    pins an explicit endpoint (e.g. Qwen3FastEmbedder :8007 0.6b) always
+    stays on the local lane.
     """
 
     EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
     MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
     DIMS = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(MODEL))
 
-    def __init__(self, embed_url: str | None = None):
-        self.url = embed_url or os.getenv(
-            "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", self.EMBED_URL)
-        )
+    def __init__(self, embed_url: str | None = None, provider: str | None = None):
+        self.url = embed_url or os.getenv("QWEN_EMBED_URL", self.EMBED_URL)
+        self.provider = (provider or os.getenv("EMBED_PROVIDER", "")).strip().lower()
+        self.api_key = DEEPINFRA_API_KEY
+        if embed_url is not None:
+            # Explicit endpoint pinned (Qwen3FastEmbedder 0.6b etc.) — local lane only.
+            self.provider = "local"
+        if not self.provider:
+            # Auto: hosted DeepInfra when keyed, else local llama.cpp fallback.
+            self.provider = "deepinfra" if self.api_key else "local"
+        if self.provider == "deepinfra" and not self.api_key:
+            raise RuntimeError(
+                "EMBED_PROVIDER=deepinfra requires DEEPINFRA_API_KEY "
+                "(env, via .env.rag / gopass). Set EMBED_PROVIDER=local for llama.cpp."
+            )
+        if self.provider not in ("deepinfra", "local"):
+            raise RuntimeError(f"EMBED_PROVIDER={self.provider!r} unknown (use deepinfra|local)")
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.provider == "deepinfra":
+            return await self._embed_deepinfra(texts)
+        return await self._embed_llamacpp(texts)
+
+    async def _embed_deepinfra(self, texts: list[str]) -> list[list[float]]:
+        """Hosted DeepInfra lane — batched OpenAI-compatible /embeddings."""
+        import httpx
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": DEEPINFRA_EMBED_MODEL,
+            "input": [t[:8000] for t in texts],
+        }
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.post(
+                    f"{DEEPINFRA_EMBED_URL}/embeddings", headers=headers, json=payload
+                )
+                if resp.status_code != 200:
+                    raise RuntimeError(
+                        f"qwen_embedder deepinfra HTTP {resp.status_code}: {resp.text[:200]}"
+                    )
+                data = resp.json().get("data", [])
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(f"qwen_embedder deepinfra failed: {exc}") from exc
+
+        results: list[list[float]] = []
+        for item in sorted(data, key=lambda x: x.get("index", 0)):
+            vec = item.get("embedding", [])
+            if len(vec) == self.DIMS:
+                results.append(vec)
+                continue
+            if len(vec) > self.DIMS:
+                # MRL truncate + renormalize (dim_policy)
+                from rugbrain.dim_policy import normalize_dims
+
+                results.append(normalize_dims(vec, self.DIMS))
+                continue
+            raise RuntimeError(f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.DIMS}")
+        if len(results) != len(texts):
+            raise RuntimeError(
+                f"deepinfra embed returned {len(results)} vectors for {len(texts)} inputs"
+            )
+        return results
+
+    async def _embed_llamacpp(self, texts: list[str]) -> list[list[float]]:
         import httpx
 
         results = []

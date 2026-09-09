@@ -237,8 +237,7 @@ with tab6:
                             params=params,
                             headers={
                                 "X-API-Key": os.getenv(
-                                    "RAG_DASHBOARD_API_KEY",
-                                    "rmi-rag-xOrYZMNw_ZFU12Fw4pe1HroasGZ7KZ9w-zsqHPTsL4M",
+                                    "RAG_DASHBOARD_API_KEY", ""
                                 )
                             },
                         )
