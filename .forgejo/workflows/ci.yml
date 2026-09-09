@@ -284,3 +284,63 @@ jobs:
             registry.rugmunch.io/rugbrain:${{ github.sha }}
         env:
           COSIGN_EXPERIMENTAL: "1"
+
+  # ── Dependency vulnerability audit (pip-audit) ───────────────
+  # Mirrors the rmi-backend gate. BLOCKING on HIGH/CRITICAL.
+  # Installs the same way the quality job does (no apt needed — the
+  # nikolaik image ships build tooling) so success conditions match.
+  pip-audit:
+    runs-on: docker-x64
+    needs: quality
+    container:
+      image: nikolaik/python-nodejs:python3.12-nodejs22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install pip-audit + deps
+        run: |
+          pip install pip-audit
+          pip install -r requirements.txt
+      - name: Run pip-audit (blocking on HIGH/CRITICAL)
+        run: |
+          pip-audit --fail-on=high --desc 2>&1 || { echo "❌ pip-audit found HIGH/CRITICAL vulnerabilities — fix before merge"; exit 1; }
+
+  # ── Dependency freshness (libyear) ───────────────────────────
+  deps-freshness:
+    runs-on: docker-x64
+    needs: quality
+    continue-on-error: true  # advisory — flags drift, never blocks
+    container:
+      image: nikolaik/python-nodejs:python3.11-nodejs22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Check dependency freshness
+        run: |
+          pip install pip-tools libyear 2>/dev/null || true
+          if [ -f requirements.txt ]; then
+            libyear --file requirements.txt || echo "Dep freshness check noted"
+          fi
+
+  # ── Mutation testing (mutmut) ────────────────────────────────
+  # Informational only for now. Path scope + pytest selection come from
+  # [tool.mutmut] in pyproject.toml (source_paths = src/rugbrain).
+  mutation-test:
+    runs-on: docker-x64
+    needs: quality
+    continue-on-error: true  # informational only for now
+    container:
+      image: nikolaik/python-nodejs:python3.12-nodejs22
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install deps + mutmut
+        run: |
+          pip install -r requirements.txt
+          pip install -e . mutmut
+      - name: Mutation testing (scoped to src/rugbrain)
+        run: mutmut run --test-timeout 10 || echo "Mutation score noted (non-blocking)"
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: mutation-report
+          path: |
+            .mutmut-cache/
+            html/
