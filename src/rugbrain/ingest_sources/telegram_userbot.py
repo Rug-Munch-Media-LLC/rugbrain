@@ -23,7 +23,7 @@ Session policy (IMPORTANT):
         python -m rugbrain.ingest_sources.telegram_userbot --cycle
 
 Config (env):
-    TELEGRAM_API_ID / TELEGRAM_API_HASH   from gopass rmi/telegram/*
+    TELEGRAM_API_ID / TELEGRAM_API_HASH   from gopass [INTERNAL_SECRET_PATH]
     TELETHON_SESSION_STRING               exported StringSession (preferred)
     RAG_TG_STATE_FILE                     default /var/lib/rmi-rag/tg_ingest_state.json
     RAG_TG_MAX_MESSAGES_PER_CHANNEL       default 40 per cycle
@@ -196,7 +196,7 @@ async def _get_client() -> Any:
     from telethon.sessions import StringSession
 
     if not API_ID or not API_HASH:
-        raise RuntimeError("TELEGRAM_API_ID / TELEGRAM_API_HASH not set (gopass rmi/telegram/*)")
+        raise RuntimeError("TELEGRAM_API_ID / TELEGRAM_API_HASH not set (gopass [INTERNAL_SECRET_PATH])")
     if SESSION_STRING:
         return TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
     return TelegramClient(SESSION_FILE, API_ID, API_HASH)

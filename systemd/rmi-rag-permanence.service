@@ -37,7 +37,7 @@
 #
 # Secrets: /path/to/b2-permanence.env (B2_APPLICATION_KEY_ID,
 # B2_APPLICATION_KEY, B2_BUCKET_NAME — populated from gopass
-# rmi/infra/b2-*; never committed to git). B2_ENCRYPTION_KEY is
+# [INTERNAL_SECRET_PATH]; never committed to git). B2_ENCRYPTION_KEY is
 # DEPRECATED since 2026-08-01 (B2 SSE-B2 encrypts at rest); it is only
 # needed to read/migrate legacy .enc objects.
 
