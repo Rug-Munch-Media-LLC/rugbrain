@@ -100,8 +100,22 @@ async def test_news_rate_never_fetches_url(client: Any, monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_news_top_fails_open_without_qdrant(client: Any) -> None:
-    """Qdrant unreachable → 200 with empty articles (fail-open)."""
+async def test_news_top_fails_open_without_qdrant(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Qdrant unreachable → 200 with empty articles (fail-open).
+
+    Hermetic since 2026-09-14: the suite used to rely on Qdrant genuinely
+    being unreachable on the host; with the outage repaired, the dead store
+    is simulated explicitly.
+    """
+    import rugbrain.qdrant_store as qs
+
+    class _DeadStore:
+        async def scroll(self, collection: Any, limit: int = 100, offset: Any = None) -> Any:
+            raise ConnectionError("qdrant unreachable (simulated)")
+
+    monkeypatch.setattr(qs, "QdrantVectorStore", _DeadStore)
     resp = await client.get("/api/v1/news/top", params={"min_quality": 70})
     assert resp.status_code == 200
     data = resp.json()

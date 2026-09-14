@@ -40,14 +40,11 @@ logger = logging.getLogger(__name__)
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
-# ── Dual-tier (2026-08-24): live fast path on the 0.6B server ──
-# Cross-encoders need no shared vector space, so the 0.6B live tier pairs
-# safely with 4B-embedded corpora. Ladder: 0.6B strained/unreachable ->
-# one capped retry on the 4B -> fail-open to pre-rerank order.
-RERANKER_URL_LIVE: str = os.getenv("RERANKER_URL_FAST", "http://127.0.0.1:8008").rstrip("/")
+# Live-lane candidate cap + the local 4B fallback cap. The 0.6B speed
+# tier these used to bound was retired 2026-08-29; its endpoint was removed
+# 2026-09-14 (all rerank traffic is the 4B family now).
 LIVE_CANDIDATE_CAP: int = int(os.getenv("RERANKER_LIVE_CANDIDATE_CAP", "40"))
 DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
-LIVE_TIMEOUT_S: float = float(os.getenv("RERANKER_LIVE_TIMEOUT", "6.0"))
 # Hosted (DeepInfra) live rung — replacement for the retired 0.6B speed tier
 # as the interactive lane (2026-09-14; same 4B cross-encoder family, ~0.5-2s
 # for a full pool vs 30s+ local on 2000-char docs).
@@ -321,8 +318,9 @@ async def _score_candidates(
 ) -> tuple[list[float], str]:
     """Score candidate chunks against query via the Qwen3 reranker tiers.
 
-    tier="live": 0.6B fast server first (candidate-capped), strain ladder
-    into the 4B; tier="deep" (default): 4B only. Returns (scores, method).
+    tier="live": hosted lane first, then the local 4B (candidate-capped);
+    tier="deep" (default): local 4B first, hosted fallback. Returns
+    (scores, method).
     """
     if not RERANKER_ENABLED or not candidates:
         return [], "none"
@@ -354,16 +352,15 @@ async def _score_candidates(
                             r.get("relevance_score", 0.0)
                         )
                 return scores_hosted, "deepinfra:qwen3-reranker-4b"
-        # 1st rung: 0.6B fast server.
-        results = await _post_rerank(RERANKER_URL_LIVE, query, [t for _, t in capped], LIVE_TIMEOUT_S, "0.6B")
-        served = "qwen3-reranker-0.6b"
+        # 1st rung (the only local lane): the 4B, candidate-capped. The
+        # 0.6B speed tier that used to sit here is retired (endpoint gone).
+        capped = capped[:DEEP_FALLBACK_CAP]
+        results = await _post_rerank(
+            RERANKER_URL, query, [t for _, t in capped], RERANKER_TIMEOUT, "4B"
+        )
+        served = "qwen3-reranker-4b"
         if results is None:
-            # 2nd rung: 4B deep server, tighter cap.
-            capped = capped[:DEEP_FALLBACK_CAP]
-            results = await _post_rerank(RERANKER_URL, query, [t for _, t in capped], RERANKER_TIMEOUT, "4B-fallback")
-            served = "qwen3-reranker-4b"
-            if results is None:
-                return [], "none"
+            return [], "none"
         scores: list[float] = [0.0] * len(candidates)
         for r in results:
             pos = r.get("index")

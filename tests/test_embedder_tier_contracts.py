@@ -31,7 +31,6 @@ import pytest
 from rugbrain.qwen_embedders import (
     OpenRouterEmbedder,
     Qwen3Embedder,
-    Qwen3FastEmbedder,
 )
 
 # ── Tier identity contracts ─────────────────────────────────────────────────
@@ -44,11 +43,13 @@ def test_deep_tier_identity():
     assert Qwen3Embedder.DIMS == 2560
 
 
-def test_speed_tier_identity():
-    """0.6B on :8007 at 1024 — utility comparisons only, never corpus search."""
-    assert Qwen3FastEmbedder.MODEL == "qwen3-embedding-0.6b"
-    assert ":8007" in Qwen3FastEmbedder.EMBED_URL
-    assert Qwen3FastEmbedder.DIMS == 1024
+def test_speed_tier_is_retired():
+    """The 0.6B tier is gone: no class, no endpoint references anywhere."""
+    import rugbrain.qwen_embedders as qe
+
+    assert not hasattr(qe, "Qwen3FastEmbedder")
+    src = (Path(__file__).resolve().parents[1] / "src/rugbrain/qwen_embedders.py").read_text()
+    assert ":8007" not in src
 
 
 def test_cloud_fallback_identity():
@@ -86,10 +87,12 @@ def test_fast_embedder_never_imported_by_search_paths():
     assert not offenders, f"fast-tier embedder leaked into corpus-search paths: {offenders}"
 
 
-def test_near_dup_is_the_fast_tier_consumer():
-    """The 0.6B tier's documented consumer is near-duplicate detection."""
+def test_near_dup_no_longer_pins_the_retired_tier():
+    """near_dup takes an injected embedder; the 0.6B pin is gone."""
     near = (Path(__file__).resolve().parents[1] / "src/rugbrain/near_dup.py").read_text()
-    assert "8007" in near or "QWEN_FAST_URL" in near or "0.6B" in near
+    assert "8007" not in near
+    assert "0.6B" not in near
+    assert "QWEN_FAST_URL" not in near
 
 
 # ── Rerank purpose routing ──────────────────────────────────────────────────
@@ -99,7 +102,7 @@ def test_rerank_lane_urls():
     """fast lane = 0.6B :8008, deep lane/fallback = 4B :8003."""
     from rugbrain.search import rerank as rr
 
-    assert ":8008" in rr.RERANKER_URL_LIVE
+    assert not hasattr(rr, "RERANKER_URL_LIVE")
     assert ":8003" in rr.RERANKER_URL
 
 
@@ -145,7 +148,7 @@ async def test_rerank_live_lane_ladder_fast_then_deep(monkeypatch):
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
     docs = [{"content": f"d{i}", "text": f"d{i}"} for i in range(5)]
     scores, method = await rr._score_candidates("q", docs, tier="live")
-    assert [":8008" in u for u in calls] == [True, False], calls
+    assert calls and all(":8003" in u for u in calls), calls
     assert method == "qwen3-reranker-4b"
     assert any(s > 0 for s in scores)
 
@@ -293,14 +296,6 @@ async def test_live_four_local_models_alive_and_wired():
         ),
     )
     await probe(
-        "speed-embed :8007",
-        "http://127.0.0.1:8007/v1/embeddings",
-        {"model": "qwen3-embedding-0.6b", "input": ["tier smoke"]},
-        lambda d: (lambda n: n == 1024 or failures.append(f"speed-embed dim {n} != 1024"))(
-            len(d["data"][0]["embedding"])
-        ),
-    )
-    await probe(
         "deep-rerank :8003",
         "http://127.0.0.1:8003/v1/rerank",
         {
@@ -314,15 +309,6 @@ async def test_live_four_local_models_alive_and_wired():
             )
             or failures.append("deep-rerank bad result shape")
         ),
-    )
-    await probe(
-        "fast-rerank :8008",
-        "http://127.0.0.1:8008/v1/rerank",
-        {
-            "query": "rug pull",
-            "documents": ["honeypot scam token", "defi yield protocol"],
-        },
-        lambda d: len(d["results"]) == 2 or failures.append("fast-rerank bad shape"),
     )
 
     assert not failures, "local-tier smoke failures:\n" + "\n".join(failures)

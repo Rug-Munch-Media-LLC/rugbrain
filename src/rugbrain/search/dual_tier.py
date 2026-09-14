@@ -1,24 +1,17 @@
-"""Dual-tier retrieval — production routing across Qwen3 0.6B (speed) and 4B (deep).
+"""Tier-labeled retrieval — all lanes serve the Qwen3 4B family (2026-09-14).
 
-USAGE POLICY (which tier serves which workload):
-
-| Workload                                   | Tier  | Rationale                          |
-|--------------------------------------------|-------|------------------------------------|
-| Consumer chat retrieval (<45 words)        | speed | latency-critical, short queries    |
-| Deep analysis / forensics pipelines (>=45) | deep  | precision over latency             |
-| Telegram/bot quick lookups                 | speed | interactive SLA                    |
-| Batch research / re-scoring jobs           | deep  | quality over speed                 |
-| Ingestion                                  | BOTH  | dual vectors written per document  |
+HISTORY: this module routed between a 0.6B "speed" tier (:8007/:8008) and a
+4B "deep" tier. The 0.6B tier was retired (2026-08-29) and its endpoints
+removed (2026-09-14); both labels now resolve to the canonical 4B lanes and
+the speed labels are kept only for API compatibility.
 
 Tier endpoints (llama.cpp on Talos, all bound to 127.0.0.1):
-  speed embed   :8007  Qwen3-Embedding-0.6B Q8_0  (1024-dim)
-  speed rerank  :8008  Qwen3-Reranker-0.6B  Q8_0
-  deep embed    :8004  Qwen3-Embedding-4B   Q8_0   (2560-dim, pre-existing)
-  deep rerank   :8003  Qwen3-Reranker-4B    Q6_K   (pre-existing)
-  chat          :8009  Qwen3-8B-Instruct Q4_K_M
+  embed    :8004  Qwen3-Embedding-4B Q8_0  (2560-dim — the ONLY embed lane)
+  rerank   :8003  Qwen3-Reranker-4B  Q6_K
+  chat     :8009  Qwen3-8B-Instruct Q4_K_M
 
-Fail-open chain: speed -> deep -> no-context (callers keep working, tagged).
-Both rerankers honor the shared vertical instruction library via the
+Fail-open chain: primary -> fallback -> no-context (callers keep working,
+tagged). Reranks honor the shared vertical instruction library via the
 query-slot technique (see rugbrain.search.rerank.apply_instruction).
 """
 
@@ -34,12 +27,17 @@ import aiohttp
 from rugbrain.search.rerank import apply_instruction
 
 # ── configuration ────────────────────────────────────────────────────────────
+_DEEP_EMBED = os.getenv("DEEP_EMBED_URL", "http://127.0.0.1:8004")
+_DEEP_RERANK = os.getenv("DEEP_RERANK_URL", "http://127.0.0.1:8003")
 ENDPOINTS = {
     "chat": os.getenv("CHAT_URL", "http://127.0.0.1:8009"),
-    "deep_embed": os.getenv("DEEP_EMBED_URL", "http://127.0.0.1:8004"),
-    "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://127.0.0.1:8003"),
-    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007"),
-    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8008"),
+    "deep_embed": _DEEP_EMBED,
+    "deep_rerank": _DEEP_RERANK,
+    # speed_* resolve to the canonical 4B lanes: the 0.6B tier is retired
+    # (2026-08-29) and its endpoints are gone (2026-09-14). Explicit
+    # SPEED_* env overrides still win if a speed server is ever revived.
+    "speed_embed": os.getenv("SPEED_EMBED_URL", _DEEP_EMBED),
+    "speed_rerank": os.getenv("SPEED_RERANK_URL", _DEEP_RERANK),
 }
 QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6334")
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")

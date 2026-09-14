@@ -185,11 +185,14 @@ class TestDimDrivenResolution:
         assert dim == 2048
 
     @pytest.mark.asyncio
-    async def test_1024_collection_resolves_speed_lane(self, me: MultiEmbedder):
+    async def test_1024_collection_falls_to_default_lane(self, me: MultiEmbedder):
+        """1024 legacy collections are retired (2026-09-14): there is no 0.6b
+        lane anymore — an old 1024 collection resolves to the default backend
+        so callers get a loud mismatch instead of a cross-model guess."""
         me._dim_cache["old_stuff"] = 1024
         be, dim = me.backend_for("old_stuff")
-        assert be.name == "qwen06b"
-        assert dim == 1024
+        assert be.name == me.default_backend
+        assert "qwen06b" not in me.backends
 
     @pytest.mark.asyncio
     async def test_resolve_collections_prewarms_cache(self, me: MultiEmbedder):
@@ -206,9 +209,14 @@ class TestDimDrivenResolution:
         be, _ = me.backend_for("wallet_v2")
         assert be.name == "qwen4b"
 
-    def test_qdrant_urls_rest_only_and_deduped(self):
+    def test_qdrant_urls_accept_host_and_container_rest_ports(self):
+        """REST probe list: container :6333 + host :6334 both allowed
+        (2026-09-14 — host-run services serve REST on the mapped port),
+        deduped, and never the gRPC service."""
         urls = MultiEmbedder._qdrant_rest_urls()
-        assert all(u.endswith(":6333") for u in urls)  # no gRPC :6334
+        assert urls, "default REST probe list must not be empty"
+        assert all(u.endswith(":6333") or u.endswith(":6334") for u in urls)
+        assert any(u.endswith(":6334") for u in urls), "host REST port must be probed"
         assert len(urls) == len(set(urls))
 
 

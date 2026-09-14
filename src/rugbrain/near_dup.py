@@ -2,7 +2,7 @@
 
 For high-throughput ingestion streams (firehose, telegram firehose, RSS)
 where a Qdrant round-trip per item is too heavy. Maintains a sliding
-window of recent text embeddings (Qwen3-0.6B :8007 — both sides of every
+window of recent text embeddings (fast embedder — both sides of every
 comparison run on the same model, honoring the cross-model rule) and
 flags texts whose max cosine similarity against the window exceeds the
 threshold.

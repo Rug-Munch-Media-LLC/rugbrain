@@ -32,9 +32,9 @@ from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
 logger = logging.getLogger(__name__)
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003")
-# Consumer/fast lane: qwen3-reranker-0.6B on :8008 — text-in/score-out, so it
-# re-ranks results from ANY vector space (space-agnostic by construction).
-RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", "http://127.0.0.1:8008")
+# 'fast'/'deep' both resolve to the canonical 4B lane: the 0.6B consumer
+# tier is retired (2026-08-29) and its endpoint is gone (2026-09-14).
+RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", RERANKER_URL)
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 # First-hit on the CPU 0.6B lane measured 7.8s cold (2026-08-25); a 20s
 # caller-side cap made every consumer rerank fail-open. 45s covers cold
@@ -228,9 +228,9 @@ async def rerank_tiered(
     tier: str = "fast",
     raw: bool = False,
 ) -> list[dict[str, Any]]:
-    """Tier-aware rerank: 'fast' -> 0.6B (:8008, consumer), 'deep' -> 4B
-    (:8003, big-corpus analysis). Fail-open: returns original order when a
-    lane is unavailable."""
+    """Tier-labeled rerank: both 'fast' and 'deep' serve the 4B lane
+    (:8003; 0.6B retired 2026-09-14). Fail-open: returns original order when
+    the lane is unavailable."""
     url = RERANK_FAST_URL if tier == "fast" else RERANKER_URL
     if not RERANKER_ENABLED or not documents:
         return []

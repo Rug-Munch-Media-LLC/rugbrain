@@ -101,7 +101,7 @@ async def test_short_query_routes_to_speed(monkeypatch):
     out = await r.retrieve("is this token a rug pull?")
     assert out.tier == "speed"
     assert not out.fallback_used
-    assert any("8007" in c for c in sess.calls), "speed embed endpoint must be hit"
+    assert any("8004" in c for c in sess.calls), "speed label resolves to the 4B lane"
 
 
 @pytest.mark.asyncio
@@ -123,14 +123,11 @@ async def test_long_query_routes_to_deep(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_speed_failure_fails_open_to_deep(monkeypatch):
+async def test_speed_label_resolves_to_the_4b_lane(monkeypatch):
+    """The speed label shares the 4B endpoints (0.6b retired 2026-09-14)."""
     monkeypatch.setattr(dual, "COLLECTION", "test")
-    routes = make_routes()
-    sess = FakeSession(routes, fail={"8007"})  # speed embed down
-    r = dual.DualTierRetriever(qdrant=fake_qdrant([]), http=sess)
-    out = await r.retrieve("rug pull check")
-    assert out.tier == "deep"
-    assert out.fallback_used
+    assert dual.ENDPOINTS["speed_embed"] == dual.ENDPOINTS["deep_embed"]
+    assert dual.ENDPOINTS["speed_rerank"] == dual.ENDPOINTS["deep_rerank"]
 
 
 @pytest.mark.asyncio
@@ -250,7 +247,7 @@ async def test_gateway_embed_explicit_speed_is_legacy_local_only(monkeypatch):
     out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
     assert out["tier"] == "speed"
     assert out.get("legacy") is True, "speed lane responses must be marked legacy"
-    assert "8007" in _FakeGatewaySession.last_url
+    assert "8004" in _FakeGatewaySession.last_url, "speed label resolves to the 4B lane"
 
 
 @pytest.mark.asyncio
@@ -265,8 +262,8 @@ async def test_gateway_embed_explicit_tier_wins(monkeypatch):
 # --- Cloud fallback + strain breaker (2026-08-23, updated 2026-08-29) --------
 # Doctrine 2026-08-29: the DEEP cloud lane is DeepInfra Qwen/Qwen3-Embedding-4B
 # @2560 — the SAME model as local :8004 ⇒ index-compatible. The SPEED lane has
-# NO cloud fallback (0.6b embed retired for writes; legacy reads are local
-# only). Rerank stays LOCAL (4B -> 0.6B), never cloud.
+# The speed label resolves to the deep lane (0.6b retired 2026-09-14):
+# both labels share the same endpoints; rerank remains local-only here.
 
 
 class _RoutingResp:
@@ -328,20 +325,17 @@ async def test_deep_embed_cloud_fallback_on_outage(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_speed_lane_never_goes_cloud(monkeypatch):
-    """0.6b speed lane is LEGACY READS ONLY: outage must NOT hit DeepInfra."""
+async def test_speed_label_shares_the_deep_cloud_rung(monkeypatch):
+    """Speed label resolves to the 4B lane (0.6b retired): on local outage the
+    DeepInfra same-model rung applies — index-compatible and tagged."""
     gw = _load_gateway()
-    sess = _make_routing_session(("8007",))
+    sess = _make_routing_session(("8004",))
     monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
     monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
-    import pytest as _pytest
-    from fastapi import HTTPException
-
-    with _pytest.raises(HTTPException):
-        await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
-    assert not any("deepinfra.com" in u for u in sess.last_urls), (
-        "speed embed must never use the cloud lane"
-    )
+    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
+    assert out["tier"] == "speed"
+    assert out["served_by"] == "cloud"
+    assert any("deepinfra.com" in u for u in sess.last_urls)
 
 
 @pytest.mark.asyncio
@@ -358,12 +352,16 @@ async def test_no_cloud_key_fails_loud(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rerank_stays_local_and_falls_to_lighter_tier(monkeypatch):
+async def test_rerank_single_lane_outage_fails_loud(monkeypatch):
+    """Both labels share :8003 now; an outage surfaces as a clear error,
+    never a silent cross-model fallback (0.6b retired 2026-09-14)."""
     gw = _load_gateway()
-    sess = _make_routing_session(("8003",))  # deep reranker down
+    sess = _make_routing_session(("8003",))  # the single rerank lane down
     monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
-    out = await gw.rerank(gw.RerankReq(query="rug pull signs", documents=["a", "b"], tier="deep"))
-    assert out["tier"] == "speed" and out.get("degraded") is True
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException):
+        await gw.rerank(gw.RerankReq(query="rug pull signs", documents=["a", "b"], tier="deep"))
     assert not any("openrouter.ai" in u for u in sess.last_urls), "rerank must never go cloud"
 
 

@@ -24,9 +24,10 @@ from rugbrain.dim_policy import (
 
 
 def test_registry_native_dims_match_verified_reality():
-    # Values verified live 2026-08-25 against :8004/:8007/OpenRouter/NIM.
+    # Values verified live 2026-08-25 against :8004/DeepInfra; the 0.6B
+    # speed tier was retired 2026-09-14.
     assert native_dims("qwen3-embedding-4b") == 2560
-    assert native_dims("qwen3-embedding-0.6b") == 1024
+    assert native_dims("qwen3-embedding-0.6b") is None  # retired 2026-09-14
     assert native_dims("nvidia/nemotron-3-embed-1b") == 2048
     assert native_dims("nvidia/llama-nemotron-embed-vl-1b-v2") == 2048
 

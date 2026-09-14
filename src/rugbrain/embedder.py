@@ -16,14 +16,12 @@ from typing import Any
 class EmbedderBackend(Enum):
     """Available embedding backends."""
 
-    Qwen3_M3 = "qwen3-embedding-4b"  # 2560d, current primary via llama.cpp
-    QWEN3_4B = "qwen3-embed:4b"  # 2560d, legacy (retired)
+    Qwen3_M3 = "qwen3-embedding-4b"  # 2560d, canonical (local + DeepInfra)
 
 
 # ── Per-backend configuration ──────────────────────────────────────────
 _BACKEND_DIMS: dict[EmbedderBackend, int] = {
     EmbedderBackend.Qwen3_M3: 2560,
-    EmbedderBackend.QWEN3_4B: 2560,
 }
 
 # Qwen3-Embedding-4B model id for the llama.cpp backend.

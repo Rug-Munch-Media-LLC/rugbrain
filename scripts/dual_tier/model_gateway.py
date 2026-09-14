@@ -53,9 +53,9 @@ HTTP_TIMEOUT = aiohttp.ClientTimeout(total=float(os.getenv("GATEWAY_TIMEOUT", "3
 # OpenRouter two-account doctrine (liquid 350m speed / qwen3-embedding-8b
 # deep) is retired: qwen3-embedding-8b is consumer-chat space, never
 # index-compatible with the 4B corpus.
-# 0.6B SPEED EMBED LANE: LEGACY READS ONLY — no cloud fallback. The 0.6b
-# embed tier is retired for NEW writes (the 0.6b RERANK ladder is text-based
-# and unaffected). Set DEEPINFRA_API_KEY (env) or DEEPINFRA_KEY_FILE.
+# SPEED LABEL: kept for API compatibility only — the 0.6b tier is
+# retired (2026-09-14) and ENDPOINTS["speed_*"] resolve to the canonical 4B
+# lanes. Set DEEPINFRA_API_KEY (env) or DEEPINFRA_KEY_FILE for the cloud rung.
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
 DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
@@ -100,13 +100,13 @@ def _retry_after(tier: str) -> str:
 async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[float]], str] | None:
     """DeepInfra lane — DEEP tier ONLY.
 
-    Same model as the local deep lane ⇒ index-compatible. The speed tier
-    has NO cloud lane: the 0.6b embed model is retired for writes
-    (legacy reads are local-only); cross-model cloud fallback may never
-    stand in for a tier (TOP-100 #25).
+    Same model as the local deep lane ⇒ index-compatible. Speed requests
+    resolve to the deep lane (0.6b retired 2026-09-14) so the same cloud
+    rung applies; cross-model cloud fallback may never stand in for a tier
+    (TOP-100 #25).
     """
-    if tier != "deep":
-        return None
+    if tier not in ("deep", "speed"):
+        return None  # speed resolves to the deep lane (0.6b retired 2026-09-14)
     key = _deepinfra_key()
     if not key:
         return None
@@ -136,10 +136,10 @@ async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[floa
 ENGINE_REGISTRY: dict[str, dict[str, Any]] = {
     # key = f"{tier}_{served_by}"; dims are canonical for compatibility checks.
     # 2026-08-29: deep_cloud = DeepInfra Qwen3-Embedding-4B @2560 — same model
-    # as deep_local ⇒ index-compatible. speed_cloud is GONE (0.6b speed embed
-    # lane is LEGACY READS ONLY, local-only, no cloud fallback).
+    # as deep_local ⇒ index-compatible. speed_cloud is GONE (0.6b retired);
+    # the speed label resolves to the deep lane (2026-09-14).
     "deep_local": {"dims": 2560, "model": "qwen3-embedding-4b"},
-    "speed_local": {"dims": 1024, "model": "qwen3-embedding-0.6b"},  # LEGACY READS ONLY
+    "speed_local": {"dims": 2560, "model": "qwen3-embedding-4b"},  # compat label; deep lane
     "deep_cloud": {"dims": 2560, "model": "Qwen/Qwen3-Embedding-4B"},  # DeepInfra
 }
 
@@ -191,7 +191,7 @@ class EmbedReq(BaseModel):
     text: str | None = None
     texts: list[str] | None = None
     tier: str | None = None  # None -> deep (canonical, 2026-08-29);
-    # "speed" = LEGACY 0.6b read lane (local-only, no cloud fallback)
+    # "speed" = compat label — resolves to the deep 4B lane (2026-09-14)
 
 
 class RerankReq(BaseModel):
@@ -265,8 +265,8 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="text or texts required")
     # 2026-08-29 consolidation: /embed defaults to the CANONICAL deep lane
     # (qwen3-embedding-4b @2560, DeepInfra fallback — index-compatible).
-    # Explicit tier="speed" is honored but is the LEGACY 0.6b read lane
-    # (local-only, no cloud fallback — do not index new writes with it).
+    # Explicit tier="speed" is honored for API compat and resolves to
+    # the canonical deep lane (0.6b retired 2026-09-14).
     tier = req.tier if req.tier in ("speed", "deep") else "deep"
     url = ENDPOINTS[f"{tier}_embed"]
     if _breaker_open(tier):
@@ -306,7 +306,7 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
             "embeddings": vecs,
         }
         if tier == "speed":
-            out["legacy"] = True  # 0.6b speed embed — LEGACY READS ONLY
+            out["legacy"] = True  # compat label; served by the deep 4B lane
         return out
     except Exception as exc:
         _note_failure(tier)

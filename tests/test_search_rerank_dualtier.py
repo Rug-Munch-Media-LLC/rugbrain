@@ -1,10 +1,10 @@
-"""RugBrain dual-tier rerank contracts (live 0.6B -> deep 4B ladder).
+"""RugBrain rerank lane contracts (hosted live lane -> local 4B).
 
 Offline: _post_rerank stubbed. Contracts:
 
-* live tier caps candidates at LIVE_CANDIDATE_CAP, hits fast server first
-* 0.6B strained/unreachable -> one capped retry on the 4B
-* both down -> ([], "none") fail-open
+* live tier caps candidates and serves from the local 4B; hosted tried first
+* hosted unavailable -> local 4B serves (capped); 0.6B tier retired 2026-09-14
+* all lanes down -> ([], "none") fail-open
 * strain breaker skips a failing endpoint entirely after threshold
 * deep tier (default) unchanged single-shot behavior
 """
@@ -30,7 +30,7 @@ def _clean_strain_and_health():
 
 
 @pytest.mark.asyncio
-async def test_live_caps_candidates_and_hits_fast_server(monkeypatch):
+async def test_live_tier_serves_from_the_local_4b(monkeypatch):
     calls: list[tuple[str, int]] = []
 
     async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
@@ -40,29 +40,34 @@ async def test_live_caps_candidates_and_hits_fast_server(monkeypatch):
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
     docs = [{"content": f"d{i}"} for i in range(100)]
     scores, method = await rr._score_candidates("rug", docs, tier="live")
-    assert method == "qwen3-reranker-0.6b"
-    assert calls[0][0] == rr.RERANKER_URL_LIVE
-    assert calls[0][1] == rr.LIVE_CANDIDATE_CAP
+    assert method == "qwen3-reranker-4b"
+    assert calls[0][0] == rr.RERANKER_URL
+    assert calls[0][1] == min(rr.LIVE_CANDIDATE_CAP, rr.DEEP_FALLBACK_CAP)
     assert len(scores) == len(docs)  # full score vector preserved
 
 
 @pytest.mark.asyncio
-async def test_live_ladder_falls_back_to_deep(monkeypatch):
+async def test_live_ladder_hosted_then_local(monkeypatch):
+    """Hosted rung tried first (the 0.6B replacement); local 4B serves on failure."""
+    monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
+
+    async def fake_hosted(query, docs, top_n=0, **kw):
+        return None  # hosted unavailable
+
     calls: list[tuple[str, int]] = []
 
     async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
         calls.append((url, len(docs)))
-        if url == rr.RERANKER_URL_LIVE:
-            return None
         return [{"index": i, "relevance_score": 0.8} for i in range(len(docs))]
 
+    monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
-    docs = [f"d{i}" and {"content": f"doc{i}"} for i in range(60)]
-    out = await rr._score_candidates("q", docs, tier="live")
-    assert out[1] == "qwen3-reranker-4b"
-    assert calls[0][0] == rr.RERANKER_URL_LIVE
-    assert calls[1][0] == rr.RERANKER_URL
-    assert calls[1][1] == min(rr.LIVE_CANDIDATE_CAP, rr.DEEP_FALLBACK_CAP)
+    docs = [{"content": f"doc{i}"} for i in range(60)]
+    scores, method = await rr._score_candidates("q", docs, tier="live")
+    assert method == "qwen3-reranker-4b"
+    assert calls[0][0] == rr.RERANKER_URL
+    assert calls[0][1] == min(rr.LIVE_CANDIDATE_CAP, rr.DEEP_FALLBACK_CAP)
+    assert any(s > 0 for s in scores)
 
 
 @pytest.mark.asyncio
@@ -104,18 +109,7 @@ async def test_rerank_chunks_tier_passthrough(monkeypatch):
 
 
 def test_strain_breaker_skips_failing_endpoint(monkeypatch):
+    """The strain ledger marks a failing lane so _post_rerank skips it."""
     for _ in range(rr._STRAIN_THRESHOLD):
-        rr._record_strain(rr.RERANKER_URL_LIVE)
-    assert rr._is_strained(rr.RERANKER_URL_LIVE)
-
-    called: list[str] = []
-
-    async def spy_post(url, query, docs, timeout, label):  # noqa: ASYNC109 — mirrors real signature
-        called.append(url)
-        return None
-
-    monkeypatch.setattr(rr, "_post_rerank", spy_post)
-    # _score_candidates(live) with strained LIVE endpoint: the stubbed
-    # _post_rerank bypasses the breaker check, so verify at the unit level:
-    # _post_rerank itself returns None immediately when strained.
-    assert rr._is_strained(rr.RERANKER_URL_LIVE) is True
+        rr._record_strain(rr.RERANKER_URL)
+    assert rr._is_strained(rr.RERANKER_URL) is True

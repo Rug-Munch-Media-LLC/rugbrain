@@ -5,10 +5,6 @@ Backends in the fleet (2026-08-29 embed consolidation directive):
                 primary. Same model as local ⇒ same vector space.
     qwen4b      local llama.cpp :8004  (canonical FALLBACK; server serves
                 native 2560 — dim comes from env/config)
-    qwen06b     local llama.cpp :8007  (1024-dim) — LEGACY READS ONLY.
-                The 0.6b speed-tier is retired for NEW writes; it remains
-                registered solely so existing 1024-dim collections stay
-                readable.
     nemotron    OpenRouter nvidia/nemotron-3-embed-1b:free (2048-dim) —
                 LEGACY READS ONLY (interim migration `_i` collections).
     or_qwen4b   OpenRouter qwen3-embedding-4b (2560) — legacy remote lane,
@@ -137,16 +133,6 @@ def _default_backends() -> dict[str, Backend]:
             q4_dim,
             model=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"),
         ),
-        # LEGACY READS ONLY — the 0.6b/1024 speed-tier is retired for new
-        # writes (2026-08-29). Kept so existing 1024-dim collections remain
-        # queryable.
-        "qwen06b": Backend(
-            "qwen06b",
-            "llamacpp",
-            os.getenv("QWEN_SPEED_URL", "http://127.0.0.1:8007/v1"),
-            int(os.getenv("QWEN_SPEED_DIMS", "1024")),
-            model=os.getenv("RAG_EMBED_SPEED_MODEL", "qwen3-embedding-0.6b"),
-        ),
         # LEGACY READS ONLY — interim 2048 `_i` shadow collections.
         "nemotron": Backend(
             "nemotron",
@@ -272,11 +258,8 @@ class MultiEmbedder:
         if dim == 2048:
             be = self.backends["nemotron"]
             return be, be.dim
-        if dim == 1024:
-            # legacy qwen4b-truncated OR qwen06b fast-lane — same declared
-            # dim; prefer the speed lane for queries (free, local, warm).
-            be = self.backends["qwen06b"]
-            return be, be.dim
+        # (No 1024 special case: those legacy collections were removed
+        # 2026-09-14 — falls through to the default backend.)
         be = self.backends[self.default_backend]
         return be, be.dim
 
@@ -403,7 +386,7 @@ class MultiEmbedder:
             if dim == 2048:
                 return "nemotron"
             if dim == 1024:
-                return "legacy-1024 (qwen4b-trunc or qwen06b)"
+                return "legacy-1024 (retired lane)"
             if dim is None:
                 return "unnamed/multivector-config"
             return f"unknown-dim-{dim}"
@@ -572,8 +555,9 @@ class MultiEmbedder:
 
         # Tier-aware rerank of the merged cross-space results. Rerankers are
         # TEXT-based — space-agnostic — so one pass covers every backend.
-        # 'fast' = 0.6B consumer lane (:8008); 'deep' = 4B (:8003);
-        # 'off' skips. Fail-open: RRF order survives any reranker outage.
+        # Since 2026-09-14 both 'fast' and 'deep' serve the 4B family
+        # (hosted live lane / local :8003); 'off' skips. Fail-open: RRF
+        # order survives any reranker outage.
         if rerank_tier in ("fast", "deep") and merged:
             try:
                 from rugbrain.reranker import rerank_tiered

@@ -77,9 +77,8 @@ class Qwen3Embedder:
         otherwise local llama.cpp.
 
     Both lanes serve the same Qwen3-Embedding-4B model, so vectors are
-    interchangeable for the 2560-dim collections. A subclass/embed_url that
-    pins an explicit endpoint (e.g. Qwen3FastEmbedder :8007 0.6b) always
-    stays on the local lane.
+    interchangeable for the 2560-dim collections. An explicit ``embed_url``
+    pins the local lane (no cloud fallback).
     """
 
     EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
@@ -91,7 +90,7 @@ class Qwen3Embedder:
         self.provider = (provider or os.getenv("EMBED_PROVIDER", "")).strip().lower()
         self.api_key = DEEPINFRA_API_KEY
         if embed_url is not None:
-            # Explicit endpoint pinned (Qwen3FastEmbedder 0.6b etc.) — local lane only.
+            # Explicit endpoint pinned (legacy speed tiers) — local lane only.
             self.provider = "local"
         if not self.provider:
             # Auto: hosted DeepInfra when keyed, else local llama.cpp fallback.
@@ -193,27 +192,6 @@ class Qwen3Embedder:
         results = await self.embed([text])
         return results[0]
 
-
-class Qwen3FastEmbedder(Qwen3Embedder):
-    """Fast utility tier — Qwen3-Embedding-0.6B on :8007.
-
-    For near-duplicate detection, clustering, cache keys and internal
-    similarity tools where BOTH sides of a comparison run on 0.6B.
-    NEVER for corpus search: a 0.6B query against a 4B-embedded
-    collection is a cross-model mismatch (same dims, different space).
-
-    Inherits all dim-handling (MRL truncate + renormalize) from
-    :class:`Qwen3Embedder`.
-    """
-
-    MODEL = "qwen3-embedding-0.6b"
-    EMBED_URL = os.getenv("QWEN_FAST_URL", "http://127.0.0.1:8007/v1")
-    DIMS = int(os.getenv("QWEN_FAST_DIMS", "1024"))
-
-    def __init__(self, embed_url: str | None = None):
-        # Bypass parent __init__ (it pins the deep URL/model); rebind ours.
-        super().__init__(embed_url=embed_url or self.EMBED_URL)
-        self.model = self.MODEL
 
 
 class OpenRouterEmbedder:

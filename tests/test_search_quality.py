@@ -100,7 +100,13 @@ MOCK_RESULTS: dict[str, list[dict[str, object]]] = {
 
 
 def _install_mock(query: str, results: list[dict[str, object]]) -> Any:
-    """Patch search_multi_collection to return *results* for *query*."""
+    """Patch search_multi_collection to return *results* for *query*.
+
+    Also no-ops the Crypto Code Mode augmentation: it merges live
+    ContextCrypto corpus hits whenever Qdrant is reachable (2026-09-14: the
+    augmentation works again after the Qdrant outage was repaired), which
+    would make these unit tests non-deterministic.
+    """
 
     async def fake_search(
         q: Any, collections: Any = None, limit: int = 10, min_similarity: float = 0.4
@@ -108,6 +114,13 @@ def _install_mock(query: str, results: list[dict[str, object]]) -> Any:
         return [dict(r) for r in results if q == query]
 
     engine_mod.search_multi_collection = fake_search
+
+    import rugbrain.crypto_code_retrieval as ccr
+
+    async def _no_augment(q: Any, found: Any, limit: int = 10) -> Any:
+        return found
+
+    ccr.augment_coding_results = _no_augment
 
 
 def _uninstall_mock() -> None:

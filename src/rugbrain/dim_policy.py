@@ -2,7 +2,8 @@
 
 All current Qdrant collections run ``COLLECTION_DIM`` (2560 = the
 qwen3-embedding-4b native dim, identical locally and on DeepInfra).
-Legacy 1024-dim collections stay readable via the retired 0.6b lane.
+All legacy 1024-dim collections were retired with the 0.6b lane
+(2026-09-14); every live collection is 2560-dim.
 The Qwen3 models
 support Matryoshka Representation Learning: the first N dims of a larger
 embedding remain a valid smaller space after renormalization.
@@ -32,12 +33,11 @@ from typing import Final
 COLLECTION_DIM: Final = 2560
 
 # Native output dims per embedding model (model-card truth, verified live
-# 2026-08-25 against :8004/:8007/OpenRouter). Single source of truth for
+# 2026-08-25 against :8004/DeepInfra). Single source of truth for
 # "which dim does this model produce" — modules must derive defaults from
 # here instead of hardcoding stale numbers.
 MODEL_DIMS: Final[dict[str, int]] = {
     "qwen3-embedding-4b": 2560,
-    "qwen3-embedding-0.6b": 1024,
     # OpenRouter :free AND NVIDIA NIM direct — same model, two quotas.
     "nvidia/nemotron-3-embed-1b": 2048,
     # NIM direct backup #2 (vision-language embed, text works fine).
