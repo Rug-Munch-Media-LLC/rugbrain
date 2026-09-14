@@ -210,7 +210,11 @@ async def ingest_docs(docs: list[dict[str, Any]], dry_run: bool) -> int:
         logger.info("[DRY RUN] would ingest %d SWC entries into %s", len(docs), COLLECTION)
         return len(docs)
 
-    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"))
+    # Provider-aware: DeepInfra when keyed (bulk lane), local fallback.
+    # Do NOT pin the local endpoint — `_url=` was an invalid kwarg that
+    # crashed this script, and pinned URLs force bulk onto the local server
+    # (both fixed 2026-09-14).
+    embedder = Qwen3Embedder()
     store = QdrantVectorStore()
     inserted = failed = 0
     try:

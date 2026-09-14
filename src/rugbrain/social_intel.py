@@ -412,7 +412,7 @@ async def collect_social_intel(
             "trending": trending,
         }
 
-    embedder = Qwen3Embedder(embed_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"))
+    embedder = Qwen3Embedder()  # provider-aware (deepinfra-first when keyed)
     store = QdrantVectorStore()
     try:
         result = await store_documents(unique, embedder, store)

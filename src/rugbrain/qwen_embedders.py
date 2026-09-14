@@ -30,7 +30,27 @@ HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
 # schema is served at /v1/embeddings and /v1/openai/embeddings). Key comes
 # from env (DEEPINFRA_API_KEY, supplied via .env.rag / gopass) — never
 # hardcoded.
-DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "")
+def _deepinfra_key_from_file() -> str:
+    """Key-file fallback: explicit env path, host path, container mount."""
+    candidates = []
+    explicit = os.getenv("DEEPINFRA_KEY_FILE", "").strip()
+    if explicit:
+        candidates.append(explicit)
+    candidates += ["/srv/secrets/deepinfra_api_key", "/run/secrets/deepinfra_api_key"]
+    for path in candidates:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                key = fh.read().strip()
+            if key:
+                return key
+        except OSError:
+            continue
+    return ""
+
+
+# Env wins; the file fallback keeps auto mode working when the shell/env
+# did not source the secrets file (2026-09-14: /run/secrets path was stale).
+DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "").strip() or _deepinfra_key_from_file()
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
 # 2026-08-25: defaults were placeholders ("openrouter/your-model-here") — if

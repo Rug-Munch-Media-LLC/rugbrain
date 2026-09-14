@@ -260,7 +260,7 @@ async def ingest_all_sources(
     In dry-run mode documents are fetched but not stored.
     """
     c = crawler or WebCrawler()
-    embedder = Qwen3Embedder(embed_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"))
+    embedder = Qwen3Embedder()  # provider-aware (deepinfra-first when keyed)
     store = QdrantVectorStore()
     totals: dict[str, Any] = {}
     try:

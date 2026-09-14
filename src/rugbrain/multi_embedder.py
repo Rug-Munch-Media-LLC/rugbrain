@@ -86,18 +86,22 @@ def _load_api_key(env_var: str = "DEEPINFRA_API_KEY") -> str:
     if val:
         return val
     if env_var == "DEEPINFRA_API_KEY":
-        try:
-            with open(_DEEPINFRA_KEY_FILE, encoding="utf-8") as fh:
-                key = fh.read().strip()
-            if key:
-                return key
-        except OSError as exc:
-            logger.warning(
-                "deepinfra_key_unavailable env=%s file=%s err=%r",
-                env_var,
-                _DEEPINFRA_KEY_FILE,
-                exc,
-            )
+        # Try every known key location: explicit env path, host path, then
+        # the container mount (/run/secrets) — 2026-09-14: only the host
+        # path exists on Talos, so /run/secrets-only lookups fell to local.
+        for path in (
+            _DEEPINFRA_KEY_FILE,
+            "/srv/secrets/deepinfra_api_key",
+            "/run/secrets/deepinfra_api_key",
+        ):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    key = fh.read().strip()
+                if key:
+                    return key
+            except OSError:
+                continue
+        logger.warning("deepinfra_key_unavailable env=%s tried=%s", env_var, _DEEPINFRA_KEY_FILE)
     return ""
 
 

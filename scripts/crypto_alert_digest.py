@@ -442,7 +442,9 @@ async def store_alerts(
     if dry_run:
         return len(incidents), 0
 
-    embedder = Qwen3Embedder(_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"))
+    # Provider-aware: DeepInfra when keyed (bulk lane), local fallback.
+    # See scripts/ingest_defihacklabs.py for the 2026-09-14 fix rationale.
+    embedder = Qwen3Embedder()
     store = QdrantVectorStore()
     stored = failed = 0
 
