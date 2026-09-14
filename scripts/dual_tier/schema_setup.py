@@ -1,3 +1,5 @@
+# DEPRECATED (2026-09-14): the 0.6B speed tier is retired; the
+# speed_vector fields are no longer created or read. Kept for history.
 """Dual-tier Qdrant schema — crypto_intelligence collection.
 
 Creates the unified collection with two named vectors:

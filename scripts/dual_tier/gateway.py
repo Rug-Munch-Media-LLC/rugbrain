@@ -33,8 +33,9 @@ ENDPOINTS = {
     "chat": os.getenv("CHAT_URL", "http://127.0.0.1:8009"),
     "deep_embed": os.getenv("DEEP_EMBED_URL", "http://127.0.0.1:8004"),
     "deep_rerank": os.getenv("DEEP_RERANK_URL", "http://127.0.0.1:8003"),
-    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007"),
-    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8008"),
+    # speed_* resolve to the canonical 4B lanes (0.6B retired 2026-09-14).
+    "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8004"),
+    "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8003"),
 }
 
 ROUTING_THRESHOLD_WORDS = int(os.getenv("ROUTING_THRESHOLD_WORDS", "45"))

@@ -1,3 +1,6 @@
+# DEPRECATED (2026-09-14): the 0.6B speed tier and its speed_vector
+# fields are retired; this backfill has nothing left to target.
+# Kept for history.
 """Backfill speed_vector (Qwen3-Embedding-0.6B, 1024-dim) across the corpus.
 
 Iterates the crypto_intelligence collection, embeds each document through the
