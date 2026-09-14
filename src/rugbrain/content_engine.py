@@ -36,7 +36,7 @@ import httpx
 logger = logging.getLogger("rugbrain.content")
 
 CHAT_URL = os.getenv("RAG_CHAT_URL", "http://127.0.0.1:8009/v1/chat/completions")
-CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "qwen3-8b-instruct")
+CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "qwen3.6-35b-a3b")
 CHAT_TIMEOUT = float(os.getenv("RAG_CHAT_TIMEOUT", "45"))
 
 _drafts_cache: dict[str, Any] = {"ts": 0.0, "data": None}
