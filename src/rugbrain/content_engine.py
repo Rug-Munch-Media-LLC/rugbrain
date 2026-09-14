@@ -71,7 +71,7 @@ async def _write_post(notes: str) -> str | None:
             "model": CHAT_MODEL,
             "messages": [
                 {"role": "system", "content": WRITER_SYSTEM_PROMPT},
-                {"role": "user", "content": notes[:6000]},
+                {"role": "user", "content": notes[:9000]},
             ],
             "temperature": 0.4,
             "max_tokens": 320,
@@ -271,7 +271,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
     # model shares CPU with the migration; serialized calls stall the endpoint.
     async def _timed_compose(story: dict[str, Any]) -> tuple[str, str]:
         try:
-            return await asyncio.wait_for(_compose(story), timeout=120.0)
+            return await asyncio.wait_for(_compose(story), timeout=180.0)
         except Exception:
             return _template_post(story), "template"
 
@@ -283,7 +283,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
     for s in news_pool[:3]:
         jobs.append(("news", s, asyncio.ensure_future(_timed_compose(s))))
 
-    done, _pending = await asyncio.wait([j[2] for j in jobs], timeout=420.0)
+    done, _pending = await asyncio.wait([j[2] for j in jobs], timeout=600.0)
     for channel, story, task in jobs:
         text, writer = task.result() if task in done else (_template_post(story), "template")
         if channel == "main" and story.get("url"):
