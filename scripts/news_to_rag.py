@@ -214,12 +214,23 @@ async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict[
 async def _embed_batch(
     client: httpx.AsyncClient, base: str, model: str, texts: list[str]
 ) -> list[list[float]] | None:
-    """Embed a list of texts via `/embeddings`. Returns None on failure."""
+    """Embed a list of texts on the bulk lane. Returns None on failure.
+
+    DeepInfra-first (same Qwen3-Embedding-4B as the local server, ~80x
+    faster); the passed ``base``/``model`` apply on the local lane. See
+    scripts/embed_lane.py for the provider policy.
+    """
     if not texts:
         return []
+    from embed_lane import resolve_lane
+
+    _provider, lane_base, lane_headers, lane_model = resolve_lane()
+    base = lane_base if _provider == "deepinfra" else base
+    model = lane_model if _provider == "deepinfra" else model
     try:
         r = await client.post(
             f"{base}/embeddings",
+            headers=lane_headers,
             json={"model": model, "input": texts},
             timeout=httpx.Timeout(300.0),
         )

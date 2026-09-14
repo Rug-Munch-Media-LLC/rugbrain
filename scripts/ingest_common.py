@@ -68,32 +68,19 @@ def chunk_text(text: str, size: int = 2000, overlap: int = 100) -> list[str]:
 
 
 async def embed_batch(client: httpx.AsyncClient, texts: Sequence[str]) -> list[list[float]]:
-    """Embed *texts* via /embeddings, one request per batch.
+    """Embed *texts* on the bulk embed lane (DeepInfra-first, local fallback).
 
     Returns one 2560-dim vector per text; failed/short vectors become an
-    empty list entry so callers can skip them deterministically.
+    empty list entry so callers can skip them deterministically.  The lane
+    (``scripts/embed_lane.py``) keeps heavy ingestion off the CPU-capped
+    local llama.cpp server — see that module for the provider policy.
     """
     if not texts:
         return []
-    payload = {"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]}
-    try:
-        r = await client.post(f"{QWEN_EMBED_URL}/embeddings", json=payload, timeout=900.0)
-        if r.status_code != 200:
-            logger.warning("embed_http_fail status=%d body=%s", r.status_code, r.text[:200])
-            return []
-        data = r.json()
-        items = sorted(data.get("data", []), key=lambda i: i.get("index", 0))
-        out: list[list[float]] = []
-        for item in items:
-            vec = item.get("embedding", [])
-            if isinstance(vec, list) and len(vec) == EMBEDDING_DIM:
-                out.append([float(x) for x in vec])
-            else:
-                out.append([])
-        return out
-    except Exception as e:
-        logger.warning("embed_fail: %s", str(e)[:200])
-        return []
+    from embed_lane import embed_batch as _lane_embed_batch
+
+    vectors = await _lane_embed_batch(list(texts), client=client)
+    return [vec if vec is not None else [] for vec in vectors]
 
 
 async def embed_many(client: httpx.AsyncClient, texts: Sequence[str]) -> list[list[float]]:

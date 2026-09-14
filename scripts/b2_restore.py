@@ -281,7 +281,7 @@ def ensure_collection(
     existing = [c.name for c in client.get_collections().collections]
     if name in existing:
         return
-    size = vector_size or 1024
+    size = vector_size or 2560  # canonical qwen3-embedding-4b dim (manifest may lack it)
     client.create_collection(
         collection_name=name,
         vectors_config=VectorParams(size=size, distance=_parse_distance(distance)),
@@ -307,7 +307,7 @@ def import_points(
         client.recreate_collection(
             collection_name=name,
             vectors_config=VectorParams(
-                size=vector_size or 1024,
+                size=vector_size or 2560,
                 distance=_parse_distance(distance),
             ),
         )

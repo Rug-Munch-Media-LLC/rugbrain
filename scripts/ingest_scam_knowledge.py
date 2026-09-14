@@ -81,7 +81,10 @@ logger = logging.getLogger("ingest_scam_knowledge")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS", "1024"))
+# Canonical corpus dim: qwen3-embedding-4b is 2560-dim natively, both
+# locally (:8004) and on DeepInfra. The old 1024 default rejected every
+# vector and looped forever on embed_missing (fixed 2026-09-14).
+EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "2560")
 KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108
 CHECKPOINT_PATH = Path(
     os.getenv("RAG_KNOWLEDGE_CHECKPOINT", str(KNOWLEDGE_DIR / "checkpoint.json"))
@@ -394,38 +397,28 @@ class Checkpoint:
 
 
 async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
-    """Embed texts through /embeddings in one request.
+    """Embed texts on the bulk lane (DeepInfra-first, local fallback).
 
     Returns L2-normalized vectors aligned with input order (None on failure).
+    The lane lives in ``scripts/embed_lane.py`` so heavy ingestion does not
+    saturate the local llama.cpp server.
     """
     if not texts:
         return []
-    try:
-        async with httpx.AsyncClient(timeout=300.0) as c:
-            r = await c.post(
-                f"{QWEN_EMBED_URL}/embeddings",
-                json={"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]},
-            )
-            if r.status_code != 200:
-                logger.warning("batch_embed_http_fail status=%d", r.status_code)
-                return [None] * len(texts)
-            data = r.json()
-            items = sorted(data.get("data", []), key=lambda i: i.get("index", 0))
-            results: list[list[float] | None] = []
-            for item in items:
-                vec = item.get("embedding", [])
-                if isinstance(vec, list) and vec and len(vec) == EMBEDDING_DIM:
-                    arr = np.asarray(vec, dtype=np.float32)
-                    n = float(np.linalg.norm(arr))
-                    if n > 0:
-                        arr = arr / n
-                    results.append(arr.tolist())
-                else:
-                    results.append(None)
-            return results
-    except Exception as e:
-        logger.warning("batch_embed_fail: %s", e)
-        return [None] * len(texts)
+    from embed_lane import embed_batch as _lane_embed_batch
+
+    vectors = await _lane_embed_batch(texts)
+    results: list[list[float] | None] = []
+    for vec in vectors:
+        if vec is None:
+            results.append(None)
+            continue
+        arr = np.asarray(vec, dtype=np.float32)
+        n = float(np.linalg.norm(arr))
+        if n > 0:
+            arr = arr / n
+        results.append(arr.tolist())
+    return results
 
 
 # ── Qdrant (batched upsert) ────────────────────────────────────────────

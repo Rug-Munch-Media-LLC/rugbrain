@@ -131,7 +131,9 @@ services:
       - HF_HOME=/opt/hf-cache
       - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
       # Embedding provider — see rag-api service for semantics.
-      - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
+      # rag-ingest is the BULK worker: default to DeepInfra (same model,
+      # ~80x faster) so heavy ingestion never saturates the local server.
+      - EMBED_PROVIDER=${EMBED_PROVIDER:-deepinfra}
       - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
       - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-4B}
     volumes:

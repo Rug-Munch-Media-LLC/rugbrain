@@ -36,17 +36,23 @@ if [ ! -x "$PYTHON" ]; then
   PYTHON=python3
 fi
 
+# Bulk lane: DeepInfra Qwen3-Embedding-4B (same 2560-dim space as the local
+# server; ~80x faster). Keeps heavy ingestion off the CPU-capped local
+# llama.cpp process — see rugbrain/scripts/embed_lane.py.
+export EMBED_PROVIDER="${EMBED_PROVIDER:-deepinfra}"
+export DEEPINFRA_KEY_FILE="${DEEPINFRA_KEY_FILE:-/srv/secrets/deepinfra_api_key}"
+
 log "step=defillama_hacks"
 (cd "$RAG_DIR" &&
   QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
     INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
-    "$PYTHON" scripts/ingest_defillama_hacks.py --days 90)
+    timeout 3600 "$PYTHON" scripts/ingest_defillama_hacks.py --days 90)
 
 log "step=regulation_enforcement"
 (cd "$RAG_DIR" &&
   QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
     INFINITY_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
-    "$PYTHON" scripts/ingest_regulation_enforcement.py --days 90)
+    timeout 3600 "$PYTHON" scripts/ingest_regulation_enforcement.py --days 90)
 
 # ── step=ingest_all_sources (2026-08-29) ─────────────────────────────
 # Full 48-source registry (CertiK alerts, SlowMist archive, CISA KEV,
@@ -58,6 +64,6 @@ log "step=ingest_all_sources"
 (cd "$RAG_DIR" &&
   QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
     QWEN_EMBED_URL="${INFINITY_URL:-http://127.0.0.1:8004/v1}" \
-    "$PYTHON" scripts/ingest_all_sources.py)
+    timeout 3600 "$PYTHON" scripts/ingest_all_sources.py)
 
 log "step=done"

@@ -1,6 +1,9 @@
 """Dimension policy — the single source of truth for vector dims.
 
-All Qdrant collections run ``COLLECTION_DIM`` (1024). The Qwen3 models
+All current Qdrant collections run ``COLLECTION_DIM`` (2560 = the
+qwen3-embedding-4b native dim, identical locally and on DeepInfra).
+Legacy 1024-dim collections stay readable via the retired 0.6b lane.
+The Qwen3 models
 support Matryoshka Representation Learning: the first N dims of a larger
 embedding remain a valid smaller space after renormalization.
 
@@ -22,7 +25,11 @@ from __future__ import annotations
 import math
 from typing import Final
 
-COLLECTION_DIM: Final = 1024
+# Canonical write dim for ALL current collections: qwen3-embedding-4b is
+# 2560-dim natively, both locally (:8004) and on DeepInfra. (The 1024
+# default survived from the retired qwen3-embedding-0.6b era and could
+# silently MRL-truncate newer embeddings — fixed 2026-09-14.)
+COLLECTION_DIM: Final = 2560
 
 # Native output dims per embedding model (model-card truth, verified live
 # 2026-08-25 against :8004/:8007/OpenRouter). Single source of truth for
