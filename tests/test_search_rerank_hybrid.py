@@ -315,6 +315,7 @@ def test_search_multi_collection_rerank_default_applies(monkeypatch: pytest.Monk
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
+        tier: str = "deep",
     ) -> Any:
         calls.append({"top_n": top_n, "keep": keep, "count": len(chunks)})
         return [dict(c) for c in chunks][:keep]
@@ -340,6 +341,7 @@ def test_search_multi_collection_rerank_timeout_falls_back(monkeypatch: pytest.M
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
+        tier: str = "deep",
     ) -> list[dict[str, Any]]:
         await asyncio.sleep(0.5)
         return [dict(c) for c in chunks][:keep]
@@ -384,6 +386,7 @@ def test_search_multi_collection_rerank_trims_and_tags(monkeypatch: pytest.Monke
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
+        tier: str = "deep",
     ) -> Any:
         calls.append({"top_n": top_n, "keep": keep, "count": len(chunks)})
         out = []
@@ -498,6 +501,7 @@ def test_three_pillar_search_rerank_applies_before_truncation(
         chunks: list[dict[str, Any]],
         top_n: int = 20,
         keep: int = 5,
+        tier: str = "deep",
     ) -> Any:
         assert top_n == 20
         out = []

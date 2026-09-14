@@ -918,6 +918,7 @@ async def search_multi_collection(
                     fused,
                     top_n=rerank_top_k,
                     keep=rerank_keep if rerank_keep is not None else limit,
+                    tier="live",
                 ),
                 timeout=None if rerank_timeout <= 0 else rerank_timeout,
             )
@@ -1460,6 +1461,7 @@ async def three_pillar_search(
                     fused,
                     top_n=rerank_top_k,
                     keep=rerank_keep if rerank_keep is not None else limit,
+                    tier="live",
                 ),
                 timeout=None if rerank_timeout <= 0 else rerank_timeout,
             )

@@ -33,6 +33,8 @@ from typing import Any, cast
 
 import httpx
 
+from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+
 logger = logging.getLogger(__name__)
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
@@ -46,6 +48,11 @@ RERANKER_URL_LIVE: str = os.getenv("RERANKER_URL_FAST", "http://127.0.0.1:8008")
 LIVE_CANDIDATE_CAP: int = int(os.getenv("RERANKER_LIVE_CANDIDATE_CAP", "40"))
 DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 LIVE_TIMEOUT_S: float = float(os.getenv("RERANKER_LIVE_TIMEOUT", "6.0"))
+# Hosted (DeepInfra) live rung — replacement for the retired 0.6B speed tier
+# as the interactive lane (2026-09-14; same 4B cross-encoder family, ~0.5-2s
+# for a full pool vs 30s+ local on 2000-char docs).
+HOSTED_TIMEOUT_S: float = float(os.getenv("RERANKER_HOSTED_TIMEOUT", "6.0"))
+HOSTED_CANDIDATE_CAP: int = int(os.getenv("RERANKER_HOSTED_CAP", "40"))
 _STRAIN_WINDOW_S: float = 120.0
 _STRAIN_THRESHOLD: int = 3
 _strain_failures: dict[str, list[float]] = defaultdict(list)
@@ -327,6 +334,26 @@ async def _score_candidates(
 
     if tier == "live":
         capped = valid[:LIVE_CANDIDATE_CAP]
+        # 0th rung: hosted DeepInfra (same 4B family, ~0.5-2s per pool; the
+        # retired 0.6B speed tier's replacement as the interactive lane).
+        # Local rungs below remain the fallback ladder.
+        if hosted_enabled():
+            hosted_capped = valid[:HOSTED_CANDIDATE_CAP]
+            hosted_results = await hosted_rerank(
+                query,
+                [t for _, t in hosted_capped],
+                top_n=len(hosted_capped),
+                timeout=HOSTED_TIMEOUT_S,
+            )
+            if hosted_results is not None:
+                scores_hosted: list[float] = [0.0] * len(candidates)
+                for r in hosted_results:
+                    pos = r.get("index")
+                    if isinstance(pos, int) and 0 <= pos < len(hosted_capped):
+                        scores_hosted[hosted_capped[pos][0]] = float(
+                            r.get("relevance_score", 0.0)
+                        )
+                return scores_hosted, "deepinfra:qwen3-reranker-4b"
         # 1st rung: 0.6B fast server.
         results = await _post_rerank(RERANKER_URL_LIVE, query, [t for _, t in capped], LIVE_TIMEOUT_S, "0.6B")
         served = "qwen3-reranker-0.6b"
@@ -345,28 +372,43 @@ async def _score_candidates(
                 scores[orig_idx] = float(r.get("relevance_score", 0.0))
         return scores, served
 
-    # ── deep tier (default): 4B only ──
-    if not await _fast_health():
-        return [], "none"
-
-    results = await _post_rerank(RERANKER_URL, query, [t for _, t in valid], RERANKER_TIMEOUT, "4B")
-    if results is None:
+    # ── deep tier (default): local 4B first (free), hosted fallback ──
+    if await _fast_health():
+        results = await _post_rerank(
+            RERANKER_URL, query, [t for _, t in valid], RERANKER_TIMEOUT, "4B"
+        )
+        if results is not None:
+            async with _lock:
+                _health["ok"] = True
+                _health["last_check"] = time.time()
+            scores_deep: list[float] = [0.0] * len(candidates)
+            for r in results:
+                pos = r.get("index")
+                if isinstance(pos, int) and 0 <= pos < len(valid):
+                    orig_idx = valid[pos][0]
+                    scores_deep[orig_idx] = float(r.get("relevance_score", 0.0))
+            return scores_deep, "qwen3-reranker-4b"
         async with _lock:
             _health["ok"] = False
             _health["last_check"] = time.time()
-        return [], "none"
 
-    async with _lock:
-        _health["ok"] = True
-        _health["last_check"] = time.time()
-
-    scores_deep: list[float] = [0.0] * len(candidates)
-    for r in results:
-        pos = r.get("index")
-        if isinstance(pos, int) and 0 <= pos < len(valid):
-            orig_idx = valid[pos][0]
-            scores_deep[orig_idx] = float(r.get("relevance_score", 0.0))
-    return scores_deep, "qwen3-reranker-4b"
+    # Local unavailable / known-down: hosted keeps deep-tier rerank alive.
+    if hosted_enabled():
+        hosted_capped = valid[:HOSTED_CANDIDATE_CAP]
+        hosted_results = await hosted_rerank(
+            query,
+            [t for _, t in hosted_capped],
+            top_n=len(hosted_capped),
+            timeout=HOSTED_TIMEOUT_S,
+        )
+        if hosted_results is not None:
+            scores_fb: list[float] = [0.0] * len(candidates)
+            for r in hosted_results:
+                pos = r.get("index")
+                if isinstance(pos, int) and 0 <= pos < len(hosted_capped):
+                    scores_fb[hosted_capped[pos][0]] = float(r.get("relevance_score", 0.0))
+            return scores_fb, "deepinfra:qwen3-reranker-4b"
+    return [], "none"
 
 
 async def rerank_chunks(

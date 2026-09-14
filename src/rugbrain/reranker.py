@@ -27,6 +27,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+
 logger = logging.getLogger(__name__)
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003")
@@ -274,6 +276,22 @@ async def rerank(
     """
     if not RERANKER_ENABLED or not documents:
         return []
+
+    # Live lane: hosted DeepInfra first (same 4B family; ~0.5-2s per pool —
+    # the retired 0.6B speed tier's replacement, 2026-09-14).  The local 4B
+    # below remains the fallback and stays primary for batch/deep callers.
+    if hosted_enabled():
+        hosted_results = await hosted_rerank(query, documents, top_n=(0 if raw else top_k))
+        if hosted_results is not None:
+            if raw:
+                for r in hosted_results:
+                    idx = r.get("index")
+                    r["document"] = (
+                        documents[idx]
+                        if isinstance(idx, int) and idx < len(documents)
+                        else ""
+                    )
+            return hosted_results
 
     # Health check with caching (don't hammer a down server)
     if not await _fast_health():

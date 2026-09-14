@@ -629,6 +629,7 @@ def test_three_pillar_search_recency_fusion(monkeypatch: pytest.MonkeyPatch) -> 
             "bitcoin price today",
             collections=["coll_a"],
             limit=2,
+            rerank=False,
             use_reranker=False,
             use_rating_boosts=False,
             use_parent_child=False,
