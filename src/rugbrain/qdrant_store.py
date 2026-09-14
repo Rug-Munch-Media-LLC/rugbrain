@@ -4,9 +4,9 @@ Replaces app.supabase_vector.SupabaseVectorStore with the same
 search / hybrid_search / insert interface backed by Qdrant.
 
 Connection strategy:
-  1. Use QDRANT_URL env var (default: http://rmi-qdrant-v2:6333 for Docker)
-  2. Fallback to http://127.0.0.1:{QDRANT_PORT or 6333} for local dev
-  3. Fallback to http://localhost:{QDRANT_PORT or 6333}
+  1. Use QDRANT_URL env var (default: http://rmi-qdrant-v2:6334 (v2))
+  2. Fallback to http://127.0.0.1:{QDRANT_PORT or 6334} for local dev
+  3. Fallback to http://localhost:{QDRANT_PORT or 6334}
   First URL that responds to GET / is used for the session.
 
 Write gate: RMI_RAG_QDRANT_WRITE_MODE env var (default: readonly).
@@ -29,12 +29,12 @@ logger = logging.getLogger(__name__)
 
 # ── Connection resolution ──────────────────────────────────────────────
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6334")
 QDRANT_FALLBACK_URLS: list[str] = []
 
 # Build fallback chain: primary → loopback variants
 _primary = QDRANT_URL.rstrip("/")
-_fallback_port = os.getenv("QDRANT_PORT", "6333")
+_fallback_port = os.getenv("QDRANT_PORT", "6334")
 QDRANT_FALLBACK_URLS = [
     _primary,
     f"http://127.0.0.1:{_fallback_port}",

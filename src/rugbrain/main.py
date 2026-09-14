@@ -394,7 +394,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         from rugbrain.qdrant_store import _ensure_collection
 
-        qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
+        qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6334").rstrip("/")
         async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as c:
             for col in [
                 "youtube_videos",

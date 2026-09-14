@@ -41,7 +41,7 @@ ENDPOINTS = {
     "speed_embed": os.getenv("SPEED_EMBED_URL", "http://127.0.0.1:8007"),
     "speed_rerank": os.getenv("SPEED_RERANK_URL", "http://127.0.0.1:8008"),
 }
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6334")
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")
 
 ROUTING_THRESHOLD_WORDS = int(os.getenv("ROUTING_THRESHOLD_WORDS", "45"))

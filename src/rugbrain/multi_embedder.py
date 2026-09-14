@@ -231,13 +231,14 @@ class MultiEmbedder:
         urls: list[str] = []
         env_urls = os.getenv(
             "RAG_QDRANT_URLS",
-            f"{os.getenv('QDRANT_URL', 'http://rmi-qdrant-v2:6333')},http://127.0.0.1:6333",
+            f"{os.getenv('QDRANT_URL', 'http://rmi-qdrant-v2:6334')},http://127.0.0.1:6333,http://127.0.0.1:6334",
         )
         for u in env_urls.split(","):
             u = u.strip().rstrip("/")
-            if u and ":" in u and u not in urls and u.endswith(":6333"):
+            # REST ports: container view :6333, host view :6334 (2026-09-14).
+            if u and ":" in u and u not in urls and (u.endswith(":6333") or u.endswith(":6334")):
                 urls.append(u)
-        return urls or ["http://rmi-qdrant-v2:6333"]
+        return urls or ["http://rmi-qdrant-v2:6334"]
 
     async def actual_dim(self, collection: str) -> int | None:
         """ACTUAL vector dim of *collection* from Qdrant (cached)."""
@@ -389,7 +390,7 @@ class MultiEmbedder:
                 # Container-aware defaults: prefer the service-network Qdrant
                 # (legacy :6333 + v2 :6334 both live behind rmi-qdrant-v2's
                 # host publishes); 127.0.0.1 only works for host-side callers.
-                "http://rmi-qdrant-v2:6333,http://rmi-qdrant-v2:6334,"
+                "http://rmi-qdrant-v2:6334,http://rmi-qdrant-v2:6334,"
                 "http://127.0.0.1:6333,http://127.0.0.1:6334",
             ).split(",")
             if u.strip()
