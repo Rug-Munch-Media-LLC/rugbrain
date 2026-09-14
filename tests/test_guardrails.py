@@ -178,7 +178,8 @@ def test_redact_output_internal_fqdn_requires_prefix() -> None:
 def test_redact_output_private_ips() -> None:
     assert "[REDACTED]" in g.redact_output("host at 192.168.1.50")
     assert "[REDACTED]" in g.redact_output("10.0.0.7 internal")
-    assert "[REDACTED]" in g.redact_output("[INTERNAL] cgnat")
+    assert "[REDACTED]" in g.redact_output("100.64.7.3")  # CGNAT range
+    assert "[REDACTED]" in g.redact_output("100.127.255.254")
 
 
 def test_redact_output_plain_text_untouched() -> None:

@@ -177,7 +177,7 @@ def test_vyper_decorated_functions_atomic() -> None:
     pytest.importorskip("tree_sitter_python")
     chunks = code_chunk(VYPER, chunk_size=80, overlap=0.2)
     for unit in (
-        "@external\n@payable\ndef deposit():",
+        "@external\n@payable\ndef deposit() -> None:",
         "@external\ndef withdraw(amount: uint256) -> bool:",
     ):
         _assert_unit_atomic(chunks, unit)

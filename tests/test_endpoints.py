@@ -411,6 +411,21 @@ async def test_analyze_full_sections(client: Any, monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(ep, "_analyze_address_findings", fake_findings)
     monkeypatch.setattr(mc, "build_token_market_context", fake_market)
+
+    # Pin the sentiment engine so the section stays deterministic — it now
+    # returns real sentiment on hosts with working data lanes (2026-09-14).
+    import rugbrain.sentiment_engine as se
+
+    class _FakeSentiment:
+        sentiment = "unknown"
+        confidence = 0.0
+        signals: list = []
+        source_counts: dict = {}
+
+    async def fake_sentiment(address: str, chain: str) -> Any:
+        return _FakeSentiment()
+
+    monkeypatch.setattr(se, "analyze_token_sentiment", fake_sentiment)
     resp = await client.get(f"/api/v1/analyze/{VALID_ADDRESS}/full?chain=ethereum")
     assert resp.status_code == 200
     data = resp.json()

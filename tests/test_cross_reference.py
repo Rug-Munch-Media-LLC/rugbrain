@@ -89,7 +89,9 @@ async def test_find_similar_historical_tokens_qdrant_fallback(
 
     monkeypatch.setattr("rugbrain.embeddings.get_embedding", fake_embedding)
 
-    with respx.mock(base_url="http://rmi-qdrant-v2:6333", assert_all_called=False) as respx_mock:
+    with respx.mock(base_url="http://rmi-qdrant-v2:6334", assert_all_called=False) as respx_mock:
+        # Resolver probe (GET /) must answer so the primary URL is picked.
+        respx_mock.get("/").respond(200, json={})
         respx_mock.get("/collections/threat_intel_v2").respond(
             200,
             json={"result": {"config": {"params": {"vectors": {"dense": {"size": 1024}}}}}},
