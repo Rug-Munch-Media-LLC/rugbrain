@@ -1,0 +1,14 @@
+{
+ "rules": {
+  "monkeypatch": 396,
+  "too-many-params": 76,
+  "eval-exec": 1,
+  "bare-except": 325,
+  "god-file": 57,
+  "slop-markers": 2,
+  "long-function": 95,
+  "fstring-logging": 49,
+  "wildcard-import": 1
+ },
+ "total": 1002
+}

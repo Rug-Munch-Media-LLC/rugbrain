@@ -22,6 +22,8 @@ jobs:
           fetch-depth: 0
       - name: Install commitlint
         run: npm install -g @commitlint/cli @commitlint/config-conventional
+      - name: Antipattern gate (per-repo ratchet)
+        run: python3 scripts/check-antipatterns.py --repo .
       - name: Validate all commits in PR
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
