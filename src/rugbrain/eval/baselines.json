@@ -1,0 +1,10 @@
+{
+  "_comment": "Retrieval-quality baselines for eval/gates.py. Shrink-only for quality metrics (actual >= value - tolerance); raise-only for latency (actual <= value * (1 + tolerance)). A metric absent here is not gated. Raising a baseline is an explicit PR edit; lowering one requires justification in the PR body. See docs/EVALS.md.",
+  "_source": "Direct-Qdrant offline retriever (no rerank/hybrid), 10-query smoke subset (scripts/run-eval-smoke.sh), 2026-09-18. Full 41-query set scored recall@10=0.317 / MRR=0.225. Provisional: the live engine path (Redis+FAISS) is expected to score higher; re-baseline once the nightly live job is green.",
+  "recall@10": {"value": 0.20, "tolerance": 0.05},
+  "recall@5": {"value": 0.10, "tolerance": 0.05},
+  "ndcg@10": {"value": 0.09, "tolerance": 0.03},
+  "ndcg@5": {"value": 0.06, "tolerance": 0.03},
+  "mrr": {"value": 0.06, "tolerance": 0.03},
+  "p95_latency_ms": {"value": 3000.0, "tolerance": 0.50}
+}

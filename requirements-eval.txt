@@ -1,0 +1,14 @@
+# Optional eval extras — NOT installed in the main venv.
+#
+# The retrieval-quality harness (eval/harness.py) and gates (eval/gates.py)
+# are pure-stdlib and require none of these. Install this file only when you
+# want LLM-judge cross-validation of the lightweight lexical metrics in
+# eval/metrics.py:
+#
+#   pip install -r requirements-eval.txt
+#
+# The harness degrades gracefully when these are absent
+# (rugbrain.eval.metrics.ragas_available() returns False).
+
+ragas>=0.2.0
+deepeval>=1.0.0
