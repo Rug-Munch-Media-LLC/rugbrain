@@ -1,8 +1,13 @@
 """
-Firehose — Twitter/X data sources.
+Firehose — Twitter/X data sources (standalone, no rmi-backend).
 
 Extracted from firehose.py FeedSources class.
+
+RugBrain fetches its social sources DIRECTLY (see ``direct_sources``); there
+is no rmi-backend DataBus call. See docs/MODERNIZATION.md §5.
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Any
@@ -12,95 +17,34 @@ import httpx
 logger = logging.getLogger("rag.firehose")
 
 
-async def pull_ct_rundown(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    """Pull CT Rundown stories (crypto Twitter)."""
-    docs: list[dict[str, Any]] = []
+async def pull_ct_rundown(client: httpx.AsyncClient | None = None) -> list[dict[str, Any]]:
+    """CT Rundown — gracefully degraded, NO standalone upstream identified.
+
+    [REVIEW] docs/MODERNIZATION.md §7 Q7: the former rmi-backend
+    ``/databus/fetch/ct_rundown`` aggregator wrapped a Nitter/X source that
+    was never exported, and there is no free, reliable replacement (Nitter
+    instances are unstable; X is paywalled). Rather than fetch from
+    rmi-backend or invent a source, this source logs and skips. It stays
+    registered so the firehose reports the gap instead of silently dropping.
+    """
+    logger.info("ct_rundown skipped: no standalone upstream identified [REVIEW]")
+    return []
+
+
+async def pull_social_sentiment(client: httpx.AsyncClient | None = None) -> list[dict[str, Any]]:
+    """Pull a standalone social-sentiment summary (Fear & Greed index).
+
+    The former rmi-backend scam_monitor/social_metrics calls are gone; the
+    direct adapter is the only path. ``client`` is accepted for call-site
+    compatibility but is intentionally unused.
+    """
+    from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
+
     try:
-        resp = await client.get(
-            "http://localhost:8000/api/v1/databus/fetch/ct_rundown",
-            params={"limit": 10},
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            return []
-        data = resp.json()
-        stories = data.get("stories", data.get("data", []))
-
-        for story in (stories if isinstance(stories, list) else [])[:5]:
-            content = f"CT: {story.get('title', '')} - {story.get('summary', '')}"
-            docs.append(
-                {
-                    "collection": "news_articles",
-                    "content": content[:1500],
-                    "metadata": {
-                        "source": "ct_rundown",
-                        "category": "crypto_twitter",
-                        "handle": story.get("handle", ""),
-                        "engagement": story.get("engagement", 0),
-                    },
-                }
-            )
-    except Exception as e:
-        logger.warning("CT rundown pull failed: %s", e)
-
-    return docs
-
-
-async def pull_social_sentiment(client: httpx.AsyncClient) -> list[dict[str, Any]]:
-    """Pull social sentiment and scam alerts from Twitter/social sources."""
-    docs: list[dict[str, Any]] = []
-    try:
-        # Scam monitor
-        resp = await client.get(
-            "http://localhost:8000/api/v1/databus/fetch/scam_monitor", timeout=20
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            alerts = data.get("alerts", data.get("data", []))
-            for alert in (alerts if isinstance(alerts, list) else [])[:10]:
-                docs.append(
-                    {
-                        "collection": "social_sentiment",
-                        "content": f"Scam alert: {alert.get('title', '')} - {alert.get('description', '')}",
-                        "metadata": {
-                            "source": "scam_monitor",
-                            "severity": alert.get("severity", "medium"),
-                            "token": alert.get("token_address", ""),
-                            "chain": alert.get("chain", ""),
-                        },
-                    }
-                )
-
-        # Social metrics
-        resp2 = await client.get(
-            "http://localhost:8000/api/v1/databus/fetch/social_metrics", timeout=20
-        )
-        if resp2.status_code == 200:
-            data2 = resp2.json()
-            metrics = data2.get("metrics", data2.get("data", {}))
-            if metrics:
-                docs.append(
-                    {
-                        "collection": "social_sentiment",
-                        "content": f"Social metrics: Sentiment {metrics.get('sentiment', '?')}, "
-                        f"Trending: {metrics.get('trending_topics', [])}",
-                        "metadata": {"source": "social_metrics", "type": "daily_summary"},
-                    }
-                )
-    except Exception as e:
-        logger.warning("Social pull failed: %s", e)
-
-    if not docs:
-        # Backend down / empty → standalone sentiment adapter (Fear & Greed).
-        # NOTE: ct_rundown and scam_monitor have no free direct equivalent —
-        # they stay backend-optional by design (fail-open to empty).
-        try:
-            from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
-
-            docs = await fetch_social_sentiment_direct()
-            if docs:
-                logger.info("social sentiment pulled via DIRECT fallback: %d docs", len(docs))
-        except Exception as e:
-            logger.warning("direct social-sentiment fallback failed: %s", e)
-
-    return docs
+        docs = await fetch_social_sentiment_direct()
+        if docs:
+            logger.info("social sentiment pulled via DIRECT: %d docs", len(docs))
+        return docs
+    except Exception as e:  # fail open, never stop the firehose
+        logger.warning("direct social-sentiment fetch failed: %s", e)
+        return []

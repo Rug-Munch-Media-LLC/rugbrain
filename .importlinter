@@ -55,6 +55,10 @@ ignore_imports =
     rugbrain.routes.intel -> rugbrain.journalism
     rugbrain.routes.intel -> rugbrain.qdrant_store
     rugbrain.routes.analyze -> rugbrain.qdrant_store
+    # KNOWN DEBT (2026-09-18): pre-existing transitive httpx paths surfaced
+    # when lint-imports was first wired into CI. Same thin-router debt class.
+    rugbrain.routes.core -> rugbrain.multi_embedder
+    rugbrain.routes.search -> rugbrain.crypto_code_retrieval
 
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)
@@ -69,3 +73,19 @@ source_modules =
     rugbrain
 forbidden_modules =
     rugbrain._legacy
+
+[importlinter:contract:no-backend-imports]
+name = RugBrain never imports rmi-backend (app.*) — standalone sever
+type = forbidden
+source_modules =
+    rugbrain
+forbidden_modules =
+    app
+
+[importlinter:contract:no-bot-imports]
+name = RugBrain never imports rugmunchbot
+type = forbidden
+source_modules =
+    rugbrain
+forbidden_modules =
+    rugmunchbot

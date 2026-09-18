@@ -29,6 +29,7 @@ dev = [
     "deptry>=0.25",
     "pip-audit>=2.10",
     "respx>=0.21.0",
+    "import-linter>=2.0",
 ]
 # Real-time alert ingestion extras (alerts.py, market_awareness.py).
 alerts = [

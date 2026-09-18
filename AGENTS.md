@@ -5,7 +5,24 @@
 > AI agent contract. Read this before touching anything in this repo.
 
 ## Status
-canonical · owner=crmuncher · last_updated=2026-07-06
+canonical · owner=crmuncher · last_updated=2026-09-18
+
+## Canonical Standards (fleet)
+This repo follows the fleet-wide standards owned by the `standards` repo, not local copies.
+Before cross-repo or architectural changes, load the playbook and read the canonical docs:
+- Playbook: `rmi_playbook('standards')` (ContextCrypto MCP) — returns the routed brief.
+- `standards/DEVELOPMENT-STANDARDS.md` — coding, testing, review gates.
+- `standards/REPO-BOUNDARIES.md` — what each repo may own/depend on.
+- `standards/DATA-STORES.md` — canonical data placement (knowledge → RAG, code → codebase MCP).
+
+Do not duplicate these standards here; link to them.
+
+## Repo Boundaries (read before importing anything)
+1. **RugBrain is the RAG engine only** — retrieval, embedding, ingestion, eval. Nothing else.
+2. **No rmi-backend imports** — never `import app.*`; no `app.*` stubs (deleted 2026-09-18).
+3. **No rmi-backend runtime calls** — ingest/read DIRECT (local Qdrant + direct upstreams); never `localhost:8000`.
+4. **Backend reaches RugBrain via HTTP** (`rugbrain_client`); this repo never reaches back.
+5. **Data placement** — knowledge belongs here; code belongs in `rmi-codebase-mcp` (see DATA-STORES.md).
 
 ## What This Repo Is
 RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of threats, scams, labels, and forensic insights in Qdrant. Owns Qdrant collection definitions, embedding model configs, and ingestion scripts from Ponder, Pry, and APIs.
@@ -27,9 +44,9 @@ RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of thr
 - `requirements.txt` — Python deps
 
 ## Dependencies
-- Vector database (Qdrant or compatible)
+- Vector database (Qdrant or compatible) — local, written directly
 - Embedding service (configurable)
-- Backend service for query endpoints
+- Direct upstream APIs (RSS, Polymarket, DeFiLlama, Fear & Greed) — no backend proxy
 
 > **Data placement (canonical):** knowledge → RAG, code → `rmi-codebase-mcp` — see `docs/DATA-PLACEMENT.md` before ingesting any new source.
 
@@ -71,8 +88,9 @@ See [PRODUCT.md](PRODUCT.md) and [ROADMAP.md](ROADMAP.md).
 - Backup: TBD
 
 ## Related Repos
-- `rmi-backend/` — query endpoint host
+- `rmi-backend/` — INBOUND caller of RugBrain's HTTP API only (never a runtime dependency)
 - `pryscraper/` — ingestion source
+- `standards/` — canonical fleet docs (see Canonical Standards above)
 - See product documentation for available products
 
 ## Open-Core Protection

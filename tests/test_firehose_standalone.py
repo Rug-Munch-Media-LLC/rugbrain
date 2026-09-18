@@ -1,9 +1,9 @@
-"""Standalone firehose contracts — RugBrain ingests without rmi-backend.
+"""Standalone firehose contracts — RugBrain ingests WITHOUT rmi-backend.
 
-docs/STANDALONE-MIGRATION-PLAN.md Phase 3: the DataBus endpoints on the
-backend are the PRIMARY news/prediction sources, but the firehose must
-degrade to DIRECT upstream fetches when the backend is down. These tests
-pin that fallback contract and the doc shapes both paths produce.
+docs/MODERNIZATION.md §5: RugBrain is fully standalone. The former
+rmi-backend DataBus calls are gone — news/prediction/social fire straight at
+their direct upstream adapters, and ct_rundown degrades gracefully (no
+standalone upstream identified). These tests pin that contract.
 """
 
 from __future__ import annotations
@@ -13,17 +13,17 @@ import pytest
 
 from rugbrain.firehose import news as fh_news
 from rugbrain.firehose import twitter as fh_twitter
-from rugbrain.firehose.direct_sources import (
-    fetch_news_direct,
-    fetch_prediction_markets_direct,
-)
 
 
 def _dead_backend_client() -> httpx.AsyncClient:
-    """A client pointed at a port with nothing listening (backend absent)."""
+    """A client pointed at a port with nothing listening.
+
+    Kept so every source still tolerates an unusable client object even
+    though the standalone paths no longer dial a backend.
+    """
 
     class _Dead:
-        async def get(self, *a, **kw):  # noqa: ANN002, ANN003
+        async def get(self, *a, **kw):
             raise httpx.ConnectError("backend down [Errno 111]")
 
     return _Dead()  # type: ignore[return-value]
@@ -51,8 +51,6 @@ async def test_news_falls_back_to_direct_when_backend_dead(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fake_direct)
-    # patch the symbol as imported inside the function's module lookup path
     monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fake_direct)
     docs = await fh_news.pull_news_rss(_dead_backend_client())
     assert called["direct"] is True
@@ -87,45 +85,45 @@ async def test_prediction_falls_back_to_direct_when_backend_dead(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_databus_primary_still_wins_when_up(monkeypatch):
-    """When the backend answers, the direct adapters must NOT be called."""
+async def test_news_direct_is_the_only_path(monkeypatch):
+    """No backend dial: the direct adapter is always the path news takes."""
     calls = {"direct": 0}
 
-    class _Live:
-        async def get(self, url, **kw):  # noqa: ANN002, ANN003
-            class R:
-                status_code = 200
-
-                def json(self):
-                    if "prediction" in url:
-                        return {
-                            "markets": [{"question": "Q?", "yes_price": "0.6", "no_price": "0.4"}]
-                        }
-                    return {
-                        "articles": [
-                            {
-                                "title": "Backend headline",
-                                "description": "D",
-                                "source": "databus",
-                            }
-                        ]
-                    }
-
-            return R()
-
-    async def fail_direct(*a, **kw):  # noqa: ANN002, ANN003
+    async def fake_direct(limit=20):
         calls["direct"] += 1
-        return []
+        return [
+            {
+                "collection": "news_articles",
+                "content": "News: Standalone headline. D",
+                "metadata": {"source": "coindesk"},
+            }
+        ]
 
-    monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fail_direct)
-    monkeypatch.setattr(
-        "rugbrain.firehose.direct_sources.fetch_prediction_markets_direct",
-        fail_direct,
-    )
-    client = _Live()
-    docs = await fh_news.pull_news_rss(client)  # type: ignore[arg-type]
-    assert docs and docs[0]["metadata"]["source"] == "databus"
-    assert calls["direct"] == 0
+    monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fake_direct)
+    # Any client — even a "live backend" one — must be ignored.
+    docs = await fh_news.pull_news_rss(_dead_backend_client())
+    assert docs and docs[0]["metadata"]["source"] == "coindesk"
+    assert calls["direct"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ct_rundown_degrades_gracefully():
+    """ct_rundown has no standalone upstream → log + skip (empty), never raises."""
+    docs = await fh_twitter.pull_ct_rundown(_dead_backend_client())
+    assert docs == []
+
+
+def test_firehose_has_no_backend_urls():
+    """Sever proof: no firehose module constructs an rmi-backend URL literal."""
+    import pathlib
+
+    pkg = pathlib.Path(fh_news.__file__).parent
+    offenders = []
+    for path in pkg.glob("*.py"):
+        text = path.read_text()
+        if "localhost:8000" in text or "127.0.0.1:8000" in text:
+            offenders.append(path.name)
+    assert offenders == [], f"backend URL literals remain: {offenders}"
 
 
 # ── Direct adapter internals (offline, no network) ─────────────────────────
@@ -133,8 +131,9 @@ async def test_databus_primary_still_wins_when_up(monkeypatch):
 
 def test_rss_parse_extracts_items():
     """The stdlib XML path extracts title/desc/link/pub from real RSS shape."""
-    from rugbrain.firehose.direct_sources import _text_of
     import xml.etree.ElementTree as ET
+
+    from rugbrain.firehose.direct_sources import _text_of
 
     xml = """
     <rss><channel>
@@ -143,7 +142,7 @@ def test_rss_parse_extracts_items():
       <item><title></title><description>skipped, no title</description></item>
     </channel></rss>
     """
-    root = ET.fromstring(xml)
+    root = ET.fromstring(xml)  # noqa: S314 — parses a static test literal
     items = root.findall(".//item")
     assert len(items) == 2
     assert _text_of(items[0].find("title")) == "T1"
@@ -162,7 +161,6 @@ def test_polymarket_prices_handle_string_encoded_list():
 @pytest.mark.asyncio
 async def test_social_sentiment_falls_back_to_fear_greed(monkeypatch):
     """Dead backend → Fear & Greed adapter produces the daily_summary doc."""
-    from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
 
     async def fake_direct():
         return [
@@ -183,9 +181,14 @@ async def test_social_sentiment_falls_back_to_fear_greed(monkeypatch):
     assert docs[0]["metadata"]["type"] == "daily_summary"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_live_fear_greed_reachable():
-    """Live probe (cheap, no key): alternative.me answers with a value."""
+    """Live probe (cheap, no key): alternative.me answers with a value.
+
+    Marked ``integration`` — it needs outbound network, so it is excluded
+    from the unit-test gate and only runs in the live/ integration job.
+    """
     from rugbrain.firehose.direct_sources import fetch_social_sentiment_direct
 
     docs = await fetch_social_sentiment_direct()

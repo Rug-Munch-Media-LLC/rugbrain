@@ -19,7 +19,6 @@ Runs: weekly (Sunday 2am) for historical sources.
 import asyncio
 import json
 import logging
-import os
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -29,8 +28,8 @@ import httpx
 logger = logging.getLogger("rag.historical")
 
 # ── Config ──
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-RAG_INGEST_URL = f"{BACKEND_URL}/api/v1/rag/ingest"
+# RugBrain writes historical sources DIRECTLY into its local Qdrant store —
+# there is no rmi-backend ingest round-trip (docs/MODERNIZATION.md §5.2).
 REQUEST_TIMEOUT = 30
 
 # ── Source Definitions ──
@@ -486,43 +485,43 @@ async def ingest_historical_source(source_id: str) -> dict[str, Any]:
     if not docs:
         return {"source": source_id, "docs_scraped": 0, "status": "empty"}
 
-    # Chunk and dedup
-    from rugbrain.app_chunking import chunk_batch  # external dependency
+    # Chunk + embed + upsert DIRECTLY into the local Qdrant store.
+    # The shared ingest path chunks with crypto-aware windows, embeds via the
+    # canonical Qwen3 lane, and skips deterministic point ids already present.
+    from rugbrain.embedder import get_embedder
+    from rugbrain.ingest_common import CrawlDocument, store_documents
+    from rugbrain.qdrant_store import get_qdrant_store
 
-    chunks = chunk_batch(docs, source["content_type"])
+    documents = [
+        CrawlDocument(
+            title=str(d.get("text", ""))[:200],
+            content=str(d.get("text", "")),
+            url=str(d.get("url", "")),
+            source=str(d.get("source", source_id)),
+            collection=source["collection"],
+            category=str(d.get("category", "")),
+            published=str(d.get("date", "")),
+            chain=str(d.get("chain", "unknown") or "unknown"),
+            metadata={"tags": d.get("tags", [])},
+        )
+        for d in docs
+    ]
 
-    # Ingest into backend
-    ingested = 0
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            # Batch in groups of 50
-            for i in range(0, len(chunks), 50):
-                batch = chunks[i : i + 50]
-                resp = await client.post(
-                    RAG_INGEST_URL,
-                    json={
-                        "documents": batch,
-                        "collection": source["collection"],
-                        "source": source_id,
-                        "chunking": source["content_type"],
-                    },
-                )
-                if resp.status_code == 200:
-                    result = resp.json()
-                    ingested += result.get("ingested", len(batch))
-                else:
-                    logger.warning(
-                        "Ingest batch failed for %s: HTTP %s", source_id, resp.status_code
-                    )
+        embedder = get_embedder()
+        store = await get_qdrant_store()
+        stats = await store_documents(documents, embedder, store)
     except Exception as e:
-        logger.error("Ingest HTTP failed for %s: %s", source_id, e)
+        logger.error("Direct store ingest failed for %s: %s", source_id, e)
+        stats = {"inserted": 0, "failed": len(documents), "chunks": 0, "skipped": 0}
 
+    ingested = stats["inserted"]
     return {
         "source": source_id,
         "name": source["name"],
         "collection": source["collection"],
         "docs_scraped": len(docs),
-        "chunks_created": len(chunks),
+        "chunks_created": stats["chunks"],
         "ingested": ingested,
         "status": "ok" if ingested > 0 else "partial",
     }

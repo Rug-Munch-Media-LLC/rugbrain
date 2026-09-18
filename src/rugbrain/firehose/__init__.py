@@ -68,7 +68,8 @@ logger = logging.getLogger("rag.firehose")
 # Configuration
 # ──────────────────────────────────────────────────────────────
 
-RAG_API = "http://localhost:8000/api/v1/rag"
+# NOTE: there is intentionally NO backend RAG_API here. RugBrain ingests
+# directly into its local Qdrant store (docs/MODERNIZATION.md §5).
 
 # Per-collection size caps (auto-evict oldest on overflow)
 COLLECTION_CAPS = {
@@ -94,14 +95,6 @@ RATE_LIMITS = {
     "news_articles": 30,
     "social_sentiment": 20,
     "default": 30,
-}
-
-# Content hash TTL in Redis (7 days for news, 30 for scams)
-HASH_TTL = {
-    "news_articles": 604800,  # 7 days
-    "social_sentiment": 604800,  # 7 days
-    "known_scams": 2592000,  # 30 days
-    "default": 1209600,  # 14 days
 }
 
 # ──────────────────────────────────────────────────────────────
@@ -148,10 +141,8 @@ class FirehoseStats:
 class IngestionPipeline:
     """Filters, deduplicates, and enriches documents before RAG storage."""
 
-    def __init__(self, client: httpx.AsyncClient):
-        self.client = client
+    def __init__(self) -> None:
         self._rate_trackers: dict[str, list[float]] = {}
-        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     def _check_rate(self, collection: str) -> bool:
         """Return True if we're under the rate limit for this collection."""
@@ -170,17 +161,20 @@ class IngestionPipeline:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
     async def is_duplicate(self, content_hash: str, collection: str) -> bool:
-        """Check if content hash already exists in Redis dedup set."""
+        """True when this content hash is already stored in local Qdrant.
+
+        Replaces the former backend ``/dedup-check`` round-trip: the
+        deterministic point id IS the content hash, so ``has_point`` is the
+        dedup oracle. Fail-open (returns False) so a store error never drops
+        fresh content.
+        """
         try:
-            resp = await self.client.get(
-                f"{RAG_API}/dedup-check",
-                params={"hash": content_hash, "collection": collection},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                return bool(resp.json().get("exists", False))
+            from rugbrain.qdrant_store import get_qdrant_store
+
+            store = await get_qdrant_store()
+            return await store.has_point(content_hash, collection)
         except Exception:
-            logger.warning("swallowed exception", exc_info=True)
+            logger.warning("dedup check failed — proceeding with ingest", exc_info=True)
         return False
 
     def score_quality(self, content: str, metadata: dict[str, Any]) -> int:
@@ -316,44 +310,39 @@ class IngestionPipeline:
             return {"status": "rate_limited", "collection": collection}
 
         try:
-            payload = {
-                "collection": collection,
-                "content": content,
-                "metadata": metadata,
-            }
-            if doc_id:
-                payload["doc_id"] = doc_id
+            # Embed and upsert DIRECTLY into the local Qdrant store. No
+            # rmi-backend round-trip (docs/MODERNIZATION.md §5.2).
+            from rugbrain.embedder import get_embedder
+            from rugbrain.qdrant_store import get_qdrant_store
 
-            resp = await self.client.post(f"{RAG_API}/ingest", json=payload, timeout=30)
+            embedder = get_embedder()
+            store = await get_qdrant_store()
+            embedding = await embedder.embed_one(content[:8000])
+            if not embedding:
+                return {"status": "error", "detail": "embedding backend returned no vector"}
+
+            point_id = doc_id or content_hash
+            ok = await store.insert(
+                doc_id=point_id,
+                collection=collection,
+                embedding=embedding,
+                content=content,
+                metadata=metadata,
+                source=str(metadata.get("source", "")),
+                severity=str(metadata.get("severity", "medium")),
+                chain=str(metadata.get("chain", "")),
+            )
             self._record_ingest(collection)
-
-            if resp.status_code == 200:
-                result = resp.json()
-                task = asyncio.create_task(self._mark_ingested(content_hash, collection))
-                self._background_tasks.add(task)
-                task.add_done_callback(self._background_tasks.discard)
-                return {
-                    "status": "ingested",
-                    "id": result.get("id"),
-                    "quality": quality,
-                    "entities": entities,
-                }
-            else:
-                return {"status": "error", "code": resp.status_code, "detail": resp.text[:200]}
+            if not ok:
+                return {"status": "error", "detail": "local qdrant insert failed"}
+            return {
+                "status": "ingested",
+                "id": point_id,
+                "quality": quality,
+                "entities": entities,
+            }
         except Exception as e:
             return {"status": "error", "detail": str(e)[:200]}
-
-    async def _mark_ingested(self, content_hash: str, collection: str) -> None:
-        """Mark content hash in Redis dedup set."""
-        try:
-            ttl = HASH_TTL.get(collection, HASH_TTL["default"])
-            await self.client.post(
-                f"{RAG_API}/dedup-mark",
-                json={"hash": content_hash, "collection": collection, "ttl": ttl},
-                timeout=5,
-            )
-        except Exception:
-            logger.warning("swallowed exception", exc_info=True)
 
     async def ingest_batch(self, docs: list[dict[str, Any]]) -> dict[str, int]:
         """Ingest multiple documents with rate limiting."""
@@ -440,7 +429,7 @@ class FeedSources:
                 rows = list(
                     await asyncio.get_running_loop().run_in_executor(
                         None,
-                        csv.DictReader,  # type: ignore[arg-type]  # csv.DictReader accepts any file-like
+                        csv.DictReader,  # accepts any file-like object
                         f,
                     )
                 )
@@ -511,40 +500,35 @@ class FeedSources:
     # ── Weekly: Pattern Extraction ──
 
     async def extract_scam_patterns(self) -> list[dict[str, Any]]:
-        """Extract common patterns from confirmed scam documents."""
+        """Extract common patterns from confirmed scam documents.
+
+        Searches the LOCAL Qdrant ``known_scams`` collection directly — the
+        former backend search call is gone (standalone, §5.2).
+        """
         docs: list[dict[str, Any]] = []
         try:
-            resp = await self.client.get(
-                f"{RAG_API}/search",
-                params={
-                    "q": "rug pull honeypot scam confirmed",
-                    "collection": "known_scams",
-                    "limit": 50,
-                },
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                results = data.get("results", [])
-                if len(results) >= 10:
-                    content_parts = []
-                    for r in results[:20]:
-                        c = r.get("content", "")[:200]
-                        if c:
-                            content_parts.append(c)
+            from rugbrain.embeddings import get_query_embedding
+            from rugbrain.qdrant_store import get_qdrant_store
 
-                    combined = "Common scam patterns observed: " + " | ".join(content_parts)
-                    docs.append(
-                        {
-                            "collection": "scam_patterns",
-                            "content": combined[:5000],
-                            "metadata": {
-                                "source": "pattern_extraction",
-                                "pattern_count": len(results),
-                                "extracted_at": datetime.now(UTC).isoformat(),
-                            },
-                        }
-                    )
+            embedding = await get_query_embedding("rug pull honeypot scam confirmed")
+            store = await get_qdrant_store()
+            results = await store.search(embedding, collection="known_scams", limit=50)
+            if len(results) >= 10:
+                content_parts = [r.get("content", "")[:200] for r in results[:20]]
+                content_parts = [c for c in content_parts if c]
+
+                combined = "Common scam patterns observed: " + " | ".join(content_parts)
+                docs.append(
+                    {
+                        "collection": "scam_patterns",
+                        "content": combined[:5000],
+                        "metadata": {
+                            "source": "pattern_extraction",
+                            "pattern_count": len(results),
+                            "extracted_at": datetime.now(UTC).isoformat(),
+                        },
+                    }
+                )
         except Exception as e:
             logger.warning("Pattern extraction failed: %s", e)
 
@@ -577,7 +561,7 @@ class FirehoseEngine:
             return
 
         self._client = httpx.AsyncClient(timeout=30, limits=httpx.Limits(max_connections=20))
-        self._pipeline = IngestionPipeline(self._client)
+        self._pipeline = IngestionPipeline()
         self._feeds = FeedSources(self._client)
         self._start_time = time.monotonic()
 
@@ -764,9 +748,7 @@ def get_firehose() -> FirehoseEngine:
 
 __all__ = [
     "COLLECTION_CAPS",
-    "HASH_TTL",
     "MIN_QUALITY_SCORE",
-    "RAG_API",
     "RATE_LIMITS",
     "FeedSource",
     "FeedSources",

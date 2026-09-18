@@ -15,6 +15,11 @@ The scanner (rmi-backend) calls ``GET /api/v1/market/context/{address}``
 before each scan, plus ``GET /api/v1/market/mood`` for the global mood.
 Both endpoints are served by this module (see ``market_routes``).
 
+Standalone note (docs/MODERNIZATION.md §5.2): this module makes NO
+rmi-backend call — every upstream (DeFiLlama, Alternative.me Fear & Greed,
+DexScreener, CoinPaprika) is fetched directly. The backend is only an
+inbound *caller* of these endpoints.
+
 All providers fail open to neutral values — market context is enrichment,
 never a blocker.
 """

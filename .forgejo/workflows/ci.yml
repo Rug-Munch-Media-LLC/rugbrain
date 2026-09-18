@@ -51,10 +51,31 @@ jobs:
       - run: pip install -r requirements.txt
       # Install the package itself so --cov=rugbrain resolves deterministically.
       - run: pip install -e .
-      - run: pip install ruff mypy pytest pytest-cov diff-cover
+      - run: pip install ruff mypy pytest pytest-cov diff-cover import-linter
       - run: ruff check src/ tests/
       # mypy gate is blocking — type errors fail CI.
       - run: mypy src/rugbrain/ --ignore-missing-imports
+      - name: Import boundary (import-linter)
+        # Structural contract: rugbrain must NOT import app.* (rmi-backend)
+        # or rugmunchbot. Contract config lives in .importlinter.
+        run: lint-imports --config .importlinter
+      - name: Structure size ratchet (>=200 report, >500 hard fail)
+        # New/grown >500-line files fail; allowlisted files may only shrink.
+        # Baseline: scripts/structure-baseline.json.
+        run: python3 scripts/check-structure.py --repo .
+      - name: Monkeypatch ratchet (decrease-only)
+        # Repo-wide monkeypatch count may never exceed the committed baseline.
+        # Baseline: scripts/monkeypatch-baseline.json.
+        run: python3 scripts/check-monkeypatch.py --repo .
+      - name: Eval smoke (conditional)
+        # The eval harness is owned by the eval workstream; this step runs it
+        # only once scripts/run-eval-smoke.sh exists, and skips cleanly until.
+        run: |
+          if [ -f scripts/run-eval-smoke.sh ]; then
+            bash scripts/run-eval-smoke.sh
+          else
+            echo "scripts/run-eval-smoke.sh absent — skipping eval-smoke"
+          fi
       - name: Unit tests with coverage (BLOCKING)
         # Tests MUST pass and global coverage must meet the 60% floor
         # declared in pyproject.toml [tool.coverage.report] fail_under.

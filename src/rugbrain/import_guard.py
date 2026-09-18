@@ -1,27 +1,18 @@
-"""Import guard — transparent stubs for optional ``app.*`` integrations.
+"""Import guard — compatibility shim (no ``app.*`` stubs remaining).
 
 The standalone rugbrain container never ships the rmi-backend ``app``
-package, but many ``rugbrain`` modules reference ``app.*`` helpers for
-optional integration (semantic cache, ANN index, knowledge graph,
-entity extraction, cross-encoder reranker, data feeders, …). Historically
-those imports raised ``ModuleNotFoundError``, which silently degraded
-features or crashed endpoints that did not guard the import.
+package. Historically this module injected 24 ``app.*`` stub modules into
+``sys.modules`` so optional ``from app.x import y`` integrations degraded
+gracefully.
 
-This module installs stub modules into ``sys.modules`` for every known
-``app.*`` name referenced by rugbrain, so ``from app.x import y`` always
-resolves. Missing modules become transparent stubs that log a warning
-and return safe defaults (empty dicts / falsy values); call sites then
-degrade gracefully instead of raising.
+**Standalone sever (2026-09-18, docs/MODERNIZATION.md §5):** all 24 entries
+were proven unused — ``grep -rnE "^\\s*(from app[.\\s]|import app\\b)"
+src/rugbrain/`` returns nothing. They are deleted from ``_APP_MODULES``.
+The guard mechanism is retained (a no-op when the list is empty) until
+Phase 8 removes this module and its ``install_import_guard()`` call.
 
-Install FIRST in the entry point (``rugbrain.main``)::
-
-    from rugbrain.import_guard import install_import_guard
-
-    install_import_guard()
-
-If the real ``app`` package IS importable (e.g. rugbrain running inside
-rmi-backend), the guard leaves it untouched and the real modules are
-used instead of stubs.
+[REVIEW] Phase 8: delete this file + the ``install_import_guard()`` call in
+``main.py`` (out of scope for the sever task — main.py is not owned here).
 """
 
 from __future__ import annotations
@@ -36,35 +27,10 @@ from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
-# Known ``app.*`` modules referenced by rugbrain. Kept in sync with
-# `grep -rhoE "from (app\.[a-zA-Z0-9_.]+) import" src/rugbrain/`.
-_APP_MODULES: list[str] = [
-    "app.ann_index",
-    "app.confidence",
-    "app.core.redis",
-    "app.cross_chain",
-    "app.cross_encoder_reranker",
-    "app.deployer_reputation",
-    "app.domains.databus.news_intel",
-    "app.domains.databus.news_provider",
-    "app.domains.databus.rag_engine",
-    "app.domains.databus.social_intel",
-    "app.domains.databus.x_intel",
-    "app.domains.scanners.unified_scanner",
-    "app.entity_extraction",
-    "app.hallucination_guard",
-    "app.investigation_narratives",
-    "app.knowledge_graph",
-    "app.mmr_dedup",
-    "app.query_transform",
-    "app.rag.embeddings",
-    "app.rag.incremental_indexer",
-    "app.rag.parent_retriever",
-    "app.rag_agentic",
-    "app.rate_limiter",
-    "app.scam_sources",
-    "app.semantic_cache",
-]
+# Previously 24 ``app.*`` stub modules. All provably unused as of the
+# standalone sever (grep proof in the module docstring). Shrink-only:
+# do NOT re-add an entry without a live import + a regression test.
+_APP_MODULES: list[str] = []
 
 
 class _StubCallable(dict[Any, Any]):
