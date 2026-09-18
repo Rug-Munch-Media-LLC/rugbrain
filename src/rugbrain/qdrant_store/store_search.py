@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from rugbrain.qdrant_store import _types
 
 
@@ -83,12 +81,7 @@ class SearchMixin(_types.StoreSurface):
 
     async def _hybrid_search_rrf(
         self,
-        client: httpx.AsyncClient,
-        collection: str,
-        dense_vector: list[float],
-        sparse: tuple[list[int], list[float]],
-        limit: int,
-        qdrant_filter: dict[str, Any] | None = None,
+        req: _types.HybridRrfQuery,
     ) -> list[dict[str, Any]] | None:
         """Native Qdrant hybrid search: named dense + BM25 sparse, RRF fusion.
 
@@ -100,19 +93,20 @@ class SearchMixin(_types.StoreSurface):
         import rugbrain.qdrant_store as _pkg
 
         logger = logging.getLogger(__name__)
+        client = await self._get_client()
         payload: dict[str, Any] = {
-            "vector": {"name": _pkg.DENSE_VECTOR_NAME, "vector": dense_vector},
+            "vector": {"name": _pkg.DENSE_VECTOR_NAME, "vector": req.dense_vector},
             "sparse_vector": {
                 "name": _pkg.SPARSE_VECTOR_NAME,
-                "vector": {"indices": sparse[0], "values": sparse[1]},
+                "vector": {"indices": req.sparse[0], "values": req.sparse[1]},
             },
             "fusion": "rrf",
-            "limit": limit,
+            "limit": req.limit,
             "with_payload": True,
         }
-        _pkg.apply_payload_filter(payload, qdrant_filter)
+        _pkg.apply_payload_filter(payload, req.qdrant_filter)
         try:
-            r = await client.post(f"/collections/{collection}/points/search", json=payload)
+            r = await client.post(f"/collections/{req.collection}/points/search", json=payload)
             if r.status_code != 200:
                 logger.warning(
                     "qdrant_hybrid_rrf_failed status=%d body=%s",

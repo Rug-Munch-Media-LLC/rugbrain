@@ -8,9 +8,21 @@ in isolation; it is never instantiated at runtime.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
+
+
+@dataclass
+class HybridRrfQuery:
+    """Parameters for native Qdrant hybrid (dense+sparse RRF) search."""
+
+    collection: str
+    dense_vector: list[float]
+    sparse: tuple[list[int], list[float]]
+    limit: int
+    qdrant_filter: dict[str, Any] | None = field(default=None)
 
 
 class StoreSurface(Protocol):
@@ -35,12 +47,4 @@ class StoreSurface(Protocol):
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]: ...
 
-    async def _hybrid_search_rrf(
-        self,
-        client: httpx.AsyncClient,
-        collection: str,
-        dense_vector: list[float],
-        sparse: tuple[list[int], list[float]],
-        limit: int,
-        qdrant_filter: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]] | None: ...
+    async def _hybrid_search_rrf(self, req: HybridRrfQuery) -> list[dict[str, Any]] | None: ...

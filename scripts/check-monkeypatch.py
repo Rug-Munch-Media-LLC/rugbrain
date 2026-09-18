@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""check-monkeypatch.py — dedicated monkeypatch ratchet (decrease-only).
+"""Dedicated monkeypatch ratchet gate (decrease-only).
 
 docs/MODERNIZATION.md §2.3 / §4.3: the repo-wide monkeypatch count may never
 increase. This gate is deliberately separate from the aggregate
 ``check-antipatterns.py`` baseline so that an unrelated change cannot inflate
 the monkeypatch budget while other rules shrink to compensate.
 
-Counts ``monkeypatch.`` / ``mock.patch`` / ``@patch(`` / ``patch.object`` /
-``del sys.modules`` occurrences under the repo (Python sources only).
+Counts monkeypatch-attribute access, mock-patch calls, patch decorators,
+patch-object calls and sys.modules deletions (Python sources only).
+The matched patterns live in ``MONKEY_RE`` below.
 
 Usage:
-  python3 scripts/check-monkeypatch.py --repo .                 # gate
-  python3 scripts/check-monkeypatch.py --repo . --update-baseline
+  python3 scripts/check-monkeypatch --repo .                 # gate
+  python3 scripts/check-monkeypatch --repo . --update-baseline
 """
 
 from __future__ import annotations

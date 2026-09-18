@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from rugbrain.news_rating.axes import (
@@ -9,6 +10,8 @@ from rugbrain.news_rating.axes import (
     REPUTATION_INDEPENDENT_MIN,
     _clamp,
 )
+
+logger = logging.getLogger(__name__)
 
 #: domain → (0-100 reputation, tier label). Unknown domains default low.
 # The expanded 100+ source database lives in ``news_sources`` and is merged
@@ -18,6 +21,7 @@ try:
 
     SOURCE_REPUTATION: dict[str, tuple[int, str]] = merged_source_reputation()
 except ImportError:  # pragma: no cover — fallback keeps the module importable
+    logger.warning("news_sources unavailable; using built-in reputation fallback")
     SOURCE_REPUTATION = {
         "reuters.com": (96, "established"),
         "bloomberg.com": (96, "established"),
@@ -77,7 +81,7 @@ try:  # merge the expanded alias table (extended wins on conflict)
 
     SOURCE_NAME_ALIASES.update(EXTENDED_SOURCE_ALIASES)
 except ImportError:  # pragma: no cover
-    pass
+    logger.debug("extended source aliases unavailable; using base table")
 
 DEFAULT_SOURCE_REPUTATION = 45
 

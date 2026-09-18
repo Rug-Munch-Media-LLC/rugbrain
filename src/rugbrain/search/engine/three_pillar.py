@@ -31,15 +31,15 @@ from .constants import (
     _RERANK_TIMEOUT,
     _SYNONYM_EXPAND_DEFAULT,
 )
-from .dense_pillar import _dense_pillar
-from .fusion_pillars import _fuse_pillars
+from .dense_pillar import DensePillarRequest, _dense_pillar
+from .fusion_pillars import FusionRequest, _fuse_pillars
 from .pillars import (
     _entity_pillar,
     _keyword_pillar,
     _sparse_pillar,
 )
-from .postprocess import postprocess_results
-from .query_expansion import _build_search_variants
+from .postprocess import PostprocessOptions, postprocess_results
+from .query_expansion import ExpansionRequest, _build_search_variants
 from .query_intent import detect_coding_query, resolve_search_collections
 
 logger = logging.getLogger(__name__)
@@ -97,25 +97,34 @@ async def three_pillar_search(
     # Variants are built once and pre-embedded so the dense pillar can search
     # each.
     query_variants, query_expansion_meta = await _build_search_variants(
-        query, hyde, multi_query, embedder, llm_fn, synonym_expand=synonym_expand
+        ExpansionRequest(
+            query=query,
+            hyde=hyde,
+            multi_query=multi_query,
+            embedder=embedder,
+            llm_fn=llm_fn,
+            synonym_expand=synonym_expand,
+        )
     )
     expanded = query_expansion_meta["variants"] > 1
 
     # ── Pillar 1: Dense vector search (ANN) ──
     pillar1_results = await _dense_pillar(
-        query,
-        collections,
-        limit,
-        min_similarity,
-        content_limit,
-        query_vec,
-        query_variants,
-        query_expansion_meta,
-        expanded,
-        hyde,
-        multi_query,
-        llm_fn,
-        embedder,
+        DensePillarRequest(
+            query=query,
+            collections=collections,
+            limit=limit,
+            min_similarity=min_similarity,
+            content_limit=content_limit,
+            query_vec=query_vec,
+            query_variants=query_variants,
+            query_expansion_meta=query_expansion_meta,
+            expanded=expanded,
+            hyde=hyde,
+            multi_query=multi_query,
+            llm_fn=llm_fn,
+            embedder=embedder,
+        )
     )
 
     # ── Pillar 2: Sparse text search (BM25 + SPLADE) ──
@@ -129,16 +138,18 @@ async def three_pillar_search(
 
     # ── RRF fusion with query-adaptive weights ──
     fused, recency_applied, query_type, weights, entity_doc_ids = _fuse_pillars(
-        pillar1_results,
-        pillar2_results,
-        pillar3_results,
-        keyword_results,
-        query,
-        hybrid,
-        entity_boost,
-        use_recency_decay,
-        recency_half_life_days,
-        recency_date_field,
+        FusionRequest(
+            pillar1_results=pillar1_results,
+            pillar2_results=pillar2_results,
+            pillar3_results=pillar3_results,
+            keyword_results=keyword_results,
+            query=query,
+            hybrid=hybrid,
+            entity_boost=entity_boost,
+            use_recency_decay=use_recency_decay,
+            recency_half_life_days=recency_half_life_days,
+            recency_date_field=recency_date_field,
+        )
     )
     w_dense, w_sparse, w_entity = weights
 
@@ -147,16 +158,18 @@ async def three_pillar_search(
         query,
         fused,
         limit,
-        use_mmr=use_mmr,
-        mmr_lambda=mmr_lambda,
-        use_reranker=use_reranker,
-        use_parent_child=use_parent_child,
-        use_rating_boosts=use_rating_boosts,
-        rerank=rerank,
-        rerank_top_k=rerank_top_k,
-        rerank_keep=rerank_keep,
-        rerank_timeout=rerank_timeout,
-        entity_doc_ids=entity_doc_ids,
+        PostprocessOptions(
+            use_mmr=use_mmr,
+            mmr_lambda=mmr_lambda,
+            use_reranker=use_reranker,
+            use_parent_child=use_parent_child,
+            use_rating_boosts=use_rating_boosts,
+            rerank=rerank,
+            rerank_top_k=rerank_top_k,
+            rerank_keep=rerank_keep,
+            rerank_timeout=rerank_timeout,
+            entity_doc_ids=entity_doc_ids,
+        ),
     )
 
     return {

@@ -9,17 +9,23 @@ optional/pluggable; without a live model the expansion degrades to a no-op
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 
-async def _build_search_variants(
-    query: str,
-    hyde: bool,
-    multi_query: bool,
-    embedder: Any,
-    llm_fn: Callable[..., Any] | None = None,
-    synonym_expand: bool = False,
-) -> tuple[list[str], dict[str, Any]]:
+@dataclass
+class ExpansionRequest:
+    """Parameters for :func:`_build_search_variants` (keeps arity ≤5)."""
+
+    query: str
+    hyde: bool = False
+    multi_query: bool = False
+    embedder: Any = None
+    llm_fn: Callable[..., Any] | None = None
+    synonym_expand: bool = False
+
+
+async def _build_search_variants(req: ExpansionRequest) -> tuple[list[str], dict[str, Any]]:
     """Build the retrieval variants for *query* (original first).
 
     Returns ``(variants, meta)`` where ``meta`` describes the expansion:
@@ -34,6 +40,7 @@ async def _build_search_variants(
     """
     from ..query_transform import expand_synonyms, hyde_expand, multi_query_expand
 
+    query = req.query
     variants = [query]
     meta: dict[str, Any] = {
         "hyde": False,
@@ -44,14 +51,14 @@ async def _build_search_variants(
         "hyde_doc": None,
         "hyde_embedding": None,
     }
-    if synonym_expand:
+    if req.synonym_expand:
         for v in expand_synonyms(query):
             if v not in variants:
                 variants.append(v)
         meta["synonym_expand"] = True
         meta["synonym_variants"] = max(0, len(variants) - 1)
-    if hyde:
-        hyde_out = await hyde_expand(query, embed_fn=embedder.embed_query, llm_fn=llm_fn)
+    if req.hyde:
+        hyde_out = await hyde_expand(query, embed_fn=req.embedder.embed_query, llm_fn=req.llm_fn)
         hypo = hyde_out.get("hypothetical_doc") or query
         if hypo not in variants:
             variants.append(hypo)
@@ -59,8 +66,8 @@ async def _build_search_variants(
             meta["hyde_embedding"] = hyde_out.get("embedding")
         meta["hyde"] = True
         meta["hyde_used_llm"] = bool(hyde_out.get("used_llm"))
-    if multi_query:
-        for v in await multi_query_expand(query, llm_fn=llm_fn):
+    if req.multi_query:
+        for v in await multi_query_expand(query, llm_fn=req.llm_fn):
             if v not in variants:
                 variants.append(v)
         meta["multi_query"] = True

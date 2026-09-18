@@ -96,16 +96,7 @@ class WriteMixin(_types.StoreSurface):
         await _pkg._ensure_collection(collection, len(embedding), client)
 
         point_id = self._to_uuid(doc_id)
-        vector_field: Any = embedding
-        if await self._collection_uses_named_vectors(collection, client):
-            vector_field = {_pkg.DENSE_VECTOR_NAME: embedding}
-            if await self._collection_supports_sparse(collection, client):
-                sparse = await _pkg._embed_sparse(content)
-                if sparse is not None:
-                    vector_field[_pkg.SPARSE_VECTOR_NAME] = {
-                        "indices": sparse[0],
-                        "values": sparse[1],
-                    }
+        vector_field = await self._resolve_vector_field(collection, embedding, content, client)
         payload = {
             "points": [
                 {
@@ -135,6 +126,28 @@ class WriteMixin(_types.StoreSurface):
         except Exception as e:
             logger.warning("qdrant_insert_error: %s", e)
             return False
+
+    async def _resolve_vector_field(
+        self,
+        collection: str,
+        embedding: list[float],
+        content: str,
+        client: Any,
+    ) -> Any:
+        """Bare vector, or named dense (+BM25 sparse) for named-vector collections."""
+        import rugbrain.qdrant_store as _pkg
+
+        vector_field: Any = embedding
+        if await self._collection_uses_named_vectors(collection, client):
+            vector_field = {_pkg.DENSE_VECTOR_NAME: embedding}
+            if await self._collection_supports_sparse(collection, client):
+                sparse = await _pkg._embed_sparse(content)
+                if sparse is not None:
+                    vector_field[_pkg.SPARSE_VECTOR_NAME] = {
+                        "indices": sparse[0],
+                        "values": sparse[1],
+                    }
+        return vector_field
 
     async def close(self) -> None:
         if self._client:

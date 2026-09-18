@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -49,6 +50,8 @@ from rugbrain.eval.ndcg import (
     ndcg_from_gains,
     recall_at_k,
 )
+
+logger = logging.getLogger(__name__)
 
 # Default golden set shipped with the package.
 DEFAULT_GOLDEN = Path(__file__).resolve().parent / "golden" / "crypto_rag_golden.jsonl"
@@ -233,6 +236,7 @@ async def score_query(
         score.retrieved_ids = [result_id(item) for item in (items or [])]
         score.latency_ms = (time.perf_counter() - start) * 1000.0
     except Exception as exc:  # pragma: no cover - defensive, fail-open
+        logger.debug("harness: retrieval failed for %r: %s", example.query, exc)
         score.error = f"{type(exc).__name__}: {exc}"
         score.latency_ms = (time.perf_counter() - start) * 1000.0
         return score

@@ -30,6 +30,55 @@ from rugbrain.news_rating.technical import technical_depth_score
 from rugbrain.news_rating.timeliness import timeliness_score
 
 
+def _composite_tier(composite: int) -> tuple[str, str]:
+    """Map a composite score to (tier, factuality) labels."""
+    if composite >= 80:
+        tier = "excellent"
+    elif composite >= 65:
+        tier = "good"
+    elif composite >= 50:
+        tier = "fair"
+    else:
+        tier = "poor"
+
+    if composite >= FACTUALITY_VERIFIED_MIN:
+        factuality = "verified"
+    elif composite >= FACTUALITY_REPORTED_MIN:
+        factuality = "reported"
+    else:
+        factuality = "rumor"
+    return tier, factuality
+
+
+def _weak_signal_map(
+    axes: dict[str, float],
+    cb: int,
+    onchain_verification: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Collect the per-axis weakness signals for the rating payload."""
+    density = axes["factual_density"]
+    bias = axes["bias"]
+    corroboration = axes["corroboration"]
+    depth = axes["technical_depth"]
+    diversity = axes["source_diversity"]
+    signals: dict[str, list[str]] = {}
+    if density < 30:
+        signals["factual_density"] = ["few_verifiable_claims"]
+    if bias < 50:
+        signals["bias"] = ["emotional_or_hype_language"]
+    if cb > 25:
+        signals["clickbait"] = ["clickbait_headline_or_body"]
+    if corroboration <= 30:
+        signals["corroboration"] = ["unconfirmed_single_source"]
+    if depth < 40:
+        signals["technical_depth"] = ["surface_level_only"]
+    if diversity <= 40:
+        signals["source_diversity"] = ["single_source"]
+    if not onchain_verification["verified"] and onchain_verification["claims"]:
+        signals["on_chain"] = ["unverified_amount_claim"]
+    return signals
+
+
 def rate_article(article: dict[str, Any], now: datetime | None = None) -> ArticleRating:
     """Rate one article dict on all seven axes and produce a composite.
 
@@ -77,44 +126,13 @@ def rate_article(article: dict[str, Any], now: datetime | None = None) -> Articl
     }
     composite = round(sum(AXIS_WEIGHTS[axis] * axes[axis] for axis in AXES))
     composite = _clamp(composite)
-
-    if composite >= 80:
-        tier = "excellent"
-    elif composite >= 65:
-        tier = "good"
-    elif composite >= 50:
-        tier = "fair"
-    else:
-        tier = "poor"
-
-    factuality: str
-    if composite >= FACTUALITY_VERIFIED_MIN:
-        factuality = "verified"
-    elif composite >= FACTUALITY_REPORTED_MIN:
-        factuality = "reported"
-    else:
-        factuality = "rumor"
+    tier, factuality = _composite_tier(composite)
 
     on_chain = bool(article.get("on_chain_evidence")) or (
         len(_find_claims(text)["addresses"] + _find_claims(text)["tx_hashes"]) > 0 and density >= 60
     )
     onchain_verification = on_chain_claim_verification(article)
-
-    signals: dict[str, list[str]] = {}
-    if density < 30:
-        signals["factual_density"] = ["few_verifiable_claims"]
-    if bias < 50:
-        signals["bias"] = ["emotional_or_hype_language"]
-    if cb > 25:
-        signals["clickbait"] = ["clickbait_headline_or_body"]
-    if corroboration <= 30:
-        signals["corroboration"] = ["unconfirmed_single_source"]
-    if depth < 40:
-        signals["technical_depth"] = ["surface_level_only"]
-    if diversity <= 40:
-        signals["source_diversity"] = ["single_source"]
-    if not onchain_verification["verified"] and onchain_verification["claims"]:
-        signals["on_chain"] = ["unverified_amount_claim"]
+    signals = _weak_signal_map(axes, cb, onchain_verification)
 
     return ArticleRating(
         url=url,

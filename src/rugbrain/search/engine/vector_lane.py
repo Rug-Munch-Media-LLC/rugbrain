@@ -162,6 +162,7 @@ async def _enrich_ann_results(
                 }
             )
         except json.JSONDecodeError:
+            logger.debug("vector_lane: unparseable doc json for %s", ar.get("id"))
             enriched.append(ar)
 
     return enriched

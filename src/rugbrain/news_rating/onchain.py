@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from rugbrain.news_rating.factual import _find_claims
+
+logger = logging.getLogger(__name__)
 
 _CLAIM_USD_RE = re.compile(
     r"(?:\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(million|billion|thousand|m|bn|b|k)?\s?"
@@ -51,6 +54,7 @@ def on_chain_claim_verification(article: dict[str, Any]) -> dict[str, Any]:
         try:
             amount = float(amount_raw)
         except ValueError:
+            logger.debug("onchain: unparseable claim amount %r", amount_raw)
             continue
         if unit in ("million", "m"):
             amount *= 1_000_000
@@ -66,6 +70,7 @@ def on_chain_claim_verification(article: dict[str, Any]) -> dict[str, Any]:
         try:
             amount = float(amount_raw)
         except ValueError:
+            logger.debug("onchain: unparseable claim amount %r", amount_raw)
             continue
         claims.append({"amount_token": amount, "token": token, "verified": False})
 

@@ -8,7 +8,21 @@ standalone upstream identified). These tests pin that contract.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import httpx
+
+
+@contextmanager
+def _patched_attr(module, name, value):
+    """Swap a module attribute for the duration of the block (no mock layer)."""
+    old = getattr(module, name)
+    setattr(module, name, value)
+    try:
+        yield
+    finally:
+        setattr(module, name, old)
+
 import pytest
 
 from rugbrain.firehose import news as fh_news
@@ -30,7 +44,7 @@ def _dead_backend_client() -> httpx.AsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_news_falls_back_to_direct_when_backend_dead(monkeypatch):
+async def test_news_falls_back_to_direct_when_backend_dead():
     """DataBus unreachable → direct RSS adapters produce well-formed docs."""
     called = {"direct": False}
 
@@ -51,8 +65,10 @@ async def test_news_falls_back_to_direct_when_backend_dead(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fake_direct)
-    docs = await fh_news.pull_news_rss(_dead_backend_client())
+    from rugbrain.firehose import direct_sources
+
+    with _patched_attr(direct_sources, "fetch_news_direct", fake_direct):
+        docs = await fh_news.pull_news_rss(_dead_backend_client())
     assert called["direct"] is True
     assert len(docs) == 1
     d = docs[0]
@@ -62,7 +78,7 @@ async def test_news_falls_back_to_direct_when_backend_dead(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_prediction_falls_back_to_direct_when_backend_dead(monkeypatch):
+async def test_prediction_falls_back_to_direct_when_backend_dead():
     """DataBus unreachable → Polymarket gamma adapter produces market docs."""
 
     async def fake_direct(limit=10):
@@ -74,18 +90,17 @@ async def test_prediction_falls_back_to_direct_when_backend_dead(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(
-        "rugbrain.firehose.direct_sources.fetch_prediction_markets_direct",
-        fake_direct,
-    )
-    docs = await fh_news.pull_prediction_markets(_dead_backend_client())
+    from rugbrain.firehose import direct_sources
+
+    with _patched_attr(direct_sources, "fetch_prediction_markets_direct", fake_direct):
+        docs = await fh_news.pull_prediction_markets(_dead_backend_client())
     assert len(docs) == 1
     assert docs[0]["collection"] == "market_intel"
     assert docs[0]["metadata"]["source"] == "polymarket"
 
 
 @pytest.mark.asyncio
-async def test_news_direct_is_the_only_path(monkeypatch):
+async def test_news_direct_is_the_only_path():
     """No backend dial: the direct adapter is always the path news takes."""
     calls = {"direct": 0}
 
@@ -99,9 +114,11 @@ async def test_news_direct_is_the_only_path(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("rugbrain.firehose.direct_sources.fetch_news_direct", fake_direct)
-    # Any client — even a "live backend" one — must be ignored.
-    docs = await fh_news.pull_news_rss(_dead_backend_client())
+    from rugbrain.firehose import direct_sources
+
+    with _patched_attr(direct_sources, "fetch_news_direct", fake_direct):
+        # Any client — even a "live backend" one — must be ignored.
+        docs = await fh_news.pull_news_rss(_dead_backend_client())
     assert docs and docs[0]["metadata"]["source"] == "coindesk"
     assert calls["direct"] == 1
 
@@ -159,7 +176,7 @@ def test_polymarket_prices_handle_string_encoded_list():
 
 
 @pytest.mark.asyncio
-async def test_social_sentiment_falls_back_to_fear_greed(monkeypatch):
+async def test_social_sentiment_falls_back_to_fear_greed():
     """Dead backend → Fear & Greed adapter produces the daily_summary doc."""
 
     async def fake_direct():
@@ -171,11 +188,10 @@ async def test_social_sentiment_falls_back_to_fear_greed(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(
-        "rugbrain.firehose.direct_sources.fetch_social_sentiment_direct",
-        fake_direct,
-    )
-    docs = await fh_twitter.pull_social_sentiment(_dead_backend_client())
+    from rugbrain.firehose import direct_sources
+
+    with _patched_attr(direct_sources, "fetch_social_sentiment_direct", fake_direct):
+        docs = await fh_twitter.pull_social_sentiment(_dead_backend_client())
     assert len(docs) == 1
     assert docs[0]["metadata"]["source"] == "fear_greed"
     assert docs[0]["metadata"]["type"] == "daily_summary"

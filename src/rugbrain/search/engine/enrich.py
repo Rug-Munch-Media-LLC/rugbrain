@@ -53,7 +53,7 @@ def _score_confidence(
                         r["metadata"]["ingested_at"].replace("Z", "+00:00")
                     ).timestamp()
                 except (ValueError, TypeError):
-                    pass
+                    logger.debug("enrich: unparseable ingested_at %r", r["metadata"].get("ingested_at"))
             sources.append(src)
         confidence = score_confidence(
             sources,

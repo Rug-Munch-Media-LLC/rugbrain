@@ -45,12 +45,13 @@ class HybridSearchMixin(_types.StoreSurface):
             sparse = await _pkg._embed_sparse(query_text)
             if sparse is not None:
                 fused = await self._hybrid_search_rrf(
-                    client,
-                    coll,
-                    query_embedding,
-                    sparse,
-                    limit,
-                    qdrant_filter=qdrant_filter,
+                    _types.HybridRrfQuery(
+                        collection=coll,
+                        dense_vector=query_embedding,
+                        sparse=sparse,
+                        limit=limit,
+                        qdrant_filter=qdrant_filter,
+                    )
                 )
                 if fused is not None:
                     return fused

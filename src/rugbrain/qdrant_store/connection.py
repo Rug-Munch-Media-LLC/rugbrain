@@ -81,5 +81,6 @@ async def _probe_qdrant() -> bool:
         async with httpx.AsyncClient(base_url=url, timeout=3.0) as c:
             r = await c.get("/")
             return r.status_code == 200
-    except Exception:
+    except Exception as exc:
+        logger.debug("qdrant health probe failed: %s", exc)
         return False

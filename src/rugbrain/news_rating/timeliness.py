@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
 from rugbrain.news_rating.axes import _clamp
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -20,6 +23,7 @@ def _parse_datetime(value: Any) -> datetime | None:
         try:
             return datetime.fromtimestamp(value, tz=UTC)
         except (OverflowError, OSError, ValueError):
+            logger.debug("timeliness: bad timestamp value %r", value)
             return None
     if isinstance(value, str):
         text = value.strip()
@@ -29,6 +33,7 @@ def _parse_datetime(value: Any) -> datetime | None:
             parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
         except ValueError:
+            logger.debug("timeliness: unparseable ISO datetime %r", text)
             return None
     return None
 

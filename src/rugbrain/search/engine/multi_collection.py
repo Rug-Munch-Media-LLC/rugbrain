@@ -22,7 +22,7 @@ from .constants import (
     _SYNONYM_EXPAND_DEFAULT,
 )
 from .keyword_lane import _hybrid_fuse
-from .query_expansion import _build_search_variants
+from .query_expansion import ExpansionRequest, _build_search_variants
 from .query_intent import detect_coding_query, resolve_search_collections
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,14 @@ async def search_multi_collection(
 
         embedder = await _e.get_embedder()
         variants, _expansion_meta = await _build_search_variants(
-            query, hyde, multi_query, embedder, llm_fn, synonym_expand=synonym_expand
+            ExpansionRequest(
+                query=query,
+                hyde=hyde,
+                multi_query=multi_query,
+                embedder=embedder,
+                llm_fn=llm_fn,
+                synonym_expand=synonym_expand,
+            )
         )
         expanded = len(variants) > 1
     else:

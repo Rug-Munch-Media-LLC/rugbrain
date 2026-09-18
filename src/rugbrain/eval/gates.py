@@ -25,11 +25,14 @@ No LLM-judge dependency: gates operate purely on the numeric report.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from rugbrain.eval.harness import BacktestReport
+
+logger = logging.getLogger(__name__)
 
 # Default baseline file shipped with the package.
 DEFAULT_BASELINES = Path(__file__).resolve().parent / "baselines.json"
@@ -112,6 +115,7 @@ def _metric_value(report: BacktestReport, metric: str) -> float | None:
         try:
             k = int(k_str)
         except ValueError:
+            logger.debug("gates: non-integer k in metric %r", metric)
             return None
         if name == "recall":
             return report.mean_recall.get(k)

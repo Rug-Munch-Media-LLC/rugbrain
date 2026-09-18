@@ -24,24 +24,12 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 
-async def _hybrid_keyword_search(
-    query: str,
+async def _collect_keyword_corpus(
+    r: Any,
     collections: list[str],
-    limit: int = 20,
-    max_docs_per_collection: int = _HYBRID_KEYWORD_MAX_DOCS,
-) -> list[dict[str, Any]]:
-    """Run the lightweight keyword/BM25 lane for *query* over *collections*.
-
-    Reads chunk docs from Redis (``rag:{collection}:{doc_id}``), builds a
-    fresh in-memory Okapi BM25 index, and returns ranked hits with
-    ``bm25_score``. Doc ids are un-prefixed so RRF fusion with the vector
-    lane (which uses plain doc ids) merges correctly. Returns ``[]`` when
-    the corpus is empty or the lane fails — callers degrade to pure vector.
-    """
-    from rugbrain.search import engine as _e
-
-    r = await _e._get_redis()
-    # corpus rows: (doc_id, collection, content, metadata)
+    max_docs_per_collection: int,
+) -> list[tuple[str, str, str, dict[str, Any]]]:
+    """Read chunk docs from Redis for the BM25 lane."""
     corpus: list[tuple[str, str, str, dict[str, Any]]] = []
     for coll in collections:
         try:
@@ -67,12 +55,34 @@ async def _hybrid_keyword_search(
             try:
                 doc = json.loads(data)
             except json.JSONDecodeError:
+                logger.debug("keyword_lane: unparseable doc json for %s", did)
                 continue
             content = doc.get("content", "") or ""
             if not content.strip():
                 continue
             corpus.append((str(did), coll, content, doc.get("metadata") or {}))
+    return corpus
 
+
+async def _hybrid_keyword_search(
+    query: str,
+    collections: list[str],
+    limit: int = 20,
+    max_docs_per_collection: int = _HYBRID_KEYWORD_MAX_DOCS,
+) -> list[dict[str, Any]]:
+    """Run the lightweight keyword/BM25 lane for *query* over *collections*.
+
+    Reads chunk docs from Redis (``rag:{collection}:{doc_id}``), builds a
+    fresh in-memory Okapi BM25 index, and returns ranked hits with
+    ``bm25_score``. Doc ids are un-prefixed so RRF fusion with the vector
+    lane (which uses plain doc ids) merges correctly. Returns ``[]`` when
+    the corpus is empty or the lane fails — callers degrade to pure vector.
+    """
+    from rugbrain.search import engine as _e
+
+    r = await _e._get_redis()
+    # corpus rows: (doc_id, collection, content, metadata)
+    corpus = await _collect_keyword_corpus(r, collections, max_docs_per_collection)
     if not corpus:
         return []
 
