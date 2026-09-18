@@ -1,0 +1,27 @@
+# RugBrain X social-intel ingestion (GetXAPI + Pry lanes) — one-shot
+# Source: deploy/systemd/rmi-rag-x-ingest.service
+# Install (on the production host):
+#   sudo cp deploy/systemd/rmi-rag-x-ingest.service /etc/systemd/system/
+#   sudo cp deploy/systemd/rmi-rag-x-ingest.timer   /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rmi-rag-x-ingest.timer
+#
+# Rollback: sudo systemctl disable --now rmi-rag-x-ingest.timer
+#
+# Requires /srv/secrets/rugbrain-tg.env (Qdrant/Redis/embed env) plus
+# GETXAPI_KEY or /srv/secrets/getxapi_api_key (root 0600) and PRY_API_KEY.
+
+[Unit]
+Description=RugBrain X/Twitter social-intel ingestion (GetXAPI + Pry)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.ingest_sources.x_intel --cycle
+EnvironmentFile=/srv/secrets/rugbrain-tg.env
+EnvironmentFile=-/srv/secrets/rugbrain-x.env
+TimeoutStartSec=1800
+SuccessExitStatus=0 1
