@@ -10,10 +10,10 @@ Implements the on-disk formats used by ``b2_permanence.py`` (upload),
 Per-collection file pipelines:
 
     Parquet (default — columnar, DuckDB-queryable from B2):
-        Qdrant points -> Arrow table -> parquet (zstd level 19)
+        Qdrant points -> Arrow table -> parquet (zstd level 6 (was 19 — see note))
 
     NDJSON (legacy fallback):
-        Qdrant points -> NDJSON -> zstd level 19 -> .jsonl.zst
+        Qdrant points -> NDJSON -> zstd level 6 (was 19 — see note) -> .jsonl.zst
 
 Encryption at rest is handled by B2 server-side encryption (SSE-B2,
 AES256), which is free and automatic on all buckets. There is NO
@@ -174,7 +174,7 @@ def sha256_file(path: Path) -> str:
 # ── zstd ──────────────────────────────────────────────────────────────
 
 
-def compress_file(src: Path, dst: Path, level: int = 19) -> Path:
+def compress_file(src: Path, dst: Path, level: int = 6) -> Path:
     """Compress *src* to *dst* with zstd at *level* (streamed)."""
     import zstandard
 
@@ -272,7 +272,7 @@ def table_from_rows(rows: Iterable[dict[str, object]]) -> Any:
     )
 
 
-def write_parquet_file(dest: Path, rows: Iterable[dict[str, object]], level: int = 19) -> Path:
+def write_parquet_file(dest: Path, rows: Iterable[dict[str, object]], level: int = 6) -> Path:
     """Write *rows* to *dest* as a zstd-compressed parquet file."""
     import pyarrow.parquet as pq
 
@@ -280,7 +280,7 @@ def write_parquet_file(dest: Path, rows: Iterable[dict[str, object]], level: int
     return dest
 
 
-def stream_parquet(dest: Path, batches: Iterable[list[dict[str, object]]], level: int = 19) -> Path:
+def stream_parquet(dest: Path, batches: Iterable[list[dict[str, object]]], level: int = 6) -> Path:
     """Stream scroll batches into *dest* as one parquet file (bounded memory)."""
     import pyarrow.parquet as pq
 

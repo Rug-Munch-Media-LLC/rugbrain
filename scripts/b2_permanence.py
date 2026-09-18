@@ -8,7 +8,7 @@ or compressed NDJSON (legacy fallback) and uploads it to B2 under
     b2://{B2_BUCKET_NAME}/snapshots/{date}/{collection}.parquet       (default)
     b2://{B2_BUCKET_NAME}/snapshots/{date}/{collection}.jsonl.zst     (legacy)
 
-Snapshots are written with zstd level 19 and uploaded WITHOUT
+Snapshots are written with zstd level 6 (was 19 — see note) and uploaded WITHOUT
 client-side encryption: B2 server-side encryption (SSE-B2, AES256)
 encrypts every object at rest for free. DuckDB can query parquet
 directly from B2 over the S3-compatible API (no full download). Access
@@ -94,6 +94,12 @@ DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6334")
 
 MANIFEST_NAME = "manifest.json"
 LATEST_NAME = "latest.json"
+# 2026-09-18: was hardcoded level 19 (max). With 41 collections that run exceeded the
+# 4h TimeoutStartSec and the unit was SIGTERM'd (ExecMainStatus=15) — every night.
+# Level 19 is ~5-10x slower than level 6 for a marginal size win, and B2 storage is
+# cheap. Override with CC_ZSTD_LEVEL if a smaller archive is ever needed.
+ZSTD_LEVEL = int(os.environ.get("CC_ZSTD_LEVEL", "6"))
+
 SNAPSHOT_PREFIX = "snapshots"
 SCROLL_BATCH = 1000
 MANIFEST_SCHEMA_VERSION = 2
@@ -167,7 +173,7 @@ def export_collection_parquet(
 
     Points are converted to Arrow tables per scroll batch and streamed
     through a ParquetWriter (bounded memory), then compressed with zstd
-    level 19 inside the parquet file itself. Returns the point count.
+    level 6 (was 19; see ZSTD_LEVEL) inside the parquet file itself.
     """
     count_cell: list[int] = [0]
 
@@ -287,7 +293,7 @@ def snapshot_collection(
         point_count = export_collection_ndjson(
             client, name, ndjson_path, limit=limit, with_vectors=with_vectors
         )
-        compress_file(ndjson_path, zst_path, level=19)
+        compress_file(ndjson_path, zst_path, level=ZSTD_LEVEL)
         upload_path = zst_path
         suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
 
@@ -302,7 +308,7 @@ def snapshot_collection(
         "point_count": point_count,
         "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,
         "bytes_stored": upload_path.stat().st_size,
-        "compression": "zstd-19" if fmt == "ndjson" else "parquet-zstd-19",
+        "compression": f"zstd-{ZSTD_LEVEL}" if fmt == "ndjson" else f"parquet-zstd-{ZSTD_LEVEL}",
         "encrypted": False,  # SSE-B2 encrypts at rest; no client-side encryption
         "sha256": sha256_file(upload_path),
         "started_at": started.isoformat(),
