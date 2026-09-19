@@ -118,10 +118,7 @@ async def _poll_forever() -> None:
             )
             await r.ping()
             logger.info(
-                "poller_connected host=%s port=%s queue=%s",
-                REDIS_HOST,
-                REDIS_PORT,
-                QUEUE_KEY,
+                "poller_connected host=%s port=%s queue=%s", REDIS_HOST, REDIS_PORT, QUEUE_KEY
             )
 
             while _poller_running:
@@ -133,9 +130,7 @@ async def _poll_forever() -> None:
                         await asyncio.sleep(1)
                         continue
                     if not isinstance(value, (bytes, str)):
-                        logger.warning(
-                            "poller_unexpected_payload_type type=%s", type(value).__name__
-                        )
+                        logger.warning("poller_unexpected_payload_type=%s", type(value).__name__)
                         continue
 
                     try:
@@ -207,9 +202,7 @@ async def _process_poller_finding(data: dict[str, Any]) -> None:
         embedding = await get_embedding(content)
     except Exception as exc:
         logger.error(
-            "poller_embedding_failed token=%s error=%s",
-            token_address,
-            str(exc)[:120],
+            "poller_embedding_failed token=%s error=%s", token_address, str(exc)[:120]
         )
         return
 

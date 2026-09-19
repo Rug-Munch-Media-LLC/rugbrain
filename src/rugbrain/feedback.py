@@ -76,9 +76,7 @@ async def record_scanner_result(
 
         # Find RAG documents matching this address
         # Search by address in known_scams collection
-        doc_ids = cast(
-            set[str], await r.smembers(f"rag:entity:address:{address.lower()}")
-        )  # decode_responses=True → str
+        doc_ids = cast(set[str], await r.smembers(f"rag:entity:address:{address.lower()}"))  # decode_responses=True
 
         if not doc_ids:
             # Try fuzzy - search for partial address in content
@@ -111,9 +109,7 @@ async def record_scanner_result(
                             doc_lower = doc.lower()
                             matching_flags = sum(1 for f in flags if f.lower() in doc_lower)
                             if matching_flags >= 2:  # At least 2 flags match
-                                doc_id = cast(str, key).split(":")[
-                                    -1
-                                ]  # decode_responses=True → str
+                                doc_id = cast(str, key).split(":")[-1]  # decode_responses=True
                                 doc_ids.add(doc_id)
                     except Exception:
                         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)

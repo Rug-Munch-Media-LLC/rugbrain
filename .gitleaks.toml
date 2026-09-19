@@ -101,6 +101,8 @@ paths = [
   # Redaction tests intentionally embed fake private IPs / BIP39 word lists
   # as INPUT to verify redact_output() — not real secrets.
   '''tests/test_guardrails\.py''',
+  # BIP39 wordlist data table — public data, not a secret
+  '''src/rugbrain/guardrails/_wordlist\.py''',
 ]
 
 # Stopwords (false-positive patterns to ignore)
@@ -110,10 +112,4 @@ stopwords = [
   "placeholder-secret",
   "your-api-key-here",
   "TODO: add real key",
-]
-
-[[allowlists]]
-description = "BIP39 wordlist data table (guardrails) — data, not a secret"
-paths = [
-  '''src/rugbrain/guardrails/_wordlist\.py''',
 ]
