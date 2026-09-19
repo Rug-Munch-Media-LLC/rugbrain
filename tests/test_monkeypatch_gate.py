@@ -57,9 +57,7 @@ def test_plus_one_fails(tmp_path):
     _write_fixture(tmp_path, source, {"total": 0, "files": {}})
     rc, out, _err = run_script([], repo=tmp_path)
     assert rc != 0, f"Expected fail, got pass: {out}"
-    assert (
-        "REFUSING to raise" in out or "FAIL" in out
-    )
+    assert "REFUSING to raise" in out or "FAIL" in out
 
 
 def test_minus_one_passes(tmp_path):
@@ -70,6 +68,15 @@ def test_minus_one_passes(tmp_path):
     rc, out, _err = run_script([], repo=tmp_path)
     assert rc == 0, f"Expected pass (decrease allowed), got fail: {out} {_err}"
     assert "PASS" in out
+
+
+def test_update_baseline_refuses_to_raise(tmp_path):
+    """--update-baseline must refuse to raise the decrease-only budget."""
+    source = f"import {_MP}\n{_MP}.foo()\n"
+    _write_fixture(tmp_path, source, {"total": 0, "files": {}})
+    rc, out, _err = run_script(["--update-baseline"], repo=tmp_path)
+    assert rc != 0, f"Expected refusal, got pass: {out}"
+    assert "REFUSING to raise" in out
 
 
 if __name__ == "__main__":

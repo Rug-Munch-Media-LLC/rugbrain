@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""check-structure.py — per-repo file-size ratchet gate (shrink-only).
+"""check-structure.py — firm per-file size policy (shrink-only ratchet).
 
-Enforces docs/MODERNIZATION.md §2.2 / §4.3:
+Policy (docs/MODERNIZATION.md §2.2 / §4.3, tightened 2026-09-19):
 
-  * a file >= 200 lines is REPORTED (advisory),
-  * a file >  500 lines is a HARD FAIL unless grandfathered in the
-    shrink-only allowlist ``scripts/structure-baseline.json``,
-  * an allowlisted file may never GROW (its line count may only decrease).
+  * a file > ADVISORY (150) lines is REPORTED (advisory),
+  * a file > 200 lines NOT in the baseline is a HARD FAIL (firm ≤200 policy),
+  * an allowlisted (baselined) file may never GROW — growth is a HARD FAIL,
+  * a file > 500 lines is a HARD FAIL unless allowlisted (which must still shrink).
 
-``--update-baseline`` regenerates the allowlist but REFUSES to raise any
-existing entry or to grandfather a brand-new >500-line file. That makes the
-ratchet one-way: the codebase can only get smaller per file.
+Baselined files that are now ≤ 200 lines (or gone) are printed as
+``[remove]`` candidates — the allowlist should only ever get shorter.
+
+``--update-baseline`` regenerates the allowlist (only files > 200) but REFUSES
+to raise any existing entry or to grandfather a *new* >200-line file (bootstrap
+aside). The ratchet is one-way: the codebase can only get smaller per file.
 
 Usage:
   python3 scripts/check-structure.py --repo .                 # gate
@@ -24,8 +27,9 @@ import json
 import sys
 from pathlib import Path
 
-REPORT_THRESHOLD = 200
-FAIL_THRESHOLD = 500
+ADVISORY_THRESHOLD = 150
+FAIL_THRESHOLD = 200
+GOD_THRESHOLD = 500
 DEFAULT_BASELINE = "scripts/structure-baseline.json"
 DEFAULT_SCAN_ROOTS = ("src/rugbrain",)
 
@@ -56,7 +60,7 @@ def count_lines(path: Path) -> int:
 
 
 def scan(root: Path, scan_roots: tuple[str, ...]) -> dict[str, int]:
-    """Map posix path -> line count for every scanned *.py >= REPORT_THRESHOLD."""
+    """Map posix path -> line count for every scanned *.py > ADVISORY."""
     sizes: dict[str, int] = {}
     for rel in scan_roots:
         base = root / rel
@@ -66,7 +70,7 @@ def scan(root: Path, scan_roots: tuple[str, ...]) -> dict[str, int]:
             if any(part in SKIP_DIRS for part in p.parts):
                 continue
             n = count_lines(p)
-            if n >= REPORT_THRESHOLD:
+            if n > ADVISORY_THRESHOLD:
                 sizes[p.relative_to(root).as_posix()] = n
     return sizes
 
@@ -82,10 +86,68 @@ def load_baseline(path: Path) -> dict[str, int]:
 
 def write_baseline(path: Path, sizes: dict[str, int]) -> None:
     payload = {
-        "thresholds": {"report": REPORT_THRESHOLD, "fail": FAIL_THRESHOLD},
+        "thresholds": {
+            "advisory": ADVISORY_THRESHOLD,
+            "fail": FAIL_THRESHOLD,
+            "hard": GOD_THRESHOLD,
+        },
         "files": dict(sorted(sizes.items())),
     }
     path.write_text(json.dumps(payload, indent=1) + "\n")
+
+
+def evaluate(
+    sizes: dict[str, int], base: dict[str, int]
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Classify every scanned file: (failures, reports, shrinks, removals)."""
+    failures: list[str] = []
+    reports: list[str] = []
+    shrinks: list[str] = []
+    removals: list[str] = []
+    for path, n in sorted(sizes.items()):
+        if path in base:
+            recorded = base[path]
+            if n > recorded:
+                failures.append(f"{path}: {recorded} -> {n} lines (allowlisted file grew)")
+            elif n < recorded:
+                shrinks.append(f"{path}: {recorded} -> {n} (run --update-baseline)")
+            if n <= FAIL_THRESHOLD:
+                removals.append(f"{path}: {n} lines (<= {FAIL_THRESHOLD} — remove from allowlist)")
+        elif n > GOD_THRESHOLD:
+            failures.append(f"{path}: {n} lines (NEW file >{GOD_THRESHOLD} — split it)")
+        elif n > FAIL_THRESHOLD:
+            failures.append(f"{path}: {n} lines (NEW file >{FAIL_THRESHOLD} — split it)")
+        else:
+            reports.append(f"{path}: {n} lines (advisory > {ADVISORY_THRESHOLD})")
+    for path, recorded in sorted(base.items()):
+        if path not in sizes:
+            removals.append(
+                f"{path}: recorded {recorded} — gone or <= {ADVISORY_THRESHOLD} "
+                "(remove from allowlist)"
+            )
+    return failures, reports, shrinks, removals
+
+
+def update_baseline(sizes: dict[str, int], old: dict[str, int], path: Path) -> int:
+    bootstrap = not path.exists()
+    raised = {k: (old[k], v) for k, v in sizes.items() if k in old and v > old[k]}
+    new_over = [k for k, v in sizes.items() if k not in old and v > FAIL_THRESHOLD]
+    if raised:
+        print("REFUSING to raise the structure baseline (shrink-only):")
+        for k, (o, n) in sorted(raised.items()):
+            print(f"  {k}: {o} -> {n}")
+        return 1
+    if new_over and not bootstrap:
+        print("REFUSING to grandfather NEW >200-line files (split them first):")
+        for k in sorted(new_over):
+            print(f"  {k}: {sizes[k]}")
+        return 1
+    kept = {k: min(old[k], sizes[k]) for k in old if k in sizes and sizes[k] > FAIL_THRESHOLD}
+    if bootstrap:
+        kept.update({k: v for k, v in sizes.items() if v > FAIL_THRESHOLD})
+    write_baseline(path, kept)
+    print(f"structure baseline updated: {path} ({len(kept)} files > {FAIL_THRESHOLD})")
+    return 0
 
 
 def main() -> int:
@@ -103,47 +165,18 @@ def main() -> int:
     old = load_baseline(baseline_path)
 
     if args.update_baseline:
-        bootstrap = not baseline_path.exists()
-        raised = {k: (old[k], v) for k, v in sizes.items() if k in old and v > old[k]}
-        new_god = [k for k, v in sizes.items() if k not in old and v > FAIL_THRESHOLD]
-        if raised:
-            print("REFUSING to raise the structure baseline (shrink-only):")
-            for k, (o, n) in sorted(raised.items()):
-                print(f"  {k}: {o} -> {n}")
-            return 1
-        if new_god and not bootstrap:
-            print("REFUSING to grandfather NEW >500-line files (split them first):")
-            for k in sorted(new_god):
-                print(f"  {k}: {sizes[k]}")
-            return 1
-        write_baseline(baseline_path, sizes)
-        print(f"structure baseline updated: {baseline_path} ({len(sizes)} files)")
-        return 0
+        return update_baseline(sizes, old, baseline_path)
 
-    failures: list[str] = []
-    reported: list[str] = []
-    for path, n in sorted(sizes.items()):
-        if path in old:
-            if n > old[path]:
-                failures.append(f"{path}: {old[path]} -> {n} lines (allowlisted file grew)")
-        elif n > FAIL_THRESHOLD:
-            failures.append(f"{path}: {n} lines (NEW file >{FAIL_THRESHOLD} — split it)")
-        else:
-            reported.append(f"{path}: {n} lines (new >= {REPORT_THRESHOLD} — advisory)")
-
-    shrinkable = [
-        f"{path}: {base_n} -> {sizes.get(path, 0)} (run --update-baseline)"
-        for path, base_n in sorted(old.items())
-        if sizes.get(path, 0) < base_n
-    ]
-
+    failures, reports, shrinks, removals = evaluate(sizes, old)
     print(
-        f"structure gate: {len(sizes)} files >= {REPORT_THRESHOLD} lines (allowlisted: {len(old)})"
+        f"structure gate: {len(sizes)} files > {ADVISORY_THRESHOLD} lines (allowlisted: {len(old)})"
     )
-    for line in reported:
+    for line in reports:
         print(f"  [report] {line}")
-    for line in shrinkable:
+    for line in shrinks:
         print(f"  [shrink] {line}")
+    for line in removals:
+        print(f"  [remove] {line}")
     if failures:
         print("\nFAIL (size ratchet):")
         for line in failures:

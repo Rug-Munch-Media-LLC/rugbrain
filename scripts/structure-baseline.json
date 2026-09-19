@@ -1,7 +1,8 @@
 {
  "thresholds": {
-  "report": 200,
-  "fail": 500
+  "advisory": 150,
+  "fail": 200,
+  "hard": 500
  },
  "files": {
   "src/rugbrain/alerts.py": 1078,
@@ -32,7 +33,6 @@
   "src/rugbrain/firehose/__init__.py": 759,
   "src/rugbrain/firehose/market_sources.py": 603,
   "src/rugbrain/freshness_registry.py": 270,
-  "src/rugbrain/guardrails.py": 935,
   "src/rugbrain/historical.py": 563,
   "src/rugbrain/import_guard.py": 209,
   "src/rugbrain/ingest_common.py": 243,
@@ -98,7 +98,6 @@
   "src/rugbrain/scanner_subscriber.py": 280,
   "src/rugbrain/search/dual_tier.py": 222,
   "src/rugbrain/search/engine/multi_collection.py": 212,
-  "src/rugbrain/search/engine/postprocess.py": 200,
   "src/rugbrain/search/engine/three_pillar.py": 214,
   "src/rugbrain/search/filters.py": 523,
   "src/rugbrain/search/query_transform.py": 222,

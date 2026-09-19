@@ -59,14 +59,20 @@ jobs:
         # Structural contract: rugbrain must NOT import app.* (rmi-backend)
         # or rugmunchbot. Contract config lives in .importlinter.
         run: lint-imports --config .importlinter
-      - name: Structure size ratchet (>=200 report, >500 hard fail)
-        # New/grown >500-line files fail; allowlisted files may only shrink.
-        # Baseline: scripts/structure-baseline.json.
+      - name: Structure size ratchet (firm >200 fail; >150 advisory; >500 hard fail)
+        # Firm policy: >200 lines fails unless allowlisted; allowlisted files
+        # may only shrink; >500 is a hard fail. Baseline:
+        # scripts/structure-baseline.json. See docs/CI-GATES.md.
         run: python3 scripts/check-structure.py --repo .
       - name: Monkeypatch ratchet (decrease-only)
         # Repo-wide monkeypatch count may never exceed the committed baseline.
         # Baseline: scripts/monkeypatch-baseline.json.
         run: python3 scripts/check-monkeypatch.py --repo .
+      - name: Gate self-test (gates must catch violations)
+        # Injects one violation at a time into a throwaway fixture repo; each
+        # gate MUST exit 1, a clean fixture MUST exit 0. Failure here means a
+        # gate silently became a no-op. See docs/CI-GATES.md.
+        run: bash scripts/ci-gate-selftest.sh
       - name: Eval smoke (conditional)
         # The eval harness is owned by the eval workstream; this step runs it
         # only once scripts/run-eval-smoke.sh exists, and skips cleanly until.
