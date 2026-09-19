@@ -232,3 +232,41 @@ only for periodic human-verified audits, not the per-PR gate.
 | `eval/history.jsonl` | append-only nightly metric history |
 | `tests/test_eval_harness.py` | metric math, gate semantics, schema tests |
 | `requirements-eval.txt` | optional LLM-judge extras |
+
+---
+
+## 9. Nightly schedule (systemd timer)
+
+The full-set nightly runner is installed as a systemd timer on the production host:
+
+| Unit | Role |
+|---|---|
+| `rmi-rag-eval-nightly.timer` | fires daily at **03:30 host-local**, `Persistent=true` (catches up a missed window after reboot) |
+| `rmi-rag-eval-nightly.service` | oneshot, runs `scripts/run-eval-nightly.sh` in `/srv/work/repos/rugbrain` |
+
+Source of truth: `deploy/systemd/rmi-rag-eval-nightly.{service,timer}`. Install / update on the host:
+
+```bash
+sudo cp deploy/systemd/rmi-rag-eval-nightly.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now rmi-rag-eval-nightly.timer
+```
+
+The service runs as root with `EnvironmentFile=-/srv/secrets/rugbrain-tg.env`
+(supplies `QDRANT_URL` + embed env) and a 30-minute start timeout. It is
+**fail-open**: when Qdrant is unreachable the script logs `eval-nightly: SKIP`
+and exits 0. Set `EVAL_STRICT=1` in the env file to turn a skip into a failure.
+A real gate regression exits non-zero and marks the unit `failed`.
+
+### Reading history
+
+Every run appends one JSON line to `eval/history.jsonl` (gitignored runtime
+data) — `ts`, `git_sha`, `set`, `status`, all metrics, and the gate verdict:
+
+```bash
+tail -1 eval/history.jsonl | jq '{ts, git_sha, status, metrics, gate}'
+journalctl -u rmi-rag-eval-nightly --since "24 hours ago"
+```
+
+`status` is `ok` (a real run) or `unavailable` (a skip). Trend `recall@10` /
+`ndcg@10` across lines to catch silent retrieval drift.

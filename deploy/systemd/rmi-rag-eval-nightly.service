@@ -1,0 +1,28 @@
+# RugBrain nightly RAG retrieval-quality eval — one-shot
+# Source: deploy/systemd/rmi-rag-eval-nightly.service
+# Install (on the production host):
+#   sudo cp deploy/systemd/rmi-rag-eval-nightly.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rmi-rag-eval-nightly.timer
+#
+# Rollback: sudo systemctl disable --now rmi-rag-eval-nightly.timer
+#
+# Runs scripts/run-eval-nightly.sh: the full golden set against
+# eval/baselines.full.json, appending a record to eval/history.jsonl.
+# Fail-open: the script exits 0 with a SKIP notice when Qdrant is
+# unreachable. Set EVAL_STRICT=1 (e.g. via the EnvironmentFile) to turn a
+# skip into a failure. A non-zero exit below means a real gate regression.
+# Requires /srv/secrets/rugbrain-tg.env for QDRANT_URL + embed env.
+
+[Unit]
+Description=RugBrain nightly RAG retrieval-quality eval (full golden set)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+EnvironmentFile=-/srv/secrets/rugbrain-tg.env
+ExecStart=/bin/bash /srv/work/repos/rugbrain/scripts/run-eval-nightly.sh
+TimeoutStartSec=1800
