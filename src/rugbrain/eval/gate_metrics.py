@@ -52,16 +52,3 @@ def format_verdict(verdict: GateVerdict) -> str:
             f"  {r.metric:<18}{r.baseline:>10.4f}{r.actual:>10.4f}{r.delta:>+10.4f}  {result}"
         )
     return "\n".join(lines)
-
-
-__all__ = [
-    "DEFAULT_BASELINES",
-    "FULL_BASELINES",
-    "SMOKE_BASELINES",
-    "GateResult",
-    "GateVerdict",
-    "evaluate_gates",
-    "format_verdict",
-    "load_baselines",
-    "select_baseline_path",
-]

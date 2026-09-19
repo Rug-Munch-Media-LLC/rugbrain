@@ -37,6 +37,7 @@ from rugbrain.eval.baseline_select import (
 from rugbrain.eval.gate_metrics import (
     _LATENCY_METRICS,
     _metric_value,
+    format_verdict as format_verdict,
 )
 from rugbrain.eval.harness import BacktestReport
 
@@ -46,7 +47,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASELINES = FULL_BASELINES
 
 # Metrics that are "higher is better" (quality) vs "lower is better" (latency).
-
 
 @dataclass
 class GateResult:
