@@ -64,8 +64,10 @@ from rugbrain.news_rating.corroboration import (
 from rugbrain.news_rating.diversity import source_diversity_score
 from rugbrain.news_rating.factual import (  # noqa: F401
     PROTOCOL_NAMES,
-    _find_claims as _find_claims,
     factual_density_score,
+)
+from rugbrain.news_rating.factual import (
+    _find_claims as _find_claims,
 )
 from rugbrain.news_rating.model import ArticleRating
 from rugbrain.news_rating.onchain import on_chain_claim_verification

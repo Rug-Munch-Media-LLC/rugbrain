@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from rugbrain.qdrant_store.store_core import QdrantVectorStoreCore
 from rugbrain.qdrant_store.store_hybrid import HybridSearchMixin
-from rugbrain.qdrant_store.store_search import SearchMixin
 from rugbrain.qdrant_store.store_scroll import ScrollMixin
+from rugbrain.qdrant_store.store_search import SearchMixin
 from rugbrain.qdrant_store.store_write import WriteMixin
 
 __all__ = ["QdrantVectorStore"]
