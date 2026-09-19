@@ -23,7 +23,7 @@ the smarter the RAG gets.
 
 import contextlib
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger("rag.feedback")
 
@@ -71,12 +71,14 @@ async def record_scanner_result(
         )
 
         if adjustment == 0:
-            await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+            await r.aclose()
             return {"status": "no_action", "verdict": verdict}
 
         # Find RAG documents matching this address
         # Search by address in known_scams collection
-        doc_ids = await r.smembers(f"rag:entity:address:{address.lower()}")
+        doc_ids = cast(
+            set[str], await r.smembers(f"rag:entity:address:{address.lower()}")
+        )  # decode_responses=True → str
 
         if not doc_ids:
             # Try fuzzy - search for partial address in content
@@ -89,7 +91,7 @@ async def record_scanner_result(
                     try:
                         doc = await r.get(key)
                         if doc and address.lower() in doc.lower():
-                            doc_id = key.split(":")[-1]
+                            doc_id = cast(str, key).split(":")[-1]  # decode_responses=True → str
                             doc_ids.add(doc_id)
                     except Exception:
                         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
@@ -109,7 +111,9 @@ async def record_scanner_result(
                             doc_lower = doc.lower()
                             matching_flags = sum(1 for f in flags if f.lower() in doc_lower)
                             if matching_flags >= 2:  # At least 2 flags match
-                                doc_id = key.split(":")[-1]
+                                doc_id = cast(str, key).split(":")[
+                                    -1
+                                ]  # decode_responses=True → str
                                 doc_ids.add(doc_id)
                     except Exception:
                         logging.getLogger(__name__).warning("swallowed exception", exc_info=True)
@@ -155,7 +159,7 @@ async def record_scanner_result(
             f"-{adjustments['penalized']} penalized"
         )
 
-        await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+        await r.aclose()
         return {
             "status": "ok",
             "verdict": verdict,
@@ -169,7 +173,7 @@ async def record_scanner_result(
     except Exception as e:
         logger.error("RAG feedback error: %s", e)
         with contextlib.suppress(Exception):
-            await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+            await r.aclose()
         return {"status": "error", "detail": str(e)}
 
 
@@ -190,7 +194,7 @@ async def get_document_weight(doc_id: str) -> float:
             decode_responses=True,
         )
         weight = await r.get(f"rag:weight:{doc_id}")
-        await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+        await r.aclose()
         return float(weight) if weight else 1.0
     except Exception:
         return 1.0
@@ -233,7 +237,7 @@ async def get_feedback_stats() -> dict[str, Any]:
         avg_weight = total_weight / weight_keys if weight_keys > 0 else 1.0
         faiss_dirty = await r.get("rag:faiss:dirty") == "1"
 
-        await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+        await r.aclose()
         return {
             "documents_with_weights": weight_keys,
             "average_weight": round(avg_weight, 3),

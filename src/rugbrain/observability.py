@@ -93,7 +93,7 @@ def trace_embedding(
     _metrics.embedding_total_ms += duration_ms
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
+            _langfuse.trace(
                 name="rag.embedding",
                 metadata={"duration_ms": duration_ms, "dims": dims, "model": model},
             )
@@ -111,7 +111,7 @@ def trace_retrieval(
         _metrics.cache_misses += 1
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
+            _langfuse.trace(
                 name="rag.retrieval",
                 metadata={
                     "duration_ms": duration_ms,
@@ -128,7 +128,7 @@ def trace_reranker(
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
+            _langfuse.trace(
                 name="rag.reranker",
                 metadata={
                     "duration_ms": duration_ms,
@@ -144,7 +144,7 @@ def trace_ingest(docs: int, collection: str) -> None:
     _metrics.ingest_docs += docs
     if LANGFUSE_AVAILABLE:
         with suppress(Exception):
-            _langfuse.trace(  # type: ignore[attr-defined]  # langfuse stub lacks trace
+            _langfuse.trace(
                 name="rag.ingest",
                 metadata={"docs": docs, "collection": collection},
             )

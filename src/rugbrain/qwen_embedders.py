@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
 
+
 # ── DeepInfra hosted embedding lane (EMBED_PROVIDER=deepinfra) ──────────
 # DeepInfra hosts the SAME Qwen3-Embedding-4B model as the local llama.cpp
 # :8004 lane, so both lanes produce identical 2560-dim vectors and are
@@ -87,7 +88,7 @@ class Qwen3Embedder:
 
     def __init__(self, embed_url: str | None = None, provider: str | None = None):
         self.url = embed_url or os.getenv("QWEN_EMBED_URL", self.EMBED_URL)
-        self.provider = (provider or os.getenv("EMBED_PROVIDER", "")).strip().lower()
+        self.provider = (provider or os.getenv("EMBED_PROVIDER") or "").strip().lower()
         self.api_key = DEEPINFRA_API_KEY
         if embed_url is not None:
             # Explicit endpoint pinned (legacy speed tiers) — local lane only.
@@ -191,7 +192,6 @@ class Qwen3Embedder:
     async def embed_one(self, text: str) -> list[float]:
         results = await self.embed([text])
         return results[0]
-
 
 
 class OpenRouterEmbedder:

@@ -105,7 +105,7 @@ async def _poll_forever() -> None:
     import redis.asyncio as aioredis
 
     while True:
-        r: aioredis.Redis[str] | None = None
+        r: aioredis.Redis | None = None
         try:
             r = aioredis.Redis(
                 host=REDIS_HOST,
@@ -131,6 +131,11 @@ async def _poll_forever() -> None:
                     value = await r.lpop(QUEUE_KEY)
                     if value is None:
                         await asyncio.sleep(1)
+                        continue
+                    if not isinstance(value, (bytes, str)):
+                        logger.warning(
+                            "poller_unexpected_payload_type type=%s", type(value).__name__
+                        )
                         continue
 
                     try:

@@ -132,7 +132,7 @@ def rate_article(article: dict[str, Any], now: datetime | None = None) -> Articl
         len(_find_claims(text)["addresses"] + _find_claims(text)["tx_hashes"]) > 0 and density >= 60
     )
     onchain_verification = on_chain_claim_verification(article)
-    signals = _weak_signal_map(axes, cb, onchain_verification)
+    signals = _weak_signal_map({k: float(v) for k, v in axes.items()}, cb, onchain_verification)
 
     return ArticleRating(
         url=url,

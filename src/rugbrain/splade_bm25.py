@@ -24,7 +24,7 @@ import logging
 import math
 import re
 from collections import Counter
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -585,7 +585,7 @@ async def build_bm25_from_redis(
                 continue
 
             # Limit per collection for memory
-            sample = list(doc_ids)[:max_per_collection]
+            sample = [cast(str, did) for did in list(doc_ids)[:max_per_collection]]
             logger.info("BM25 indexing %s: %s docs", coll, len(sample))
 
             # Batch fetch
@@ -617,7 +617,7 @@ async def build_bm25_from_redis(
             logger.warning("BM25 indexing for %s failed: %s", coll, e)
 
     index.build()
-    await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+    await r.aclose()
 
     logger.info(
         f"BM25 index built: {total_indexed} docs, {len(index.df)} unique terms, avg doc length {index.avg_dl:.1f}"

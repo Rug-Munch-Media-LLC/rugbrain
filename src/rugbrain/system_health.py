@@ -87,7 +87,7 @@ async def _probe_redis() -> dict[str, Any]:
             queue_depth = int(await r.llen("rmi:rag:findings_queue") or 0)
         except Exception:
             queue_depth = -1
-        await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+        await r.aclose()
         return {"ok": True, "host": REDIS_HOST, "queue_depth": queue_depth}
     except Exception as e:
         return {"ok": False, "host": REDIS_HOST, "error": str(e)[:120]}
@@ -247,7 +247,7 @@ async def _scanner_section() -> dict[str, Any]:
         sentinel["ok"] = bool(sentinel_keys)
         databus["providers"] = sorted(databus_keys)[:50]
         databus["ok"] = bool(databus_keys)
-        await r.aclose()  # type: ignore[attr-defined]  # redis.asyncio stub lacks aclose
+        await r.aclose()
     except Exception as e:
         sentinel["error"] = str(e)[:120]
         databus["error"] = str(e)[:120]

@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -273,7 +273,7 @@ class CryptoCodeRetriever:
                         }
                         for p in points
                     ),
-                    key=lambda x: x["keyword_score"],
+                    key=lambda x: cast(float, x["keyword_score"]),  # _keyword_score → float
                     reverse=True,
                 )
                 keyword_lists.append(kw_ranked)

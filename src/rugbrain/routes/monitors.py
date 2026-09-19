@@ -130,27 +130,20 @@ async def rag_status_all(request: Request) -> dict[str, Any]:
 
     # ── Liquidation Heatmap ───────────────────────────────────────────
     try:
-        from rugbrain.liquidation_heatmap import (
-            _7d_volume,
-            _24h_volume,
-            _30d_volume,
-            _biggest_single,
-            _liquidation_history,
-            _peak_24h,
-        )
+        from rugbrain.liquidation_heatmap import constants as _lh
 
         monitors["liquidation_heatmap"] = {
-            "total_events": len(_liquidation_history),
-            "volume_24h_usd": round(_24h_volume, 2),
-            "volume_7d_usd": round(_7d_volume, 2),
-            "volume_30d_usd": round(_30d_volume, 2),
-            "peak_24h_usd": round(_peak_24h, 2),
-            "biggest_single": _biggest_single,
-            "recent_events": _liquidation_history[-20:],
+            "total_events": len(_lh._liquidation_history),
+            "volume_24h_usd": round(_lh._24h_volume, 2),
+            "volume_7d_usd": round(_lh._7d_volume, 2),
+            "volume_30d_usd": round(_lh._30d_volume, 2),
+            "peak_24h_usd": round(_lh._peak_24h, 2),
+            "biggest_single": _lh._biggest_single,
+            "recent_events": _lh._liquidation_history[-20:],
         }
         health_checks["liquidation_heatmap"] = {
-            "status": "active" if len(_liquidation_history) > 0 else "idle",
-            "events_cached": len(_liquidation_history),
+            "status": "active" if len(_lh._liquidation_history) > 0 else "idle",
+            "events_cached": len(_lh._liquidation_history),
         }
     except Exception as exc:
         monitors["liquidation_heatmap"] = {"error": str(exc)[:200]}

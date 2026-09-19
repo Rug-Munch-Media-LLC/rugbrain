@@ -117,7 +117,7 @@ def _embed_deployer_fingerprint(wallet_profile: dict[str, Any]) -> list[float]:
     for i in range(27):
         vec[101 + i] = full_hash[i] / 255.0
 
-    return vec.tolist()
+    return [float(v) for v in vec]
 
 
 async def _query_wallet_profile(
