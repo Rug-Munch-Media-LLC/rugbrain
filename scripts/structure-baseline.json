@@ -26,7 +26,6 @@
   "src/rugbrain/eval/retrieval_eval.py": 632,
   "src/rugbrain/eval/run_eval.py": 336,
   "src/rugbrain/evaluation.py": 472,
-  "src/rugbrain/fear_index.py": 773,
   "src/rugbrain/feature_extractors.py": 316,
   "src/rugbrain/feedback.py": 244,
   "src/rugbrain/firehose/__init__.py": 759,
