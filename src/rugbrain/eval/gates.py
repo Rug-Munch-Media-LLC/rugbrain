@@ -113,7 +113,6 @@ def load_baselines(path: Path | str = DEFAULT_BASELINES) -> dict[str, dict[str, 
 
 
 
-
 def evaluate_gates(
     report: BacktestReport,
     baselines: dict[str, dict[str, float]] | Path | str | None = None,
