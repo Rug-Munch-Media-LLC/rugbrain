@@ -46,7 +46,7 @@ async def pull_etherscan_labels(client: httpx.AsyncClient) -> list[dict[str, Any
             rows = list(
                 await asyncio.get_running_loop().run_in_executor(
                     None,
-                    lambda fh: csv.DictReader(fh),  # type: ignore[call-overload]
+                    lambda fh: csv.DictReader(fh),
                     f,
                 )
             )
