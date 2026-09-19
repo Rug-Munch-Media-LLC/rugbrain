@@ -5,7 +5,6 @@
   "hard": 500
  },
  "files": {
-  "src/rugbrain/alerts.py": 1078,
   "src/rugbrain/bundle_cluster.py": 720,
   "src/rugbrain/chain_parquet.py": 461,
   "src/rugbrain/citations.py": 258,
@@ -59,7 +58,6 @@
   "src/rugbrain/market_context.py": 372,
   "src/rugbrain/market_data.py": 227,
   "src/rugbrain/market_snapshot.py": 321,
-  "src/rugbrain/mcp_bridge.py": 1076,
   "src/rugbrain/mempool_scanner.py": 220,
   "src/rugbrain/monitors/bucketshop_tracker.py": 405,
   "src/rugbrain/monitors/content_digest.py": 495,
