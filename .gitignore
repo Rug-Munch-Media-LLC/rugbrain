@@ -77,3 +77,6 @@ coverage/
 /data
 mutants/
 .venv-link
+
+# eval runtime output (nightly history)
+/eval/history.jsonl

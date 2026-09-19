@@ -30,12 +30,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from rugbrain.eval.baseline_select import (
+    FULL_BASELINES,
+    SMOKE_BASELINES,
+    select_baseline_path,
+)
 from rugbrain.eval.harness import BacktestReport
 
 logger = logging.getLogger(__name__)
 
-# Default baseline file shipped with the package.
-DEFAULT_BASELINES = Path(__file__).resolve().parent / "baselines.json"
+# Default baseline file shipped with the package (full set).
+DEFAULT_BASELINES = FULL_BASELINES
 
 # Metrics that are "higher is better" (quality) vs "lower is better" (latency).
 _QUALITY_METRICS = ("recall", "ndcg", "mrr")
@@ -127,13 +132,23 @@ def _metric_value(report: BacktestReport, metric: str) -> float | None:
 def evaluate_gates(
     report: BacktestReport,
     baselines: dict[str, dict[str, float]] | Path | str | None = None,
+    *,
+    limit: int | None = None,
+    total: int | None = None,
 ) -> GateVerdict:
     """
     Compare *report* against *baselines* and return a pass/fail verdict.
 
     Args:
         report: the backtest report to gate.
-        baselines: baseline dict, or path to ``baselines.json`` (default).
+        baselines: baseline dict, or path to a baseline JSON. When ``None``
+            the baseline matching the selected query set is used: pass
+            ``limit`` (and optionally ``total``) so a smoke run is gated
+            against ``baselines.smoke.json`` and a full run against
+            ``baselines.full.json``. With no ``limit`` the full baseline is
+            used.
+        limit: the ``limit`` used for the run (``None`` = all rows).
+        total: number of golden rows available, when known.
 
     Returns:
         A ``GateVerdict``. ``skipped=True`` when the report is unavailable
@@ -141,7 +156,7 @@ def evaluate_gates(
         A metric absent from the baselines is reported as skipped, not failed.
     """
     if baselines is None:
-        baselines = DEFAULT_BASELINES
+        baselines = select_baseline_path(limit, total)
     if isinstance(baselines, (str, Path)):
         baselines = load_baselines(baselines)
 
@@ -227,9 +242,12 @@ def format_verdict(verdict: GateVerdict) -> str:
 
 __all__ = [
     "DEFAULT_BASELINES",
+    "FULL_BASELINES",
+    "SMOKE_BASELINES",
     "GateResult",
     "GateVerdict",
     "evaluate_gates",
     "format_verdict",
     "load_baselines",
+    "select_baseline_path",
 ]

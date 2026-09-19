@@ -78,6 +78,7 @@ class GoldenQuery(BaseModel):
     expected_answer: str | None = None
     category: str = "general"
     provenance: str = "synthetic"
+    provenance_note: str | None = None
 
     @property
     def has_gold(self) -> bool:
@@ -388,7 +389,7 @@ def direct_qdrant_retriever(
             return []
         emb = embedder
         if emb is None:
-            from rugbrain.search.engine import get_embedder  # type: ignore[attr-defined]
+            from rugbrain.search.engine import get_embedder
 
             emb = await get_embedder()
         q_vec = await emb.embed_query(query)

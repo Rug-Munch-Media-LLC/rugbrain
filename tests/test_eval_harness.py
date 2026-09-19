@@ -17,6 +17,12 @@ from typing import Any
 
 import pytest
 
+from rugbrain.eval.baseline_select import (
+    FULL_BASELINES,
+    SMOKE_BASELINES,
+    select_baseline_name,
+    select_baseline_path,
+)
 from rugbrain.eval.gates import (
     evaluate_gates,
     format_verdict,
@@ -228,6 +234,46 @@ class TestGates:
             load_baselines(tmp_path / "nope.json")
 
 
+# ── baseline-set selection ───────────────────────────────────────────
+
+
+class TestBaselineSelection:
+    def test_no_limit_selects_full(self) -> None:
+        assert select_baseline_path(None) == FULL_BASELINES
+        assert select_baseline_name(None) == "full"
+
+    def test_small_limit_selects_smoke(self) -> None:
+        assert select_baseline_path(10, total=41) == SMOKE_BASELINES
+        assert select_baseline_name(10, total=41) == "smoke"
+
+    def test_limit_covering_whole_set_selects_full(self) -> None:
+        assert select_baseline_path(41, total=41) == FULL_BASELINES
+        assert select_baseline_path(100, total=41) == FULL_BASELINES
+
+    def test_limit_without_total_is_smoke(self) -> None:
+        assert select_baseline_path(10) == SMOKE_BASELINES
+
+    def test_both_baseline_files_exist_and_parse(self) -> None:
+        for path in (SMOKE_BASELINES, FULL_BASELINES):
+            assert path.exists(), path
+            data = load_baselines(path)
+            assert "recall@10" in data
+            assert "p95_latency_ms" in data
+
+    def test_gate_uses_smoke_baseline_for_small_limit(self) -> None:
+        # A report that clears the smoke baseline but not the full one must
+        # pass when gated with limit=10 and fail when gated as a full run.
+        report = _report(0.25, 0.10, 0.10)
+        assert evaluate_gates(report, limit=10, total=41).passed
+        assert not evaluate_gates(report, limit=None).passed
+
+    def test_gate_default_is_full_baseline(self) -> None:
+        # No limit => full baseline (recall@10 value 0.63).
+        verdict = evaluate_gates(_report(0.20, 0.5, 0.5))
+        assert not verdict.passed
+        assert any(r.metric == "recall@10" for r in verdict.failures)
+
+
 # ── golden-set schema validation ─────────────────────────────────────
 
 
@@ -250,6 +296,21 @@ class TestGoldenSet:
         assert verified, "expected at least one verified row"
         for row in verified:
             assert row.relevant_doc_ids, f"verified row lacks ids: {row.query}"
+
+    def test_verified_rows_carry_provenance_note(self) -> None:
+        # Every verified row must document how it was confirmed against the
+        # live corpus (see docs/EVALS.md §4).
+        for row in load_golden(GOLDEN):
+            if row.provenance == "verified":
+                note = getattr(row, "provenance_note", None)
+                assert note, f"verified row lacks provenance_note: {row.query}"
+
+    def test_all_rows_verified(self) -> None:
+        # The 2026-09-19 hardening pass confirmed every golden row against
+        # live Qdrant; no synthetic rows should remain.
+        rows = load_golden(GOLDEN)
+        assert all(r.provenance == "verified" for r in rows)
+        assert all(r.relevant_doc_ids for r in rows)
 
     def test_categories_are_known(self) -> None:
         known = {"coding", "scam", "incident", "market", "research", "general"}

@@ -64,7 +64,7 @@ async def main() -> int:
         k_values=(5, 10),
         limit=limit,
     )
-    verdict = evaluate_gates(report)
+    verdict = evaluate_gates(report, limit=limit)
     print(json.dumps(report.to_dict(), indent=2))
     print(format_verdict(verdict))
 

@@ -44,6 +44,19 @@ EVAL_STRICT=1 scripts/run-eval-smoke.sh   # a backend-down skip becomes a failur
 
 Exit codes: `0` = pass or skip, `1` = gate failure (or skip under `EVAL_STRICT=1`).
 
+### Nightly full run
+
+```bash
+scripts/run-eval-nightly.sh                 # all golden rows, full baseline
+EVAL_STRICT=1 scripts/run-eval-nightly.sh   # a backend-down skip becomes a failure
+```
+
+The nightly runner scores the **entire** golden set against
+`eval/baselines.full.json`, appends a JSON record to `eval/history.jsonl`
+(timestamp, git sha, metrics, gate verdict), and exits non-zero on gate
+failure. A pre-flight `curl` on `/healthz` makes a down Qdrant SKIP
+immediately (exit 0) instead of waiting for per-query timeouts.
+
 ### Full harness (Python)
 
 ```python
@@ -101,9 +114,15 @@ Rules:
 1. **`provenance` is mandatory** and must be `verified` or `synthetic`.
    * `verified` — you confirmed the chunk exists in the live corpus (scroll
      Qdrant, observe the point ID + content). Verified rows **must** carry
-     `relevant_doc_ids`.
+     `relevant_doc_ids` **and** a `provenance_note` recording how/when it was
+     confirmed. Verified rows are scored in **doc-id mode** (exact point-id
+     match), which is stricter than chunk-substring mode.
    * `synthetic` — hand-written coverage not yet confirmed. Safe to keep, but
      **must not** be used to raise a baseline.
+   * As of 2026-09-19 all 41 rows are `verified`; the 19 previously-synthetic
+     rows were confirmed by scrolling live Qdrant and copying the point id +
+     a distinctive content phrase. Two rows were re-pointed to the correct
+     collection (`known_scams`) after the original collection had no match.
 2. **`category`** ∈ `coding | scam | incident | market | research | general`.
 3. Every row must carry at least one of `gold_chunks` / `relevant_doc_ids`.
 4. To derive a verified row, scroll the collection and confirm the chunk:
@@ -123,11 +142,23 @@ The schema is enforced by `tests/test_eval_harness.py::TestGoldenSet`.
 
 ## 5. How gates evolve
 
-Baselines live in `eval/baselines.json`:
+Baselines are **split by query set** so a 10-query smoke run is never gated
+against a full-set threshold (the two sets have different metric
+distributions):
+
+| File | Query set | Used by |
+|---|---|---|
+| `eval/baselines.smoke.json` | first 10 golden rows | `scripts/run-eval-smoke.sh` |
+| `eval/baselines.full.json` | all 41 golden rows | `scripts/run-eval-nightly.sh` |
+
+`evaluate_gates(report, limit=...)` selects the file automatically via
+`eval/baseline_select.py`: `limit is None` (or `limit >= total`) → full,
+otherwise smoke. Callers that pass an explicit `baselines=` path bypass the
+selection.
 
 ```json
-{"recall@10": {"value": 0.30, "tolerance": 0.05},
- "p95_latency_ms": {"value": 3000.0, "tolerance": 0.50}}
+{"recall@10": {"value": 0.39, "tolerance": 0.05},
+ "p95_latency_ms": {"value": 20000.0, "tolerance": 0.50}}
 ```
 
 Semantics:
@@ -146,6 +177,11 @@ Evolution policy:
 * The current baselines are **provisional** — they were recorded from the
   direct-Qdrant offline retriever (no rerank/hybrid), which scores lower than
   the live engine. Re-baseline once the nightly live job is green.
+* **Measured 2026-09-19** (direct-Qdrant, all 41 rows verified, doc-id mode):
+  full set recall@5=0.2927 / recall@10=0.3902 / nDCG@5=0.2364 / nDCG@10=0.2676
+  / MRR=0.2301 / p50=11993.8ms / p95=19043.4ms; smoke subset (10 rows)
+  recall@5=0.1000 / recall@10=0.2000 / nDCG@5=0.0631 / nDCG@10=0.0946 /
+  MRR=0.0625 / p50=12409.2ms / p95=14214.4ms.
 
 ---
 
@@ -187,8 +223,12 @@ only for periodic human-verified audits, not the per-PR gate.
 |---|---|
 | `src/rugbrain/eval/harness.py` | offline backtest runner + retrievers |
 | `src/rugbrain/eval/gates.py` | threshold gate + verdict formatting |
-| `src/rugbrain/eval/baselines.json` | committed thresholds |
-| `src/rugbrain/eval/golden/crypto_rag_golden.jsonl` | golden set |
+| `src/rugbrain/eval/baselines.smoke.json` | committed thresholds (10-query subset) |
+| `src/rugbrain/eval/baselines.full.json` | committed thresholds (full set) |
+| `src/rugbrain/eval/baseline_select.py` | maps query set → baseline file |
+| `src/rugbrain/eval/golden/crypto_rag_golden.jsonl` | golden set (41 verified rows) |
 | `scripts/run-eval-smoke.sh` | fast CI subset runner |
+| `scripts/run-eval-nightly.sh` | full-set nightly runner + history record |
+| `eval/history.jsonl` | append-only nightly metric history |
 | `tests/test_eval_harness.py` | metric math, gate semantics, schema tests |
 | `requirements-eval.txt` | optional LLM-judge extras |

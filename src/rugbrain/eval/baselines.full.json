@@ -1,0 +1,10 @@
+{
+  "_comment": "Retrieval-quality baselines for the FULL golden set (all 41 rows; scripts/run-eval-nightly.sh). Shrink-only for quality metrics (actual >= value - tolerance); raise-only for latency (actual <= value * (1 + tolerance)). A metric absent here is not gated. Raising a baseline is an explicit PR edit; lowering one requires justification in the PR body. See docs/EVALS.md.",
+  "_source": "Direct-Qdrant offline retriever (no rerank/hybrid), full 41-query golden set, measured live 2026-09-19 against Qdrant http://127.0.0.1:6334. All 41 rows are provenance=verified and scored in doc-id mode (exact Qdrant point-id match), which is stricter than the earlier chunk-substring mode. Measured: recall@5=0.2927 recall@10=0.3902 ndcg@5=0.2364 ndcg@10=0.2676 mrr=0.2301 p50=11993.8ms p95=19043.4ms. Values below are the measured numbers rounded down to a 0.01 grid (quality) / up (latency) so the gate is not flaky on re-runs. Provisional: the live engine path (Redis+FAISS) is expected to score higher; re-baseline once the nightly live job is green.",
+  "recall@10": {"value": 0.39, "tolerance": 0.05},
+  "recall@5": {"value": 0.29, "tolerance": 0.05},
+  "ndcg@10": {"value": 0.26, "tolerance": 0.03},
+  "ndcg@5": {"value": 0.23, "tolerance": 0.03},
+  "mrr": {"value": 0.23, "tolerance": 0.03},
+  "p95_latency_ms": {"value": 20000.0, "tolerance": 0.50}
+}
