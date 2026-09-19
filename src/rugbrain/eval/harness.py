@@ -62,7 +62,6 @@ _ID_KEYS = ("id", "doc_id", "uuid", "chunk_id")
 # Default rank cutoffs reported by the harness.
 DEFAULT_K_VALUES: tuple[int, ...] = (5, 10)
 
-
 # ── golden-set model ─────────────────────────────────────────────────
 
 
