@@ -103,6 +103,15 @@ def __getattr__(name: str) -> object:
     if name in ("_INTERNAL_FQDN_RE", "_BARE_HOST_RE"):
         fqdn, bare = _host_patterns(os.getenv("RMI_INTERNAL_HOSTS", ""))
         return fqdn if name == "_INTERNAL_FQDN_RE" else bare
+    if name == "_INTERNAL_FQDN_PARTS":
+        hosts = tuple(
+            h.strip().lower() for h in os.getenv("RMI_INTERNAL_HOSTS", "").split(",") if h.strip()
+        )
+        parts: list[str] = []
+        if hosts:
+            parts.append(r"(?:" + "|".join(re.escape(h) for h in hosts) + r")\.rugmunch\.io\b")
+        parts.append(r"(?:[a-z0-9-]+\.)+(?:internal|local)\b")
+        return parts
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 # RFC1918 + CGNAT (100.64/10) private IPs.
 _PRIVATE_IP_RE = re.compile(
