@@ -15,8 +15,8 @@ from rugbrain.liquidation_heatmap.constants import (
 from rugbrain.liquidation_heatmap.price_bands import classify_severity
 
 __all__ = [
-    "get_kraken_futures_liquidations",
     "get_bitmex_liquidations",
+    "get_kraken_futures_liquidations",
     "get_kucoin_futures_liquidations",
     "get_phemex_liquidations",
 ]

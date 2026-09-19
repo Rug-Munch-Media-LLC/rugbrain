@@ -17,9 +17,9 @@ from rugbrain.liquidation_heatmap.constants import (
 from rugbrain.liquidation_heatmap.price_bands import classify_severity
 
 __all__ = [
-    "get_protocol_liquidations",
     "get_dydx_liquidations",
     "get_gmx_liquidations",
+    "get_protocol_liquidations",
     "get_synthetix_liquidations",
 ]
 

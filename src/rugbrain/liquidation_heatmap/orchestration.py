@@ -7,6 +7,11 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from rugbrain.liquidation_heatmap.analysis import (
+    get_hype_liquidations,
+    get_liquidation_wins,
+    get_total_market_liq_24h,
+)
 from rugbrain.liquidation_heatmap.cex_fetchers import (
     get_binance_liquidations,
     get_bitmex_liquidations,
@@ -20,7 +25,6 @@ from rugbrain.liquidation_heatmap.cex_fetchers import (
 )
 from rugbrain.liquidation_heatmap.constants import (
     POLL_INTERVAL,
-    _24h_volume,
     _biggest_single,
     _liquidation_history,
     _peak_24h,
@@ -31,11 +35,6 @@ from rugbrain.liquidation_heatmap.protocol_fetchers import (
     get_gmx_liquidations,
     get_protocol_liquidations,
     get_synthetix_liquidations,
-)
-from rugbrain.liquidation_heatmap.analysis import (
-    get_hype_liquidations,
-    get_liquidation_wins,
-    get_total_market_liq_24h,
 )
 
 __all__ = [
