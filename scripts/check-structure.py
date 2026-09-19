@@ -22,12 +22,9 @@ FAIL_THRESHOLD = 200
 GOD_THRESHOLD = 500
 DEFAULT_BASELINE = "scripts/structure-baseline.json"
 
-SKIP_DIRS = {
-    ".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv", "dist",
-    "build", ".mypy_cache", ".ruff_cache", ".pytest_cache", "site-packages",
-    "mutants", ".tox", ".nox", "htmlcov", ".next", "coverage", ".openhands",
-}
-SKIP_TOP = {"scripts", "tests", "docs", "migrations", ".github", ".forgejo"}
+_SKIP = ".git .hg .svn node_modules __pycache__ .venv venv dist build .mypy_cache .ruff_cache .pytest_cache site-packages mutants .tox .nox htmlcov .next coverage .openhands"
+SKIP_DIRS = frozenset(_SKIP.split())
+SKIP_TOP = frozenset(["scripts", "tests", "docs", "migrations", ".github", ".forgejo"])
 
 
 def count_lines(path: Path) -> int:
@@ -47,6 +44,9 @@ def scan(root: Path, scan_roots: tuple[str, ...]) -> dict[str, int]:
             continue
         for p in base.rglob("*.py"):
             if any(part in SKIP_DIRS for part in p.parts):
+                continue
+            # Gate toolkit (check-*.py / ci-gate-*) is tooling, not product code.
+            if p.name.startswith(("check-", "ci-gate")):
                 continue
             n = count_lines(p)
             if n > ADVISORY_THRESHOLD:
@@ -74,7 +74,9 @@ def resolve_scan_roots(root: Path, explicit: tuple[str, ...]) -> tuple[str, ...]
         subs = sorted(
             d.name
             for d in src.iterdir()
-            if d.is_dir() and not d.name.startswith(".") and not d.name.endswith(".egg-info")
+            if d.is_dir()
+            and not d.name.startswith(".")
+            and not d.name.endswith(".egg-info")
         )
         return tuple(f"src/{s}" for s in subs) or ("src",)
     top = tuple(
@@ -106,13 +108,19 @@ def load_baseline(path: Path) -> dict[str, int]:
 def write_baseline(path: Path, sizes: dict[str, int]) -> None:
     """Write the file-size allowlist to JSON."""
     payload = {
-        "thresholds": {"advisory": ADVISORY_THRESHOLD, "fail": FAIL_THRESHOLD, "hard": GOD_THRESHOLD},
+        "thresholds": {
+            "advisory": ADVISORY_THRESHOLD,
+            "fail": FAIL_THRESHOLD,
+            "hard": GOD_THRESHOLD,
+        },
         "files": dict(sorted(sizes.items())),
     }
     path.write_text(json.dumps(payload, indent=1) + "\n")
 
 
-def evaluate(sizes: dict[str, int], base: dict[str, int]) -> tuple[list[str], list[str], list[str], list[str]]:
+def evaluate(
+    sizes: dict[str, int], base: dict[str, int]
+) -> tuple[list[str], list[str], list[str], list[str]]:
     """Classify every scanned file: (failures, reports, shrinks, removals)."""
     failures: list[str] = []
     reports: list[str] = []
@@ -122,15 +130,21 @@ def evaluate(sizes: dict[str, int], base: dict[str, int]) -> tuple[list[str], li
         if path in base:
             recorded = base[path]
             if n > recorded:
-                failures.append(f"{path}: {recorded} -> {n} lines (allowlisted file grew)")
+                failures.append(
+                    f"{path}: {recorded} -> {n} lines (allowlisted file grew)"
+                )
             elif n < recorded:
                 shrinks.append(f"{path}: {recorded} -> {n} (run --update-baseline)")
             if n <= FAIL_THRESHOLD:
-                removals.append(f"{path}: {n} lines (<= {FAIL_THRESHOLD} — remove from allowlist)")
+                removals.append(
+                    f"{path}: {n} lines (<= {FAIL_THRESHOLD} — remove from allowlist)"
+                )
         elif n > GOD_THRESHOLD:
             failures.append(f"{path}: {n} lines (NEW file >{GOD_THRESHOLD} — split it)")
         elif n > FAIL_THRESHOLD:
-            failures.append(f"{path}: {n} lines (NEW file >{FAIL_THRESHOLD} — split it)")
+            failures.append(
+                f"{path}: {n} lines (NEW file >{FAIL_THRESHOLD} — split it)"
+            )
         else:
             reports.append(f"{path}: {n} lines (advisory > {ADVISORY_THRESHOLD})")
     for path, recorded in sorted(base.items()):
@@ -156,7 +170,11 @@ def update_baseline(sizes: dict[str, int], old: dict[str, int], path: Path) -> i
         for k in sorted(new_over):
             print(f"  {k}: {sizes[k]}")
         return 1
-    kept = {k: min(old[k], sizes[k]) for k in old if k in sizes and sizes[k] > FAIL_THRESHOLD}
+    kept = {
+        k: min(old[k], sizes[k])
+        for k in old
+        if k in sizes and sizes[k] > FAIL_THRESHOLD
+    }
     if bootstrap:
         kept.update({k: v for k, v in sizes.items() if v > FAIL_THRESHOLD})
     write_baseline(path, kept)
@@ -182,7 +200,9 @@ def main() -> int:
     if args.update_baseline:
         return update_baseline(sizes, old, baseline_path)
     failures, reports, shrinks, removals = evaluate(sizes, old)
-    print(f"structure gate: {len(sizes)} files > {ADVISORY_THRESHOLD} lines (allowlisted: {len(old)})")
+    print(
+        f"structure gate: {len(sizes)} files > {ADVISORY_THRESHOLD} lines (allowlisted: {len(old)})"
+    )
     for line in reports:
         print(f"  [report] {line}")
     for line in shrinks:
