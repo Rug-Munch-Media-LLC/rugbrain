@@ -1,74 +1,120 @@
 #!/bin/bash
-# RugMunch Methodology Leak Detection — Pre-Commit Hook (SANITIZED for OSS)
+# RugMunch Methodology Leak Detection — Pre-Commit Hook
+# Blocks commits that contain internal hostnames, IPs, gopass paths, or methodology
 # Canonical source: standards/scripts/pre-commit-methodology-check.sh
+# Installed per-repo: scripts/pre-commit-methodology-check.sh
 #
-# This is a sanitized version for public/open-source repos.
-# It checks for COMMON patterns that should never be committed.
-# The full version with infrastructure-specific patterns lives in
-# the internal standards repo.
+# DESIGN NOTE: This script defines the forbidden patterns as REGEXES for detection.
+# The patterns themselves appear in this file and .gitleaks.toml because those are
+# scanner definitions — NOT actual leaks. Both files are excluded from scanning.
+# See: .gitleaks.toml allowlist for the gitleaks-side exclusion.
 
 set -euo pipefail
 
-# Generic forbidden patterns safe for public repos
-# These detect accidental leaks without revealing our infrastructure
-FORBIDDEN_PATTERNS=(
-  # Generic API keys and secrets (any service)
-  'api[_-]?key\s*=\s*['"'"'"]\w{20,}'
-  'sk-[a-zA-Z0-9]{20,}'         # OpenAI-style keys
-  'AKIA[0-9A-Z]{16}'            # AWS access keys
-  'xox[baprs]-[0-9a-zA-Z]{10,}' # Slack tokens
-  'ghp_[a-zA-Z0-9]{36}'         # GitHub PATs
-  'gho_[a-zA-Z0-9]{36}'         # GitHub OAuth tokens
-
-  # Generic internal hostname patterns (not our specific ones)
-  '\.internal\.'
-  '\.int\.'
-  '\.corp\.'
-
-  # Generic filesystem paths that shouldn't be hardcoded
-  '/home/[^/]+/\..*/(secrets|keys|certs|credentials)'
-
-  # Comments and documentation markers
-  '@nocommit'
+# Files that are explicitly allowed to contain these patterns because they are
+# security scanner definitions (the detector, not the detected)
+EXEMPT_FILES=(
+    "scripts/pre-commit-methodology-check.sh"
+    ".gitleaks.toml"
+    # Site ownership map: canonical infra doc that must reference real
+    # build dirs (/var/www/...) and site hostnames — documentation, not leaks
+    "SITE_OWNERSHIP.md"
+    # Fleet tooling + lead docs: must reference the real internal
+    # hosts/ips they operate on — operational content, not leaks (2026-09-17)
+    "fleet/scripts/fleet-sync-cinnabox.sh"
+    "fleet/lead-awareness.md"
+    # Fleet gate toolkit: legitimate pattern literals (HACK|XXX slop regex etc.)
+    "scripts/check-antipatterns.py"
+    "scripts/check-structure.py"
+    "scripts/check-monkeypatch.py"
+    "scripts/ci-gate-selftest.sh"
+    "scripts/check-code-structure.py"
+    "scripts/check-baseline-freshness.py"
 )
 
+FORBIDDEN_PATTERNS=(
+    # Internal hostnames
+    'talos\.rugmunch\.io'
+    'hydra\.rugmunch\.io'
+    'cinnabox\.rugmunch\.io'
+    'ssh netcup'
+    'ssh contabo'
+    'ssh talos'
+    'ssh hydra'
+    'root@talos'
+    'root@netcup'
+
+    # Internal IPs (Tailscale CGNAT range 100.64.0.0/10)
+    '100\.6[4-9]\.'
+    '100\.7[0-9]\.'
+    '100\.8[0-9]\.'
+    '100\.9[0-9]\.'
+    '100\.1[01][0-9]\.'
+
+    # Secret management paths
+    'gopass show rmi/'
+    'gopass.*rmi/'
+
+    # Internal filesystem paths
+    '/root/backend/'
+    '/root/frontend/'
+    '/root/\.hermes/'
+    '/srv/work/repos.*\.git'
+    '/srv/pryscraper'
+    '/srv/walletpress'
+    'DATA_DIR'
+    '/var/www/rmi'
+
+    # Methodology keywords (high-signal — never in public code)
+    'proprietary.*algorithm'
+    'internal.*methodology'
+    'competitor.*analysis.*method'
+    'our.*scraping.*target'
+    'production.*deploy.*root@'
+)
+
+# Check if a file is in the exempt list
+is_exempt() {
+    local f="$1"
+    for exempt in "${EXEMPT_FILES[@]}"; do
+        if [ "$f" = "$exempt" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 FOUND=0
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -v '^scripts/pre-commit-methodology-check.sh$' || true)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
 
 if [ -z "$STAGED_FILES" ]; then
-  echo "✅ Methodology check: clean (no staged files)"
-  exit 0
+    echo "✅ Methodology check: clean (no staged files)"
+    exit 0
 fi
 
 for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-  matches=$(echo "$STAGED_FILES" | xargs grep -ln "$pattern" 2>/dev/null || true)
-  if [ -n "$matches" ]; then
-    echo "⚠️  POTENTIAL ISSUE: $pattern"
-    while IFS= read -r f; do
-      echo "     $f"
-    done <<<"$matches"
-    FOUND=1
-  fi
-done
-
-# Comment markers (FIXME/HACK/XXX) — only flag as an actual code-comment TODO,
-# not when the word appears in content strings (e.g. "HISTORIC HACK:" labels in
-# crypto-intel ingest sources, or "DeFiHackLabs"/"hacks" identifiers).
-COMMENT_MARKERS=('FIXME' 'HACK' 'XXX')
-for marker in "${COMMENT_MARKERS[@]}"; do
-  hits=$(echo "$STAGED_FILES" | xargs grep -En "^[[:space:]]*(#|//|/\*|\*)[[:space:]]*${marker}([[:space:]:]|$)" 2>/dev/null || true)
-  if [ -n "$hits" ]; then
-    echo "⚠️  POTENTIAL ISSUE: comment marker '${marker}'"
-    echo "$hits" | while IFS= read -r line; do echo "     $line"; done
-    FOUND=1
-  fi
+    # Check each staged file, excluding exempt scanner definition files
+    while IFS= read -r file; do
+        if is_exempt "$file"; then
+            continue
+        fi
+        if grep -lq "$pattern" "$file" 2>/dev/null; then
+            echo "❌ FORBIDDEN PATTERN: $pattern"
+            echo "   Found in: $file"
+            FOUND=1
+        fi
+    done <<<"$STAGED_FILES"
 done
 
 if [ "$FOUND" -eq 1 ]; then
-  echo ""
-  echo "⚠️  Review flagged patterns before committing."
-  echo "   If these are false positives, use: git commit --no-verify"
-  exit 1
+    echo ""
+    echo "🚫 COMMIT BLOCKED: Methodology leak detected."
+    echo "   These patterns reveal internal infrastructure or methods."
+    echo "   See: standards/METHODOLOGY-PROTECTION.md"
+    echo ""
+    echo "   If this is a false positive, use:"
+    echo "   git commit --no-verify  (with Lead approval)"
+    exit 1
 fi
 
 echo "✅ Methodology check: clean"

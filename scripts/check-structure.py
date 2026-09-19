@@ -1,19 +1,9 @@
 #!/usr/bin/env python3
 """check-structure.py — firm per-file size policy (shrink-only ratchet).
 
-Policy (docs/MODERNIZATION.md §2.2 / §4.3, tightened 2026-09-19):
-
-  * a file > ADVISORY (150) lines is REPORTED (advisory),
-  * a file > 200 lines NOT in the baseline is a HARD FAIL (firm ≤200 policy),
-  * an allowlisted (baselined) file may never GROW — growth is a HARD FAIL,
-  * a file > 500 lines is a HARD FAIL unless allowlisted (which must still shrink).
-
-Baselined files that are now ≤ 200 lines (or gone) are printed as
-``[remove]`` candidates — the allowlist should only ever get shorter.
-
-``--update-baseline`` regenerates the allowlist (only files > 200) but REFUSES
-to raise any existing entry or to grandfather a *new* >200-line file (bootstrap
-aside). The ratchet is one-way: the codebase can only get smaller per file.
+Policy: >150 REPORTED · >200 HARD FAIL unless allowlisted · allowlisted files
+may never GROW · >500 HARD FAIL unless allowlisted. ``--update-baseline``
+only ever removes/shrinks; per-repo roots via [tool.fleet-gates].scan-roots.
 
 Usage:
   python3 scripts/check-structure.py --repo .                 # gate
@@ -31,28 +21,17 @@ ADVISORY_THRESHOLD = 150
 FAIL_THRESHOLD = 200
 GOD_THRESHOLD = 500
 DEFAULT_BASELINE = "scripts/structure-baseline.json"
-DEFAULT_SCAN_ROOTS = ("src/rugbrain",)
 
 SKIP_DIRS = {
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".venv",
-    "venv",
-    "dist",
-    "build",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-    "site-packages",
-    "mutants",
-    ".tox",
-    ".nox",
-    "htmlcov",
+    ".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv", "dist",
+    "build", ".mypy_cache", ".ruff_cache", ".pytest_cache", "site-packages",
+    "mutants", ".tox", ".nox", "htmlcov", ".next", "coverage", ".openhands",
 }
+SKIP_TOP = {"scripts", "tests", "docs", "migrations", ".github", ".forgejo"}
 
 
 def count_lines(path: Path) -> int:
+    """Return the line count of one file (0 when unreadable)."""
     try:
         return len(path.read_text(errors="ignore").splitlines())
     except OSError:
@@ -75,7 +54,47 @@ def scan(root: Path, scan_roots: tuple[str, ...]) -> dict[str, int]:
     return sizes
 
 
+def resolve_scan_roots(root: Path, explicit: tuple[str, ...]) -> tuple[str, ...]:
+    """Explicit > [tool.fleet-gates].scan-roots > auto-detect (no repo defaults)."""
+    if explicit:
+        return explicit
+    cfg = root / "pyproject.toml"
+    if cfg.exists():
+        try:
+            import tomllib
+
+            tool = tomllib.loads(cfg.read_text(encoding="utf-8")).get("tool", {})
+        except (ImportError, OSError, ValueError):
+            tool = {}
+        roots = (tool.get("fleet-gates") or {}).get("scan-roots")
+        if roots:
+            return tuple(str(r) for r in roots)
+    src = root / "src"
+    if src.is_dir():
+        subs = sorted(
+            d.name
+            for d in src.iterdir()
+            if d.is_dir() and not d.name.startswith(".") and not d.name.endswith(".egg-info")
+        )
+        return tuple(f"src/{s}" for s in subs) or ("src",)
+    top = tuple(
+        sorted(
+            d.name
+            for d in root.iterdir()
+            if d.is_dir()
+            and not d.name.startswith(".")
+            and d.name not in SKIP_TOP
+            and d.name not in SKIP_DIRS
+            and any(d.rglob("*.py"))
+        )
+    )
+    if top:
+        return top
+    return ("scripts",) if (root / "scripts").is_dir() else (".",)
+
+
 def load_baseline(path: Path) -> dict[str, int]:
+    """Read the shrink-only file-size allowlist from JSON."""
     if not path.exists():
         return {}
     try:
@@ -85,20 +104,15 @@ def load_baseline(path: Path) -> dict[str, int]:
 
 
 def write_baseline(path: Path, sizes: dict[str, int]) -> None:
+    """Write the file-size allowlist to JSON."""
     payload = {
-        "thresholds": {
-            "advisory": ADVISORY_THRESHOLD,
-            "fail": FAIL_THRESHOLD,
-            "hard": GOD_THRESHOLD,
-        },
+        "thresholds": {"advisory": ADVISORY_THRESHOLD, "fail": FAIL_THRESHOLD, "hard": GOD_THRESHOLD},
         "files": dict(sorted(sizes.items())),
     }
     path.write_text(json.dumps(payload, indent=1) + "\n")
 
 
-def evaluate(
-    sizes: dict[str, int], base: dict[str, int]
-) -> tuple[list[str], list[str], list[str], list[str]]:
+def evaluate(sizes: dict[str, int], base: dict[str, int]) -> tuple[list[str], list[str], list[str], list[str]]:
     """Classify every scanned file: (failures, reports, shrinks, removals)."""
     failures: list[str] = []
     reports: list[str] = []
@@ -122,13 +136,13 @@ def evaluate(
     for path, recorded in sorted(base.items()):
         if path not in sizes:
             removals.append(
-                f"{path}: recorded {recorded} — gone or <= {ADVISORY_THRESHOLD} "
-                "(remove from allowlist)"
+                f"{path}: recorded {recorded} — gone or <= {ADVISORY_THRESHOLD} (remove)"
             )
     return failures, reports, shrinks, removals
 
 
 def update_baseline(sizes: dict[str, int], old: dict[str, int], path: Path) -> int:
+    """Regenerate the allowlist; only removals/shrinks are permitted."""
     bootstrap = not path.exists()
     raised = {k: (old[k], v) for k, v in sizes.items() if k in old and v > old[k]}
     new_over = [k for k, v in sizes.items() if k not in old and v > FAIL_THRESHOLD]
@@ -151,6 +165,7 @@ def update_baseline(sizes: dict[str, int], old: dict[str, int], path: Path) -> i
 
 
 def main() -> int:
+    """CLI entry: enforce the firm <=200 policy and the shrink-only allowlist."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=".")
     ap.add_argument("--baseline", default=DEFAULT_BASELINE)
@@ -159,18 +174,15 @@ def main() -> int:
     args = ap.parse_args()
 
     root = Path(args.repo).resolve()
-    scan_roots = tuple(args.scan_roots or DEFAULT_SCAN_ROOTS)
+    scan_roots = resolve_scan_roots(root, tuple(args.scan_roots or ()))
+    print(f"structure gate: scan roots = {', '.join(scan_roots)}")
     sizes = scan(root, scan_roots)
     baseline_path = root / args.baseline
     old = load_baseline(baseline_path)
-
     if args.update_baseline:
         return update_baseline(sizes, old, baseline_path)
-
     failures, reports, shrinks, removals = evaluate(sizes, old)
-    print(
-        f"structure gate: {len(sizes)} files > {ADVISORY_THRESHOLD} lines (allowlisted: {len(old)})"
-    )
+    print(f"structure gate: {len(sizes)} files > {ADVISORY_THRESHOLD} lines (allowlisted: {len(old)})")
     for line in reports:
         print(f"  [report] {line}")
     for line in shrinks:
