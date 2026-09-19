@@ -60,37 +60,50 @@ _GENERIC_KEY_RE = re.compile(
 _BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{20,}\b", re.IGNORECASE)
 # Internal fleet hostnames are configured via RMI_INTERNAL_HOSTS (a
 # comma-separated list of host labels) so no deployment-specific hostnames
-# ship in the public repo. Default is EMPTY — with no hosts configured only
-# the generic patterns below (RFC1918/CGNAT IPs, *.internal / *.local
-# FQDNs) are redacted. A configured label is redacted both as a bare word
-# and as <label>.rugmunch.io. The public rugmunch.io domain itself is NOT
-# redacted (see [REVIEW]).
+# ship in the public repo. Read LAZILY (at call time, cached per env value)
+# so behavior no longer depends on which module imported first — the
+# import-order dependence caused a test-order flake that kept main CI red.
+# Default is EMPTY — with no hosts configured only the generic patterns
+# below (RFC1918/CGNAT IPs, *.internal / *.local FQDNs) are redacted. A
+# configured label is redacted both as a bare word and as
+# <label>.rugmunch.io. The public rugmunch.io domain itself is NOT redacted
+# (see [REVIEW]).
 # ``*.internal`` / ``*.local`` require at least one prefix label — a bare
 # ``internal`` is a common Solidity visibility keyword and must survive
 # (fix: `+` quantifier; `*` would redact it and corrupt code snippets).
-_INTERNAL_HOSTS: tuple[str, ...] = tuple(
-    h.strip().lower() for h in os.getenv("RMI_INTERNAL_HOSTS", "").split(",") if h.strip()
-)
+_HOST_PATTERN_CACHE: dict[str, tuple[re.Pattern[str], re.Pattern[str] | None]] = {}
 
-_INTERNAL_FQDN_PARTS: list[str] = []
-if _INTERNAL_HOSTS:
-    _INTERNAL_FQDN_PARTS.append(
-        r"(?:" + "|".join(re.escape(h) for h in _INTERNAL_HOSTS) + r")\.rugmunch\.io\b"
-    )
-_INTERNAL_FQDN_PARTS.append(r"(?:[a-z0-9-]+\.)+(?:internal|local)\b")
-_INTERNAL_FQDN_RE = re.compile(
-    r"\b(?:" + "|".join(_INTERNAL_FQDN_PARTS) + r")",
-    re.IGNORECASE,
-)
-# Bare host labels that are unique enough to redact without qualification.
-_BARE_HOST_RE = (
-    re.compile(
-        r"\b(?:" + "|".join(re.escape(h) for h in _INTERNAL_HOSTS) + r")\b",
-        re.IGNORECASE,
-    )
-    if _INTERNAL_HOSTS
-    else None
-)
+
+def _host_patterns(env: str) -> tuple[re.Pattern[str], re.Pattern[str] | None]:
+    """Build (fqdn_re, bare_re) for the host labels in *env* (cached per value)."""
+    cached = _HOST_PATTERN_CACHE.get(env)
+    if cached is not None:
+        return cached
+    hosts = tuple(h.strip().lower() for h in env.split(",") if h.strip())
+    parts: list[str] = []
+    bare: re.Pattern[str] | None = None
+    if hosts:
+        parts.append(r"(?:" + "|".join(re.escape(h) for h in hosts) + r")\.rugmunch\.io\b")
+        bare = re.compile(
+            r"\b(?:" + "|".join(re.escape(h) for h in hosts) + r")\b",
+            re.IGNORECASE,
+        )
+    parts.append(r"(?:[a-z0-9-]+\.)+(?:internal|local)\b")
+    fqdn = re.compile(r"\b(?:" + "|".join(parts) + r")", re.IGNORECASE)
+    _HOST_PATTERN_CACHE[env] = (fqdn, bare)
+    return fqdn, bare
+
+
+def __getattr__(name: str) -> object:
+    """PEP 562 back-compat for the legacy host-constant names (lazy, env-driven)."""
+    if name == "_INTERNAL_HOSTS":
+        return tuple(
+            h.strip().lower() for h in os.getenv("RMI_INTERNAL_HOSTS", "").split(",") if h.strip()
+        )
+    if name in ("_INTERNAL_FQDN_RE", "_BARE_HOST_RE"):
+        fqdn, bare = _host_patterns(os.getenv("RMI_INTERNAL_HOSTS", ""))
+        return fqdn if name == "_INTERNAL_FQDN_RE" else bare
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 # RFC1918 + CGNAT (100.64/10) private IPs.
 _PRIVATE_IP_RE = re.compile(
     r"\b(?:10|127|192\.168|172\.(?:1[6-9]|2[0-9]|3[01])|100\.(?:6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7]))"
@@ -118,8 +131,9 @@ def redact_output(text: str) -> str:
     out = _API_KEY_RE.sub(_REDACTED, out)
     out = _GENERIC_KEY_RE.sub(_REDACTED, out)
     out = _BEARER_TOKEN_RE.sub(_REDACTED, out)
-    out = _INTERNAL_FQDN_RE.sub(_REDACTED, out)
-    if _BARE_HOST_RE is not None:
-        out = _BARE_HOST_RE.sub(_REDACTED, out)
+    fqdn_re, bare_re = _host_patterns(os.getenv("RMI_INTERNAL_HOSTS", ""))
+    out = fqdn_re.sub(_REDACTED, out)
+    if bare_re is not None:
+        out = bare_re.sub(_REDACTED, out)
     out = _PRIVATE_IP_RE.sub(_REDACTED, out)
     return out
