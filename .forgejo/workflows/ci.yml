@@ -22,8 +22,6 @@ jobs:
           fetch-depth: 0
       - name: Install commitlint
         run: npm install -g @commitlint/cli @commitlint/config-conventional
-      - name: Antipattern gate (per-repo ratchet)
-        run: python3 scripts/check-antipatterns.py --repo .
       - name: Validate all commits in PR
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -44,10 +42,8 @@ jobs:
           # Full history: the per-diff coverage gate (diff-cover) needs
           # origin/main as the diff base.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
+      # NOTE: the nikolaik base image already ships python3.12; setup-python@v5
+      # fails on this runner (no hosted toolcache / offline manifest).
       - run: pip install -r requirements.txt
       # Install the package itself so --cov=rugbrain resolves deterministically.
       - run: pip install -e .
@@ -68,6 +64,8 @@ jobs:
         # Repo-wide monkeypatch count may never exceed the committed baseline.
         # Baseline: scripts/monkeypatch-baseline.json.
         run: python3 scripts/check-monkeypatch.py --repo .
+      - name: Antipattern gate (per-repo ratchet)
+        run: python3 scripts/check-antipatterns.py --repo .
       - name: Gate self-test (gates must catch violations)
         # Injects one violation at a time into a throwaway fixture repo; each
         # gate MUST exit 1, a clean fixture MUST exit 0. Failure here means a
@@ -111,9 +109,15 @@ jobs:
   docker-lint:
     runs-on: docker-x64
     container:
-      image: hadolint/hadolint:latest
+      image: nikolaik/python-nodejs:python3.12-nodejs22
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # JS actions (checkout) need node; the hadolint image has none — install
+      # the binary instead of using it as the job container.
+      - name: Install hadolint
+        run: |
+          curl -sSfL "https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64" -o /usr/local/bin/hadolint
+          chmod +x /usr/local/bin/hadolint
       - name: Hadolint Dockerfile
         run: hadolint --failure-threshold error Dockerfile
 
@@ -121,9 +125,12 @@ jobs:
   container-scan:
     runs-on: docker-x64
     container:
-      image: aquasec/trivy:latest
+      image: nikolaik/python-nodejs:python3.12-nodejs22
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install trivy
+        run: |
+          curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz" | tar xz -C /usr/local/bin trivy
       - name: Trivy scan Dockerfile
         run: trivy fs --severity CRITICAL,HIGH --exit-code 1 .
 
@@ -135,7 +142,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - run: pip install gitleaks
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" | tar xz -C /usr/local/bin gitleaks
       - run: gitleaks detect --no-git -v
       - run: pip install bandit
       # -ll = MEDIUM+ severity blocks (fleet convention); LOW findings are
@@ -149,9 +158,6 @@ jobs:
       image: nikolaik/python-nodejs:python3.12-nodejs22
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Verify no app.* imports
         # Anchored to real import statements — the old unanchored grep
