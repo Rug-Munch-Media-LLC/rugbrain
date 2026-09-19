@@ -112,3 +112,8 @@ stopwords = [
   "TODO: add real key",
 ]
 
+[[allowlists]]
+description = "BIP39 wordlist data table (guardrails) — data, not a secret"
+paths = [
+  '''src/rugbrain/guardrails/_wordlist\.py''',
+]
