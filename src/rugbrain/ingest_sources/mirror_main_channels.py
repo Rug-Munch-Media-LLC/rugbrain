@@ -143,7 +143,7 @@ async def _join_one(client: Any, username: str) -> str:
     try:
         await client(JoinChannelRequest(username))
         return "joined"
-    except Exception as e:  # noqa: BLE001 — telethon raises many specific types
+    except Exception as e:
         name = type(e).__name__
         if "FloodWait" in name:
             wait = getattr(e, "seconds", 60)

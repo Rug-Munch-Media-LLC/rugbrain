@@ -108,7 +108,7 @@ def test_live_tier_prefers_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_hosted(query: str, docs: list[str], top_n: int = 0, **kw: Any):
         return [{"index": 1, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.2}]
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
         local_calls["n"] += 1
         return None
 
@@ -128,7 +128,7 @@ def test_live_tier_falls_to_local_on_hosted_failure(monkeypatch: pytest.MonkeyPa
     async def fake_hosted(query: str, docs: list[str], top_n: int = 0, **kw: Any):
         return None
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
         if url == sr.RERANKER_URL:
             return [{"index": 0, "relevance_score": 0.7}]
         return None  # retired :8008 speed tier
@@ -149,7 +149,7 @@ def test_deep_tier_local_first(monkeypatch: pytest.MonkeyPatch) -> None:
         hosted_calls["n"] += 1
         return [{"index": 0, "relevance_score": 0.99}]
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
         return [{"index": 0, "relevance_score": 0.8}]
 
     monkeypatch.setattr(sr, "hosted_rerank", fake_hosted)
@@ -167,7 +167,7 @@ def test_deep_tier_hosted_fallback_on_local_failure(monkeypatch: pytest.MonkeyPa
     async def fake_hosted(query: str, docs: list[str], top_n: int = 0, **kw: Any):
         return [{"index": 1, "relevance_score": 0.95}]
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
         return None
 
     monkeypatch.setattr(sr, "hosted_rerank", fake_hosted)

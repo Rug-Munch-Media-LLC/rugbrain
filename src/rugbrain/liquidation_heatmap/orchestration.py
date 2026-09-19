@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from rugbrain.liquidation_heatmap import constants as _c
 from rugbrain.liquidation_heatmap.analysis import (
     get_hype_liquidations,
     get_liquidation_wins,
@@ -23,7 +24,6 @@ from rugbrain.liquidation_heatmap.cex_fetchers import (
     get_okx_liquidations,
     get_phemex_liquidations,
 )
-from rugbrain.liquidation_heatmap import constants as _c
 from rugbrain.liquidation_heatmap.constants import (
     POLL_INTERVAL,
     _liquidation_history,

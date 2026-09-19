@@ -419,8 +419,8 @@ async def test_analyze_full_sections(client: Any, monkeypatch: pytest.MonkeyPatc
     class _FakeSentiment:
         sentiment = "unknown"
         confidence = 0.0
-        signals: list = []
-        source_counts: dict = {}
+        signals: list = []  # noqa: RUF012 — test double, never mutated
+        source_counts: dict = {}  # noqa: RUF012 — test double, never mutated
 
     async def fake_sentiment(address: str, chain: str) -> Any:
         return _FakeSentiment()

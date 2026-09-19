@@ -190,7 +190,7 @@ class TestDimDrivenResolution:
         lane anymore — an old 1024 collection resolves to the default backend
         so callers get a loud mismatch instead of a cross-model guess."""
         me._dim_cache["old_stuff"] = 1024
-        be, dim = me.backend_for("old_stuff")
+        be, _dim = me.backend_for("old_stuff")
         assert be.name == me.default_backend
         assert "qwen06b" not in me.backends
 

@@ -22,9 +22,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time as _t
-from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -36,7 +35,7 @@ _UA = {"User-Agent": "rugbrain-firehose/1.0 (+https://rugmunch.io)"}
 
 def _now_iso() -> str:
     """ISO stamp so downstream freshness gates can rank intel docs."""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _doc(collection: str, content: str, meta: dict[str, Any]) -> dict[str, Any]:
@@ -69,7 +68,7 @@ async def fetch_trending_snapshot() -> list[dict[str, Any]]:
                 },
             )
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("trending snapshot failed: %s", exc)
         return []
 
@@ -94,7 +93,7 @@ async def fetch_market_health() -> list[dict[str, Any]]:
                     {"source": "coingecko_global", "type": "daily_summary"},
                 )
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("global metrics failed: %s", exc)
     try:
         async with httpx.AsyncClient(timeout=15) as c:
@@ -110,7 +109,7 @@ async def fetch_market_health() -> list[dict[str, Any]]:
                         {"source": "fear_greed", "type": "sentiment"},
                     )
                 )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("fng failed: %s", exc)
     return docs
 
@@ -144,7 +143,7 @@ async def fetch_stablecoin_market() -> list[dict[str, Any]]:
                 },
             )
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("stablecoin pull failed: %s", exc)
         return []
 
@@ -178,7 +177,7 @@ async def fetch_derivatives_pressure() -> list[dict[str, Any]]:
                 {"source": "coingecko_derivatives", "type": "snapshot"},
             )
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("derivatives pull failed: %s", exc)
         return []
 
@@ -191,7 +190,7 @@ async def fetch_regulation_feed() -> list[dict[str, Any]]:
             r = await c.get("https://www.sec.gov/news/pressreleases.rss")
         if r.status_code != 200:
             return []
-        root = ET.fromstring(r.text)
+        root = ET.fromstring(r.text)  # noqa: S314 — trusted source (SEC RSS); stdlib ET by design (see rss_parser.py)
         for item in root.findall(".//item")[:5]:
             title = _txt(item.find("title"))
             if not title:
@@ -208,7 +207,7 @@ async def fetch_regulation_feed() -> list[dict[str, Any]]:
                     },
                 )
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("sec rss failed: %s", exc)
     return docs
 
@@ -253,7 +252,7 @@ async def fetch_hack_feed() -> list[dict[str, Any]]:
                 )
             )
         return docs
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("hacks pull failed: %s", exc)
         return []
 
@@ -351,7 +350,7 @@ async def fetch_whale_transfers() -> list[dict[str, Any]]:
                         )
                 if len(docs) >= 12:
                     break
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("whale multichain pull failed: %s", exc)
     return docs[:12]
 
@@ -374,7 +373,7 @@ async def fetch_hyperliquid_positioning() -> list[dict[str, Any]]:
         payload = r.json()
         universe, ctxs = payload[0], payload[1]
         rows = []
-        for meta, ctx in zip(universe.get("universe", []), ctxs):
+        for meta, ctx in zip(universe.get("universe", []), ctxs, strict=False):
             name = meta.get("name", "")
             oi = float(ctx.get("openInterest", 0) or 0)
             funding = float(ctx.get("funding", 0) or 0) * 100
@@ -405,7 +404,7 @@ async def fetch_hyperliquid_positioning() -> list[dict[str, Any]]:
                 },
             )
         ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("hl positioning failed: %s", exc)
         return []
 
@@ -489,7 +488,7 @@ async def fetch_stablecoin_whales() -> list[dict[str, Any]]:
                             },
                         )
                     )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("stablecoin whale pull failed: %s", exc)
     docs.sort(key=lambda d: d["metadata"].get("amount_usd", 0), reverse=True)
     return docs[:8]
@@ -534,7 +533,7 @@ async def fetch_btc_whales() -> list[dict[str, Any]]:
                     )
                 if len(docs) >= 8:
                     break
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("btc whale pull failed: %s", exc)
     return docs[:8]
 
@@ -578,7 +577,7 @@ async def fetch_solana_whales() -> list[dict[str, Any]]:
                     post = meta.get("postBalances") or []
                     if not pre or len(pre) != len(post):
                         continue
-                    deltas = (p - q for p, q in zip(post, pre))
+                    deltas = (p - q for p, q in zip(post, pre, strict=False))
                     biggest = max(deltas)
                     if biggest < _SOL_WHALE_LAMPORTS:
                         continue
@@ -598,6 +597,6 @@ async def fetch_solana_whales() -> list[dict[str, Any]]:
                     )
                 if len(docs) >= 6:
                     break
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("solana whale pull failed: %s", exc)
     return docs[:6]

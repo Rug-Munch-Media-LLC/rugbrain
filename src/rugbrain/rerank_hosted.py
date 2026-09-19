@@ -77,7 +77,7 @@ async def hosted_rerank(
     documents: list[str],
     top_n: int = 0,
     *,
-    timeout: float | None = None,
+    timeout: float | None = None,  # noqa: ASYNC109 — forwarded to the HTTP client, not an asyncio timeout
 ) -> list[dict[str, Any]] | None:
     """Score *documents* against *query* on DeepInfra.
 
@@ -108,6 +108,6 @@ async def hosted_rerank(
         results = [{"index": i, "relevance_score": float(s)} for i, s in enumerate(scores)]
         results.sort(key=lambda r: r["relevance_score"], reverse=True)
         return results[:top_n] if top_n and top_n > 0 else results
-    except Exception as exc:  # noqa: BLE001 — the rung must fail open
+    except Exception as exc:
         logger.debug("rerank_hosted_failed: %s", str(exc)[:120])
         return None
