@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import httpx
@@ -47,11 +48,22 @@ async def test_normalize_profile() -> None:
     assert normalize_profile({"no_handle": True}) is None
 
 
+@pytest.fixture
+def getxapi_env():
+    """Pin GETXAPI_KEY for this test (hermetic in CI; key file absent there)."""
+    prev = os.environ.get("GETXAPI_KEY")
+    os.environ["GETXAPI_KEY"] = "test-key"
+    yield
+    if prev is None:
+        os.environ.pop("GETXAPI_KEY", None)
+    else:
+        os.environ["GETXAPI_KEY"] = prev
+
+
 @pytest.mark.asyncio
-async def test_client_extracts_tweets_from_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_client_extracts_tweets_from_payload(getxapi_env) -> None:
     # Hermetic: key resolution falls back to /srv/secrets/getxapi_api_key
     # (present on Talos, absent in CI) — pin the env key so the HTTP path runs.
-    monkeypatch.setenv("GETXAPI_KEY", "test-key")
 
     async def handler(request: httpx.Request) -> httpx.Response:
         assert "/twitter/user/tweets" in request.url.path

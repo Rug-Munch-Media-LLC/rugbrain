@@ -13,6 +13,7 @@ Offline: httpx stubbed. Contracts for _score_candidates:
 
 from __future__ import annotations
 
+import os
 import time
 from unittest.mock import MagicMock
 
@@ -27,11 +28,16 @@ def _healthy(monkeypatch):
     # Hermetic: force the local lane (hosted rung reads DEEPINFRA_API_KEY /
     # /srv/secrets — present on Talos, absent in CI) and clear global strain
     # state polluted by sibling tests (module-level defaultdict).
-    monkeypatch.setenv("RERANK_HOSTED", "0")
+    _prev_hosted = os.environ.get("RERANK_HOSTED")
+    os.environ["RERANK_HOSTED"] = "0"
     rr._strain_failures.clear()
     rr._health["ok"] = True
     rr._health["last_check"] = time.time()
     yield
+    if _prev_hosted is None:
+        os.environ.pop("RERANK_HOSTED", None)
+    else:
+        os.environ["RERANK_HOSTED"] = _prev_hosted
     rr._health["ok"] = False
     rr._health["last_check"] = 0.0
     rr._strain_failures.clear()
