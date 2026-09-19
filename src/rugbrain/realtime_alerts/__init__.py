@@ -31,14 +31,15 @@ from __future__ import annotations
 import logging
 
 import httpx as httpx
+
 from rugbrain.alerts import AlertBus as AlertBus
 
+from .cli import main as main
 from .clickhouse_logger import CriticalAlertLogger
 from .clickhouse_logger import _critical_logger as _critical_logger
-from .cli import main as main
 from .config import CRITICAL_ALERTS_TABLE as CRITICAL_ALERTS_TABLE
-from .config import ETH_PRICE_USD as ETH_PRICE_USD
 from .config import CRITICAL_NATS_SUBJECT as CRITICAL_NATS_SUBJECT
+from .config import ETH_PRICE_USD as ETH_PRICE_USD
 from .config import ETH_RPC_URL as ETH_RPC_URL
 from .config import EXPLOIT_ACCOUNTS as EXPLOIT_ACCOUNTS
 from .config import LARGE_TX_USD as LARGE_TX_USD
@@ -50,55 +51,75 @@ from .config import ONCHAIN_POLL_SECONDS as ONCHAIN_POLL_SECONDS
 from .config import RPC_POLL_SECONDS as RPC_POLL_SECONDS
 from .config import SEARXNG_URL as SEARXNG_URL
 from .config import SEEN_TTL as SEEN_TTL
-from .config import SOLANA_RPC_URL as SOLANA_RPC_URL
 from .config import SOL_PRICE_USD as SOL_PRICE_USD
+from .config import SOLANA_RPC_URL as SOLANA_RPC_URL
 from .config import TWITTER_POLL_SECONDS as TWITTER_POLL_SECONDS
 from .heuristics import detect_chain_critical, is_exploit_candidate, parse_amount_usd
 from .models import CriticalAlert
 from .monitor import (
     ExploitMonitor,
-    _monitor as _monitor,
     is_realtime_monitor_running,
     realtime_monitor_stats,
     start_realtime_monitor,
     stop_realtime_monitor,
 )
+from .monitor import (
+    _monitor as _monitor,
+)
 from .payloads import build_webhook_payload
 from .poller_onchain import (
     _dex_whale_sql as _dex_whale_sql,
+)
+from .poller_onchain import (
     _new_address_sql as _new_address_sql,
+)
+from .poller_onchain import (
     _oracle_pattern_sql as _oracle_pattern_sql,
+)
+from .poller_onchain import (
     poll_onchain_anomalies,
 )
 from .poller_rpc import (
     poll_ethereum_rpc as poll_ethereum_rpc,
+)
+from .poller_rpc import (
     poll_rpc_large_txs,
+)
+from .poller_rpc import (
     poll_solana_rpc as poll_solana_rpc,
 )
 from .poller_searxng import poll_searxng_exploits
 from .pricing import (
     _fetch_live_price as _fetch_live_price,
+)
+from .pricing import (
     _price_cache as _price_cache,
+)
+from .pricing import (
     resolve_native_price as resolve_native_price,
 )
-from .qdrant_store import store_qdrant_live_threat
 from .qdrant_store import scroll_live_threats as scroll_live_threats
+from .qdrant_store import store_qdrant_live_threat
 from .redis_client import _get_redis as _get_redis
 from .signing import sign_payload, verify_signature
 from .store import (
     LiveThreatStore,
-    _store as _store,
     get_live_threats,
     get_recent_alerts,
+)
+from .store import (
+    _store as _store,
 )
 from .telegram import _send_telegram as _send_telegram
 from .watchlist import AlertDispatcher, WatchlistManager
 from .watchlist import start_alert_listener as start_alert_listener
 from .webhooks import (
     WebhookRegistry,
-    _webhook_registry as _webhook_registry,
     deliver_webhooks,
     get_webhook_registry,
+)
+from .webhooks import (
+    _webhook_registry as _webhook_registry,
 )
 
 log = logging.getLogger("rugbrain.realtime_alerts")
