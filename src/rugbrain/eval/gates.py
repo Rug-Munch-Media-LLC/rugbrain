@@ -37,6 +37,8 @@ from rugbrain.eval.baseline_select import (
 from rugbrain.eval.gate_metrics import (
     _LATENCY_METRICS,
     _metric_value,
+)
+from rugbrain.eval.gate_metrics import (
     format_verdict as format_verdict,
 )
 from rugbrain.eval.harness import BacktestReport
