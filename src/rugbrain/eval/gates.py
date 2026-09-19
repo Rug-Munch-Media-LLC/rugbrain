@@ -53,7 +53,6 @@ DEFAULT_BASELINES = FULL_BASELINES
 @dataclass
 class GateResult:
     """Outcome of one metric comparison."""
-
     metric: str
     baseline: float
     actual: float
