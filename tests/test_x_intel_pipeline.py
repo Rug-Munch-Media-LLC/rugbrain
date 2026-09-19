@@ -48,7 +48,11 @@ async def test_normalize_profile() -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_extracts_tweets_from_payload() -> None:
+async def test_client_extracts_tweets_from_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Hermetic: key resolution falls back to /srv/secrets/getxapi_api_key
+    # (present on Talos, absent in CI) — pin the env key so the HTTP path runs.
+    monkeypatch.setenv("GETXAPI_KEY", "test-key")
+
     async def handler(request: httpx.Request) -> httpx.Response:
         assert "/twitter/user/tweets" in request.url.path
         assert request.url.params["userName"] == "peckshield"

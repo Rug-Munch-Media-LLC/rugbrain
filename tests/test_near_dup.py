@@ -29,8 +29,12 @@ class StubEmbedder:
             return self.vectors[text]
         if self.default is not None:
             return self.default
-        # derive a stable pseudo-vector from the text
-        h = abs(hash(text))
+        # derive a stable pseudo-vector from the text — hashlib, NOT builtin
+        # hash(): str hashing is PYTHONHASHSEED-randomized, which made two
+        # "unique-*" texts collide in CI and fail the eviction assertion.
+        import hashlib
+
+        h = int(hashlib.sha256(text.encode()).hexdigest(), 16)
         dim = 8
         vec = [0.0] * dim
         vec[h % dim] = 1.0

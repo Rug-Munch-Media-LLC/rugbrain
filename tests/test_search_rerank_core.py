@@ -24,11 +24,17 @@ from rugbrain.search import rerank as rr
 @pytest.fixture(autouse=True)
 def _healthy(monkeypatch):
     monkeypatch.setattr(rr, "RERANKER_ENABLED", True)
+    # Hermetic: force the local lane (hosted rung reads DEEPINFRA_API_KEY /
+    # /srv/secrets — present on Talos, absent in CI) and clear global strain
+    # state polluted by sibling tests (module-level defaultdict).
+    monkeypatch.setenv("RERANK_HOSTED", "0")
+    rr._strain_failures.clear()
     rr._health["ok"] = True
     rr._health["last_check"] = time.time()
     yield
     rr._health["ok"] = False
     rr._health["last_check"] = 0.0
+    rr._strain_failures.clear()
 
 
 def _resp(payload, status=200):
