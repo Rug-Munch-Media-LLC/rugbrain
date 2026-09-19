@@ -23,11 +23,10 @@ from rugbrain.liquidation_heatmap.cex_fetchers import (
     get_okx_liquidations,
     get_phemex_liquidations,
 )
+from rugbrain.liquidation_heatmap import constants as _c
 from rugbrain.liquidation_heatmap.constants import (
     POLL_INTERVAL,
-    _biggest_single,
     _liquidation_history,
-    _peak_24h,
     logger,
 )
 from rugbrain.liquidation_heatmap.protocol_fetchers import (
@@ -45,7 +44,6 @@ __all__ = [
 
 async def liquidation_scan_cycle() -> dict[str, Any]:
     """Run one comprehensive liquidation monitoring cycle."""
-    global _24h_volume, _peak_24h, _biggest_single
 
     # Gather all sources in parallel
     (
@@ -100,14 +98,14 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
 
     # Update 24h volume
     if market.get("estimated_total_24h", 0) > 0:
-        _24h_volume = market["estimated_total_24h"]
-        if _24h_volume > _peak_24h:
-            _peak_24h = _24h_volume
+        _c._24h_volume = market["estimated_total_24h"]
+        if _c._24h_volume > _c._peak_24h:
+            _c._peak_24h = _c._24h_volume
 
     # Find biggest single liquidation
     for e in all_events:
-        if e.get("value_usd", 0) > _biggest_single.get("value_usd", 0):
-            _biggest_single = e
+        if e.get("value_usd", 0) > _c._biggest_single.get("value_usd", 0):
+            _c._biggest_single = e
 
     # Aggregate by exchange
     by_exchange: defaultdict[str, dict[str, Any]] = defaultdict(
@@ -162,8 +160,8 @@ async def liquidation_scan_cycle() -> dict[str, Any]:
         },
         "hype_liquidations": hype[:10],
         "liquidation_wins": wins[:10],
-        "biggest_single": _biggest_single,
-        "peak_24h": round(_peak_24h, 2),
+        "biggest_single": _c._biggest_single,
+        "peak_24h": round(_c._peak_24h, 2),
         "alerts": len([e for e in all_events if e.get("value_usd", 0) > 1_000_000]),
     }
 
