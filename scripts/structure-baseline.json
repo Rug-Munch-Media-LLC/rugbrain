@@ -14,7 +14,6 @@
   "src/rugbrain/cross_chain.py": 317,
   "src/rugbrain/cross_reference.py": 375,
   "src/rugbrain/crypto_code_retrieval.py": 397,
-  "src/rugbrain/crypto_embeddings.py": 818,
   "src/rugbrain/crypto_schema.py": 514,
   "src/rugbrain/dashboard.py": 299,
   "src/rugbrain/discord_scraper.py": 267,
