@@ -190,7 +190,7 @@ async def fetch_regulation_feed() -> list[dict[str, Any]]:
             r = await c.get("https://www.sec.gov/news/pressreleases.rss")
         if r.status_code != 200:
             return []
-        root = ET.fromstring(r.text)  # noqa: S314 — trusted source (SEC RSS); stdlib ET by design (see rss_parser.py)
+        root = ET.fromstring(r.text)  # noqa: S314  # nosec B314 — trusted source (SEC RSS); stdlib ET by design (see rss_parser.py)
         for item in root.findall(".//item")[:5]:
             title = _txt(item.find("title"))
             if not title:

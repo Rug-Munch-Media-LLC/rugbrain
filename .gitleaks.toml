@@ -80,7 +80,7 @@ tags = ["rmi", "critical"]
 
 # ─── ALLOWLIST ──────────────────────────────────────────────────────────────
 
-[allowlist]
+[[allowlists]]
 description = "Global allowlist — applies to all repos"
 paths = [
   '''node_modules/''',

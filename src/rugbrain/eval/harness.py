@@ -400,7 +400,7 @@ def direct_qdrant_retriever(
         )
         # Blocking HTTP is acceptable here: the eval harness is a batch tool,
         # not a request-serving path (ASYNC210 is a false positive for evals).
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310, ASYNC210
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310, ASYNC210  # nosec B310 — local Qdrant URL (scheme-validated), eval batch tool
             data = json.load(resp)
         points = data.get("result", {}).get("points", [])
 
