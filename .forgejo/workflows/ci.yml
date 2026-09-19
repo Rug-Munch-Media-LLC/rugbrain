@@ -255,7 +255,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Generate SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
+        # pinned: v0 resolves to a node24 release; this runner supports <= node20
+        uses: anchore/sbom-action@v0.21.0
         with:
           format: cyclonedx-json
           output: sbom.cyclonedx.json
