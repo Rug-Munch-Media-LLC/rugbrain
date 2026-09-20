@@ -1,0 +1,12 @@
+# rugbrain-registry.timer — weekly registry refresh (Mon 03:30 UTC,
+# after the 03:00 ingest so counts include the fresh run).
+[Unit]
+Description=Weekly RugBrain collection registry refresh
+
+[Timer]
+OnCalendar=Mon *-*-* 03:30:00
+Persistent=true
+Unit=rugbrain-registry.service
+
+[Install]
+WantedBy=timers.target

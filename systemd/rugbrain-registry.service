@@ -1,0 +1,19 @@
+# rugbrain-registry — regenerate docs/COLLECTION_REGISTRY.md from live Qdrant
+#
+# The registry drifted a month behind reality (news_v2 listed 4,124 vs
+# 143,985 live) and caused wrong duplication conclusions. This unit makes
+# drift impossible: the doc is generated, never hand-edited.
+#
+# Deploy:
+#   cp systemd/rugbrain-registry.service /etc/systemd/system/
+#   cp systemd/rugbrain-registry.timer   /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rugbrain-registry.timer
+[Unit]
+Description=RugBrain collection registry refresh (auto-generated doc)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python scripts/registry_report.py --write
+Nice=10
