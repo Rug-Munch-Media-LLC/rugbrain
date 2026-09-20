@@ -1,5 +1,14 @@
 # Dual-Tier RAG — Production Architecture
 
+> ⚠️ **PARTLY ARCHIVED (2026-09-20):** the 0.6B speed tiers
+> (`llama-speed-embed` :8007, `llama-speed-rerank` :8008) are retired — those
+> ports are dead. Live: `Qwen3-Embedding-4B` (DeepInfra + :8004) and
+> `Qwen3-Reranker-4B` (:8003 + DeepInfra); chat is `qwythos-9b` on
+> `llama-chat.service` :8009 (local-free lane). The dual-tier *concept*
+> (fast utility vs deep quality) survives only in consumers' routing, not as
+> separate model servers.
+
+
 > Status: **LIVE** (speed tier + chat deployed 2026-08-23; deep tier pre-existing)
 > Owner: build lead · Review cadence: after any model swap
 
@@ -18,7 +27,7 @@
             \                            /
              \        top-5 contexts    /
               └────────────┬───────────┘
-                    Qwen3-8B-Instruct :8009
+                    Qwythos-9B :8009
                     (llama-chat.service)
 ```
 

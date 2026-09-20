@@ -1,4 +1,4 @@
-> ⚠️ **ARCHIVED 2026-08-29 — 0.6B TIER RETIRED.** The qwen3-embedding-0.6B (:8007) and qwen3-reranker-0.6B (:8008) lanes are GONE. Everything below about the speed tier is historical. Current doctrine: ONE canonical embedder (qwen3-embedding-4b @ 2560, DeepInfra primary + local :8004 fallback) + qwen3-reranker-4b (:8003) for all rerank. Legacy 1024-dim collections are served by 4B MRL-truncate. Chat: qwen3-8b-instruct :8009. This doc is kept for historical reference only.
+> ⚠️ **ARCHIVED 2026-08-29 — 0.6B TIER RETIRED.** The qwen3-embedding-0.6B (:8007) and qwen3-reranker-0.6B (:8008) lanes are GONE. Everything below about the speed tier is historical. Current doctrine: ONE canonical embedder (qwen3-embedding-4b @ 2560, DeepInfra primary + local :8004 fallback) + qwen3-reranker-4b (:8003) for all rerank. Legacy 1024-dim collections are served by 4B MRL-truncate. Chat: qwythos-9b :8009 (local-free lane, intent-routed by consumers). This doc is kept for historical reference only.
 
 # RugBrain Tier Matrix — which model serves what (authoritative)
 

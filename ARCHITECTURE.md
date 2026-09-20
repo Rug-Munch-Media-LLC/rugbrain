@@ -165,7 +165,7 @@ in `src/app/` (currently being restored — see §7).
 | Speed embed (Qwen3-Embedding-0.6B, 1024d) | `llama-speed-embed.service` | 8007 | Interactive/short-query lane |
 | Deep rerank (Qwen3-Reranker-4B) | `qwen-reranker.service` | 8003 | Query-time reranking |
 | Speed rerank (Qwen3-Reranker-0.6B) | `llama-speed-rerank.service` | 8008 | Fast rerank lane |
-| Chat (Qwen3-8B-Instruct Q4_K_M) | `llama-chat.service` | 8009 | Community chat generation |
+| Chat (**Qwythos-9B Claude-Mythos**) | `llama-chat.service` | 8009 | Local-free generation lane; consumers intent-route (local first, cloud for quality-critical) |
 | Model Services Gateway | `model_gateway.service` | 8010 | Single door: auto-tier, breaker, cloud fallback |
 | Qwen3 Reranker | `qwen-reranker.service` | 8003 | Cross-encoder reranking — Qwen3-Reranker-8B Q4_K_M (llama.cpp `--rerank`, systemd on host) |
 | rmi-backend | `rmi-backend` | 8000 | Retrieval layer `/api/v1/rag/v2/*`, scanner, DataBus |

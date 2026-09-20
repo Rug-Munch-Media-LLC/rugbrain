@@ -12,7 +12,7 @@
 | Qwen3-Reranker-**4B** | :8003 | DEEP rerank | high-precision ordering |
 | Qwen3-Embedding-**0.6B** | :8007 | SPEED embed | 1024-dim, ~20ms/query |
 | Qwen3-Reranker-**0.6B** | :8008 | SPEED rerank | fast scoring, sharp w/ instructions |
-| Qwen3-8B-Instruct | :8009 | CHAT/generation | community chat, summaries |
+| **Qwythos-9B Claude-Mythos** | :8009 | CHAT/generation | local-free lane (our model, private); consumers route intelligently — local first, cloud for quality-critical |
 
 All CPU-served (llama.cpp b10155) on the RS8000; cgroup-capped so no engine
 can starve another. All rerankers share the vertical instruction library

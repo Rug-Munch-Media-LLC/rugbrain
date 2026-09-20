@@ -34,45 +34,48 @@ never assume a bind from this doc alone.
 2. **Free-first always**: local servers → OpenRouter paid (backup acct)
    → OpenRouter free (main acct). Cloud is a fallback, never a default.
 
-## Tier Matrix Per Product
+## Tier Matrix Per Product (2026-09-20)
 
-| Product | Embed deep | Embed fast | Rerank live | Rerank deep | Cloud fallback |
-|---------|-----------|------------|-------------|-------------|----------------|
-| **rmi-backend** (`app/rate_limiter.py`) | `qwen3_4b_local` :8004 | `qwen3_06b_local` :8007 | — (uses rugbrain) | `rerank.py` ladder | OR paid 8B → free LFM |
-| **rugbrain** (`search/rerank.py`, `qwen_embedders.py`) | `Qwen3Embedder` :8004 | `Qwen3FastEmbedder` :8007 | `tier="live"` :8008 cap40/6s | `tier="deep"` :8003 | strain ladder → fail-open |
-| **rugmunchbot** (vendored router) | :8004 via rpc_router | — | — | — | DataBus gateway final rung |
-| **lite-chain-indexer** | own pools (:8004-class) | — | — | — | pool rotation + autotune |
+| Product | Embed | Rerank | Chat |
+|---------|-------|--------|------|
+| **rmi-backend** | `Qwen3-Embedding-4B` (DeepInfra + local :8004) via rugbrain | via rugbrain | — |
+| **rugbrain** | `Qwen3-Embedding-4B` (DeepInfra canonical → local :8004) | `Qwen3-Reranker-4B` :8003 + DeepInfra hosted | `qwythos-9b` :8009 (`RAG_CHAT_MODEL`) |
+| **rugmunchbot** | :8004 via its router | — | **intent-routed**: `local/qwythos-9b` first (free, private) → cloud for quality-critical |
+| **lite-chain-indexer** | own pools | — | — |
 
-## Fallback Ladders
+## Fallback Ladders (2026-09-20)
 
-### Embedding (rmi-backend dispatcher)
+### Embedding
 ```
-qwen3_4b_local (:8004, prio 120)
-→ qwen3_06b_local (:8007, prio 110)          # fast-tier tasks only
-→ qwen3_8b_openrouter_paid (prio 20)         # OPENROUTER_BACKUP_API_KEY
-→ qwen3_free_openrouter: LFM-350M (prio 15)  # OPENROUTER_API_KEY
-→ hash (deterministic last resort)
-```
-Every vector passes `normalize_dims()` → collection dim 1024 (MRL
-truncate + renormalize); undersized batches dropped loudly.
-
-### Reranking (rugbrain `search/rerank.py` + backend `rag/rerank.py`)
-```
-LIVE tier:  0.6B :8008 (cap 40 candidates, 6s budget)
-  ↓ strained/unreachable
-DEEP retry: 4B :8003 (cap 24, 30s)
+DeepInfra Qwen/Qwen3-Embedding-4B   (canonical primary, 2560d, keyed)
+  ↓ unreachable
+local llama.cpp :8004               (SAME model ⇒ index-compatible fallback)
   ↓ both down
-FAIL-OPEN:  pre-rerank order preserved (search never breaks)
+FAIL LOUD  (RAGUnavailableError → HTTP 503; no hash, no 0.6B, no MRL)
 ```
-Protections: per-endpoint strain breaker (3 fails / 2min), autotune
-soft-spacing (indexer), quota ledger (bot router).
+
+### Reranking
+```
+local :8003 Qwen3-Reranker-4B (Q8_0)
+  ↓ strained/unreachable
+DeepInfra Qwen/Qwen3-Reranker-4B (hosted, same model)
+  ↓ both down
+FAIL-OPEN: pre-rerank order preserved (search never breaks)
+```
+
+### Chat (local-free first — "fast response" lane)
+```
+local qwythos-9b :8009              (our model; free, private, ~8-10 tok/s CPU)
+  ↓ quality-critical / latency budget exceeded
+cloud lanes via the consumer's router (bot: intent table in model_router.py)
+```
 
 ## Environment Variables
 
 | Var | Default | Used by |
 |-----|---------|---------|
-| `QWEN_EMBED_URL` | http://172.22.0.1:8004/v1 | backend dispatcher, rugbrain |
-| `QWEN_FAST_URL` | http://172.22.0.1:8007/v1 | backend dispatcher |
+| `QWEN_EMBED_URL` | http://127.0.0.1:8004/v1 | backend dispatcher, rugbrain |
+| `QWEN_FAST_URL` | (retired — :8007 dead) | backend dispatcher |
 | `RERANKER_URL` | http://172.22.0.1:8003 | backend + rugbrain rerank |
 | `RERANKER_URL_FAST` | http://172.22.0.1:8008 | rugbrain + backend live tier |
 | `RERANKER_LIVE_CANDIDATE_CAP` | 40 | live candidate cap |
