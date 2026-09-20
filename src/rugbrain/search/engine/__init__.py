@@ -21,7 +21,8 @@ Submodules:
   * ``transform``        — query-transformation search
 """
 
-from rugbrain.crypto_embeddings import COLLECTIONS, get_embedder
+from rugbrain.crypto_embeddings import COLLECTIONS
+from rugbrain.query_embedder import get_embedder
 
 from .._state import _get_redis
 from .code_chunks import (

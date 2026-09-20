@@ -16,9 +16,8 @@ from rugbrain.crypto_embeddings import (
     KNOWN_SCAM_PATTERNS,
     CryptoEmbedder,
     EmbeddingResult,
-    get_embedder,
 )
-from rugbrain.query_embedder import embed_query
+from rugbrain.query_embedder import embed_query, get_embedder
 
 from ._state import (  # noqa: F401  (_pattern_cache_loaded bound here, written via global)
     _get_redis,
