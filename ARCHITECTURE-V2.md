@@ -16,13 +16,13 @@
 ## 0.1 As-Built Reality (verified 2026-08-01 — final sweep)
 
 **What is live and correct:**
-- **Qwen3-Embedding-4B Q8_0 is the primary embedder** (2560d via llama.cpp `qwen-embedder.service` :8004; `embedder.py` + `embeddings.py`). The old bge-m3 container path (formerly served by the retired Infinity app) is decommissioned. `[DONE]`
+- **Qwen3-Embedding-4B Q8_0 is the embedder** (2560d; DeepInfra canonical primary + local llama.cpp `qwen-embedder.service` :8004 fallback — same model ⇒ index-compatible; `embedder.py` + `embeddings.py`). Historical: the old BGE-M3/Infinity container path is decommissioned. `[DONE]`
 - **Qdrant is the single store** (`rmi-qdrant:6333`, 20 collections, live). **BM25 sparse hybrid shipped**: `scripts/migrate_to_sparse.py` creates `{name}_v2` collections carrying named `dense` + `bm25` sparse vectors; 9 `_v2` collections live with points (scam_intel_v2 600, news_v2 623, scanner_v2 191, research_v2 60, threat_intel_v2 26; hacks_v2 0 — empty, see §10 gaps). `[DONE]`
 - **Parquet permanence shipped**: `scripts/b2_permanence.py` writes parquet snapshots (zstd) of all collections to B2 bucket `rmi-rag-permanence`; `scripts/migrate_to_parquet.py` converts legacy NDJSON; `scripts/b2_restore.py` restores. Verified dry-run: 20 collections, `format=parquet`, `encrypt=False`. `[DONE]`
 - **Client-side B2 encryption REMOVED**: `B2_ENCRYPTION_KEY` is deprecated; all objects are encrypted at rest by **B2 SSE-B2 (AES256)** — no client-side AES-GCM on new uploads. `[DONE]`
 - **DuckDB query endpoint added**: `POST /api/v1/rag/query` (in `endpoints.py` + `parquet_analytics.py`) runs read-only SQL (SELECT/WITH/DESCRIBE/SHOW only) over the B2 parquet snapshots (httpfs direct or download fallback). **DEPLOYED 2026-08-01**: container rebuilt from HEAD; verified live `200` with `source=b2-direct` (DuckDB httpfs). Dockerfile bakes the httpfs extension at build time (`RUN INSTALL/LOAD httpfs`) so no runtime download. `[DONE]`
 - **RAGAS evaluation added**: `src/rugbrain/evaluation.py` + `eval_ragas.py`, route `GET /api/v1/eval/run`, golden-set metrics. **DEPLOYED 2026-08-01** on :8012; stale `rugbrain-eval-test` container (:8013) removed. `[DONE]`
-- **Qwen3-Reranker-8B self-hosted**: `qwen-reranker.service` (systemd, llama.cpp `--rerank`, Q4_K_M, :8003) replaces bge-reranker-v2-m3/llama.cpp Qwen3 embedder reranking. HTTP client in `reranker.py` + `search/rerank.py`; opt-in via `rerank=true`, graceful no-op fallback. `[DONE]`
+- **Qwen3-Reranker-4B self-hosted**: `qwen-reranker.service` (systemd, llama.cpp `--rerank`, **Q8_0**, :8003) + DeepInfra hosted (`Qwen/Qwen3-Reranker-4B`, same model) — replaces the retired bge-reranker path. HTTP client in `reranker.py` + `search/rerank.py`; opt-in via `rerank=true`, graceful no-op fallback. `[DONE]`
 - **Metrics router**: `metrics.py` + `/metrics` Prometheus mount. **DEPLOYED 2026-08-01** — `/metrics` returns 200 behind API key on the rebuilt :8012 container. `[DONE]`
 - **Rate limiting**: IP-based per-hour limiter on `/search` shipped (commit 57a5f81). `[DONE in code]`
 
@@ -79,7 +79,7 @@
                     ┌─────────────────────────────────────────────┐
                     │              rugbrain-api  (:8012)            │
                     │  THE single RAG service                      │
-                    │  embedder.py (BGE-M3 2560d, llama.cpp Qwen3 embedder)        │
+                    │  embedder.py (Qwen3-Embedding-4B 2560d, llama.cpp :8004 + DeepInfra)        │
                     │  qdrant_store.py → Qdrant (dense+BM25)      │
                     │  endpoints.py (all routes, NOT split)       │
                     │  evaluation.py / eval_ragas.py (RAGAS)      │
@@ -90,7 +90,7 @@
               ┌──────────────┼──────────────────────┐
               ▼              ▼                      ▼
     ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐
-    │ Qdrant          │  │ llama.cpp Qwen3 embedder BGE-M3 │  │ B2 rugbrain-      │
+    │ Qdrant          │  │ llama.cpp Qwen3-Embedding-4B │  │ B2 rugbrain-      │
     │ rmi-qdrant:6333 │  │ 2560d (primary) │  │ permanence       │
     │ 20 collections  │  │ Qwen3-Reranker- │  │ parquet snapshots│
     │ dense + bm25    │  │ 8B Q4_K_M :8003 │  │ SSE-B2 (AES256)  │
@@ -99,7 +99,7 @@
 ```
 
 **Non-negotiables (as-built status in brackets)**
-1. ONE embedding stack: BGE-M3 (2560d) via llama.cpp, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE — qwen3-embedding-4b live via llama.cpp]**
+1. ONE embedding stack: **Qwen3-Embedding-4B** (2560d) via llama.cpp `:8004` + DeepInfra, `embedder.py`. No hash fallback, no dual-dim, no "tiers". **[DONE]**
 2. ONE store: Qdrant, `store.py` (wraps `qdrant_store.py`). No numpy ANN, no ChromaDB, no Redis vectors. **[DONE — Qdrant 20 collections; BM25 sparse `_v2` variants live]**
 3. ONE search path: dense + keyword filter + RRF, `retrieval.py`. No three-pillar facade. **[PARTIAL — search/ package + search_service.py still exist; retrieval is endpoint-driven hybrid]**
 4. Backend never embeds, never queries vectors. It proxies HTTP. **[NOT DONE — backend still imports `app.rag` in-process; RagApiClient never created]**
@@ -117,7 +117,7 @@
 
 | Concern | Lives in | Why |
 |---|---|---|
-| Embedding (BGE-M3 via llama.cpp) + reranking (Qwen3-Reranker-8B, llama.cpp :8003) | rugbrain | single dim (1024); HTTP-only rerank client — no torch in container |
+| Embedding (Qwen3-Embedding-4B via llama.cpp :8004 + DeepInfra) + reranking (Qwen3-Reranker-4B, :8003 + DeepInfra) | rugbrain | single dim (2560); HTTP-only rerank client — no torch in container |
 | Vector storage (Qdrant) | rugbrain | single writer to collections; backend must not touch Qdrant |
 | Retrieval (dense + keyword + RRF) | rugbrain | one search implementation, one ranking contract |
 | Ingestion (scanner/news/wallet → embed → upsert) | rugbrain | embedding is co-located with storage |
@@ -140,7 +140,7 @@
 src/rugbrain/
 ├── config.py              # NEW [decision]: settings (QDRANT_URL, QWEN_EMBED_URL, GATEWAY_EMBED_URL, collection names, timeouts).
 │                          #   Only module embedder/store/retrieval/ingestion/api may import.
-├── embedder.py            # Single embedder: BGE-M3 via llama.cpp (/embeddings). 2560d.
+├── embedder.py            # Single embedder: Qwen3-Embedding-4B via llama.cpp :8004 (/embeddings). 2560d.
 │                          #   KEEP (verified working) — delete qwen3 legacy enum entries.
 ├── store.py               # NEW thin public wrapper over qdrant_store.py: get_collection(name),
 │                          #   upsert(points), search(query, filter, limit). Collection list is config.
@@ -325,7 +325,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 ## 4. What Gets KEPT and FIXED
 
 ### 4.1 `rugbrain/embedder.py` — KEEP, 3 fixes
-1. Remove the retired `QWEN3_4B` enum entry + `_BACKEND_DIMS` dead path (BGE-M3 2560d only). [verified it is already the documented primary]
+1. Remove the retired `QWEN3_4B` enum entry + `_BACKEND_DIMS` dead path (Qwen3-Embedding-4B 2560d only). [verified it is already the documented primary]
 2. Carry the "fail loudly, no hash fallback" semantics already in `embeddings.py` into `embed()` (raise `EmbeddingError` on HTTP error/timeout; never synthesize vectors).
 3. Expose one canonical `async def embed(texts: list[str]) -> list[list[float]]`; add `embed_one()` convenience. Update `scanner_subscriber/poller`, `scripts/*`, `endpoints.py` to use it.
 
@@ -342,7 +342,7 @@ Current `__init__.py` re-exports from `cross_encoder`, `embeddings`, `incrementa
 C1 = the module queries ChromaDB directly with a pattern-match fallback [verified: docstring says "ChromaDB primary, pattern-match fallback"]. Fix: replace the ChromaDB path with `POST http://rugbrain-api:8012/api/v1/rag/v2/scam-check` via `RagApiClient`. Keep the pattern-match + neutral fallbacks ONLY as behavior at the backend orchestration layer (LLM reasoning), never as a vector-substitute.
 
 ### 4.5 `rugbrain/scanner_subscriber.py` / `scanner_poller.py` — KEEP (working) [verified]
-- Subscriber: Redis `rmi:rag:ingest` → embed → upsert Qdrant. Fix stale docstring (says 2560-dim; embedder is 2560d BGE-M3) and rewire `get_embedding()` → `embedder.embed()`. Then relocate into `ingestion/scanner.py`.
+- Subscriber: Redis `rmi:rag:ingest` → embed → upsert Qdrant. Fix stale docstring (says 2560-dim; embedder is 2560d Qwen3-Embedding-4B) and rewire `get_embedding()` → `embedder.embed()`. Then relocate into `ingestion/scanner.py`.
 - Poller: keep loop; same rewiring.
 
 ### 4.6 Backend routers — KEEP, redirect

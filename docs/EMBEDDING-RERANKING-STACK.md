@@ -7,16 +7,23 @@
 
 | Service | Port | Model | Output Dims | Role |
 |---------|------|-------|-------------|------|
-| qwen-embedder | :8004 | qwen3-embedding-4b Q8_0 | **1024** (MRL-truncated) | Corpus embeddings + search queries |
-| llama-speed-embed | :8007 | qwen3-embedding-0.6b | 1024 | Utility similarity (dedup/clustering/cache-keys) |
-| qwen-reranker | :8003 | qwen3-reranker-4b | scores | Deep rerank (background quality) |
-| qwen-reranker-fast | :8008 | qwen3-reranker-0.6b | scores | Live rerank (consumer latency) |
+| qwen-embedder | :8004 | qwen3-embedding-4b Q8_0 | **2560** | Corpus embeddings + search queries (local) |
+| qwen-reranker | :8003 | qwen3-reranker-4b Q8_0 | scores | Deep rerank (local) |
+| DeepInfra (hosted) | API | `Qwen/Qwen3-Embedding-4B` + `Qwen/Qwen3-Reranker-4B` | 2560 / scores | **Canonical primary lane** (same models as local) |
 | model gateway | :8010 | — | — | Strain breaker + cloud fallback lanes |
-| chat | :8009 | qwen3-8b-instruct | — | LLM generation only |
+| chat | :8009 | qwythos-9b | — | LLM generation only |
 
-**All endpoints bind the docker bridge (`172.22.0.1`), NOT 127.0.0.1.**
-Stale localhost defaults have caused two production incidents — see
-"Incident History".
+> **Corrections (2026-09-20, verified against the running services):** output
+> dims are **2560** (not 1024/MRL — every collection measures 2560d). The
+> 0.6B utility tiers (`llama-speed-embed` :8007, `qwen-reranker-fast` :8008)
+> are **retired** — both ports are dead. There is no BGE-M3 anywhere in the
+> stack: embed = `Qwen3-Embedding-4B`, rerank = `Qwen3-Reranker-4B`, local
+> llama.cpp + DeepInfra.
+
+**Bind reality (2026-09-20):** `:8003`/`:8004` listen on **127.0.0.1**
+(verified with `ss`); the historical docker-bridge (`172.22.0.1`) guidance
+predates the current units — check `ss -tlnp` before pointing a client, and
+never assume a bind from this doc alone.
 
 ## The Two Iron Rules
 

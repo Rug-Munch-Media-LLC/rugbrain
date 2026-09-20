@@ -82,14 +82,14 @@ in `src/app/` (currently being restored — see §7).
                        ▼                       ▼
         ┌──────────────────────┐   ┌──────────────────────────┐
         │  Qdrant (vector)     │   │  Redis (doc store +      │
-        │  2560-dim BGE-M3     │   │  warm numpy-cosine scan)  │
+        │  2560-dim Qwen3-Embedding-4B     │   │  warm numpy-cosine scan)  │
         │  Cosine distance     │   │  + semantic cache + TTLs  │
         └──────────────┬───────┘   └──────────────────────────┘
                        │
                        ▼
         ┌──────────────────────────────────────────────────────┐
         │                 EMBEDDING LAYER                       │
-        │  BGE-M3 (primary, llama.cpp Qwen3 embedder, 2560-dim)                 │
+        │  Qwen3-Embedding-4B (llama.cpp :8004 + DeepInfra, 2560-dim)                 │
         │  nomic-embed-text (fallback, 768-dim, backend chain)  │
         │  legacy chain: OpenRouter → LocalBGE → HF (CryptoEmbedder)│
         └──────────────┬───────────────────────────────────────┘
@@ -129,7 +129,7 @@ in `src/app/` (currently being restored — see §7).
         ┌───────────┴────────┐   ┌────────┴─────────────┐
         │  Qdrant             │   │  Redis               │
         │  (vector store)     │   │  (warm store)        │
-        │  2560-dim BGE-M3    │   │  docs rag:{c}:{id}   │
+        │  2560-dim Qwen3-Embedding-4B    │   │  docs rag:{c}:{id}   │
         │  Cosine distance    │   │  idx rag:idx:{c}     │
         │  3 collections exist│   │  numpy cosine scan   │
         └───────────┬────────┘   └────────┬─────────────┘
@@ -181,7 +181,7 @@ cached for the process lifetime (`qdrant_store._resolve_qdrant_url`).
 
 ### 3.1 Qdrant (vector store)
 
-**Distance:** Cosine. **Dimension:** 1024 (BGE-M3) — collections are created
+**Distance:** Cosine. **Dimension:** 2560 (Qwen3-Embedding-4B) — collections are created
 on-demand by `QdrantVectorStore._ensure_collection` with the embedding's
 dimension.
 
@@ -218,13 +218,13 @@ document overwrites the same point instead of duplicating it. Scanner findings
 use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 `pattern-<name>` / `hack-<name>` / `actor-<name>`.
 
-### 3.2 llama.cpp Qwen3 embedder / BGE-M3 (embedding + reranking)
+### 3.2 Qwen3-Embedding-4B + Qwen3-Reranker-4B (embedding + reranking)
 
 | Setting | Value |
 |---------|-------|
 | Primary model | `qwen3-embedding-4b` (2560-dim, llama.cpp Qwen3 embedder /embeddings) |
-| Fallback model | `BAAI/bge-small-en-v1.5` (384-dim) / OpenRouter — used by rmi-backend chain |
-| systemd services | `qwen-embedder.service` :8004 (+ speed/rerank/chat/gateway units) |
+| Hosted lane | `Qwen/Qwen3-Embedding-4B` via DeepInfra (canonical primary) — same model as local, index-compatible |
+| systemd services | `qwen-embedder.service` :8004, `qwen-reranker.service` :8003 (+ chat :8009 / gateway :8010) |
 | Concurrency | llama.cpp Qwen3 embedder native batching (`/embeddings` input arrays) |
 | Context | 8,000-char truncation per input; 2560-dim output |
 | Keep-alive | n/a (stateless HTTP server) |
@@ -233,15 +233,13 @@ use `scanner_{chain}_{token_address}`; seed docs use `seed:<id>` /
 (per T04: hash embeddings returned confidently-wrong results and were removed;
 when both backends fail the API raises `RAGUnavailableError` → HTTP 503):
 
-1. **llama.cpp Qwen3 embedder qwen3-embedding-4b** — `POST /embeddings` (OpenAI-compatible) with
-   `input` truncated to 8,000 chars, L2-normalized to 1024 dims.
-2. **OpenRouter** (only if `OPENROUTER_API_KEY` is set) — same 2560-dim resize.
+1. **DeepInfra `Qwen/Qwen3-Embedding-4B`** — canonical primary (2560d, keyed).
+2. **Local llama.cpp `:8004`** — same model, same 2560d space (index-compatible fallback).
 
-`RAG_EMBED_BACKEND` env can force `int` or `openrouter`; default `auto` (int -> gateway -> openrouter, fail loud)
+`RAG_EMBED_BACKEND` env can force a lane; default `auto` = DeepInfra -> local `:8004` (fail loud; legacy gateway/OpenRouter/NIM lanes only via explicit override)
 (probe llama.cpp Qwen3 embedder once per process, cache result).
 
-**Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — still used
-by search/ingest code paths: llama.cpp Qwen3 embedder → OpenRouter → LocalBGE
+**Legacy multi-head chain (`crypto_embeddings.CryptoEmbedder`)** — retired, do not extend: llama.cpp Qwen3 embedder → OpenRouter → LocalBGE
 (`BAAI/bge-small-en-v1.5`, 384-dim) → HuggingFace (`qwen3-embedding-4b`) → hash
 (last resort, deprecated). Specialized heads: `embed_token_scam`,
 `embed_wallet`, `embed_scam_pattern`, `embed_news`, `embed_contract`
