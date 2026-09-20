@@ -83,6 +83,11 @@ tags = ["rmi", "critical"]
 [[allowlists]]
 description = "Global allowlist — applies to all repos"
 paths = [
+    # The companion pattern file for scripts/pre-commit-methodology-check.sh.
+    # A SCANNER DEFINITION (the detector, not the detected): it holds the
+    # internal literals the guard matches on, is gitignored, and is never
+    # committed or pushed. Same rationale as the guard script itself.
+    '''\.methodology-patterns''',
   '''node_modules/''',
   '''\.git/''',
   '''__pycache__/''',
