@@ -356,6 +356,25 @@ def _live_retriever() -> Callable[..., Any]:
     return live
 
 
+_NAMED_CACHE: dict[str, bool] = {}
+
+
+def _named_vectors(base: str, collection: str) -> bool:
+    """True when the collection stores named vectors (dense + sparse)."""
+    if collection in _NAMED_CACHE:
+        return _NAMED_CACHE[collection]
+    import urllib.request as _u
+
+    try:
+        with _u.urlopen(f"{base}/collections/{collection}", timeout=30) as resp:  # noqa: S310
+            vectors = json.load(resp)["result"]["config"]["params"].get("vectors") or {}
+        named = isinstance(vectors, dict) and "size" not in vectors
+    except Exception:  # noqa: BLE001 — default to unnamed
+        named = False
+    _NAMED_CACHE[collection] = named
+    return named
+
+
 def direct_qdrant_retriever(
     qdrant_url: str | None = None,
     embedder: Any | None = None,
@@ -386,50 +405,42 @@ def direct_qdrant_retriever(
     async def retrieve(query: str, collection: str | None, limit: int) -> list[dict[str, Any]]:
         if not collection:
             return []
-        emb = embedder
-        if emb is None:
-            from rugbrain.search.engine import get_embedder
+        if embedder is not None:
+            q_vec = await embedder.embed_query(query)
+        else:
+            from rugbrain.query_embedder import embed_query
 
-            emb = await get_embedder()
-        q_vec = await emb.embed_query(query)
+            q_vec = await embed_query(query)
 
+        # Proper ANN search over the full collection. The previous
+        # scroll+cosine sampled only the first 2,000 points, so gold in a
+        # 2M-point collection could never be found — recall was
+        # structurally zero regardless of retrieval quality.
+        named = _named_vectors(base, collection)
+        vector: Any = {"name": "dense", "vector": q_vec} if named else q_vec
         req = urllib.request.Request(  # noqa: S310 - local Qdrant URL
-            f"{base}/collections/{collection}/points/scroll",
-            data=json.dumps({"limit": 2000, "with_payload": True, "with_vector": True}).encode(),
+            f"{base}/collections/{collection}/points/search",
+            data=json.dumps({"vector": vector, "limit": limit, "with_payload": True}).encode(),
             headers={"Content-Type": "application/json"},
         )
-        # Blocking HTTP is acceptable here: the eval harness is a batch tool,
-        # not a request-serving path (ASYNC210 is a false positive for evals).
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310, ASYNC210  # nosec B310 — local Qdrant URL (scheme-validated), eval batch tool
-            data = json.load(resp)
-        points = data.get("result", {}).get("points", [])
-
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for point in points:
-            vec = point.get("vector")
-            if isinstance(vec, dict):
-                vec = next(iter(vec.values()), None)
-            if not vec:
-                continue
-            sim = _cosine(q_vec, vec)
-            payload = point.get("payload", {})
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310, ASYNC210  # nosec B310 — local Qdrant URL, eval batch tool
+            hits = json.load(resp).get("result", [])
+        results: list[dict[str, Any]] = []
+        for hit in hits:
+            payload = hit.get("payload", {})
             content = " ".join(
                 str(payload.get(key) or "")
                 for key in ("content", "title", "description", "code_block", "ocr_text")
             )
-            scored.append(
-                (
-                    sim,
-                    {
-                        "id": str(point.get("id")),
-                        "content": content,
-                        "collection": collection,
-                        "score": sim,
-                    },
-                )
+            results.append(
+                {
+                    "id": str(hit.get("id")),
+                    "content": content,
+                    "collection": collection,
+                    "score": hit.get("score"),
+                }
             )
-        scored.sort(key=lambda pair: pair[0], reverse=True)
-        return [item for _, item in scored[:limit]]
+        return results
 
     return retrieve
 

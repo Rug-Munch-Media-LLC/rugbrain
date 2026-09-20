@@ -18,6 +18,7 @@ from rugbrain.crypto_embeddings import (
     EmbeddingResult,
     get_embedder,
 )
+from rugbrain.query_embedder import embed_query
 
 from ._state import (  # noqa: F401  (_pattern_cache_loaded bound here, written via global)
     _get_redis,
@@ -146,7 +147,7 @@ async def _embed_by_collection(
             balance_usd=float(metadata.get("balance_usd", 0) or 0),
         )
     elif collection == "contract_audits":
-        vec = await embedder._semantic_embed_one(content, "semantic")
+        vec = await embed_query(content)
         return EmbeddingResult(
             vector=vec,
             dims=len(vec),
@@ -154,7 +155,7 @@ async def _embed_by_collection(
             head="contract_audit",
         )
     else:
-        vec = await embedder._semantic_embed_one(content, "semantic")
+        vec = await embed_query(content)
         return EmbeddingResult(
             vector=vec,
             dims=len(vec),
