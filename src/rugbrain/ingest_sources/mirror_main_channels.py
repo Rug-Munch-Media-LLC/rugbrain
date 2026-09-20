@@ -14,10 +14,10 @@ Ban-safety / anti-detection:
 
 Env (scraper account — SEPARATE from the main ingester env):
     TELEGRAM_API_ID / TELEGRAM_API_HASH   rminsight app (39738133)
-    RAG_TG_SESSION_FILE                   default /var/lib/rmi-rag/insight/tg_insight.session
-    RAG_TG_STATE_FILE                     default /var/lib/rmi-rag/insight/tg_insight_state.json
+    RAG_TG_SESSION_FILE                   default /var/lib/rugbrain/insight/tg_insight.session
+    RAG_TG_STATE_FILE                     default /var/lib/rugbrain/insight/tg_insight_state.json
     TELEGRAM_PHONE                        only needed for --login
-    MAIN_INVENTORY_FILE                   default /var/lib/rmi-rag/insight/main_inventory.json
+    MAIN_INVENTORY_FILE                   default /var/lib/rugbrain/insight/main_inventory.json
 
 Usage:
     python -m rugbrain.ingest_sources.mirror_main_channels --report     # accounting
@@ -39,10 +39,10 @@ from typing import Any
 logger = logging.getLogger("rugbrain.tg_mirror")
 
 MAIN_INVENTORY_FILE = os.getenv(
-    "MAIN_INVENTORY_FILE", "/var/lib/rmi-rag/insight/main_inventory.json"
+    "MAIN_INVENTORY_FILE", "/var/lib/rugbrain/insight/main_inventory.json"
 )
-SESSION_FILE = os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rmi-rag/insight/tg_insight.session")
-STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rmi-rag/insight/tg_insight_state.json")
+SESSION_FILE = os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rugbrain/insight/tg_insight.session")
+STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rugbrain/insight/tg_insight_state.json")
 MAX_PER_RUN = int(os.getenv("RAG_TGJOIN_MAX_PER_RUN", "6"))
 MIN_PER_RUN = int(os.getenv("RAG_TGJOIN_MIN_PER_RUN", "3"))
 MIN_DELAY = int(os.getenv("RAG_TGJOIN_MIN_DELAY", "45"))

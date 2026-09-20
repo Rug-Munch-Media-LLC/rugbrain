@@ -4,8 +4,8 @@ After=network.target llama-speed-embed.service llama-speed-rerank.service
 
 [Service]
 Type=simple
-WorkingDirectory=/srv/work/repos/rmi-rag
-ExecStart=/srv/work/repos/rmi-rag/.venv/bin/python -m uvicorn \
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m uvicorn \
   scripts.dual_tier.model_gateway:app \
   --host 172.22.0.1 --port 8010 --workers 2 --log-level warning
 Restart=always

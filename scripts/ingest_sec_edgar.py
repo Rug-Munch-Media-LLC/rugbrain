@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-shot SEC EDGAR filing ingestion.
 
-Run daily via cron: 0 6 * * * cd /srv/work/repos/rmi-rag && docker compose run --rm rag-ingest python scripts/ingest_sec_edgar.py
+Run daily via cron: 0 6 * * * cd /srv/work/repos/rugbrain && docker compose run --rm rag-ingest python scripts/ingest_sec_edgar.py
 """
 
 import asyncio

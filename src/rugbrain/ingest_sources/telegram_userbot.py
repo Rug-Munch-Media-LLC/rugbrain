@@ -25,7 +25,7 @@ Session policy (IMPORTANT):
 Config (env):
     TELEGRAM_API_ID / TELEGRAM_API_HASH   from gopass [INTERNAL_SECRET_PATH]
     TELETHON_SESSION_STRING               exported StringSession (preferred)
-    RAG_TG_STATE_FILE                     default /var/lib/rmi-rag/tg_ingest_state.json
+    RAG_TG_STATE_FILE                     default /var/lib/rugbrain/tg_ingest_state.json
     RAG_TG_MAX_MESSAGES_PER_CHANNEL       default 40 per cycle
     RAG_TG_SHILL_WINDOW_MINUTES           default 90
     RAG_TG_SHILL_MIN_CHANNELS             default 4
@@ -62,8 +62,8 @@ logger = logging.getLogger("rugbrain.tg_userbot")
 API_ID = int(os.getenv("TELEGRAM_API_ID", "0") or 0)
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 SESSION_STRING = os.getenv("TELETHON_SESSION_STRING", "")
-SESSION_FILE = os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rmi-rag/tg_ingest.session")
-STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rmi-rag/tg_ingest_state.json")
+SESSION_FILE = os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rugbrain/tg_ingest.session")
+STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rugbrain/tg_ingest_state.json")
 MAX_PER_CHANNEL = int(os.getenv("RAG_TG_MAX_MESSAGES_PER_CHANNEL", "40"))
 SHILL_WINDOW_MIN = int(os.getenv("RAG_TG_SHILL_WINDOW_MINUTES", "90"))
 SHILL_MIN_CHANNELS = int(os.getenv("RAG_TG_SHILL_MIN_CHANNELS", "4"))

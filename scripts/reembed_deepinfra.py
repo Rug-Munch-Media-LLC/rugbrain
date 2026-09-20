@@ -85,7 +85,7 @@ EMBED_DIM = int(os.getenv("EMBED_DIM", "2560"))  # Qwen3-Embedding-4B native (ma
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 DATA_DIR = Path(os.getenv("SEED_DATA_DIR", "/tmp/rag_seed"))
-STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rmi-rag/reembed_deepinfra_state.json"))
+STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rugbrain/reembed_deepinfra_state.json"))
 
 # Throughput calibration (benchmarked 2026-08-29): DeepInfra batch=50 -> 23 ms/doc.
 SHORT_BATCH = 32

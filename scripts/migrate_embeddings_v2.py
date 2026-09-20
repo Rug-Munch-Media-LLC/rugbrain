@@ -41,7 +41,7 @@ EMBEDDER = os.getenv("EMBEDDER_URL", "http://127.0.0.1:8004")
 EMBEDDER_MODEL = os.getenv("EMBEDDER_MODEL", "")
 EMBEDDER_API_KEY = os.getenv("EMBEDDER_API_KEY", "")
 EMBEDDER_DIMS = int(os.getenv("EMBEDDER_DIMS", "2560"))
-STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rmi-rag/reembed_state.json"))
+STATE_FILE = Path(os.getenv("STATE_FILE", "/var/lib/rugbrain/reembed_state.json"))
 
 # Field priority mirroring what ingestion embeds (content first).
 TEXT_FIELDS = ("content", "text", "chunk_text", "title", "summary", "description", "name")

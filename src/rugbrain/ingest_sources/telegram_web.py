@@ -28,8 +28,8 @@ import httpx
 
 logger = logging.getLogger("rugbrain.tgweb")
 
-CHANNELS_FILE = os.getenv("RAG_TGWEB_CHANNELS", "/var/lib/rmi-rag/tg_channels.txt")
-STATE_FILE = os.getenv("RAG_TGWEB_STATE", "/var/lib/rmi-rag/tgweb_state.json")
+CHANNELS_FILE = os.getenv("RAG_TGWEB_CHANNELS", "/var/lib/rugbrain/tg_channels.txt")
+STATE_FILE = os.getenv("RAG_TGWEB_STATE", "/var/lib/rugbrain/tgweb_state.json")
 PER_CHANNEL = int(os.getenv("RAG_TGWEB_LIMIT", "20"))
 MAX_PER_CYCLE = int(os.getenv("RAG_TGWEB_MAX_CHANNELS", "80"))
 UA = os.getenv(

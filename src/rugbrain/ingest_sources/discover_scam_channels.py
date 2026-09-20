@@ -32,8 +32,8 @@ import httpx
 
 logger = logging.getLogger("rugbrain.tg_discover")
 
-CHANNELS_FILE = os.getenv("RAG_TGWEB_CHANNELS", "/var/lib/rmi-rag/tg_channels.txt")
-STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rmi-rag/tg_ingest_state.json")
+CHANNELS_FILE = os.getenv("RAG_TGWEB_CHANNELS", "/var/lib/rugbrain/tg_channels.txt")
+STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rugbrain/tg_ingest_state.json")
 MAX_PER_RUN = int(os.getenv("RAG_TGJOIN_MAX_PER_RUN", "4"))
 UA = os.getenv(
     "RAG_TGWEB_UA",
@@ -178,7 +178,7 @@ async def run(join_count: int = 0) -> dict[str, Any]:
     from telethon import TelegramClient
 
     client = TelegramClient(
-        os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rmi-rag/tg_ingest.session"),
+        os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rugbrain/tg_ingest.session"),
         int(os.getenv("TELEGRAM_API_ID", "0") or 0),
         os.getenv("TELEGRAM_API_HASH", ""),
     )
