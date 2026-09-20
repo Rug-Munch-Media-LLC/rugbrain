@@ -54,7 +54,7 @@ services:
       - QDRANT_URL=http://rmi-qdrant-v2:6333
       - QDRANT_HOST=rmi-qdrant-v2
       - QDRANT_PORT=6333
-      - REDIS_HOST=rmi-redis
+      - REDIS_HOST=rmi-valkey
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -120,7 +120,7 @@ services:
       - QDRANT_URL=http://rmi-qdrant-v2:6333
       - QDRANT_HOST=rmi-qdrant-v2
       - QDRANT_PORT=6333
-      - REDIS_HOST=rmi-redis
+      - REDIS_HOST=rmi-valkey
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
