@@ -14,7 +14,9 @@ scam patterns, and threat intelligence.
 
 ## Authentication
 
-None required for read-only queries. Rate limits apply (see below).
+**`X-API-Key` header is required** (value: `RMI_RAG_API_KEY` in
+`/srv/secrets/backend.env`). Requests without it get
+`401 {"code": "auth.missing_key"}`. Rate limits apply (see below).
 
 ## Endpoints
 
@@ -30,7 +32,10 @@ by vector similarity (Qwen3-Embedding-4B via llama.cpp, 2560 dimensions).
 **Parameters:**
 - `q` (required) — search query, e.g., token address or scam description
 - `limit` (optional, default 10, max 100) — max results
-- `collection` (optional, default `threat_intel`) — Qdrant collection
+- `collection` (optional, default `threat_intel_v2`) — Qdrant collection
+- `rerank` (optional, boolean) — `true` re-scores the top candidates with
+  Qwen3-Reranker-4B (local `:8003`, DeepInfra hosted fallback). Lane names
+  (`fast`/`deep`/`off`) belong to `/api/v1/search/federated`, not here.
 
 **Example:**
 ```bash

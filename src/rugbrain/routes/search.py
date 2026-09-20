@@ -330,6 +330,7 @@ async def search_threat_intel(
     except Exception as e:
         logger.debug("reflection_failed (non-critical): %s", e)
 
+    results = results[:limit]  # rerank fetches 20+ candidates; honour the caller's limit
     return {
         "results": results,
         "query": q,
