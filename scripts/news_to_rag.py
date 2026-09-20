@@ -56,6 +56,8 @@ from typing import Any
 import asyncpg
 import httpx
 
+from rugbrain.news_filter import is_noise_article
+
 logger = logging.getLogger("news_to_rag")
 
 CHUNK_SIZE = 500
@@ -536,6 +538,9 @@ async def run(
             # Group completed vectors by article and upsert
             for article, chunks in articles:
                 news_id = article["news_id"]
+                if is_noise_article(article):
+                    stats["skipped_noise"] = stats.get("skipped_noise", 0) + 1
+                    continue
                 text = "\n".join(
                     filter(
                         None,
