@@ -1,0 +1,11 @@
+# rugbrain-retention.timer — nightly retention sweep (04:10 UTC).
+[Unit]
+Description=Nightly RugBrain retention sweep
+
+[Timer]
+OnCalendar=*-*-* 04:10:00
+Persistent=true
+Unit=rugbrain-retention.service
+
+[Install]
+WantedBy=timers.target

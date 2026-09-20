@@ -1,0 +1,17 @@
+# rugbrain-retention — per-source TTL enforcement (deletes expired points)
+#
+# TTLs live in scripts/retention_sweep.py (RETENTION / SOURCE_TTL). News 90d,
+# social 30d, market snapshots 180d; indicators/audits/exploits are permanent.
+#
+# Deploy:
+#   cp systemd/rugbrain-retention.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rugbrain-retention.timer
+[Unit]
+Description=RugBrain retention sweep (per-source TTLs)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python scripts/retention_sweep.py --apply
+Nice=10
