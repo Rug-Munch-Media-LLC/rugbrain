@@ -80,3 +80,4 @@ mutants/
 
 # eval runtime output (nightly history)
 /eval/history.jsonl
+.methodology-patterns
