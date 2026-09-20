@@ -30,7 +30,7 @@ class SearchMixin(_types.StoreSurface):
         import rugbrain.qdrant_store as _pkg
 
         logger = logging.getLogger(__name__)
-        collection = _pkg._map_collection(collection)
+        collection, unified_condition = _pkg.unified_route(collection)
         coll = collection or "default"
         client = await self._get_client()
         await _pkg._ensure_collection(coll, len(query_embedding), client)
@@ -51,8 +51,11 @@ class SearchMixin(_types.StoreSurface):
             "score_threshold": min_similarity,
             "with_payload": True,
         }
-        if filters:
+        if filters or unified_condition:
             qdrant_filter = _pkg.normalize_filters(filters)
+            if unified_condition:
+                qdrant_filter = qdrant_filter or {"must": []}
+                qdrant_filter.setdefault("must", []).append(unified_condition)
             _pkg.apply_payload_filter(payload, qdrant_filter)
 
         try:

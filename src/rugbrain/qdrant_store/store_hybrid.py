@@ -35,11 +35,14 @@ class HybridSearchMixin(_types.StoreSurface):
         """
         import rugbrain.qdrant_store as _pkg
 
-        coll = collection or "default"
+        coll, unified_condition = _pkg.unified_route(collection or "default")
         client = await self._get_client()
         await _pkg._ensure_collection(coll, len(query_embedding), client)
 
         qdrant_filter = _pkg.normalize_filters(filters)
+        if unified_condition:
+            qdrant_filter = qdrant_filter or {"must": []}
+            qdrant_filter.setdefault("must", []).append(unified_condition)
 
         if query_text and await self._collection_supports_sparse(coll, client):
             sparse = await _pkg._embed_sparse(query_text)

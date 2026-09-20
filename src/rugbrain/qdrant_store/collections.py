@@ -90,6 +90,39 @@ def _map_collection(collection: str | None) -> str | None:
     return collection
 
 
+# ── Unified reads (2026-09-20 consolidation) ───────────────────────────────
+# Every legacy RAG collection was copied into ``rag_documents`` with the
+# source recorded in the ``collection`` payload field (content-hash doc ids,
+# 334k points). With RAG_UNIFIED_READS=1 reads for a consolidated collection
+# are served from the unified store with an equivalent payload filter — the
+# legacy collections stay intact until retirement, so this is reversible by
+# flipping one env var.
+UNIFIED_COLLECTION = "rag_documents"
+UNIFIED_READS = os.getenv("RAG_UNIFIED_READS", "0").lower() in ("1", "true", "yes")
+
+CONSOLIDATED_SOURCES: frozenset[str] = frozenset(
+    {
+        "news_v2", "news_articles", "social_intel", "known_scams", "scam_patterns",
+        "scam_intel_v2", "wallet_profiles", "wallet_v2", "defi_exploits",
+        "threat_intel_v2", "contract_audits", "crypto_vulnerabilities",
+        "regulation_enforcement", "research_v2", "education", "github_audits",
+        "contract_security", "security_feeds", "market_health", "stablecoin_market",
+        "live_threats", "hacks_v2",
+    }
+)
+
+
+def unified_route(collection: str | None) -> tuple[str | None, dict | None]:
+    """Map a consolidated collection to (rag_documents, provenance filter).
+
+    Returns the collection unchanged (and no filter) when unified reads are
+    disabled or the name is not consolidated.
+    """
+    if UNIFIED_READS and collection in CONSOLIDATED_SOURCES:
+        return UNIFIED_COLLECTION, {"key": "collection", "match": {"value": collection}}
+    return _map_collection(collection), None
+
+
 _existing_collections: set[str] = set()
 
 

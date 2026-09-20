@@ -33,6 +33,7 @@ from rugbrain.qdrant_store.collections import (
     _ensure_collection,
     _existing_collections,
     _map_collection,
+    unified_route,
 )
 from rugbrain.qdrant_store.connection import (
     QDRANT_FALLBACK_URLS,
@@ -100,4 +101,5 @@ __all__ = [
     "build_search_filters",
     "get_qdrant_store",
     "normalize_filters",
+    "unified_route",
 ]
