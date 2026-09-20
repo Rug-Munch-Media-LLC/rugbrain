@@ -56,7 +56,7 @@ services:
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-RMI_PROD_REDIS_2026}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=http://rmi-langfuse:3000
@@ -122,7 +122,7 @@ services:
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-RMI_PROD_REDIS_2026}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=http://rmi-langfuse:3000
