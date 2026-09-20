@@ -18,6 +18,7 @@ Verdicts:
 from __future__ import annotations
 
 import re
+import unicodedata
 
 TOPICAL_CATEGORIES = frozenset(
     {
@@ -54,9 +55,34 @@ TICKER = re.compile(r"\$[A-Za-z][A-Za-z0-9]{1,9}\b")
 CONTRACT = re.compile(r"0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}")
 NON_LATIN = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u4E00-\u9FFF\u0400-\u04FF]")
 
+#: English-only gate: >20% non-ASCII letters means the text is not English.
+NON_ASCII_LETTER = re.compile(r"[^\x00-\x7F]")
+
+
+def _normalize(text: str) -> str:
+    """NFKC-fold styled Unicode (𝗦𝗢𝗟 -> SOL, fullwidth -> ASCII) before checks."""
+    return unicodedata.normalize("NFKC", text)
+
+
+def is_english(text: str, threshold: float = 0.2) -> bool:
+    """True when the text is predominantly English (ASCII letters)."""
+    text = _normalize(text)
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+    non_ascii = sum(1 for c in letters if NON_ASCII_LETTER.match(c))
+    return (non_ascii / len(letters)) <= threshold
+
 
 def classify_text(category: str | None, text: str) -> str:
-    """Core classifier: 'topical' | 'crypto-general' | 'noise'."""
+    """Core classifier: 'topical' | 'crypto-general' | 'noise'.
+
+    English-only + crypto-specific: non-English text is noise regardless of
+    category; general/unknown text needs a crypto signal to be kept.
+    """
+    text = _normalize(text)
+    if not is_english(text):
+        return "noise"
     cat = str(category or "").strip().lower()
     if cat in TOPICAL_CATEGORIES:
         return "topical"

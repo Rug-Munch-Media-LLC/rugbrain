@@ -67,7 +67,7 @@ def scroll_all(collection: str, batch: int = 2000):
 
 
 def _post(path: str, body: dict, timeout: int = 300) -> dict:
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310 — Qdrant http://, audited 2026-09-20
         f"{QDRANT}{path}",
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"},
