@@ -1,0 +1,11 @@
+# rugbrain-consolidate.timer — hourly sync of actively-ingested collections.
+[Unit]
+Description=Hourly RugBrain consolidation sync
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=rugbrain-consolidate.service
+
+[Install]
+WantedBy=timers.target

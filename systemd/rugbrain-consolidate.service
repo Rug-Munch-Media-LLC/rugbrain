@@ -1,0 +1,19 @@
+# rugbrain-consolidate — incremental sync of active collections into rag_documents
+#
+# Writers still target the legacy collections (news_to_rag -> news_v2, the
+# ingest crons -> known_scams / threat_intel_v2 / scam_intel_v2 / wallet_v2 …);
+# unified reads serve rag_documents. This hourly sync copies only points that
+# are not there yet (existence check — no re-embedding of existing points).
+#
+# Deploy:
+#   cp systemd/rugbrain-consolidate.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rugbrain-consolidate.timer
+[Unit]
+Description=RugBrain incremental consolidation into rag_documents
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/bin/bash /srv/work/repos/rugbrain/scripts/consolidate-active.sh
+Nice=15
