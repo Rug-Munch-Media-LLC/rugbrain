@@ -576,7 +576,7 @@ find src/rugbrain -name '*.py' -exec wc -l {} + | sort -rn
 # top-level function+class counts
 rg -c '^(async )?def |^class ' src/rugbrain/<file>
 # backend leftovers
-ssh talos 'cd /srv/work/repos/rmi-backend && find app -maxdepth 2 -iname "*rag*"'
+ssh <internal-host> 'cd <repo-root> && find app -maxdepth 2 -iname "*rag*"'
 # rugbrain backend coupling
 rg -n 'from app\.|RAG_API|localhost:8000' src/rugbrain -g '*.py'
 # existing ratchet baseline

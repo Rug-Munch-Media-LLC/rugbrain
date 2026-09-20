@@ -56,7 +56,7 @@ services:
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-valkey
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via the environment; no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=http://rmi-langfuse:3000
@@ -67,7 +67,7 @@ services:
       - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
       # Embedding provider (qwen3-embedding-4b, 2560d): EMBED_PROVIDER=local
       # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-4B,
-      # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag / gopass —
+      # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
       - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
@@ -79,7 +79,7 @@ services:
       # B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY are required for the
       # endpoint; B2_S3_ENDPOINT defaults to s3.us-east-005.backblazeb2.com.
       # Supplied via env_file (.env.rag) — no bare .env in the repo (fleet
-      # no-env-files hook; secrets sourced from gopass).
+      # no-env-files hook; secrets sourced from the environment).
       #
       # Chain-data query endpoint (/api/v1/rag/chain/query) — chain-indexer
       # parquet at b2-crypt:chain-data/parquet/. The b2-crypt remote is
@@ -122,7 +122,7 @@ services:
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-valkey
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via env (gopass rmi/infra/redis_password); no default is committed}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?REDIS_PASSWORD must be supplied via the environment; no default is committed}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=http://rmi-langfuse:3000
