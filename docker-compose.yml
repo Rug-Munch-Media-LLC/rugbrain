@@ -64,7 +64,9 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
-      - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
+      - QWEN_EMBED_URL=http://172.18.0.1:8004/v1
+      # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
+      - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
       # Embedding provider (qwen3-embedding-4b, 2560d): EMBED_PROVIDER=local
       # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-4B,
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
@@ -129,7 +131,9 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
-      - QWEN_EMBED_URL=http://172.22.0.1:8004/v1
+      - QWEN_EMBED_URL=http://172.18.0.1:8004/v1
+      # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
+      - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
       # Embedding provider — see rag-api service for semantics.
       # rag-ingest is the BULK worker: default to DeepInfra (same model,
       # ~80x faster) so heavy ingestion never saturates the local server.
