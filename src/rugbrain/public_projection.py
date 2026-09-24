@@ -47,6 +47,11 @@ _ALLOWED_VERDICTS = frozenset({"clean", "defense", "weakness", "mixed", "unknown
 _INTERNAL_SOURCE_HOST = re.compile(
     r"(?i)(?:^|[.:-])(?:rugmunch|rmi|talos|cinnabox|netcup|internal)(?:[.:-]|$)|\.local$"
 )
+_PROMPT_INJECTION = re.compile(
+    r"(?i)(?:ignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions|"
+    r"system\s+prompt|you\s+are\s+now|new\s+instructions?\s*:|forget\s+everything|"
+    r"jailbreak|dan\s+mode|<system>|</system>)"
+)
 _SECRET_OR_INTERNAL = re.compile(
     r"(?i)(?:/srv/|/root/|/home/dev/|\b(?:qwen|deepinfra|deepseek|llama\.cpp|contextcrypto|"
     r"master_skills|dispatch_brief|rugmunch|rmi-[a-z]+|talos|netcup)\b|"
@@ -62,8 +67,8 @@ def _clean_text(value: Any, field: str) -> str:
     if value is None:
         return ""
     text = str(value).strip()
-    if _SECRET_OR_INTERNAL.search(text):
-        raise ProjectionError(f"public projection contains internal material in {field}")
+    if _SECRET_OR_INTERNAL.search(text) or _PROMPT_INJECTION.search(text):
+        raise ProjectionError(f"public projection contains unsafe instruction content in {field}")
     return text
 
 

@@ -119,6 +119,7 @@ _FORBIDDEN_PUBLIC_KEYS = frozenset(
         "secret",
         "served_by",
         "source_path",
+        "source_kind",
         "system_prompt",
         "trace_backend",
         "vector",

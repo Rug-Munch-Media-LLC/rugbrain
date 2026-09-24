@@ -18,6 +18,12 @@ from rugbrain.public_projection import (
     PUBLIC_SOURCE_KIND,
 )
 
+_PROMPT_INJECTION = re.compile(
+    r"(?ix)"
+    r"(?:\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions\b"
+    r"|\bsystem\s+prompt\b|\byou\s+are\s+now\b|\bnew\s+instructions?\s*:"
+    r"|\bforget\s+everything\b|\bjailbreak\b|\bdan\s+mode\b|<system>|</system>)"
+)
 _DANGEROUS_REQUEST = re.compile(
     r"(?ix)"
     r"(?:\b(?:deploy|execute|run|launch|automate)\b[^.]{0,80}\b(?:exploit|malware|ransomware|dropper|shell)\b"
@@ -32,8 +38,9 @@ _PUBLIC_SOURCE_KINDS = frozenset({PUBLIC_SOURCE_KIND, PUBLIC_CODE_SOURCE_KIND})
 
 
 def public_code_request_allowed(query: str) -> bool:
-    """Return False for requests that would enable operational harm."""
-    return not _DANGEROUS_REQUEST.search((query or "").strip())
+    """Return False for prompt injection or operational-harm requests."""
+    normalized = (query or "").strip()
+    return not (_DANGEROUS_REQUEST.search(normalized) or _PROMPT_INJECTION.search(normalized))
 
 
 def _is_public_projection_hit(hit: dict[str, Any]) -> bool:

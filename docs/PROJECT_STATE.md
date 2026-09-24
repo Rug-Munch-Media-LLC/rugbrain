@@ -23,6 +23,7 @@ Enforce the public/internal audience boundary in search, coding enrichment, inge
 - Raw ContextCrypto code-mode retrieval is hidden behind an operator-only opt-in scope; public coding search uses curated RugBrain knowledge by default.
 - Added the reviewed `public_crypto_patterns` projection contract and a dry-run-first JSONL importer; raw ContextCrypto collections are never read by the importer. Public code projections may include reviewed open-source library snippets and defensive exploit knowledge, never internal apps/repos.
 - Public crypto-code search is served only from the projection and refuses requests to weaponize or execute attacks. Approved public/open-source snippets may be returned with public URLs/licenses; internal apps/repos remain unavailable.
+- Applied a reviewed two-record public seed (OpenZeppelin ReentrancyGuard and SWC-128); future additions must pass the same projection, license, prompt-injection, and leak checks.
 - Added audience-boundary, route, ingest, code-mode, and projection regression coverage.
 - Accepted the audience/projection rules in `docs/RAG-MCP-BOUNDARY.md` and `docs/DATA-PLACEMENT.md`.
 
@@ -31,7 +32,7 @@ Enforce the public/internal audience boundary in search, coding enrichment, inge
 - Full-repository mypy and Ruff gates retain unrelated baseline failures.
 - Retired empty 1024-dimensional Qdrant placeholders require a separate migration decision.
 - The 8B corpus is still incomplete; no reader/writer cutover is allowed.
-- PublicContextCrypto projections are not populated yet; raw ContextCrypto collections must remain internal.
+- PublicContextCrypto projections contain only the reviewed seed; expansion remains gated and raw ContextCrypto collections must remain internal.
 
 ## Next step
 

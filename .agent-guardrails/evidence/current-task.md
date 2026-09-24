@@ -40,6 +40,10 @@ RugBrain public crypto-intelligence audience boundary and canonical 2560-dimensi
 - Projection importer dry-runs validated both pattern and public-code samples; no live projection was written.
 - No public ContextCrypto projection is populated yet; raw internal code and source coordinates remain internal-only.
 - 8B cutover gate remains closed: the active re-embed process is still processing `codebase_reference_v2` at approximately 290k/2.13M points; `agent_vectors_8b` is 0/141 and multiple targets are incomplete. No 8B routing or service cutover was performed.
+- Applied reviewed public seed: OpenZeppelin ReentrancyGuard (MIT) and SWC-128 defensive pattern (MIT); `public_crypto_patterns` now has 2 points at 2560 dimensions.
+- Public code output sanitizer now removes source-kind labels and public query/projection guards reject prompt-injection instructions; 50 focused tests, Ruff, and targeted mypy passed after the change.
+- Full audience-boundary suite after seed/safety changes: `122 passed`; gitleaks clean.
+- Live after restart: public code queries return 2/1 approved results with no `contextcrypto` or `source_kind` strings; injection and operational-harm requests return blocked=true; internal collection request returns 403.
 
 ## Required command evidence
 - `pytest -q tests/test_qdrant_store.py tests/test_qdrant_store_write_gate.py tests/test_content_engine.py tests/test_routes_core.py tests/test_subscriber.py tests/test_main_health.py tests/test_routes_ingest.py tests/test_routes_search.py tests/test_rag_tools_boundary.py tests/test_crypto_code_retrieval.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_search_quality.py tests/test_mcp_bridge.py` — executed via `heavy-run pytest`; 120 passed.

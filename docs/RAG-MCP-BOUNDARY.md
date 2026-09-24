@@ -243,7 +243,9 @@ then uses `--apply` only after the source, license, and public-safety review.
 The importer reads no ContextCrypto collection directly; it accepts only
 records already marked `audience=public` and an approved public source kind;
 code snippets additionally require `source_kind=contextcrypto_public_code` and
-`public_safe=true`.
+`public_safe=true`. The reviewed two-record seed is
+`data/public_crypto_patterns_seed.jsonl`; expand it only through the same
+projection and leak-scan gates.
 
 ---
 
