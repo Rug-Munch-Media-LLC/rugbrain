@@ -4,11 +4,11 @@ Last updated: 2026-09-24
 
 ## Goal
 
-Keep RugBrain on one canonical Qwen3-Embedding-4B vector space (2560 dimensions) and make ingestion/readiness fail visibly when Qdrant schemas or upstream dependencies diverge.
+Keep RugBrain as the public crypto-intelligence and entity layer, while ContextCrypto remains the private code/security/engineering knowledge tool. The public surface must answer with curated evidence without exposing internal code, prompts, paths, model/provider identity, or detection methodology.
 
 ## Current focus
 
-Validate and ship the canonical 2560-dimensional Qdrant/search/ingestion path without touching the separate 8B re-embedding work.
+Enforce the public/internal audience boundary in search, coding enrichment, ingestion, and response serialization. Preserve the 2560-dim canonical path and do not cut over to the separate 8B corpus until its migration gates pass.
 
 ## Done recently
 
@@ -16,15 +16,23 @@ Validate and ship the canonical 2560-dimensional Qdrant/search/ingestion path wi
 - Added dynamic dense/sparse vector-name discovery for hybrid collections.
 - Removed the retired 1024-dimensional startup collection bootstrap.
 - Added schema-aware health/readiness checks and an additive `/embed` compatibility route.
-- Made empty content-draft generation safe when no stories are available.
-- Focused regression suite: 44 passed; changed-file Ruff and targeted mypy passed.
+- Normalized provider embedding URLs and stopped `/embed` responses from exposing provider identity.
+- Added `knowledge_boundary.py` as an explicit public collection allowlist and internal collection classifier.
+- Public search/ingestion now reject internal ContextCrypto collection names.
+- Public search responses recursively remove source paths, prompts, model/provider fields, raw payloads, and graph coordinates.
+- Raw ContextCrypto code-mode retrieval is hidden behind an operator-only opt-in scope; public coding search uses curated RugBrain knowledge by default.
+- Added the reviewed `public_crypto_patterns` projection contract and a dry-run-first JSONL importer; raw ContextCrypto collections are never read by the importer. Public code projections may include reviewed open-source library snippets and defensive exploit knowledge, never internal apps/repos.
+- Public crypto-code search is served only from the projection and refuses requests to weaponize or execute attacks. Approved public/open-source snippets may be returned with public URLs/licenses; internal apps/repos remain unavailable.
+- Added audience-boundary, route, ingest, code-mode, and projection regression coverage.
+- Accepted the audience/projection rules in `docs/RAG-MCP-BOUNDARY.md` and `docs/DATA-PLACEMENT.md`.
 
 ## Blockers
 
 - Full-repository mypy and Ruff gates retain unrelated baseline failures.
-- Production has not yet been restarted with the branch changes.
 - Retired empty 1024-dimensional Qdrant placeholders require a separate migration decision.
+- The 8B corpus is still incomplete; no reader/writer cutover is allowed.
+- PublicContextCrypto projections are not populated yet; raw ContextCrypto collections must remain internal.
 
 ## Next step
 
-Run the guardrail check, review the branch diff, commit only intended RugBrain changes, push `fix/rugbrain-canonical-2560-rag`, then restart and smoke-test only RugBrain.
+Run focused tests/lint/type checks, review the audience-boundary diff, commit and push only intended RugBrain changes, then perform non-secret public-route smoke checks without touching the re-embedding service.

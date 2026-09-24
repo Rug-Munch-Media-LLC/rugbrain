@@ -1,4 +1,8 @@
-"""Crypto-code retrieval over the ContextCrypto Qdrant collections.
+"""Internal crypto-code retrieval over ContextCrypto Qdrant collections.
+
+This module is not a public RAG surface. Public callers must use curated
+RugBrain collections; the HTTP route is operator-gated and public coding
+enrichment is disabled by default.
 
 Searches two read-only collections that live on the same Qdrant instance
 as the RugBrain collections (populated by the ContextCrypto ingest):
@@ -333,8 +337,18 @@ async def search_crypto_code(
     severity: str | None = None,
     ecosystem: str | None = None,
     force: bool = False,
+    *,
+    audience: str = "internal",
 ) -> dict[str, Any]:
-    """Public entry point: classify, then retrieve (or report not-routed)."""
+    """Internal entry point: classify, then retrieve (or report not-routed)."""
+    if audience != "internal":
+        return {
+            "query": query,
+            "routed": False,
+            "results": [],
+            "total": 0,
+            "note": "raw code retrieval is internal-only",
+        }
     routed = force or classify_crypto_code_query(query)
     if not routed:
         return {
@@ -361,15 +375,22 @@ async def search_crypto_code(
 
 
 async def augment_coding_results(
-    query: str, results: list[dict[str, Any]], limit: int = 5
+    query: str,
+    results: list[dict[str, Any]],
+    limit: int = 5,
+    *,
+    audience: str = "public",
 ) -> list[dict[str, Any]]:
-    """Merge ContextCrypto hits into coding-search results when the query
-    is a crypto-CODE question. Degrades silently when Qdrant/embedder are
-    unavailable so the existing coding path never breaks."""
-    if not classify_crypto_code_query(query):
+    """Optionally merge raw ContextCrypto hits for an internal caller.
+
+    Public coding search must not receive raw ContextCrypto code or source
+    coordinates. The default is therefore fail-closed: callers must opt in to
+    ``audience="internal"`` after authentication and policy review.
+    """
+    if audience != "internal" or not classify_crypto_code_query(query):
         return results
     try:
-        crypto = await search_crypto_code(query, top_k=limit)
+        crypto = await search_crypto_code(query, top_k=limit, audience="internal")
     except Exception as e:
         logger.warning("crypto_code_augment_failed err=%s", e)
         return results

@@ -1,6 +1,6 @@
 # RAG ↔ MCP Boundary — Design Specification
 
-> **Status:** proposal for operator decision · owner=Rug Munch Media LLC Engineering
+> **Status:** accepted v1 · owner=Rug Munch Media LLC Engineering
 > **Supersedes:** nothing — extends `DATA-PLACEMENT.md` (the one-line rule survives)
 > **Measured:** 2026-09-20 against live Qdrant + both service surfaces
 
@@ -197,7 +197,57 @@ evidence" — the boundary is only proven by evals.
 
 ---
 
-## 7. Decision checklist
+## 7. Accepted audience boundary (v1)
+
+The two systems share infrastructure, not authority. The implemented policy
+is fail-closed:
+
+| Audience | May retrieve | Must not retrieve |
+|---|---|---|
+| **RugBrain public** | Explicitly allowlisted crypto-intelligence collections plus reviewed public/open-source crypto code and security-pattern projections (`defi_exploits`, `contract_audits`, `crypto_vulnerabilities`, `threat_intel_v2`, `public_crypto_patterns`, and curated product knowledge) | ContextCrypto internal/private code collections, our own app/repo source coordinates, prompts, model/provider identity, routing/configuration, fleet paths, secrets, or raw tool payloads |
+| **ContextCrypto internal** | Full code graph, `codebase_reference`, `security_patterns`, internal repos, skills, routing, and explicitly public projections | Nothing is silently copied into the public audience; internal retrieval is read-through or operator-scoped |
+
+Implementation rules:
+
+1. `knowledge_boundary.py` is the single collection allowlist. New collections
+   are private until reviewed and added explicitly.
+2. Public search and ingestion reject ContextCrypto/internal collection names
+   with a generic error that does not confirm the collection exists.
+3. Public responses pass through a recursive sanitizer that removes source
+   paths, prompts, model/provider fields, raw payloads, and graph coordinates.
+4. Raw ContextCrypto code retrieval remains internal-only. The public
+   `/search/crypto-code` surface reads only reviewed public/open-source
+   projections; it never falls back to `codebase_reference`,
+   `security_patterns`, or our own repositories.
+5. Public code projections may contain genuinely useful code snippets from
+   reviewed public/open-source crypto libraries, with public URLs and license
+   metadata. Internal source paths, private repos, prompts, secrets, and
+   unreviewed PoCs never enter `public_crypto_patterns`.
+6. The public product may explain zero-days and exploit mechanics at a
+   defensive/educational level and provide authorized regression tests. It
+   refuses requests to deploy, drain, steal, evade, or otherwise operationalize
+   an attack against someone else's systems.
+7. The public product may state **what** a vulnerability or exploit does and
+   cite public evidence. It must not reveal retrieval infrastructure, model
+   identity, system prompts, internal source paths, or security-detection
+   methodology. Internal agents use ContextCrypto for those questions.
+
+The next migration step is a redacted, provenance-preserving projection from
+approved ContextCrypto patterns into `public_crypto_patterns`; it is not a
+bulk copy and does not re-embed the same internal payload into a public path.
+
+The projection contract is implemented in
+`src/rugbrain/public_projection.py`. An operator runs
+`python scripts/ingest_public_contextcrypto.py reviewed.jsonl` for a dry run,
+then uses `--apply` only after the source, license, and public-safety review.
+The importer reads no ContextCrypto collection directly; it accepts only
+records already marked `audience=public` and an approved public source kind;
+code snippets additionally require `source_kind=contextcrypto_public_code` and
+`public_safe=true`.
+
+---
+
+## 8. Decision checklist
 
 1. **Interface:** A (hard split) or **B (read-through bridge, recommended)**?
 2. **RAG consolidation:** execute the `QDRANT-CONSOLIDATION.md` plan now

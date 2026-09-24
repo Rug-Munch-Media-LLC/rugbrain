@@ -33,6 +33,9 @@ async def search_scam_knowledge(
     results = await _e.search_multi_collection(
         query, collections=colls, limit=limit, min_similarity=min_similarity
     )
+    from rugbrain.knowledge_boundary import sanitize_public_result
+
+    results = [sanitize_public_result(result) for result in results]
     return {
         "query": query,
         "collections": colls,
@@ -47,11 +50,15 @@ async def search_coding_knowledge(
     collections: list[str] | None = None,
     limit: int = 10,
     min_similarity: float = 0.4,
+    *,
+    include_contextcrypto: bool = False,
 ) -> dict[str, Any]:
     """Search the smart-contract coding-knowledge base.
 
     Defaults to CODING_COLLECTIONS (coding_knowledge, solidity_patterns,
-    solana_patterns, contract_security, audit_findings). Results whose content
+    solana_patterns, contract_security, audit_findings). Raw ContextCrypto
+    enrichment is opt-in for explicitly internal callers; public calls remain
+    on the curated product corpus. Results whose content
     carries code (contract/function/struct bodies) are flagged with
     ``has_code_snippet`` and enriched with ``code_blocks`` (fenced blocks
     extracted intact, language-tagged) and ``code_answer`` (the content with
@@ -71,14 +78,25 @@ async def search_coding_knowledge(
         r["code_blocks"] = extract_code_blocks(content)
         r["code_answer"] = format_code_answer(content)
 
-    # Crypto Code Mode: merge ContextCrypto collection hits (codebase_reference
-    # + security_patterns) for crypto-CODE queries. Degrades silently.
-    try:
-        from rugbrain.crypto_code_retrieval import augment_coding_results
+    if include_contextcrypto:
+        # Raw ContextCrypto code is an internal-only enrichment path. Public
+        # coding search uses the curated RAG collections above.
+        try:
+            from rugbrain.crypto_code_retrieval import augment_coding_results
 
-        results = await augment_coding_results(query, results, limit=limit)
-    except Exception as exc:  # best-effort enrichment, never breaks coding search
-        logger.debug("crypto_code_augment_failed err=%s", exc)
+            results = await augment_coding_results(
+                query,
+                results,
+                limit=limit,
+                audience="internal",
+            )
+        except Exception as exc:  # best-effort enrichment, never breaks coding search
+            logger.debug("crypto_code_augment_failed err=%s", exc)
+    if not include_contextcrypto:
+        from rugbrain.knowledge_boundary import sanitize_public_result
+
+        results = [sanitize_public_result(result) for result in results]
+
     return {
         "query": query,
         "collections": colls,

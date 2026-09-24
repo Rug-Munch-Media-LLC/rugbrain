@@ -38,12 +38,9 @@ async def health() -> dict[str, str]:
 
 @router.post("/embed")
 async def embed_text(request: EmbedRequest) -> dict[str, Any]:
-    """Embed text via Qwen3-Embedding-4B and return the vector.
+    """Return an embedding without exposing implementation details.
 
-    Canonical chain (2026-08-29 consolidation): DeepInfra primary — the
-    SAME qwen3-embedding-4b model as local :8004, so its 2560-dim vectors
-    are index-compatible — then local llama.cpp :8004 fallback, then fail
-    loud (502). The retired OpenRouter remote lane is gone.
+    Public responses intentionally omit provider, model, and routing metadata.
     """
     import httpx
 
@@ -85,7 +82,7 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
                         from rugbrain.dim_policy import normalize_dims
 
                         vec = normalize_dims(vec, request.dimensions)
-                    return {"embedding": vec, "dim": len(vec), "served_by": name}
+                    return {"embedding": vec, "dim": len(vec)}
                 last_exc = RuntimeError(f"{name} HTTP {r.status_code}")
         except Exception as e:
             last_exc = e

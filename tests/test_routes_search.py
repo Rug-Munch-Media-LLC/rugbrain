@@ -87,6 +87,51 @@ async def test_search_empty_query_short_circuits(client: AsyncClient, mock_rag) 
 
 
 @pytest.mark.asyncio
+async def test_search_rejects_internal_collection(client: AsyncClient) -> None:
+    resp = await client.get(
+        "/search",
+        params={"q": "reentrancy", "collection": "codebase_reference"},
+    )
+    assert resp.status_code == 403
+    assert resp.json() == {"detail": {"error": "collection_not_available"}}
+
+
+@pytest.mark.asyncio
+async def test_search_sanitizes_internal_fields(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_emb(_q: str) -> list[float]:
+        return [0.1] * 8
+
+    class FakeStore:
+        async def hybrid_search(self, **_: Any) -> list[dict[str, Any]]:
+            return [
+                {
+                    "id": "public-1",
+                    "content": "Qwen model at /srv/work/repos/internal returned a report",
+                    "metadata": {
+                        "file_path": "src/internal/service.py",
+                        "model": "private-model",
+                        "source": "https://example.com/audit",
+                    },
+                }
+            ]
+
+    import rugbrain.embeddings as emb_mod
+    import rugbrain.qdrant_store as qd_mod
+
+    monkeypatch.setattr(emb_mod, "get_query_embedding", fake_emb, raising=False)
+    monkeypatch.setattr(qd_mod, "QdrantVectorStore", lambda: FakeStore(), raising=False)
+
+    resp = await client.get("/search", params={"q": "reentrancy"})
+    assert resp.status_code == 200
+    result = resp.json()["results"][0]
+    assert "metadata" not in result or "file_path" not in result["metadata"]
+    assert "model" not in result.get("metadata", {})
+    assert "/srv/" not in result["content"]
+
+
+@pytest.mark.asyncio
 async def test_search_fails_loud_503_when_embedder_down(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

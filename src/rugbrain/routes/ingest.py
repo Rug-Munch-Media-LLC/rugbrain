@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -29,6 +29,7 @@ class IngestDocument(BaseModel):
     source: str = "api"
     severity: str = "medium"
     chain: str = ""
+    audience: Literal["public"] = "public"
 
 
 class IngestRequest(BaseModel):
@@ -53,10 +54,25 @@ async def ingest_documents(
           -d '{"documents":[{"content":"Flash loan attack on...","collection":"defi_exploits","severity":"high"}]}'
     """
     from rugbrain.embeddings import get_embedding
+    from rugbrain.knowledge_boundary import (
+        CollectionNotPublic,
+        require_public_collection,
+        sanitize_public_result,
+    )
     from rugbrain.qdrant_store import QdrantVectorStore
 
     if not body.documents:
         return {"status": "ok", "ingested": 0, "results": []}
+
+    try:
+        normalized_collections = [
+            require_public_collection(doc.collection) for doc in body.documents
+        ]
+    except CollectionNotPublic as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "collection_not_available"},
+        ) from exc
 
     # Rate limit by client IP
     hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
@@ -77,7 +93,7 @@ async def ingest_documents(
     store = QdrantVectorStore()
     results: list[dict[str, Any]] = []
 
-    for doc in body.documents:
+    for doc, collection in zip(body.documents, normalized_collections, strict=True):
         try:
             embedding = await get_embedding(doc.content)
             if not embedding:
@@ -89,16 +105,16 @@ async def ingest_documents(
             doc_id = doc.doc_id or doc.content[:64]
             ok = await store.insert(
                 doc_id=doc_id,
-                collection=doc.collection,
+                collection=collection,
                 embedding=embedding,
                 content=doc.content,
-                metadata=doc.metadata,
-                source=doc.source,
+                metadata=sanitize_public_result(doc.metadata),
+                source=sanitize_public_result(doc.source),
                 severity=doc.severity,
                 chain=doc.chain,
             )
             results.append(
-                {"doc_id": doc_id, "status": "ok" if ok else "failed", "collection": doc.collection}
+                {"doc_id": doc_id, "status": "ok" if ok else "failed", "collection": collection}
             )
         except Exception as e:
             logger.warning("ingest_failed doc_id=%s error=%s", doc.doc_id, e)

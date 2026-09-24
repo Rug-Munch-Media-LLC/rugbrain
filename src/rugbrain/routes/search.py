@@ -22,6 +22,11 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from rugbrain import endpoints as _ep
+from rugbrain.knowledge_boundary import (
+    CollectionNotPublic,
+    require_public_collection,
+    sanitize_public_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +147,14 @@ async def search_threat_intel(
     if not q:
         return {"results": [], "query": q, "collection": collection, "total": 0}
 
+    try:
+        collection = require_public_collection(collection)
+    except CollectionNotPublic as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "collection_not_available"},
+        ) from exc
+
     # Rate limit /search by client IP (not spoofable via headers). Each
     # search performs an embedding + Qdrant query (+ optional rerank), so an
     # unthrottled caller could burn significant compute.
@@ -198,7 +211,6 @@ async def search_threat_intel(
         filters=filters,
     )
 
-    reranker_method = None
     reranker_applied = False
     if rerank and results:
         try:
@@ -217,10 +229,8 @@ async def search_threat_intel(
                     if isinstance(idx, int) and 0 <= idx < len(results):
                         results[idx]["rerank_score"] = r.get("relevance_score", 0.0)
                         results[idx]["reranked"] = True
-                        results[idx]["rerank_method"] = "qwen3-reranker-4b"
                 results.sort(key=lambda r: r.get("rerank_score", 0.0), reverse=True)
                 reranker_applied = True
-                reranker_method = "qwen3-reranker-4b"
         except Exception as e:
             logger.debug("search rerank failed (non-critical): %s", e)
 
@@ -330,7 +340,9 @@ async def search_threat_intel(
     except Exception as e:
         logger.debug("reflection_failed (non-critical): %s", e)
 
-    results = results[:limit]  # rerank fetches 20+ candidates; honour the caller's limit
+    results = [sanitize_public_result(result) for result in results[:limit]]
+    if pattern_matches is not None:
+        pattern_matches = sanitize_public_result(pattern_matches)
     return {
         "results": results,
         "query": q,
@@ -339,7 +351,6 @@ async def search_threat_intel(
         "reflection": reflection,
         "filters_applied": filters is not None,
         "reranker_applied": reranker_applied,
-        "reranker_method": reranker_method,
         "rating_filters_applied": rating_filters_applied,
         "rating_boosts_applied": rating_boosts_applied,
         "chain_data_applied": chain_data_applied,
@@ -396,6 +407,14 @@ async def search_multi(
 
     if not q:
         return {"results": [], "query": q, "collections": cols, "total": 0}
+
+    try:
+        cols = [require_public_collection(col) for col in cols]
+    except CollectionNotPublic as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "collection_not_available"},
+        ) from exc
 
     # Rate limit by client IP
     hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
@@ -463,7 +482,6 @@ async def search_multi(
 
     # Optional rerank
     reranker_applied = False
-    reranker_method: str | None = None
     if do_rerank and fused:
         try:
             from rugbrain.reranker import rerank as _rerank
@@ -480,22 +498,19 @@ async def search_multi(
                     if isinstance(r_idx, int) and 0 <= r_idx < len(docs):
                         fused[r_idx]["rerank_score"] = r.get("relevance_score", 0.0)
                         fused[r_idx]["reranked"] = True
-                        fused[r_idx]["rerank_method"] = "qwen3-reranker-4b"
                 fused[:top_n] = sorted(
                     fused[:top_n], key=lambda r: r.get("rerank_score", 0.0), reverse=True
                 )
                 reranker_applied = True
-                reranker_method = "qwen3-reranker-4b"
         except Exception as e:
             logger.debug("search_multi rerank failed (non-critical): %s", e)
 
     return {
-        "results": fused[:lim],
+        "results": [sanitize_public_result(result) for result in fused[:lim]],
         "query": q,
         "collections": cols,
         "total": len(fused[:lim]),
         "reranker_applied": reranker_applied,
-        "reranker_method": reranker_method,
     }
 
 
@@ -560,14 +575,16 @@ async def scam_check(
         sim = r.get("similarity", 0)
         sev = r.get("severity", "")
         matches.append(
-            {
-                "id": r.get("id", ""),
-                "content": (r.get("content", "") or "")[:300],
-                "similarity": round(sim, 4),
-                "severity": sev,
-                "collection": r.get("metadata", {}).get("collection", r.get("collection", "")),
-                "source": r.get("source", ""),
-            }
+            sanitize_public_result(
+                {
+                    "id": r.get("id", ""),
+                    "content": (r.get("content", "") or "")[:300],
+                    "similarity": round(sim, 4),
+                    "severity": sev,
+                    "collection": r.get("metadata", {}).get("collection", r.get("collection", "")),
+                    "source": r.get("source", ""),
+                }
+            )
         )
         max_score = max(max_score, sim)
         if sev in ("high", "critical"):
@@ -598,50 +615,34 @@ async def scam_check(
         "total_matches": len(matches),
     }
 
-# ── Crypto Code Mode (ContextCrypto collections) ──────────────────────
-
-
-
 
 # ── Crypto Code Mode (ContextCrypto collections) ──────────────────────
 
 
 @router.get("/search/crypto-code")
 async def search_crypto_code_endpoint(
-    q: str = Query(..., min_length=2, description="crypto-CODE question (contracts, exploits, testing)"),
+    q: str = Query(..., min_length=2, description="public crypto-code question"),
     limit: int = Query(default=10, ge=1, le=50),
-    verdict: str | None = Query(
-        default=None,
-        pattern="^(clean|malicious|defense|weakness|mixed|unknown)$",
-        description="ContextCrypto verdict filter",
-    ),
-    library_id: str | None = Query(default=None, description="codebase_reference library filter"),
-    category: str | None = Query(default=None, description="category filter (Reentrancy, Flash-Loan, ...)"),
-    severity: str | None = Query(
-        default=None,
-        pattern="^(critical|high|medium|low|informational|info|unknown)$",
-        description="security_patterns severity filter",
-    ),
-    ecosystem: str | None = Query(default=None, description="ecosystem filter (EVM, Solana, ...)"),
-    force: bool = Query(default=False, description="bypass the crypto-code classifier"),
 ) -> dict[str, Any]:
-    """Crypto Code Mode — hybrid retrieval over the ContextCrypto collections.
+    """Search reviewed public/open-source crypto code and exploit knowledge.
 
-    Queries classified as crypto-CODE questions (contract patterns, exploit
-    PoCs, testing guidance) are answered from ``codebase_reference`` and
-    ``security_patterns`` with full source attribution (library, file path,
-    verdict label, reason_why). Non-code queries are rejected with
-    ``routed=false`` so general RAG stays unchanged.
+    This endpoint never reads ContextCrypto's internal collections. It serves
+    only the redacted ``public_crypto_patterns`` projection and refuses
+    requests to weaponize or execute attacks.
     """
-    from rugbrain.crypto_code_retrieval import search_crypto_code
+    from rugbrain.public_crypto_code import public_code_request_allowed
 
-    return await search_crypto_code(
-        q,
-        top_k=limit,
-        verdict=verdict,
-        library_id=library_id,
-        category=category,
-        severity=severity,
-        ecosystem=ecosystem,
-        force=force,
-    )
+    if not public_code_request_allowed(q):
+        return {
+            "query": q,
+            "routed": False,
+            "blocked": True,
+            "reason": "unsafe_request",
+            "results": [],
+            "total": 0,
+            "message": "I can help with defensive analysis, public advisories, and authorized code review.",
+        }
+
+    from rugbrain.public_crypto_code import search_public_crypto_code
+
+    return await search_public_crypto_code(q, top_k=limit)

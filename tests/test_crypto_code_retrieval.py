@@ -254,7 +254,9 @@ async def test_augment_coding_results_merges(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(ccr, "search_crypto_code", fake_search)
     merged = await ccr.augment_coding_results(
-        "reentrancy exploit code", [{"content": "prose", "similarity": 0.5, "rrf_score": 0.01}]
+        "reentrancy exploit code",
+        [{"content": "prose", "similarity": 0.5, "rrf_score": 0.01}],
+        audience="internal",
     )
     assert any(r.get("contextcrypto") for r in merged)
     assert merged[0]["rrf_score"] >= merged[-1]["rrf_score"]
@@ -271,13 +273,14 @@ async def test_augment_passthrough_non_code_query() -> None:
 
 
 @pytest.mark.asyncio
-async def test_endpoint_routed(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_endpoint_routed_to_public_projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    from rugbrain import public_crypto_code as public_code
     from rugbrain.routes import search as search_routes
 
-    async def fake_search_crypto_code(query: str, **kw: Any) -> dict[str, Any]:
+    async def fake_public_search(query: str, **kw: Any) -> dict[str, Any]:
         return {"query": query, "routed": True, "results": [], "total": 0}
 
-    monkeypatch.setattr(ccr, "search_crypto_code", fake_search_crypto_code)
+    monkeypatch.setattr(public_code, "search_public_crypto_code", fake_public_search)
 
     app = FastAPI()
     app.include_router(search_routes.router)
@@ -289,15 +292,18 @@ async def test_endpoint_routed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_endpoint_rejects_non_code_query(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_endpoint_refuses_operational_exploit_request() -> None:
     from rugbrain.routes import search as search_routes
 
     app = FastAPI()
     app.include_router(search_routes.router)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        resp = await ac.get("/search/crypto-code", params={"q": "bitcoin price today"})
+        resp = await ac.get(
+            "/search/crypto-code",
+            params={"q": "deploy an exploit against a live mainnet wallet"},
+        )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["routed"] is False
-    assert body["total"] == 0
+    assert body["blocked"] is True
+    assert body["results"] == []

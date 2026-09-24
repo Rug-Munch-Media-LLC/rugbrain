@@ -9,11 +9,13 @@ No URL prefix here — the parent router in ``endpoints.py`` supplies
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+
+from rugbrain.knowledge_boundary import sanitize_public_result
 
 logger = logging.getLogger(__name__)
 
@@ -24,20 +26,10 @@ router: APIRouter = APIRouter(tags=["rag-optimization"])
 async def rag_query_snapshots(
     request: Request, data: dict[str, Any]
 ) -> dict[str, Any] | JSONResponse:
-    """Run read-only SQL over RAG permanence parquet snapshots via DuckDB.
+    """Run a bounded, read-only query over public RAG snapshot data.
 
-    Body: ``{"query": "SELECT ...", "date": "2026-08-01"?, "limit": N?}``.
-    A read-only ``snapshots`` view exposes every parquet snapshot under
-    ``s3://{B2_BUCKET_NAME}/snapshots/`` (filtered by ``date`` when
-    given), so callers can ask questions like:
-
-        SELECT content, metadata FROM snapshots
-        WHERE json_extract_string(metadata, '$.severity') = 'critical';
-
-    Queries are validated to be single, read-only statements (no DDL,
-    DML, extension loading, or external file reads). Credentials come
-    from the process environment (B2_APPLICATION_KEY_ID/KEY,
-    B2_BUCKET_NAME, B2_S3_ENDPOINT) and are never exposed.
+    The public response contains only query results; storage locations and
+    credentials are never returned.
     """
     query = data.get("query", "")
     if not query or not str(query).strip():
@@ -65,36 +57,19 @@ async def rag_query_snapshots(
         return JSONResponse(
             status_code=502,
             content={
-                "error": f"snapshot query failed: {exc}",
+                "error": "snapshot query unavailable",
                 "code": "query.execution_failed",
             },
         )
-    return result
+    return cast(dict[str, Any], sanitize_public_result(result))
 
 
 @router.post("/rag/chain/query", response_model=None)
 async def rag_chain_query(request: Request, data: dict[str, Any]) -> dict[str, Any] | JSONResponse:
-    """Run read-only SQL over chain-indexer parquet snapshots via DuckDB.
+    """Run a bounded, read-only query over public chain-index data.
 
-    Body: ``{"query": "SELECT ...", "chain": "ethereum"?, "date":
-    "2026-08-03"?, "hour": "00"?, "limit": N?}``.
-
-    This is the *second* B2 parquet data source: the chain-indexer's
-    hourly on-chain snapshots (transfers + DEX swaps) at
-    ``b2-crypt:chain-data/parquet/{chain}/{YYYY}/{MM}/{DD}/{HH}/``.
-    Read-only ``chain_events`` (transfers) and ``chain_dex`` (DEX swaps)
-    views are exposed over the requested chain/date/hour prefix, so
-    callers can ask questions like:
-
-        SELECT chain, from_address, to_address, token_address, value
-        FROM chain_events WHERE chain = 'gnosis'
-        ORDER BY block_timestamp DESC LIMIT 10;
-
-    The prefix is downloaded through ``rclone`` (the ``b2-crypt`` remote
-    is content-encrypted, so DuckDB httpfs cannot read it directly) and
-    queried locally. ``chain`` is required when querying B2; ``date`` /
-    ``hour`` narrow the download. Credentials come from the rclone
-    config / process environment and are never exposed.
+    The public response contains only query results; storage locations,
+    remotes, and credentials are never returned.
     """
     query = data.get("query", "")
     if not query or not str(query).strip():
@@ -131,34 +106,25 @@ async def rag_chain_query(request: Request, data: dict[str, Any]) -> dict[str, A
         return JSONResponse(
             status_code=502,
             content={
-                "error": f"chain query failed: {exc}",
+                "error": "chain query unavailable",
                 "code": "query.execution_failed",
             },
         )
-    return result
+    return cast(dict[str, Any], sanitize_public_result(result))
 
 
 @router.get("/rag/chain/catalog")
 async def rag_chain_catalog(request: Request) -> dict[str, Any]:
-    """List the chain-data parquet source available to the RAG.
+    """List the public chain-data capabilities without storage details.
 
-    Returns the configured B2 remote/bucket/prefix, the chain names the
-    indexer writes, and an example prefix for reference. This is static
-    metadata (no B2 round-trip) so callers know what the
-    ``/api/v1/rag/chain/query`` endpoint can reach.
+    Storage remotes, buckets, prefixes, and provider names are intentionally
+    omitted from this public response.
     """
-    from rugbrain.chain_parquet import (
-        DEFAULT_CHAIN_BUCKET,
-        DEFAULT_CHAIN_PREFIX,
-        DEFAULT_CHAIN_REMOTE,
-        KNOWN_CHAINS,
-    )
+    from rugbrain.chain_parquet import KNOWN_CHAINS
 
     return {
-        "data_source": "chain-data-parquet",
-        "remote": f"{DEFAULT_CHAIN_REMOTE}:{DEFAULT_CHAIN_BUCKET}",
-        "prefix": DEFAULT_CHAIN_PREFIX,
-        "layout": "parquet/{chain}/{YYYY}/{MM}/{DD}/{HH}/*.parquet",
+        "data_source": "chain-data",
+        "layout": "chain data partitioned by chain and time",
         "views": ["chain_events (transfers)", "chain_dex (DEX swaps)"],
         "chains": KNOWN_CHAINS,
         "example_query": (

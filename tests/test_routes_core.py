@@ -31,6 +31,7 @@ async def test_embed_normalizes_provider_base_url(monkeypatch: pytest.MonkeyPatc
         )
         result = await embed_text(EmbedRequest(text="health smoke"))
 
-    assert result["served_by"] == "deepinfra"
+    assert "served_by" not in result
+    assert "model" not in result
     assert result["embedding"] == [0.1, 0.2]
     assert provider_route.called

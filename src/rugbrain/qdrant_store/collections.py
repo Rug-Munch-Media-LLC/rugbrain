@@ -68,6 +68,9 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "youtube_videos",
         "newsletters",
         "podcast_episodes",
+        # Explicitly reviewed, redacted ContextCrypto projection only.
+        # Never add the internal ContextCrypto collections to this gate.
+        "public_crypto_patterns",
     }
 )
 

@@ -23,6 +23,19 @@ If a new source is ambiguous, answer this single question: **"is the payload
 something an agent would retrieve to *look at code* (MCP), or to *answer a
 question with facts* (RAG)?"**
 
+Audience is a second, non-negotiable gate:
+
+- **ContextCrypto/internal:** code, source paths, graph metadata, prompts,
+  model/provider/routing details, internal methodology, and security
+  architecture.
+- **RugBrain/public:** curated crypto facts, incidents, audit findings, public
+  vulnerability explanations, and explicitly reviewed public/open-source code
+  or security-pattern projections. Internal code and model identity never
+  become public RAG data.
+- A source can cross the boundary only through a redacted, allowlisted
+  projection with provenance and license metadata. Never expose a raw
+  ContextCrypto collection through a public search or ingestion route.
+
 ---
 
 ## Placement table
@@ -58,10 +71,12 @@ never by repo**:
 4. **Audit reports**: findings prose → RAG `contract_audits`; the audited
    contract code itself (if ingested) → MCP `codebase_reference` (`clean`).
 
-**Never store the same snippet in both systems.** If it's code, it lives in
-MCP; RAG reaches it via `mcp_bridge.py` (`search_codebase`,
-`augment_code_query`) when a query is code-shaped. If it's facts, it lives in
-RAG; MCP does not duplicate it.
+**Never store the same snippet in both systems.** If it's internal code, it
+lives in ContextCrypto and is not copied into RugBrain. A reviewed
+public/open-source exception may create a redacted derivative in
+`public_crypto_patterns` with a public URL and license; the public bot reads
+that projection, while internal agents continue to use the MCP/code graph.
+Public RAG does not call the internal bridge for code retrieval.
 
 ---
 
@@ -70,7 +85,7 @@ RAG; MCP does not duplicate it.
 | Layer | Consumer | Retrieval surface |
 |-------|----------|-------------------|
 | **MCP** | AI agents (the fleet's own toolset) + RAG bridge | `resolve_library`, `query_codebase`, `query_security_context` |
-| **RAG** | End users (bot `/research` `/investigate`, frontend chat, scanner `Known Scam Patterns`) | `/api/v1/rag/v2/*`, `/api/v1/search` |
+| **RAG** | End users (bot `/research` `/investigate`, frontend chat, scanner `Known Scam Patterns`) | `/api/v1/rag/v2/*`, `/api/v1/search`, public `/api/v1/search/crypto-code` projection |
 
-The bridge is the seam: RAG augments a code question by calling MCP
-`query_codebase` + `query_security_context`; MCP never calls RAG.
+The bridge is an internal seam only: RugBrain's public code route never calls
+MCP; it reads only `public_crypto_patterns`. MCP never calls RAG.
