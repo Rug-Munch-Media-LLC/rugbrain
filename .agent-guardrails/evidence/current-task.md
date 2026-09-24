@@ -26,5 +26,6 @@ RugBrain canonical 2560-dimensional Qwen3-Embedding-4B path. The separate 8B re-
 - Empty retired 1024d placeholder collections remain in Qdrant and must be reviewed separately; no destructive collection deletion was performed.
 - Full repository mypy/ruff gates retain unrelated baseline failures.
 - Security: no secrets were added; a prior diagnostic tool output exposed secret-bearing environment values and should be handled as a credential-rotation incident.
-- Performance: schema/name probes are cached per store instance; health checks add bounded Qdrant reads.
-- Continuity: the canonical `/api/v1/embed` route remains unchanged; `/embed` is additive.
+- Follow-up: normalized DeepInfra/local embedding base URLs to append `/embeddings` once, and increased the local fallback timeout to 30 seconds. Route tests cover both URL forms.
+- Follow-up live test: direct `embed_text()` returned a 2560-dimensional vector from DeepInfra; the previous 502 was caused by posting to `https://api.deepinfra.com/v1` and timing out on the local fallback.
+- 8B cutover gate remains closed: the active re-embed process is still processing `codebase_reference_v2` at approximately 290k/2.13M points; `agent_vectors_8b` is 0/141 and multiple targets are incomplete. No 8B routing or service cutover was performed.

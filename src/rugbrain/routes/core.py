@@ -24,6 +24,12 @@ class EmbedRequest(BaseModel):
     dimensions: int | None = None
 
 
+def _embeddings_endpoint(base_url: str) -> str:
+    """Normalize provider URLs that may be configured as a base or endpoint."""
+    normalized = base_url.rstrip("/")
+    return normalized if normalized.endswith("/embeddings") else f"{normalized}/embeddings"
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     """Health check — verifies service is running."""
@@ -51,17 +57,19 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
         attempts.append(
             (
                 "deepinfra",
-                os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings"),
+                _embeddings_endpoint(
+                    os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1")
+                ),
                 os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
                 di_key,
             )
         )
-    attempts.append(("local", f"{int_url.rstrip('/')}/embeddings", model, ""))
+    attempts.append(("local", _embeddings_endpoint(int_url), model, ""))
     last_exc: Exception | None = None
     for name, url, req_model, bearer in attempts:
         # Local probe must fail FAST so the remote fallback engages inside
         # the caller's budget (a wedged :8004 otherwise eats 30s).
-        timeout = 20.0 if name == "deepinfra" else 8.0
+        timeout = 20.0 if name == "deepinfra" else 30.0
         headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
