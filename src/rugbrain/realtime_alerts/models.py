@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 class CriticalAlert(BaseModel):
     """A single detected exploit/critical threat.
 
-    ``id`` is a deterministic UUIDv5 derived from ``source + title +
-    detected_at`` so re-detection of the same incident maps to the same
-    store point (upserts are idempotent).
+    ``id`` is a deterministic UUIDv5 derived from a stable event key.  The
+    timestamp is deliberately excluded: the same transaction is re-polled and
+    must map to the same store point across polls.
     """
 
     id: str = ""
@@ -44,8 +44,20 @@ class CriticalAlert(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         if not self.id:
-            basis = f"{self.source}:{self.title}:{self.detected_at}"
-            self.id = str(uuid.uuid5(uuid.NAMESPACE_URL, basis))
+            if self.tx_hash:
+                event_key = f"tx:{self.tx_hash}"
+            elif self.url:
+                event_key = f"url:{self.url}"
+            else:
+                pair = self.raw.get("pair")
+                if pair:
+                    tokens = self.raw.get("tokens", "")
+                    event_key = f"pair:{self.chain}:{pair}:{tokens}"
+                else:
+                    # Titles are the last-resort stable key for feed-only
+                    # alerts; detected_at is never part of the identity.
+                    event_key = f"title:{self.title}"
+            self.id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{self.source}:{event_key}"))
 
     def text(self) -> str:
         parts = [self.title, self.description]

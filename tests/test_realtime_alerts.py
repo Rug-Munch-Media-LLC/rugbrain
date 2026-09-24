@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -22,12 +23,40 @@ import rugbrain.realtime_alerts as ra
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_critical_alert_id_deterministic() -> None:
+def test_critical_alert_id_deterministic_across_polls() -> None:
     a = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-04T00:00:00+00:00")
-    b = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-04T00:00:00+00:00")
+    b = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-05T00:00:00+00:00")
     assert a.id == b.id
-    c = ra.CriticalAlert(title="Curve Hack", source="test", detected_at="2026-08-05T00:00:00+00:00")
+
+
+def test_critical_alert_id_prefers_transaction_key() -> None:
+    a = ra.CriticalAlert(title="Large swap", source="clickhouse-dex", tx_hash="0xabc")
+    b = ra.CriticalAlert(title="Large swap (updated)", source="clickhouse-dex", tx_hash="0xabc")
+    c = ra.CriticalAlert(title="Large swap", source="clickhouse-dex", tx_hash="0xdef")
+    assert a.id == b.id
     assert a.id != c.id
+
+
+def test_critical_alert_id_uses_feed_url_when_present() -> None:
+    a = ra.CriticalAlert(title="Alert", source="searxng", url="https://example.test/1")
+    b = ra.CriticalAlert(title="Updated alert", source="searxng", url="https://example.test/1")
+    assert a.id == b.id
+
+
+def test_critical_alert_id_uses_pair_for_aggregate_alerts() -> None:
+    a = ra.CriticalAlert(
+        title="Oracle pattern",
+        source="clickhouse-oracle",
+        chain="ethereum",
+        raw={"pair": "ETH/USDC", "tokens": "ETH/USDC"},
+    )
+    b = ra.CriticalAlert(
+        title="Oracle pattern updated",
+        source="clickhouse-oracle",
+        chain="ethereum",
+        raw={"pair": "ETH/USDC", "tokens": "ETH/USDC"},
+    )
+    assert a.id == b.id
 
 
 def test_critical_alert_from_candidate_classifies() -> None:
@@ -612,7 +641,12 @@ async def test_monitor_dedup_skips_second_alert(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(ra._critical_logger, "log", lambda alert: True)
 
     monitor = ra.ExploitMonitor()
-    alert = ra.CriticalAlert(title="Hack", source="test", detected_at=datetime.now(UTC).isoformat())
+    alert = ra.CriticalAlert(
+        title="Hack",
+        source="test",
+        tx_hash=f"test-{uuid4()}",
+        detected_at=datetime.now(UTC).isoformat(),
+    )
     await monitor._handle_candidate(alert)
     await monitor._handle_candidate(alert)  # deduped
     assert calls["nats"] == 1
