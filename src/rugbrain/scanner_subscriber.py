@@ -3,7 +3,7 @@ Scanner Subscriber — live ingestion of high-risk scan findings into Qdrant.
 
 Listens on Redis channel ``rmi:rag:ingest`` for JSON payloads published by
 rmi-backend's ``UnifiedTokenScanner`` after every high/critical-risk scan.
-On receipt: generates a 1024-dim embedding (via the existing embedding pipeline)
+On receipt: generates a 2560-dim embedding (via the canonical embedding pipeline)
 and upserts into the Qdrant ``threat_intel_v2`` collection for live RAG search.
 
 Architecture::
@@ -166,7 +166,7 @@ async def _listen_forever() -> None:
         finally:
             if r is not None:
                 with contextlib.suppress(Exception):
-                    await r.close()
+                    await r.aclose()
 
 
 # ── Message processing ─────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ async def _process_finding(data: dict[str, Any]) -> None:
 
     Steps:
       1. Build a descriptive text from the finding payload.
-      2. Generate a 1024-dim embedding via ``get_embedding()``.
+      2. Generate a 2560-dim embedding via ``get_embedding()``.
       3. Upsert into Qdrant ``threat_intel_v2`` collection via ``QdrantVectorStore.insert()``.
     """
     global _ingested_count, _last_ingested_at

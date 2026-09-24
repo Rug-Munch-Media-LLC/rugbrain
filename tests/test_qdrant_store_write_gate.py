@@ -34,7 +34,9 @@ class TestQdrantWriteGate:
         store = QdrantVectorStore(url=URL)
         with respx.mock(base_url=URL, assert_all_called=False) as respx_mock:
             put_route = respx_mock.put("/collections/rmi_documents/points")
-            ok = await store.insert(doc_id="doc_x", collection="rmi_documents", embedding=[0.1] * 8)
+            ok = await store.insert(
+                doc_id="doc_x", collection="rmi_documents", embedding=[0.1] * 2560
+            )
         assert ok is False
         assert not put_route.called  # blocked before any HTTP write
         assert any(
@@ -51,7 +53,9 @@ class TestQdrantWriteGate:
             put_route = respx_mock.put("/collections/news_v2/points").respond(
                 200, json={"result": {"status": "ok"}}
             )
-            ok = await store.insert(doc_id="doc_owned", collection="news_v2", embedding=[0.1] * 8)
+            ok = await store.insert(
+                doc_id="doc_owned", collection="news_v2", embedding=[0.1] * 2560
+            )
         assert ok is True
         assert put_route.called
 
@@ -67,14 +71,14 @@ class TestQdrantWriteGate:
         store = QdrantVectorStore(url=URL)
         with respx.mock(base_url=URL, assert_all_called=False) as respx_mock:
             blocked = await store.insert(
-                doc_id="d1", collection="rmi_documents__interim", embedding=[0.1] * 8
+                doc_id="d1", collection="rmi_documents__interim", embedding=[0.1] * 2560
             )
             _mock_plain_collection(respx_mock, "news_v2__interim")
             respx_mock.put("/collections/news_v2__interim/points").respond(
                 200, json={"result": {"status": "ok"}}
             )
             allowed = await store.insert(
-                doc_id="d2", collection="news_v2__interim", embedding=[0.1] * 8
+                doc_id="d2", collection="news_v2__interim", embedding=[0.1] * 2560
             )
         assert blocked is False
         assert allowed is True
@@ -91,6 +95,6 @@ class TestQdrantWriteGate:
             put_route = respx_mock.put("/collections/scratch_coll/points").respond(
                 200, json={"result": {"status": "ok"}}
             )
-            ok = await store.insert(doc_id="d3", collection="scratch_coll", embedding=[0.1] * 8)
+            ok = await store.insert(doc_id="d3", collection="scratch_coll", embedding=[0.1] * 2560)
         assert ok is True
         assert put_route.called

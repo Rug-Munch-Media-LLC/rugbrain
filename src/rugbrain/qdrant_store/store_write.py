@@ -93,10 +93,18 @@ class WriteMixin(_types.StoreSurface):
             return False
 
         client = await self._get_client()
-        await _pkg._ensure_collection(collection, len(embedding), client)
+        if not await _pkg._ensure_collection(collection, len(embedding), client):
+            logger.error(
+                "qdrant_insert_blocked collection=%s requested_dim=%d reason=incompatible_schema",
+                collection,
+                len(embedding),
+            )
+            return False
 
         point_id = self._to_uuid(doc_id)
         vector_field = await self._resolve_vector_field(collection, embedding, content, client)
+        if vector_field is None:
+            return False
         payload = {
             "points": [
                 {
@@ -134,19 +142,28 @@ class WriteMixin(_types.StoreSurface):
         content: str,
         client: Any,
     ) -> Any:
-        """Bare vector, or named dense (+BM25 sparse) for named-vector collections."""
+        """Build a Qdrant vector payload using the collection's actual names."""
         import rugbrain.qdrant_store as _pkg
 
-        vector_field: Any = embedding
-        if await self._collection_uses_named_vectors(collection, client):
-            vector_field = {_pkg.DENSE_VECTOR_NAME: embedding}
-            if await self._collection_supports_sparse(collection, client):
-                sparse = await _pkg._embed_sparse(content)
-                if sparse is not None:
-                    vector_field[_pkg.SPARSE_VECTOR_NAME] = {
-                        "indices": sparse[0],
-                        "values": sparse[1],
-                    }
+        if not await self._collection_uses_named_vectors(collection, client):
+            return embedding
+
+        dense_name = await self._get_dense_vector_name(collection, client, len(embedding))
+        if dense_name is None:
+            logger.error(
+                "qdrant_insert_blocked collection=%s reason=missing_dense_vector_name",
+                collection,
+            )
+            return None
+        vector_field: dict[str, Any] = {dense_name: embedding}
+        sparse_name = await self._get_sparse_vector_name(collection, client)
+        if sparse_name is not None:
+            sparse = await _pkg._embed_sparse(content)
+            if sparse is not None:
+                vector_field[sparse_name] = {
+                    "indices": sparse[0],
+                    "values": sparse[1],
+                }
         return vector_field
 
     async def close(self) -> None:

@@ -23,6 +23,8 @@ class HybridRrfQuery:
     sparse: tuple[list[int], list[float]]
     limit: int
     qdrant_filter: dict[str, Any] | None = field(default=None)
+    dense_name: str | None = field(default=None)
+    sparse_name: str | None = field(default=None)
 
 
 class StoreSurface(Protocol):
@@ -37,6 +39,14 @@ class StoreSurface(Protocol):
     async def _collection_uses_named_vectors(
         self, collection: str, client: httpx.AsyncClient
     ) -> bool: ...
+
+    async def _get_dense_vector_name(
+        self, collection: str, client: httpx.AsyncClient, expected_dim: int | None = None
+    ) -> str | None: ...
+
+    async def _get_sparse_vector_name(
+        self, collection: str, client: httpx.AsyncClient
+    ) -> str | None: ...
 
     async def search(
         self,

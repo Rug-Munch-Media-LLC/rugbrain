@@ -156,7 +156,7 @@ async def _poll_forever() -> None:
         finally:
             if r is not None:
                 with contextlib.suppress(Exception):
-                    await r.close()
+                    await r.aclose()
 
 
 # ── Message processing ─────────────────────────────────────────────────────
@@ -201,9 +201,7 @@ async def _process_poller_finding(data: dict[str, Any]) -> None:
     try:
         embedding = await get_embedding(content)
     except Exception as exc:
-        logger.error(
-            "poller_embedding_failed token=%s error=%s", token_address, str(exc)[:120]
-        )
+        logger.error("poller_embedding_failed token=%s error=%s", token_address, str(exc)[:120])
         return
 
     # Upsert into Qdrant threat_intel_v2 collection

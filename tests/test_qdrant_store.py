@@ -11,9 +11,7 @@ import pytest
 import respx
 
 
-def _mock_collection(
-        respx_mock: Any, collection: str = "default", exists: bool = True
-    ) -> None:
+def _mock_collection(respx_mock: Any, collection: str = "default", exists: bool = True) -> None:
     """Mock collection existence check."""
     status = 200 if exists else 404
     respx_mock.get(f"/collections/{collection}").respond(
@@ -22,10 +20,10 @@ def _mock_collection(
 
 
 def _mock_search(
-        respx_mock: Any,
-        results: list[dict[str, Any]],
-        collection: str = "default",
-    ) -> None:
+    respx_mock: Any,
+    results: list[dict[str, Any]],
+    collection: str = "default",
+) -> None:
     """Mock search endpoint with given results."""
     respx_mock.post(f"/collections/{collection}/points/search").respond(
         200, json={"result": results}
@@ -55,7 +53,7 @@ async def test_search_returns_results() -> None:
                 }
             ],
         )
-        results = await store.search(query_embedding=[0.1] * 768, limit=5, min_similarity=0.5)
+        results = await store.search(query_embedding=[0.1] * 2560, limit=5, min_similarity=0.5)
     assert len(results) == 1
     assert results[0]["id"] == "doc1"
     assert results[0]["similarity"] == 0.85
@@ -74,7 +72,7 @@ async def test_search_empty_when_no_results() -> None:
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
         _mock_collection(respx_mock)
         _mock_search(respx_mock, [])
-        results = await store.search(query_embedding=[0.1] * 768, limit=5, min_similarity=0.5)
+        results = await store.search(query_embedding=[0.1] * 2560, limit=5, min_similarity=0.5)
     assert results == []
 
 
@@ -90,7 +88,7 @@ async def test_search_with_filters() -> None:
             200, json={"result": []}
         )
         await store.search(
-            query_embedding=[0.1] * 768,
+            query_embedding=[0.1] * 2560,
             limit=5,
             filters={"chain": "solana"},
         )
@@ -110,7 +108,7 @@ async def test_search_handles_http_500() -> None:
     with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
         _mock_collection(respx_mock)
         respx_mock.post("/collections/default/points/search").respond(500)
-        results = await store.search(query_embedding=[0.1] * 768, limit=5, min_similarity=0.5)
+        results = await store.search(query_embedding=[0.1] * 2560, limit=5, min_similarity=0.5)
     assert results == []
 
 
@@ -125,7 +123,7 @@ async def test_search_handles_network_error() -> None:
         respx_mock.post("/collections/default/points/search").side_effect = Exception(
             "Connection refused"
         )
-        results = await store.search(query_embedding=[0.1] * 768, limit=5, min_similarity=0.5)
+        results = await store.search(query_embedding=[0.1] * 2560, limit=5, min_similarity=0.5)
     assert results == []
 
 
@@ -141,7 +139,7 @@ async def test_search_with_custom_collection() -> None:
             200, json={"result": []}
         )
         results = await store.search(
-            query_embedding=[0.1] * 768,
+            query_embedding=[0.1] * 2560,
             collection="scam_patterns",
             limit=3,
         )
@@ -162,7 +160,7 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection() -> None:
             200, json={"result": []}
         )
         await store.search(
-            query_embedding=[0.1] * 768,
+            query_embedding=[0.1] * 2560,
             collection="threat_intel",
             limit=5,
             min_similarity=0.4,
@@ -171,6 +169,101 @@ async def test_search_uses_named_dense_vector_on_hybrid_collection() -> None:
     request_body = route.calls[0].request.content
     assert b'"name":"dense"' in request_body
     assert b'"vector":' in request_body
+
+
+@pytest.mark.asyncio
+async def test_search_blocks_incompatible_collection_dimension() -> None:
+    """A 1024-dim collection must not receive a canonical 2560-dim query."""
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        respx_mock.get("/collections/legacy_1024").respond(
+            200,
+            json={
+                "result": {"config": {"params": {"vectors": {"size": 1024, "distance": "Cosine"}}}}
+            },
+        )
+        search_route = respx_mock.post("/collections/legacy_1024/points/search")
+        results = await store.search(
+            query_embedding=[0.1] * 2560,
+            collection="legacy_1024",
+            limit=3,
+        )
+
+    assert results == []
+    assert not search_route.called
+
+
+@pytest.mark.asyncio
+async def test_write_uses_configured_vector_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Writes must use the collection's actual dense and sparse names."""
+    import rugbrain.qdrant_store as qdrant_store
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    async def _fake_embed_sparse(text: Any) -> Any:
+        assert text == "custom vector names"
+        return ([7], [0.9])
+
+    monkeypatch.setattr(qdrant_store, "_embed_sparse", _fake_embed_sparse)
+    monkeypatch.setattr(qdrant_store, "_RMI_RAG_QDRANT_WRITE_MODE", "writable")
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        respx_mock.get("/collections/custom_named").respond(
+            200,
+            json={
+                "result": {
+                    "config": {
+                        "params": {
+                            "vectors": {"document": {"size": 2560, "distance": "Cosine"}},
+                            "sparse_vectors": {"lexical": {}},
+                        }
+                    }
+                }
+            },
+        )
+        put_route = respx_mock.put("/collections/custom_named/points").respond(
+            200, json={"result": {"status": "ok"}}
+        )
+        ok = await store.insert(
+            doc_id="custom-vector",
+            collection="custom_named",
+            embedding=[0.1] * 2560,
+            content="custom vector names",
+        )
+
+    assert ok is True
+    body = put_route.calls[0].request.content
+    assert b'"document"' in body
+    assert b'"lexical"' in body
+
+
+@pytest.mark.asyncio
+async def test_search_blocks_named_collection_with_empty_vector_name() -> None:
+    """An invalid empty vector name must not fall back to a bare vector request."""
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        respx_mock.get("/collections/broken_named").respond(
+            200,
+            json={
+                "result": {
+                    "config": {"params": {"vectors": {"": {"size": 2560, "distance": "Cosine"}}}}
+                }
+            },
+        )
+        search_route = respx_mock.post("/collections/broken_named/points/search")
+        results = await store.search(
+            query_embedding=[0.1] * 2560,
+            collection="broken_named",
+            limit=3,
+        )
+
+    assert results == []
+    assert not search_route.called
 
 
 @pytest.mark.asyncio
@@ -189,7 +282,7 @@ async def test_insert_stores_document(monkeypatch: pytest.MonkeyPatch) -> None:
         ok = await store.insert(
             doc_id="doc_001",
             collection="scam_db",
-            embedding=[0.1] * 256,
+            embedding=[0.1] * 2560,
             content="This is a scam pattern",
             metadata={"type": "honeypot"},
             source="manual",
@@ -219,7 +312,7 @@ async def test_insert_fails_on_http_error() -> None:
         ok = await store.insert(
             doc_id="bad_doc",
             collection="test_coll",
-            embedding=[0.1] * 256,
+            embedding=[0.1] * 2560,
         )
     assert ok is False
 
@@ -241,7 +334,7 @@ async def test_insert_creates_collection_if_missing(monkeypatch: pytest.MonkeyPa
         ok = await store.insert(
             doc_id="new_doc",
             collection="new_coll",
-            embedding=[0.1] * 256,
+            embedding=[0.1] * 2560,
         )
     assert ok is True
     assert create_route.called
@@ -284,7 +377,7 @@ async def test_hybrid_search() -> None:
         )
         results = await store.hybrid_search(
             query_text="token risk solana",
-            query_embedding=[0.1] * 768,
+            query_embedding=[0.1] * 2560,
             limit=5,
         )
     assert len(results) >= 1
@@ -319,7 +412,7 @@ async def test_hybrid_search_fallback_to_vector() -> None:
         )
         results = await store.hybrid_search(
             query_text="",
-            query_embedding=[0.1] * 768,
+            query_embedding=[0.1] * 2560,
             limit=5,
         )
     assert len(results) == 1
@@ -337,18 +430,27 @@ async def test_get_qdrant_store_singleton() -> None:
     await s1.close()
 
 
-def _mock_hybrid_collection(
-        respx_mock: Any, collection: str = "default"
-    ) -> None:
+def _mock_hybrid_collection(respx_mock: Any, collection: str = "default") -> None:
     """Mock collection existence check with a BM25 sparse config."""
     respx_mock.get(f"/collections/{collection}").respond(
         200,
-        json={"result": {"config": {"params": {"sparse_vectors": {"bm25": {}}}}}},
+        json={
+            "result": {
+                "config": {
+                    "params": {
+                        "vectors": {"dense": {"size": 2560, "distance": "Cosine"}},
+                        "sparse_vectors": {"bm25": {}},
+                    }
+                }
+            }
+        },
     )
 
 
 @pytest.mark.asyncio
-async def test_insert_includes_sparse_when_collection_supports(monkeypatch: pytest.MonkeyPatch) -> Any:
+async def test_insert_includes_sparse_when_collection_supports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     """insert() should add a BM25 sparse vector for hybrid collections."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
@@ -370,7 +472,7 @@ async def test_insert_includes_sparse_when_collection_supports(monkeypatch: pyte
         ok = await store.insert(
             doc_id="doc_hybrid",
             collection="hybrid_coll",
-            embedding=[0.1] * 1024,
+            embedding=[0.1] * 2560,
             content="solana honeypot rug",
         )
     assert ok is True
@@ -384,7 +486,9 @@ async def test_insert_includes_sparse_when_collection_supports(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_insert_dense_only_when_collection_has_no_sparse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """insert() should keep dense-only payload for legacy collections."""
     import rugbrain.qdrant_store as qdrant_store
     from rugbrain.qdrant_store import QdrantVectorStore
@@ -405,7 +509,7 @@ async def test_insert_dense_only_when_collection_has_no_sparse(monkeypatch: pyte
         ok = await store.insert(
             doc_id="doc_dense",
             collection="dense_only",
-            embedding=[0.1] * 256,
+            embedding=[0.1] * 2560,
             content="legacy content",
         )
     assert ok is True
@@ -448,7 +552,7 @@ async def test_hybrid_search_native_rrf(monkeypatch: pytest.MonkeyPatch) -> Any:
         )
         results = await store.hybrid_search(
             query_text="solana rug",
-            query_embedding=[0.1] * 1024,
+            query_embedding=[0.1] * 2560,
             limit=5,
         )
     assert route.called
@@ -499,7 +603,7 @@ async def test_hybrid_search_falls_back_on_rrf_failure(monkeypatch: pytest.Monke
         )
         results = await store.hybrid_search(
             query_text="solana token",
-            query_embedding=[0.1] * 1024,
+            query_embedding=[0.1] * 2560,
             limit=5,
         )
     assert len(results) == 1
@@ -525,6 +629,6 @@ async def test_hybrid_search_sparse_capability_cached(monkeypatch: pytest.Monkey
             json={"result": {"config": {"params": {"sparse_vectors": {"bm25": {}}}}}},
         )
         respx_mock.post("/collections/default/points/search").respond(200, json={"result": []})
-        await store.hybrid_search(query_text="q1", query_embedding=[0.1] * 1024)
-        await store.hybrid_search(query_text="q2", query_embedding=[0.1] * 1024)
+        await store.hybrid_search(query_text="q1", query_embedding=[0.1] * 2560)
+        await store.hybrid_search(query_text="q2", query_embedding=[0.1] * 2560)
     assert probe.call_count == 1

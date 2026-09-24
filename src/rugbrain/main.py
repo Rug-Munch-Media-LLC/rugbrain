@@ -37,6 +37,7 @@ from rugbrain.endpoints import scam_check_router  # noqa: E402
 from rugbrain.metrics import metrics_router  # noqa: E402
 from rugbrain.news_feed import news_feed_router  # noqa: E402
 from rugbrain.routes.content import router as content_router  # noqa: E402
+from rugbrain.routes.core import embed_text as embed_text_route  # noqa: E402
 from rugbrain.routes.search_federated import router as federated_router  # noqa: E402
 from rugbrain.scanner_feedback import scanner_feedback_router  # noqa: E402
 from rugbrain.sentiment_engine import sentiment_router  # noqa: E402
@@ -72,6 +73,7 @@ if not RMI_RAG_API_KEY:
 _health_state: dict[str, Any] = {
     "status": "starting",
     "qdrant": False,
+    "qdrant_schema": False,
     "redis": False,
     "qdrant_url": "",
     "redis_host": "",
@@ -259,9 +261,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("fear_index_poller_start_failed: %s", exc)
         _health_state["fear_index_poller"] = False
 
-    _health_state["status"] = "ok"
     logger.info(
-        "rugbrain_started qdrant=%s redis=%s subscriber=%s fear=%s",
+        "rugbrain_starting qdrant=%s redis=%s subscriber=%s fear=%s",
         _health_state["qdrant"],
         _health_state["redis"],
         _health_state["scanner_subscriber"],
@@ -390,32 +391,29 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("newsletter_ingester_start_failed: %s", exc)
         _health_state["newsletter_ingester"] = False
 
-    # ── Auto-create Qdrant collections ──────────────────────────────
+    # ── Validate canonical Qdrant collections ───────────────────────
+    # Writers create their own collections at the canonical 2560 dimension.
+    # Do not bootstrap the retired 1024-dim placeholders here.
     try:
+        from rugbrain.dim_policy import COLLECTION_DIM
         from rugbrain.qdrant_store import _ensure_collection
 
         qdrant_url = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6334").rstrip("/")
-        async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as c:
-            for col in [
-                "youtube_videos",
-                "podcast_episodes",
-                "newsletters",
-                "wallet_clusters",
-                "exchange_flows",
-                "liquidation_events",
-                "token_unlocks",
-                "market_health",
-                "hyperliquid",
-            ]:
-                ok = await _ensure_collection(col, 1024, c)
+        schema_ok = True
+        async with httpx.AsyncClient(base_url=qdrant_url, timeout=5) as client:
+            for collection in ("news_v2", "rag_documents"):
+                ok = await _ensure_collection(collection, COLLECTION_DIM, client)
                 logger.info(
-                    "qdrant_collection_%s collection=%s ok=%s",
-                    "created" if ok else "failed",
-                    col,
+                    "qdrant_canonical_collection collection=%s dim=%d ok=%s",
+                    collection,
+                    COLLECTION_DIM,
                     ok,
                 )
+                schema_ok = schema_ok and ok
+        _health_state["qdrant_schema"] = schema_ok
     except Exception as exc:
-        logger.warning("qdrant_auto_create failed: %s", exc)
+        logger.warning("qdrant_canonical_schema_check failed: %s", exc)
+        _health_state["qdrant_schema"] = False
 
     # ── Exchange flow monitor ───────────────────────────────────────
     try:
@@ -571,6 +569,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning("bucketshop_tracker_start_failed: %s", exc)
         _health_state["bucketshop_tracker"] = False
 
+    _health_state["status"] = (
+        "ok"
+        if _health_state["qdrant"] and _health_state["redis"] and _health_state["qdrant_schema"]
+        else "degraded"
+    )
+    logger.info(
+        "rugbrain_started qdrant=%s schema=%s redis=%s status=%s",
+        _health_state["qdrant"],
+        _health_state["qdrant_schema"],
+        _health_state["redis"],
+        _health_state["status"],
+    )
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────
@@ -664,9 +674,49 @@ app.include_router(news_feed_router)  # /api/v1/news/feed, /story, /trending, /t
 app.include_router(health_router)  # /api/v1/health/full — aggregated dashboard
 app.include_router(content_router)  # /api/v1/content/* — distribution drafts
 app.include_router(federated_router)  # /api/v1/search/federated — multi-backend reader
+# Compatibility alias for older workers that call POST /embed directly.
+# The canonical documented route remains /api/v1/embed.
+app.add_api_route(
+    "/embed",
+    embed_text_route,
+    methods=["POST"],
+    tags=["rag-optimization"],
+)
 
 
 # ── Health endpoints ──────────────────────────────────────────────────
+async def _qdrant_schema_ok() -> bool:
+    """Verify the live canonical collections have the production vector dimension."""
+    from rugbrain.dim_policy import COLLECTION_DIM
+    from rugbrain.qdrant_store import dense_vector_dimensions
+
+    try:
+        async with httpx.AsyncClient(base_url=_health_state["qdrant_url"], timeout=3.0) as client:
+            for collection in ("news_v2", "rag_documents"):
+                response = await client.get(f"/collections/{collection}")
+                if response.status_code != 200:
+                    logger.warning(
+                        "qdrant_schema_probe_failed collection=%s status=%d",
+                        collection,
+                        response.status_code,
+                    )
+                    return False
+                params = response.json().get("result", {}).get("config", {}).get("params", {}) or {}
+                dimensions = dense_vector_dimensions(params)
+                if not dimensions or COLLECTION_DIM not in dimensions:
+                    logger.error(
+                        "qdrant_schema_incompatible collection=%s configured_dims=%s expected=%d",
+                        collection,
+                        sorted(dimensions),
+                        COLLECTION_DIM,
+                    )
+                    return False
+        return True
+    except Exception as exc:
+        logger.warning("qdrant_schema_probe_failed error=%s", exc)
+        return False
+
+
 @app.get("/health", tags=["system"])
 async def health() -> dict[str, Any]:
     """Liveness probe — checks Qdrant + Redis connectivity."""
@@ -678,6 +728,8 @@ async def health() -> dict[str, Any]:
             qdrant_ok = r.status_code == 200
     except Exception:
         qdrant_ok = False
+    qdrant_schema_ok = await _qdrant_schema_ok()
+    _health_state["qdrant_schema"] = qdrant_schema_ok
 
     # Re-probe Redis
     redis_ok = False
@@ -762,9 +814,12 @@ async def health() -> dict[str, Any]:
         news_running = False
         news_stats = {}
 
+    status = "ok" if qdrant_ok and qdrant_schema_ok and redis_ok else "degraded"
+    _health_state["status"] = status
     return {
-        "status": "ok" if (qdrant_ok or redis_ok) else "degraded",
+        "status": status,
         "qdrant": qdrant_ok,
+        "qdrant_schema": qdrant_schema_ok,
         "redis": redis_ok,
         "qdrant_url": _health_state["qdrant_url"],
         "redis_host": _health_state["redis_host"],
@@ -798,14 +853,15 @@ async def health() -> dict[str, Any]:
         "exchange_wallets": _health_state.get("exchange_wallets", False),
         "oracle_monitor": _health_state.get("oracle_monitor", False),
         "bucketshop_tracker": _health_state.get("bucketshop_tracker", False),
-        "qdrant_collections_auto": True,
+        "qdrant_collections_auto": qdrant_schema_ok,
     }
 
 
 @app.get("/ready", tags=["system"])
 async def ready() -> dict[str, str]:
-    """Readiness probe — lightweight check that the app started."""
+    """Readiness probe — require live Qdrant, schema, and Redis health."""
+    current = await health()
     return {
-        "status": "ready" if _health_state["status"] == "ok" else "starting",
+        "status": "ready" if current["status"] == "ok" else "degraded",
         "app": "rugbrain",
     }

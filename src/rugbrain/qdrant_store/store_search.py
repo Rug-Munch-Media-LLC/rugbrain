@@ -33,17 +33,27 @@ class SearchMixin(_types.StoreSurface):
         collection, unified_condition = _pkg.unified_route(collection)
         coll = collection or "default"
         client = await self._get_client()
-        await _pkg._ensure_collection(coll, len(query_embedding), client)
+        if not await _pkg._ensure_collection(coll, len(query_embedding), client):
+            logger.error(
+                "qdrant_search_blocked collection=%s requested_dim=%d reason=incompatible_schema",
+                coll,
+                len(query_embedding),
+            )
+            return []
 
-        # Hybrid collections (created by scripts/migrate_to_sparse.py) and
-        # named dense-only collections (e.g. news_v2) carry named vectors.
-        # A bare vector is rejected by Qdrant against a named-vector
-        # collection ("Not existing vector name"), so send the named dense
-        # vector when the collection uses named vectors. Dense-only legacy
-        # collections keep using the bare vector.
+        # Hybrid collections and named dense-only collections require the
+        # configured dense vector name. Do not assume it is always "dense";
+        # Qdrant permits arbitrary named-vector keys.
         vector_field: Any = query_embedding
         if await self._collection_uses_named_vectors(coll, client):
-            vector_field = {"name": _pkg.DENSE_VECTOR_NAME, "vector": query_embedding}
+            dense_name = await self._get_dense_vector_name(coll, client, len(query_embedding))
+            if dense_name is None:
+                logger.error(
+                    "qdrant_search_blocked collection=%s reason=missing_dense_vector_name",
+                    coll,
+                )
+                return []
+            vector_field = {"name": dense_name, "vector": query_embedding}
 
         payload: dict[str, Any] = {
             "vector": vector_field,
@@ -96,11 +106,17 @@ class SearchMixin(_types.StoreSurface):
         import rugbrain.qdrant_store as _pkg
 
         logger = logging.getLogger(__name__)
+        if req.sparse_name is None:
+            return None
         client = await self._get_client()
         payload: dict[str, Any] = {
-            "vector": {"name": _pkg.DENSE_VECTOR_NAME, "vector": req.dense_vector},
+            "vector": (
+                {"name": req.dense_name, "vector": req.dense_vector}
+                if req.dense_name is not None
+                else req.dense_vector
+            ),
             "sparse_vector": {
-                "name": _pkg.SPARSE_VECTOR_NAME,
+                "name": req.sparse_name,
                 "vector": {"indices": req.sparse[0], "values": req.sparse[1]},
             },
             "fusion": "rrf",

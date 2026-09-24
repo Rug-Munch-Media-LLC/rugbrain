@@ -283,6 +283,13 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
     for s in news_pool[:3]:
         jobs.append(("news", s, asyncio.ensure_future(_timed_compose(s))))
 
+    if not jobs:
+        logger.warning("content_drafts_no_stories")
+        drafts["scans"] = await select_scans()
+        _drafts_cache["ts"] = time.time()
+        _drafts_cache["data"] = drafts
+        return drafts
+
     done, _pending = await asyncio.wait([j[2] for j in jobs], timeout=600.0)
     for channel, story, task in jobs:
         text, writer = task.result() if task in done else (_template_post(story), "template")

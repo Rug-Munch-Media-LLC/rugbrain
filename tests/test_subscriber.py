@@ -87,8 +87,39 @@ class TestScannerSubscriber:
         result = await _process_finding({})
         assert result is None  # Function returns None on success
 
+    @pytest.mark.asyncio
+    async def test_process_finding_uses_canonical_embedding_dim(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Scanner findings must reach Qdrant with the 2560-dim canonical vector."""
+        from rugbrain.scanner_subscriber import _process_finding
 
-# ── Auth Middleware Tests ──────────────────────────────────────────────────
+        captured: dict[str, Any] = {}
+
+        async def _fake_embedding(text: str) -> list[float]:
+            assert "0xcanonical" in text
+            return [0.1] * 2560
+
+        class _FakeStore:
+            async def insert(self, **kwargs: Any) -> bool:
+                captured.update(kwargs)
+                return True
+
+        monkeypatch.setattr("rugbrain.embeddings.get_embedding", _fake_embedding)
+        monkeypatch.setattr("rugbrain.qdrant_store.QdrantVectorStore", _FakeStore)
+
+        await _process_finding(
+            {
+                "token_address": "0xcanonical",
+                "chain": "ethereum",
+                "risk_level": "high",
+                "safety_score": 10,
+            }
+        )
+
+        assert captured["collection"] == "threat_intel_v2"
+        assert len(captured["embedding"]) == 2560
+        assert captured["metadata"]["source"] == "scanner"
 
 
 class TestRAGAuthMiddleware:

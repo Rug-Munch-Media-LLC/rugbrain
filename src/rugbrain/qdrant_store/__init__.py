@@ -33,6 +33,7 @@ from rugbrain.qdrant_store.collections import (
     _ensure_collection,
     _existing_collections,
     _map_collection,
+    dense_vector_dimensions,
     unified_route,
 )
 from rugbrain.qdrant_store.connection import (
@@ -99,6 +100,7 @@ __all__ = [
     "apply_payload_filter",
     "build_qdrant_filter",
     "build_search_filters",
+    "dense_vector_dimensions",
     "get_qdrant_store",
     "normalize_filters",
     "unified_route",

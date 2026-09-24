@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from rugbrain.qdrant_store import _types
+
+logger = logging.getLogger(__name__)
 
 
 class HybridSearchMixin(_types.StoreSurface):
@@ -27,8 +30,6 @@ class HybridSearchMixin(_types.StoreSurface):
         the dense and sparse result lists natively (``fusion="rrf"``).
         Otherwise it falls back to the dense-only search with lightweight
         keyword re-ranking so pre-migration collections keep working.
-        collection = _map_collection(collection)
-
         ``filters`` uses the same structured shape as ``search``
         (``{"match": {...}, "range": [...]}``) and is applied to both the RRF
         request and the dense fallback.
@@ -36,17 +37,26 @@ class HybridSearchMixin(_types.StoreSurface):
         import rugbrain.qdrant_store as _pkg
 
         coll, unified_condition = _pkg.unified_route(collection or "default")
+        coll = coll or "default"
         client = await self._get_client()
-        await _pkg._ensure_collection(coll, len(query_embedding), client)
+        if not await _pkg._ensure_collection(coll, len(query_embedding), client):
+            logger.error(
+                "qdrant_hybrid_search_blocked collection=%s requested_dim=%d reason=incompatible_schema",
+                coll,
+                len(query_embedding),
+            )
+            return []
 
         qdrant_filter = _pkg.normalize_filters(filters)
         if unified_condition:
             qdrant_filter = qdrant_filter or {"must": []}
             qdrant_filter.setdefault("must", []).append(unified_condition)
 
-        if query_text and await self._collection_supports_sparse(coll, client):
+        sparse_name = await self._get_sparse_vector_name(coll, client)
+        if query_text and sparse_name is not None:
             sparse = await _pkg._embed_sparse(query_text)
             if sparse is not None:
+                dense_name = await self._get_dense_vector_name(coll, client, len(query_embedding))
                 fused = await self._hybrid_search_rrf(
                     _types.HybridRrfQuery(
                         collection=coll,
@@ -54,6 +64,8 @@ class HybridSearchMixin(_types.StoreSurface):
                         sparse=sparse,
                         limit=limit,
                         qdrant_filter=qdrant_filter,
+                        dense_name=dense_name,
+                        sparse_name=sparse_name,
                     )
                 )
                 if fused is not None:

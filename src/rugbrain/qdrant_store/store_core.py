@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -27,13 +28,11 @@ class QdrantVectorStoreCore:
         # constructor argument was silently ignored by _get_client().
         self._explicit_url = url is not None
         self._client: httpx.AsyncClient | None = None
-        # Per-instance cache of whether a collection carries a sparse
-        # vector config (avoids a GET per insert/search in production).
-        self._sparse_cache: dict[str, bool] = {}
-        # Per-instance cache of whether a collection is configured with
-        # named vectors (named dense and/or sparse). Named-vector
-        # collections reject the bare vector format.
-        self._named_cache: dict[str, bool] = {}
+        # Per-instance cache of collection params and vector capabilities.
+        # Qdrant schemas are immutable, so one probe per collection is enough.
+        self._params_cache: dict[str, dict[str, Any] | None] = {}
+        self._sparse_name_cache: dict[str, str | None] = {}
+        self._dense_name_cache: dict[str, str | None] = {}
 
     @property
     def url(self) -> str:
@@ -48,63 +47,87 @@ class QdrantVectorStoreCore:
             self._client = httpx.AsyncClient(base_url=resolved, timeout=30.0)
         return self._client
 
-    async def _collection_supports_sparse(self, collection: str, client: httpx.AsyncClient) -> bool:
-        """Return True when *collection* carries a sparse-vector config.
-
-        Results are cached per store instance so callers pay one extra
-        GET per collection per process.
-        """
-        cached = self._sparse_cache.get(collection)
-        if cached is not None:
-            return cached
-        supports = False
+    async def _get_collection_params(
+        self, collection: str, client: httpx.AsyncClient
+    ) -> dict[str, Any] | None:
+        """Fetch and cache a collection's Qdrant parameter object."""
+        if collection in self._params_cache:
+            return self._params_cache[collection]
+        params: dict[str, Any] | None = None
         try:
-            r = await client.get(f"/collections/{collection}")
-            if r.status_code == 200:
-                params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
-                supports = bool(params.get("sparse_vectors"))
-        except Exception as e:
-            logger.debug("qdrant_sparse_probe_failed collection=%s err=%s", collection, e)
-        self._sparse_cache[collection] = supports
-        return supports
+            response = await client.get(f"/collections/{collection}")
+            if response.status_code == 200:
+                result = response.json().get("result", {}) or {}
+                candidate = result.get("config", {}).get("params", {}) or {}
+                if isinstance(candidate, dict):
+                    params = candidate
+        except Exception as exc:
+            logger.debug("qdrant_collection_params_failed collection=%s err=%s", collection, exc)
+        self._params_cache[collection] = params
+        return params
+
+    async def _get_dense_vector_name(
+        self,
+        collection: str,
+        client: httpx.AsyncClient,
+        expected_dim: int | None = None,
+    ) -> str | None:
+        """Return the configured dense vector name, or ``None`` for bare vectors."""
+        if collection in self._dense_name_cache:
+            return self._dense_name_cache[collection]
+        import rugbrain.qdrant_store as _pkg
+
+        name: str | None = None
+        params = await self._get_collection_params(collection, client)
+        vectors = params.get("vectors") if params else None
+        if isinstance(vectors, dict) and "size" not in vectors:
+            candidates = {
+                key: value
+                for key, value in vectors.items()
+                if isinstance(key, str) and key and isinstance(value, dict)
+            }
+            if _pkg.DENSE_VECTOR_NAME in candidates:
+                name = _pkg.DENSE_VECTOR_NAME
+            elif expected_dim is not None:
+                matching = [
+                    key for key, spec in candidates.items() if spec.get("size") == expected_dim
+                ]
+                if len(matching) == 1:
+                    name = matching[0]
+            elif len(candidates) == 1:
+                name = next(iter(candidates))
+            elif len(candidates) > 1:
+                logger.error(
+                    "qdrant_dense_vector_ambiguous collection=%s names=%s dim=%s",
+                    collection,
+                    sorted(candidates),
+                    expected_dim,
+                )
+        self._dense_name_cache[collection] = name
+        return name
+
+    async def _get_sparse_vector_name(
+        self, collection: str, client: httpx.AsyncClient
+    ) -> str | None:
+        """Return the configured sparse vector name, if any."""
+        if collection in self._sparse_name_cache:
+            return self._sparse_name_cache[collection]
+        params = await self._get_collection_params(collection, client)
+        sparse = params.get("sparse_vectors") if params else None
+        name = next(iter(sparse), None) if isinstance(sparse, dict) else None
+        if not isinstance(name, str) or not name:
+            name = None
+        self._sparse_name_cache[collection] = name
+        return name
+
+    async def _collection_supports_sparse(self, collection: str, client: httpx.AsyncClient) -> bool:
+        """Return whether *collection* exposes a named sparse vector."""
+        return await self._get_sparse_vector_name(collection, client) is not None
 
     async def _collection_uses_named_vectors(
         self, collection: str, client: httpx.AsyncClient
     ) -> bool:
-        """Return True when *collection* is configured with named vectors.
-
-        A collection created with a named-vector config (``{"dense": ...}``
-        or ``{"dense": ..., "bm25": ...}``) rejects a bare vector with
-        "Not existing vector name", so the caller must send the named
-        dense format. Only legacy collections created with a bare
-        ``{"size": N, "distance": "Cosine"}`` config accept the bare
-        vector. Named dense-only collections (e.g. ``news_v2``) do NOT
-        report sparse support, so callers must probe named vectors, not
-        just ``sparse_vectors``, before choosing the request shape.
-
-        Results are cached per store instance so callers pay one extra
-        GET per collection per process.
-        """
-        import rugbrain.qdrant_store as _pkg
-
-        cached = self._named_cache.get(collection)
-        if cached is not None:
-            return cached
-        named = False
-        try:
-            r = await client.get(f"/collections/{collection}")
-            if r.status_code == 200:
-                params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
-                vectors = params.get("vectors")
-                # Named dense vector config is a dict mapping name → spec.
-                # A legacy config is a plain ``{"size": N, "distance": ...}``
-                # which also happens to be a dict — distinguish by checking
-                # for the named dense key we actually write.
-                if isinstance(vectors, dict) and _pkg.DENSE_VECTOR_NAME in vectors:
-                    named = True
-                if params.get("sparse_vectors"):
-                    named = True
-        except Exception as e:
-            logger.debug("qdrant_named_probe_failed collection=%s err=%s", collection, e)
-        self._named_cache[collection] = named
-        return named
+        """Return whether Qdrant requires a named dense vector."""
+        params = await self._get_collection_params(collection, client)
+        vectors = params.get("vectors") if params else None
+        return isinstance(vectors, dict) and "size" not in vectors

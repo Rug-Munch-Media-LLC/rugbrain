@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -102,17 +103,33 @@ UNIFIED_READS = os.getenv("RAG_UNIFIED_READS", "0").lower() in ("1", "true", "ye
 
 CONSOLIDATED_SOURCES: frozenset[str] = frozenset(
     {
-        "news_v2", "news_articles", "social_intel", "known_scams", "scam_patterns",
-        "scam_intel_v2", "wallet_profiles", "wallet_v2", "defi_exploits",
-        "threat_intel_v2", "contract_audits", "crypto_vulnerabilities",
-        "regulation_enforcement", "research_v2", "education", "github_audits",
-        "contract_security", "security_feeds", "market_health", "stablecoin_market",
-        "live_threats", "hacks_v2",
+        "news_v2",
+        "news_articles",
+        "social_intel",
+        "known_scams",
+        "scam_patterns",
+        "scam_intel_v2",
+        "wallet_profiles",
+        "wallet_v2",
+        "defi_exploits",
+        "threat_intel_v2",
+        "contract_audits",
+        "crypto_vulnerabilities",
+        "regulation_enforcement",
+        "research_v2",
+        "education",
+        "github_audits",
+        "contract_security",
+        "security_feeds",
+        "market_health",
+        "stablecoin_market",
+        "live_threats",
+        "hacks_v2",
     }
 )
 
 
-def unified_route(collection: str | None) -> tuple[str | None, dict | None]:
+def unified_route(collection: str | None) -> tuple[str | None, dict[str, Any] | None]:
     """Map a consolidated collection to (rag_documents, provenance filter).
 
     Returns the collection unchanged (and no filter) when unified reads are
@@ -123,25 +140,72 @@ def unified_route(collection: str | None) -> tuple[str | None, dict | None]:
     return _map_collection(collection), None
 
 
-_existing_collections: set[str] = set()
+def dense_vector_dimensions(params: Mapping[str, Any]) -> set[int]:
+    """Return configured dense vector dimensions from a Qdrant params object.
+
+    Qdrant uses either a legacy bare-vector object (``{"size": N}``) or a
+    named-vector object (``{"dense": {"size": N}}``).  Keeping this parsing in
+    one place prevents readers and writers from disagreeing about a schema.
+    """
+    vectors = params.get("vectors")
+    if not isinstance(vectors, dict):
+        return set()
+    size = vectors.get("size")
+    if isinstance(size, int):
+        return {size}
+    dimensions: set[int] = set()
+    for spec in vectors.values():
+        if isinstance(spec, dict) and isinstance(spec.get("size"), int):
+            dimensions.add(int(spec["size"]))
+    return dimensions
+
+
+_existing_collections: dict[str, int] = {}
 
 
 async def _ensure_collection(collection: str, vector_size: int, client: httpx.AsyncClient) -> bool:
-    if collection in _existing_collections:
+    """Ensure a collection exists and can accept the requested vector dimension."""
+    if vector_size <= 0:
+        logger.error(
+            "qdrant_collection_invalid_dim collection=%s requested_dim=%d",
+            collection,
+            vector_size,
+        )
+        return False
+    if _existing_collections.get(collection) == vector_size:
         return True
     try:
         r = await client.get(f"/collections/{collection}")
         if r.status_code == 200:
-            _existing_collections.add(collection)
+            params = r.json().get("result", {}).get("config", {}).get("params", {}) or {}
+            configured_dims = dense_vector_dimensions(params)
+            if configured_dims and vector_size not in configured_dims:
+                logger.error(
+                    "qdrant_collection_incompatible collection=%s requested_dim=%d configured_dims=%s",
+                    collection,
+                    vector_size,
+                    sorted(configured_dims),
+                )
+                return False
+            _existing_collections[collection] = vector_size
             return True
+        if r.status_code != 404:
+            logger.error(
+                "qdrant_collection_probe_failed collection=%s status=%d",
+                collection,
+                r.status_code,
+            )
+            return False
     except Exception as e:
-        logger.debug("qdrant_collection_probe_failed collection=%s err=%s", collection, e)
+        logger.warning("qdrant_collection_probe_failed collection=%s err=%s", collection, e)
+        return False
+
     try:
         payload: dict[str, Any] = {"vectors": {"size": vector_size, "distance": "Cosine"}}
         r = await client.put(f"/collections/{collection}", json=payload)
         ok = r.status_code in (200, 201)
         if ok:
-            _existing_collections.add(collection)
+            _existing_collections[collection] = vector_size
         return ok
     except Exception as e:
         logger.warning("qdrant_create_collection_failed collection=%s err=%s", collection, e)
