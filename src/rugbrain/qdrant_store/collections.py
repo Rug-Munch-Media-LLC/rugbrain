@@ -166,8 +166,18 @@ def dense_vector_dimensions(params: Mapping[str, Any]) -> set[int]:
 _existing_collections: dict[str, int] = {}
 
 
-async def _ensure_collection(collection: str, vector_size: int, client: httpx.AsyncClient) -> bool:
-    """Ensure a collection exists and can accept the requested vector dimension."""
+async def _ensure_collection(
+    collection: str,
+    vector_size: int,
+    client: httpx.AsyncClient,
+    *,
+    create_if_missing: bool = True,
+) -> bool:
+    """Ensure a collection exists and can accept the requested vector dimension.
+
+    Read-only callers can disable auto-creation so a missing canary target
+    fails closed instead of being materialized as an empty shadow collection.
+    """
     if vector_size <= 0:
         logger.error(
             "qdrant_collection_invalid_dim collection=%s requested_dim=%d",
@@ -201,6 +211,13 @@ async def _ensure_collection(collection: str, vector_size: int, client: httpx.As
             return False
     except Exception as e:
         logger.warning("qdrant_collection_probe_failed collection=%s err=%s", collection, e)
+        return False
+
+    if not create_if_missing:
+        logger.warning(
+            "qdrant_collection_missing collection=%s reason=create_if_missing_false",
+            collection,
+        )
         return False
 
     try:

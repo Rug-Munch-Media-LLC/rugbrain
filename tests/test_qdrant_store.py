@@ -77,6 +77,26 @@ async def test_search_empty_when_no_results() -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_does_not_create_missing_collection_when_disabled() -> None:
+    """Fail-closed reads must not materialize a missing shadow target."""
+    from rugbrain.qdrant_store import QdrantVectorStore
+
+    store = QdrantVectorStore(url="http://rmi-qdrant:6333")
+    with respx.mock(base_url="http://rmi-qdrant:6333", assert_all_called=False) as respx_mock:
+        probe = respx_mock.get("/collections/canary_missing_8b").respond(404, json={})
+        create = respx_mock.put("/collections/canary_missing_8b").respond(201, json={})
+        results = await store.search(
+            query_embedding=[0.1] * 4096,
+            collection="canary_missing_8b",
+            limit=5,
+            allow_create=False,
+        )
+    assert results == []
+    assert probe.call_count == 1
+    assert not create.called
+
+
+@pytest.mark.asyncio
 async def test_search_with_filters() -> None:
     """search() should pass filters to Qdrant."""
     from rugbrain.qdrant_store import QdrantVectorStore

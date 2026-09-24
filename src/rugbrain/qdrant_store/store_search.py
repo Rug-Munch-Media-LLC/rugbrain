@@ -17,6 +17,7 @@ class SearchMixin(_types.StoreSurface):
         limit: int = 10,
         min_similarity: float = 0.6,
         filters: dict[str, Any] | None = None,
+        allow_create: bool = True,
     ) -> list[dict[str, Any]]:
         """Semantic search with optional payload filters.
 
@@ -24,6 +25,11 @@ class SearchMixin(_types.StoreSurface):
           - a plain ``{field: value}`` dict (legacy exact-match form), or
           - a structured ``{"match": {...}, "range": [...]}`` dict as produced
             by ``build_search_filters``.
+
+
+        Set ``allow_create=False`` for fail-closed reads against
+        pre-provisioned shadow collections.
+
         """
         import logging
 
@@ -33,7 +39,12 @@ class SearchMixin(_types.StoreSurface):
         collection, unified_condition = _pkg.unified_route(collection)
         coll = collection or "default"
         client = await self._get_client()
-        if not await _pkg._ensure_collection(coll, len(query_embedding), client):
+        if not await _pkg._ensure_collection(
+            coll,
+            len(query_embedding),
+            client,
+            create_if_missing=allow_create,
+        ):
             logger.error(
                 "qdrant_search_blocked collection=%s requested_dim=%d reason=incompatible_schema",
                 coll,

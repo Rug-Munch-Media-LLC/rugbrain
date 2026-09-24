@@ -22,6 +22,7 @@ class HybridSearchMixin(_types.StoreSurface):
         vector_weight: float = 0.7,
         min_similarity: float = 0.6,
         filters: dict[str, Any] | None = None,
+        allow_create: bool = True,
     ) -> list[dict[str, Any]]:
         """Dense + BM25 sparse hybrid search with Reciprocal Rank Fusion.
 
@@ -32,14 +33,20 @@ class HybridSearchMixin(_types.StoreSurface):
         keyword re-ranking so pre-migration collections keep working.
         ``filters`` uses the same structured shape as ``search``
         (``{"match": {...}, "range": [...]}``) and is applied to both the RRF
-        request and the dense fallback.
+        request and the dense fallback. Set ``allow_create=False`` for
+        fail-closed reads against pre-provisioned shadow collections.
         """
         import rugbrain.qdrant_store as _pkg
 
         coll, unified_condition = _pkg.unified_route(collection or "default")
         coll = coll or "default"
         client = await self._get_client()
-        if not await _pkg._ensure_collection(coll, len(query_embedding), client):
+        if not await _pkg._ensure_collection(
+            coll,
+            len(query_embedding),
+            client,
+            create_if_missing=allow_create,
+        ):
             logger.error(
                 "qdrant_hybrid_search_blocked collection=%s requested_dim=%d reason=incompatible_schema",
                 coll,
@@ -78,6 +85,7 @@ class HybridSearchMixin(_types.StoreSurface):
             limit=limit * 2,
             min_similarity=min_similarity,
             filters=qdrant_filter,
+            allow_create=allow_create,
         )
 
         if query_text and results:

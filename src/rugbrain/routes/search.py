@@ -141,6 +141,14 @@ async def search_threat_intel(
 
         curl "http://localhost:8012/api/v1/search?q=reentrancy&collection=threat_intel_v2&filter_severity=critical&filter_chain=ethereum&filter_date_after=2023-01-01&limit=5&factuality_filter=verified&require_corroboration=1"
     """
+    from rugbrain.canary_routing import (
+        CanaryConfigError,
+        CanaryUnavailable,
+        canary_target_for,
+        get_canary_query_embedding,
+        sanitize_canary_result,
+        validate_canary_vector,
+    )
     from rugbrain.embeddings import get_query_embedding
     from rugbrain.qdrant_store import QdrantVectorStore, build_search_filters
 
@@ -153,6 +161,14 @@ async def search_threat_intel(
         raise HTTPException(
             status_code=403,
             detail={"error": "collection_not_available"},
+        ) from exc
+
+    try:
+        canary_collection = canary_target_for(collection)
+    except CanaryConfigError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "canary_configuration_invalid"},
         ) from exc
 
     # Rate limit /search by client IP (not spoofable via headers). Each
@@ -174,12 +190,23 @@ async def search_threat_intel(
         )
 
     try:
-        embedding = await get_query_embedding(q)
+        if canary_collection is not None:
+            canary_embedding = await get_canary_query_embedding(q)
+            embedding = validate_canary_vector(canary_embedding)
+        else:
+            embedding = await get_query_embedding(q)
+    except (CanaryConfigError, CanaryUnavailable) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "canary_embedding_unavailable"},
+        ) from exc
     except Exception as e:
         raise HTTPException(
             status_code=503,
             detail={"error": "embedding_unavailable", "message": str(e)[:200]},
         ) from e
+
+    search_collection = canary_collection or collection
 
     filters = build_search_filters(
         severity=filter_severity,
@@ -205,10 +232,11 @@ async def search_threat_intel(
     results = await store.hybrid_search(
         query_text=q,
         query_embedding=embedding,
-        collection=collection,
+        collection=search_collection,
         limit=candidate_limit,
         min_similarity=0.4,
         filters=filters,
+        **({"allow_create": False} if canary_collection is not None else {}),
     )
 
     reranker_applied = False
@@ -340,7 +368,10 @@ async def search_threat_intel(
     except Exception as e:
         logger.debug("reflection_failed (non-critical): %s", e)
 
-    results = [sanitize_public_result(result) for result in results[:limit]]
+    if canary_collection is not None:
+        results = [sanitize_canary_result(result, collection) for result in results[:limit]]
+    else:
+        results = [sanitize_public_result(result) for result in results[:limit]]
     if pattern_matches is not None:
         pattern_matches = sanitize_public_result(pattern_matches)
     return {
@@ -396,6 +427,7 @@ async def search_multi(
           -H "X-API-Key: ..." \\
           -d '{"query":"flash loan attack","collections":["threat_intel_v2","scam_patterns"],"rerank":true}'
     """
+    from rugbrain.canary_routing import CanaryConfigError, canary_target_for
     from rugbrain.embeddings import get_query_embedding
     from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -415,6 +447,19 @@ async def search_multi(
             status_code=403,
             detail={"error": "collection_not_available"},
         ) from exc
+
+    try:
+        canary_targets = [canary_target_for(col) for col in cols]
+    except CanaryConfigError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "canary_configuration_invalid"},
+        ) from exc
+    if any(target is not None for target in canary_targets):
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "canary_not_supported_for_multi"},
+        )
 
     # Rate limit by client IP
     hour_key = datetime.now(UTC).strftime("%Y%m%d%H")

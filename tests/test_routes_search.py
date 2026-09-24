@@ -173,3 +173,73 @@ async def test_multi_search_empty_query_no_calls(client: AsyncClient, mock_rag) 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
     assert mock_rag == []
+
+
+@pytest.mark.asyncio
+async def test_search_canary_routes_only_explicit_source(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RAG_8B_CANARY_ENABLED", "1")
+    monkeypatch.setenv("RAG_8B_CANARY_COLLECTIONS", "contract_security")
+    calls: list[tuple[str, int, bool | None]] = []
+
+    async def fake_canary_embedding(_query: str) -> list[float]:
+        return [0.1] * 4096
+
+    async def fail_normal_embedding(_query: str) -> list[float]:
+        raise AssertionError("normal 2560 embedder must not be used for an 8B canary")
+
+    class FakeStore:
+        async def hybrid_search(
+            self,
+            *,
+            collection: str,
+            limit: int,
+            allow_create: bool | None = None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            calls.append((collection, limit, allow_create))
+            hit = _hit("canary-1", 0.9, "Canary result")
+            hit["metadata"].update(
+                {
+                    "collection": "contract_security_8b",
+                    "source_collection": "contract_security_8b",
+                }
+            )
+            hit["content"] = "Canary result from contract_security_8b"
+            return [hit]
+
+    import rugbrain.canary_routing as canary_mod
+    import rugbrain.embeddings as emb_mod
+    import rugbrain.qdrant_store as qd_mod
+
+    monkeypatch.setattr(canary_mod, "get_canary_query_embedding", fake_canary_embedding)
+    monkeypatch.setattr(emb_mod, "get_query_embedding", fail_normal_embedding, raising=False)
+    monkeypatch.setattr(qd_mod, "QdrantVectorStore", lambda: FakeStore(), raising=False)
+
+    response = await client.get(
+        "/search",
+        params={"q": "reentrancy defense", "collection": "contract_security", "limit": 1},
+    )
+    assert response.status_code == 200
+    assert response.json()["collection"] == "contract_security"
+    result = response.json()["results"][0]
+    assert result["metadata"]["collection"] == "contract_security"
+    assert result["content"] == "Canary result from contract_security"
+    assert "contract_security_8b" not in str(result)
+    assert calls == [("contract_security_8b", 1, False)]
+
+
+@pytest.mark.asyncio
+async def test_multi_search_rejects_canary_source_until_grouped(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RAG_8B_CANARY_ENABLED", "1")
+    monkeypatch.setenv("RAG_8B_CANARY_COLLECTIONS", "contract_security")
+
+    response = await client.post(
+        "/search/multi",
+        json={"query": "reentrancy", "collections": ["contract_security", "threat_intel_v2"]},
+    )
+    assert response.status_code == 400
+    assert response.json() == {"detail": {"error": "canary_not_supported_for_multi"}}

@@ -1,7 +1,7 @@
 # Current task evidence
 
 ## Scope
-RugBrain public crypto-intelligence audience boundary and canonical 2560-dimensional Qwen3-Embedding-4B path. The separate 8B re-embedding services and files were not modified or restarted.
+RugBrain public crypto-intelligence audience boundary, canonical 2560-dimensional Qwen3-Embedding-4B path, and default-off public 8B canary selector. The separate 8B re-embedding services and global 8B switch were not modified or restarted.
 
 ## Commands and results
 - `heavy-run .venv/bin/pytest -q tests/test_qdrant_store.py tests/test_qdrant_store_write_gate.py tests/test_content_engine.py tests/test_routes_core.py tests/test_subscriber.py tests/test_main_health.py` — 44 passed.
@@ -39,7 +39,7 @@ RugBrain public crypto-intelligence audience boundary and canonical 2560-dimensi
 - A PATH-level `mypy` invocation resolves a different environment and reports 64 pre-existing import/stub errors; the repository `.venv/bin/mypy` targeted gate is clean.
 - Projection importer dry-runs validated both pattern and public-code samples; no live projection was written.
 - No public ContextCrypto projection is populated yet; raw internal code and source coordinates remain internal-only.
-- 8B cutover gate remains closed: the active re-embed process is still processing `codebase_reference_v2` at approximately 290k/2.13M points; `agent_vectors_8b` is 0/141 and multiple targets are incomplete. No 8B routing or service cutover was performed.
+- 8B cutover gate remains closed: the active re-embed process is still processing `codebase_reference_v2` at approximately 290k/2.13M points; `agent_vectors_8b` is 0/141 and multiple targets are incomplete. The new canary selector is default-off and does not perform a global 8B routing, writer, or service cutover.
 - Applied reviewed public seed: OpenZeppelin ReentrancyGuard (MIT) and SWC-128 defensive pattern (MIT); `public_crypto_patterns` now has 2 points at 2560 dimensions.
 - Public code output sanitizer now removes source-kind labels and public query/projection guards reject prompt-injection instructions; 50 focused tests, Ruff, and targeted mypy passed after the change.
 - Full audience-boundary suite after seed/safety changes: `122 passed`; gitleaks clean.
@@ -49,4 +49,17 @@ RugBrain public crypto-intelligence audience boundary and canonical 2560-dimensi
 - `pytest -q tests/test_qdrant_store.py tests/test_qdrant_store_write_gate.py tests/test_content_engine.py tests/test_routes_core.py tests/test_subscriber.py tests/test_main_health.py tests/test_routes_ingest.py tests/test_routes_search.py tests/test_rag_tools_boundary.py tests/test_crypto_code_retrieval.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_search_quality.py tests/test_mcp_bridge.py` — executed via `heavy-run pytest`; 120 passed.
 - `ruff check src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py scripts/ingest_public_contextcrypto.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_routes_ingest.py` — executed via `heavy-run ruff check`; passed.
 - `.venv/bin/mypy src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py --ignore-missing-imports` — executed via `heavy-run .venv/bin/mypy`; passed.
-- `npx agent-guardrails check --review --commands-run ...` — passed with 0 errors and 9 warnings; remaining warnings concern pre-existing/generated files and broad multi-file state changes.
+- `npx agent-guardrails check --review --commands-run ...` — previously passed with 0 errors and 9 warnings; remaining warnings concern pre-existing/generated files and broad multi-file state changes.
+
+## Default-off 8B canary follow-up
+- Implemented public-only canary allowlist and 4096-dimensional validation in `src/rugbrain/canary_routing.py`; internal ContextCrypto and incomplete sources are rejected.
+- Wired explicit single-search canary routing in `src/rugbrain/routes/search.py`; multi-search rejects canary sources until grouped routing exists; responses relabel shadow target names and never expose provider/model metadata.
+- Added `allow_create=False` Qdrant reads so a missing canary target fails closed and is not auto-created.
+- `pytest -q tests/test_canary_routing.py tests/test_routes_search.py tests/test_qdrant_store.py` (executed via `heavy-run pytest`) — 42 passed.
+- `pytest -q tests/test_qdrant_store.py tests/test_qdrant_store_write_gate.py tests/test_content_engine.py tests/test_routes_core.py tests/test_subscriber.py tests/test_main_health.py tests/test_routes_ingest.py tests/test_routes_search.py tests/test_rag_tools_boundary.py tests/test_crypto_code_retrieval.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_search_quality.py tests/test_mcp_bridge.py` (executed via `heavy-run pytest`) — 125 passed.
+- `ruff check src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py scripts/ingest_public_contextcrypto.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_routes_ingest.py` (executed via `heavy-run ruff check`) — passed.
+- `.venv/bin/mypy src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py --ignore-missing-imports` (executed via `heavy-run .venv/bin/mypy`) — passed.
+- `gitleaks detect --no-git --redact --source .` — no leaks found.
+- Live opt-in ASGI canary probe: HTTP 200, source collection preserved, 3 results, target/provider leakage false. Live default-off probe: HTTP 200 with canonical behavior preserved.
+- `git diff --check` — passed.
+- `npx agent-guardrails check --base-ref HEAD~1` with all three required `--commands-run` entries — passed with 0 errors and 2 pre-existing continuity warnings; no production 8B activation or service restart performed.
