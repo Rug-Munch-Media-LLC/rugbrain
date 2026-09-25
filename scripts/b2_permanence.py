@@ -39,6 +39,7 @@ Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
     B2_BUCKET_NAME                              (default rmi-rag-permanence)
     B2_EXCLUDE_SUFFIXES                         (default _8b; generated mirror collections)
+    B2_PAYLOAD_ONLY_COLLECTIONS                 (default codebase_reference_v2; large vector corpus)
     B2_ENCRYPTION_KEY                           DEPRECATED — SSE-B2 encrypts
                                                 at rest; kept only for
                                                 reading/migrating legacy .enc
@@ -97,6 +98,7 @@ DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6334")
 MANIFEST_NAME = "manifest.json"
 LATEST_NAME = "latest.json"
 DEFAULT_EXCLUDED_SUFFIXES = ("_8b",)
+DEFAULT_PAYLOAD_ONLY_COLLECTIONS = ("codebase_reference_v2",)
 # 2026-09-18: was hardcoded level 19 (max). With 41 collections that run exceeded the
 # 4h TimeoutStartSec and the unit was SIGTERM'd (ExecMainStatus=15) — every night.
 # Level 19 is ~5-10x slower than level 6 for a marginal size win, and B2 storage is
@@ -158,6 +160,23 @@ def filter_collections(collections: list[str], excluded_suffixes: tuple[str, ...
     if not suffixes:
         return list(collections)
     return [name for name in collections if not name.endswith(suffixes)]
+
+
+def resolve_payload_only_collections(explicit: list[str] | None) -> set[str]:
+    """Resolve collections whose vectors are too large for the nightly window."""
+    raw = (
+        explicit
+        if explicit is not None
+        else os.getenv(
+            "B2_PAYLOAD_ONLY_COLLECTIONS", ",".join(DEFAULT_PAYLOAD_ONLY_COLLECTIONS)
+        ).split(",")
+    )
+    return {part.strip() for part in raw if part.strip()}
+
+
+def collection_has_vectors(name: str, requested: bool, payload_only: set[str]) -> bool:
+    """Return whether this collection should export vector data."""
+    return requested and name not in payload_only
 
 
 def collection_info(client: qdrant_client.QdrantClient, name: str) -> dict[str, Any]:
@@ -625,6 +644,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exclude collection names ending with this suffix; repeatable (default: _8b)",
     )
     p.add_argument(
+        "--payload-only-collection",
+        action="append",
+        default=None,
+        help="Export payload without vectors for this collection; repeatable",
+    )
+    p.add_argument(
         "--collection",
         action="append",
         default=[],
@@ -722,6 +747,12 @@ def main() -> int:
         )
 
     with_vectors = not args.no_vectors
+    payload_only_collections = resolve_payload_only_collections(args.payload_only_collection)
+    logger.info(
+        "vector_policy requested_vectors=%s payload_only=%s",
+        with_vectors,
+        ",".join(sorted(payload_only_collections)) or "<none>",
+    )
 
     try:
         collections = list_collections(client)
@@ -771,10 +802,11 @@ def main() -> int:
         for c in collections:
             info = collection_info(client, c)
             logger.info(
-                "dry-run would snapshot collection=%s format=%s points=<all> vector_size=%s",
+                "dry-run would snapshot collection=%s format=%s points=<all> vector_size=%s vectors=%s",
                 c,
                 fmt,
                 info.get("vector_size"),
+                collection_has_vectors(c, with_vectors, payload_only_collections),
             )
         # If retention pruning was requested, show what WOULD be pruned.
         # Best-effort: B2 creds may be absent in pure dry-run; never delete.
@@ -818,7 +850,7 @@ def main() -> int:
                         name,
                         workdir,
                         args.limit,
-                        with_vectors,
+                        collection_has_vectors(name, with_vectors, payload_only_collections),
                         fmt,
                     )
                 )
@@ -838,7 +870,7 @@ def main() -> int:
                         name,
                         workdir,
                         args.limit,
-                        with_vectors,
+                        collection_has_vectors(name, with_vectors, payload_only_collections),
                         fmt,
                     )
                     failures -= 1

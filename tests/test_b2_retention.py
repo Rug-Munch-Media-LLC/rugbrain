@@ -85,6 +85,15 @@ def test_filter_collections_can_be_disabled() -> None:
     assert b2_permanence.filter_collections(names, ()) == names
 
 
+def test_payload_only_policy_skips_large_vector_corpus() -> None:
+    payload_only = b2_permanence.resolve_payload_only_collections(None)
+    assert payload_only == {"codebase_reference_v2"}
+    assert (
+        b2_permanence.collection_has_vectors("codebase_reference_v2", True, payload_only) is False
+    )
+    assert b2_permanence.collection_has_vectors("threat_intel_v2", True, payload_only) is True
+
+
 # ── parse_snapshot_date ────────────────────────────────────────────────
 
 
