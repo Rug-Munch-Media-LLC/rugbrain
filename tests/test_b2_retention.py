@@ -69,6 +69,22 @@ class FakeApi:
         return self.bucket
 
 
+# ── collection filtering ────────────────────────────────────────────────
+
+
+def test_filter_collections_excludes_generated_8b_mirrors() -> None:
+    names = ["codebase_reference_v2", "codebase_reference_v2_8b", "threat_intel_v2_8b", "news_v2"]
+    assert b2_permanence.filter_collections(names, ("_8b",)) == [
+        "codebase_reference_v2",
+        "news_v2",
+    ]
+
+
+def test_filter_collections_can_be_disabled() -> None:
+    names = ["codebase_reference_v2", "codebase_reference_v2_8b"]
+    assert b2_permanence.filter_collections(names, ()) == names
+
+
 # ── parse_snapshot_date ────────────────────────────────────────────────
 
 

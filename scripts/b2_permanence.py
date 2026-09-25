@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Nightly B2 permanence sync — Qdrant snapshots to Backblaze B2.
 
-Exports every Qdrant collection as a columnar parquet file (default)
+Exports canonical Qdrant collections as a columnar parquet file (default;
+generated ``*_8b`` mirror collections are excluded by default)
 or compressed NDJSON (legacy fallback) and uploads it to B2 under
 ``snapshots/YYYY-MM-DD/``:
 
@@ -37,6 +38,7 @@ Usage:
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
     B2_BUCKET_NAME                              (default rmi-rag-permanence)
+    B2_EXCLUDE_SUFFIXES                         (default _8b; generated mirror collections)
     B2_ENCRYPTION_KEY                           DEPRECATED — SSE-B2 encrypts
                                                 at rest; kept only for
                                                 reading/migrating legacy .enc
@@ -94,6 +96,7 @@ DEFAULT_QDRANT_PORT = os.getenv("QDRANT_PORT", "6334")
 
 MANIFEST_NAME = "manifest.json"
 LATEST_NAME = "latest.json"
+DEFAULT_EXCLUDED_SUFFIXES = ("_8b",)
 # 2026-09-18: was hardcoded level 19 (max). With 41 collections that run exceeded the
 # 4h TimeoutStartSec and the unit was SIGTERM'd (ExecMainStatus=15) — every night.
 # Level 19 is ~5-10x slower than level 6 for a marginal size win, and B2 storage is
@@ -147,6 +150,14 @@ def resolve_qdrant_client(host: str | None, port: int | None) -> qdrant_client.Q
 def list_collections(client: qdrant_client.QdrantClient) -> list[str]:
     """Return collection names sorted alphabetically."""
     return sorted(c.name for c in client.get_collections().collections)
+
+
+def filter_collections(collections: list[str], excluded_suffixes: tuple[str, ...]) -> list[str]:
+    """Exclude generated mirror collections from the canonical snapshot set."""
+    suffixes = tuple(suffix for suffix in excluded_suffixes if suffix)
+    if not suffixes:
+        return list(collections)
+    return [name for name in collections if not name.endswith(suffixes)]
 
 
 def collection_info(client: qdrant_client.QdrantClient, name: str) -> dict[str, Any]:
@@ -608,6 +619,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Snapshot format: parquet (default, DuckDB-queryable) or ndjson (legacy)",
     )
     p.add_argument(
+        "--exclude-suffix",
+        action="append",
+        default=None,
+        help="Exclude collection names ending with this suffix; repeatable (default: _8b)",
+    )
+    p.add_argument(
         "--collection",
         action="append",
         default=[],
@@ -719,6 +736,21 @@ def main() -> int:
             logger.critical("unknown collection(s): %s (have: %s)", sorted(missing), collections)
             return 1
         collections = [c for c in collections if c in requested]
+    else:
+        configured = args.exclude_suffix
+        if configured is None:
+            configured = [
+                part.strip() for part in os.getenv("B2_EXCLUDE_SUFFIXES", "_8b").split(",")
+            ]
+        excluded_suffixes = tuple(part for part in configured if part)
+        before = len(collections)
+        collections = filter_collections(collections, excluded_suffixes)
+        logger.info(
+            "collection_filter excluded_suffixes=%s excluded=%d remaining=%d",
+            ",".join(excluded_suffixes) or "<none>",
+            before - len(collections),
+            len(collections),
+        )
 
     if not collections:
         logger.warning("no collections to snapshot")
