@@ -1,4 +1,8 @@
-"""CLI for ``python -m rugbrain.ingest_sources.x_intel``."""
+"""CLI for ``python -m rugbrain.ingest_sources.x_intel``.
+
+Exit codes: ``0`` success, ``2`` usage/config error, ``3`` Pry lane
+payment-gated (x402 402) — see ``pry_lane.PRY_LANE_EXIT_CODE``.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +10,28 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+CycleFn = Callable[[], Awaitable[dict[str, Any]]]
+
+
+def _run_cycle(cycle: CycleFn | None = None) -> int:
+    """Run one cycle; translate a dead Pry lane into a nonzero exit.
+
+    ``cycle`` is the DI seam: tests inject a stub (or a raiser) instead of
+    patching ``pipeline.run_cycle``.
+    """
+    from rugbrain.ingest_sources.x_intel.pipeline import run_cycle
+    from rugbrain.ingest_sources.x_intel.pry_paywall import PRY_LANE_EXIT_CODE, PryLaneUnavailable
+
+    try:
+        print(json.dumps(asyncio.run((cycle or run_cycle)()), indent=2))
+    except PryLaneUnavailable as exc:
+        print(f"x-intel ingest FAILED: {exc}", file=sys.stderr)
+        return PRY_LANE_EXIT_CODE
+    return 0
 
 
 def main() -> None:
@@ -32,10 +58,7 @@ def main() -> None:
         print(json.dumps(asyncio.run(default_tracker().get_daily_usage()), indent=2))
         return
     if args.cycle:
-        from rugbrain.ingest_sources.x_intel.pipeline import run_cycle
-
-        print(json.dumps(asyncio.run(run_cycle()), indent=2))
-        return
+        sys.exit(_run_cycle())
     parser.print_help()
 
 

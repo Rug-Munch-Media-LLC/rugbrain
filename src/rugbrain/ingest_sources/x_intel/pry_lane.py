@@ -11,14 +11,15 @@ Markdown parsing lives in ``pry_parse``. Fail-open: any error → ``None``.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import httpx
 
+from rugbrain.ingest_sources.x_intel.pry_cache import cache_get, cache_set
 from rugbrain.ingest_sources.x_intel.pry_parse import (
     extract_created_at,
     extract_engagement,
@@ -27,6 +28,12 @@ from rugbrain.ingest_sources.x_intel.pry_parse import (
     parse_int,
     tweet_id_from_url,
 )
+from rugbrain.ingest_sources.x_intel.pry_paywall import (
+    PRY_402_COUNTER_KEY,
+    PRY_LANE_EXIT_CODE,
+    PryLaneUnavailable,
+    record_paywall,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +41,8 @@ PRY_BASE_URL: str = os.getenv("PRYSCRAPER_URL", "http://127.0.0.1:8005").rstrip(
 PRY_SCRAPE_TIMEOUT_S: float = float(os.getenv("PRY_SCRAPE_TIMEOUT_S", "45"))
 PRY_CACHE_TWEETS_S: float = float(os.getenv("XINTEL_PRY_CACHE_TWEETS_S", "900"))
 PRY_CACHE_PROFILE_S: float = float(os.getenv("XINTEL_PRY_CACHE_PROFILE_S", "3600"))
+#: The single scrape primitive every Pry helper is built on (DI seam for tests).
+ScrapeFn = Callable[..., Awaitable[dict[str, Any] | None]]
 
 
 def pry_headers() -> dict[str, str]:
@@ -47,30 +56,15 @@ def pry_headers() -> dict[str, str]:
     return headers
 
 
-async def _cache_get(key: str) -> Any | None:
-    try:
-        from rugbrain.compat import get_redis_async
-
-        raw = await (await get_redis_async()).get(key)
-        return json.loads(raw) if raw is not None else None
-    except Exception:
-        logger.debug("xintel:pry_cache_read_failed key=%s", key)
-        return None
-
-
-async def _cache_set(key: str, value: Any, ttl: float) -> None:
-    try:
-        from rugbrain.compat import get_redis_async
-
-        await (await get_redis_async()).set(key, json.dumps(value), ex=int(ttl))
-    except Exception:
-        logger.debug("xintel:pry_cache_write_failed key=%s", key)
-
-
 async def _pry_scrape(
     url: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> dict[str, Any] | None:
-    """POST *url* to Pry ``/v1/scrape`` (Cloudflare bypass + JS render)."""
+    """POST *url* to Pry ``/v1/scrape`` (Cloudflare bypass + JS render).
+
+    Transient failures (Pry down, timeout, 5xx) stay fail-open → ``None``.
+    An x402 402 is NOT transient: it raises ``PryLaneUnavailable`` so the
+    cycle can fail loudly instead of silently scraping nothing forever.
+    """
     if not url:
         return None
     try:
@@ -80,8 +74,17 @@ async def _pry_scrape(
                 headers=pry_headers(),
                 json={"url": url, "bypassCloudflare": True, "jsRender": True},
             )
-            response.raise_for_status()
-            body = response.json()
+    except Exception as exc:
+        logger.debug("xintel:pry_scrape_failed url=%s err=%s", url, str(exc)[:160])
+        return None
+    if response.status_code == 402:
+        await record_paywall()
+        raise PryLaneUnavailable(
+            f"pry /v1/scrape returned 402 (payment required) for url={url[:120]}"
+        )
+    try:
+        response.raise_for_status()
+        body = response.json()
     except Exception as exc:
         logger.debug("xintel:pry_scrape_failed url=%s err=%s", url, str(exc)[:160])
         return None
@@ -100,7 +103,7 @@ async def scrape_tweet(
     if not tweet_id:
         return None
     cache_key = f"xintel:pry:tweet:{tweet_id}"
-    cached = await _cache_get(cache_key)
+    cached = await cache_get(cache_key)
     if cached is not None:
         return cast("dict[str, Any]", cached)
     data = await _pry_scrape(tweet_url, transport)
@@ -124,22 +127,28 @@ async def scrape_tweet(
         "url": tweet_url,
         "source": "pry",
     }
-    await _cache_set(cache_key, result, PRY_CACHE_TWEETS_S)
+    await cache_set(cache_key, result, PRY_CACHE_TWEETS_S)
     return result
 
 
 async def scrape_profile(
-    username: str, transport: httpx.AsyncBaseTransport | None = None
+    username: str,
+    transport: httpx.AsyncBaseTransport | None = None,
+    scrape: ScrapeFn = _pry_scrape,
 ) -> dict[str, Any] | None:
-    """Scrape one X profile via Pry (FREE) → bio/followers/recent tweets."""
+    """Scrape one X profile via Pry (FREE) → bio/followers/recent tweets.
+
+    ``scrape`` is the DI seam (mirrors ``routing.pacing_active(redis_client)``):
+    tests inject a stub instead of patching the module.
+    """
     username = str(username or "").strip().lstrip("@")
     if not username:
         return None
     cache_key = f"xintel:pry:profile:{username}"
-    cached = await _cache_get(cache_key)
+    cached = await cache_get(cache_key)
     if cached is not None:
         return cast("dict[str, Any]", cached)
-    data = await _pry_scrape(f"https://x.com/{username}", transport)
+    data = await scrape(f"https://x.com/{username}", transport)
     if not data:
         return None
     markdown = str(data.get("markdown") or data.get("content") or "").strip()
@@ -173,8 +182,17 @@ async def scrape_profile(
         "recent_tweets": recent,
         "source": "pry",
     }
-    await _cache_set(cache_key, result, PRY_CACHE_PROFILE_S)
+    await cache_set(cache_key, result, PRY_CACHE_PROFILE_S)
     return result
 
 
-__all__ = ["PRY_BASE_URL", "pry_headers", "scrape_profile", "scrape_tweet"]
+__all__ = [
+    "PRY_402_COUNTER_KEY",
+    "PRY_BASE_URL",
+    "PRY_LANE_EXIT_CODE",
+    "PryLaneUnavailable",
+    "pry_headers",
+    "record_paywall",
+    "scrape_profile",
+    "scrape_tweet",
+]
