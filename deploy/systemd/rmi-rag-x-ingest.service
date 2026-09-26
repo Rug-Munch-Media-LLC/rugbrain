@@ -24,4 +24,8 @@ ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.ingest_sources.x
 EnvironmentFile=/srv/secrets/rugbrain-tg.env
 EnvironmentFile=-/srv/secrets/rugbrain-x.env
 TimeoutStartSec=1800
-SuccessExitStatus=0 1
+# 2026-09-26: dropped `1` from SuccessExitStatus. It marked the timer green
+# while the cycle silently scraped nothing — the Pry lane was swallowed at
+# logger.debug and every run exited 0 with a zero summary. A dead lane must
+# now surface as a failed oneshot (Pry x402 402 → exit 3).
+SuccessExitStatus=0
