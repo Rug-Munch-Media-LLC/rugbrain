@@ -100,7 +100,7 @@ jobs:
         run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=60
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v5.0.0
         with:
           name: coverage-report
           path: |
@@ -238,7 +238,7 @@ jobs:
             --sarif \
             --output=semgrep.sarif \
             src/rugbrain/
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v5.0.0
         if: always()
         with:
           name: semgrep-report
@@ -269,7 +269,7 @@ jobs:
           assert sbom.get('bomFormat') == 'CycloneDX', 'not a CycloneDX document'
           print(f"SBOM OK — {len(sbom.get('components', []))} components")
           EOF
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v5.0.0
         with:
           name: sbom
           path: sbom.cyclonedx.json
@@ -374,10 +374,11 @@ jobs:
           pip install -e . mutmut
       - name: Mutation testing (scoped to src/rugbrain)
         run: mutmut run --test-timeout 10 || echo "Mutation score noted (non-blocking)"
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v5.0.0
         if: always()
         with:
           name: mutation-report
           path: |
             .mutmut-cache/
             html/
+          include-hidden-files: true
