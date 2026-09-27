@@ -19,6 +19,8 @@ import logging
 import re
 from typing import Any
 
+from rugbrain.reflection_confidence import score_confidence
+
 logger = logging.getLogger(__name__)
 
 # Regex patterns for on-chain references
@@ -194,5 +196,5 @@ async def pre_generation_reflection(
         "block_generation": should_block,
         "warnings": warnings,
         "refs_found": refs,
-        "confidence_multiplier": 0.0 if should_block else (0.5 if not verified else 1.0),
+        "confidence_multiplier": score_confidence(verified, discrepancies, refs),
     }
