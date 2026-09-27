@@ -1,0 +1,27 @@
+# rugbrain-staleness — fail when a crypto collection stops being fed.
+#
+# Deploy:
+#   cp systemd/rugbrain-staleness.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rugbrain-staleness.timer
+#
+# Paths are placeholders (see systemd/README.md): substitute the real repo root
+# and interpreter when installing.
+#
+# Read-only: the check scrolls Qdrant payloads and exits non-zero when a
+# collection's newest document is older than 5 days. It never writes a point
+# and never re-runs an ingest. Run it by hand first — a red gate here means a
+# real dead feed, not a flake.
+[Unit]
+Description=RugBrain crypto-collection staleness check (read-only)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/rugbrain
+ExecStart=/path/to/rugbrain/.venv/bin/python scripts/check-collection-staleness.py
+Nice=10
+
+# A stale corpus is a real incident, but it is not urgent: the report names
+# the collection and its age. 0 exit = fresh, 1 = stale, 2 = error.
+SuccessExitStatus=0

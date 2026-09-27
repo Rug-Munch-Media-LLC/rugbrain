@@ -1,0 +1,16 @@
+# rugbrain-staleness.timer — daily corpus-freshness gate (05:20 UTC).
+#
+# Off the hour on purpose: the fleet already crowds :00 (backups, retention at
+# 04:10, registry at 03:30, eval at 03:30). 05:20 is clear of all of them.
+# Daily is right because the threshold is 5 days — checking more often would
+# re-alert on the same untouched evidence.
+[Unit]
+Description=Daily RugBrain crypto-collection staleness check
+
+[Timer]
+OnCalendar=*-*-* 05:20:00
+Persistent=true
+Unit=rugbrain-staleness.service
+
+[Install]
+WantedBy=timers.target
