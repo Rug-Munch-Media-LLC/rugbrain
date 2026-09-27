@@ -2,7 +2,8 @@
 
 Ported from rugmunchbot ``x_ingest`` Pry helpers + ``support/pry_auth.py``.
 Pry is self-hosted at ``http://127.0.0.1:8005``; ``/v1/scrape`` is x402-gated
-and unlocked with the internal ``PRY_API_KEY`` Bearer credential.
+and unlocked with the internal ``PRY_API_KEY`` Bearer credential, or with the
+first-party internal credential (see ``pry_internal_auth``).
 
 Helpers: ``scrape_tweet`` (one tweet URL → tweet dict, cached 15 min) and
 ``scrape_profile`` (profile page → bio/followers/recent tweets, cached 1 h).
@@ -13,19 +14,18 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import httpx
 
+from rugbrain.ingest_sources.x_intel import pry_internal_auth
 from rugbrain.ingest_sources.x_intel.pry_cache import cache_get, cache_set
 from rugbrain.ingest_sources.x_intel.pry_parse import (
     extract_created_at,
     extract_engagement,
     extract_tweet_text,
     handle_from_url,
-    parse_int,
     tweet_id_from_url,
 )
 from rugbrain.ingest_sources.x_intel.pry_paywall import (
@@ -41,18 +41,29 @@ PRY_BASE_URL: str = os.getenv("PRYSCRAPER_URL", "http://127.0.0.1:8005").rstrip(
 PRY_SCRAPE_TIMEOUT_S: float = float(os.getenv("PRY_SCRAPE_TIMEOUT_S", "45"))
 PRY_CACHE_TWEETS_S: float = float(os.getenv("XINTEL_PRY_CACHE_TWEETS_S", "900"))
 PRY_CACHE_PROFILE_S: float = float(os.getenv("XINTEL_PRY_CACHE_PROFILE_S", "3600"))
-#: The single scrape primitive every Pry helper is built on (DI seam for tests).
 ScrapeFn = Callable[..., Awaitable[dict[str, Any] | None]]
 
 
-def pry_headers() -> dict[str, str]:
-    """Auth headers for every Pry request (Bearer key when configured)."""
+def pry_headers(
+    method: str = "POST", path: str = pry_internal_auth.PRY_SCRAPE_PATH
+) -> dict[str, str]:
+    """Auth headers for one Pry request.
+
+    Bearer key when configured, plus Pry's first-party internal credential
+    (``X-Internal-Token`` / ``X-Internal-Signature`` / ``X-Internal-Timestamp``)
+    so first-party jobs skip the x402 challenge instead of paying us.
+
+    The internal triple is minted per call: the signature covers the timestamp
+    and Pry refuses a signature it has already seen, so cached headers would
+    replay-fail. Omitted entirely when ``PRY_INTERNAL_TOKEN`` is unset.
+    """
     headers: dict[str, str] = {"Content-Type": "application/json"}
     key = os.getenv("PRY_API_KEY", "").strip()
     if key:
         headers["Authorization"] = f"Bearer {key}"
     if os.getenv("PRY_X402_OFFLINE", "false").lower() in ("1", "true", "yes"):
         headers["X-X402-Offline"] = "true"
+    headers.update(pry_internal_auth.pry_internal_headers(method=method, path=path))
     return headers
 
 
@@ -70,8 +81,8 @@ async def _pry_scrape(
     try:
         async with httpx.AsyncClient(timeout=PRY_SCRAPE_TIMEOUT_S, transport=transport) as client:
             response = await client.post(
-                f"{PRY_BASE_URL}/v1/scrape",
-                headers=pry_headers(),
+                f"{PRY_BASE_URL}{pry_internal_auth.PRY_SCRAPE_PATH}",
+                headers=pry_headers("POST", pry_internal_auth.PRY_SCRAPE_PATH),
                 json={"url": url, "bypassCloudflare": True, "jsRender": True},
             )
     except Exception as exc:
@@ -131,60 +142,9 @@ async def scrape_tweet(
     return result
 
 
-async def scrape_profile(
-    username: str,
-    transport: httpx.AsyncBaseTransport | None = None,
-    scrape: ScrapeFn = _pry_scrape,
-) -> dict[str, Any] | None:
-    """Scrape one X profile via Pry (FREE) → bio/followers/recent tweets.
-
-    ``scrape`` is the DI seam (mirrors ``routing.pacing_active(redis_client)``):
-    tests inject a stub instead of patching the module.
-    """
-    username = str(username or "").strip().lstrip("@")
-    if not username:
-        return None
-    cache_key = f"xintel:pry:profile:{username}"
-    cached = await cache_get(cache_key)
-    if cached is not None:
-        return cast("dict[str, Any]", cached)
-    data = await scrape(f"https://x.com/{username}", transport)
-    if not data:
-        return None
-    markdown = str(data.get("markdown") or data.get("content") or "").strip()
-    if not markdown:
-        return None
-    bio = ""
-    for ln in (ln.strip() for ln in markdown.splitlines()):
-        if ln and not re.fullmatch(r"@?[\w.]+", ln) and len(ln) >= 8:
-            bio = ln[:300]
-            break
-    m = re.search(r"([\d.,]+[kKmM]?)\s*[Ff]ollowers", markdown)
-    followers = parse_int(m.group(1)) if m else 0
-    recent: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for tid in re.findall(rf"x\.com/{re.escape(username)}/status/(\d+)", markdown):
-        if tid in seen:
-            continue
-        seen.add(tid)
-        tweet = await scrape_tweet(f"https://x.com/{username}/status/{tid}", transport)
-        if tweet is not None:
-            recent.append(tweet)
-        if len(recent) >= 5:
-            break
-    result: dict[str, Any] = {
-        "username": username,
-        "name": str((data.get("metadata") or {}).get("title") or "").strip() or username,
-        "bio": bio,
-        "followers_count": followers,
-        "following_count": 0,
-        "tweets_count": 0,
-        "recent_tweets": recent,
-        "source": "pry",
-    }
-    await cache_set(cache_key, result, PRY_CACHE_PROFILE_S)
-    return result
-
+# Re-exported so the historical ``pry_lane.scrape_profile`` import path
+# (pipeline, tests) keeps working after the profile scrape moved to its module.
+from rugbrain.ingest_sources.x_intel.pry_profile import scrape_profile  # noqa: E402
 
 __all__ = [
     "PRY_402_COUNTER_KEY",
