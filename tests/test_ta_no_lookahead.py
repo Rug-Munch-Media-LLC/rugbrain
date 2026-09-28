@@ -18,12 +18,12 @@ import pytest
 
 from rugbrain.ta.backtest import (
     FILL_LAG_BARS,
-    _rewrite_future,
     prefix_invariance,
     purged_split,
     walk_forward,
 )
 from rugbrain.ta.candles import Candle, Series
+from rugbrain.ta.no_lookahead import rewrite_future as _rewrite_future
 from rugbrain.ta.signals import Signal, evaluate, evaluate_at
 
 HOUR = 3600

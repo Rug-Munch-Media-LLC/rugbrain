@@ -9,10 +9,14 @@ nothing in RugBrain could read it.
 This package is that substrate. Layout (one job per module, all under 200 lines):
 
 * :mod:`candles`  — the :class:`Candle` value type and series helpers.
-* :mod:`reader`  — ClickHouse reader for ``wallet_memory.dex_ohlcv_hourly``.
+* :mod:`ohlcv_sql` — the SQL text for the OHLCV reads (built, never executed).
+* :mod:`reader`  — ClickHouse connection + row-to-candle for the same table.
 * :mod:`indicators` — SMA / EMA / RSI / ATR / volume / volatility / drawdown.
-* :mod:`signals` — candles + indicators -> a scored finding.
-* :mod:`backtest` — point-in-time evaluator that cannot read the future.
+* :mod:`signatures` — the three triggers (liquidity/volume/dump) + their confidence maths.
+* :mod:`signals` — candles + indicators -> a scored finding, dispatched to the signatures.
+* :mod:`results` — the value types a backtest emits (``Trade``, ``BacktestResult``).
+* :mod:`backtest` — walk-forward: bars in, trades out, with a one-bar fill lag.
+* :mod:`no_lookahead` — the leak DETECTOR: rewrites the future and checks the verdict moved.
 
 Every indicator is a **pure function over a list of floats** — no pandas, no
 numpy dependency in the maths — and every one of them is *causal by

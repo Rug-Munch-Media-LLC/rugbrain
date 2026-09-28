@@ -11,6 +11,9 @@ code path that can emit a mutation.
 The table is the price-series substrate the mission eval was missing —
 2,596,363 hourly candles over 53,935 DEX pairs, fresh to the current hour, with
 columns ``chain, pair_address, timestamp, open, high, low, close, volume, trades``.
+
+One job: connect, execute, and turn rows into :class:`Candle` objects. The SQL
+text itself lives in :mod:`rugbrain.ta.ohlcv_sql`.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .candles import Candle, Series
+from .ohlcv_sql import MAX_WINDOW_HOURS, candles_sql, stats_sql, top_pairs_sql
 
 log = logging.getLogger("rugbrain.ta")
 
@@ -33,14 +37,12 @@ CLICKHOUSE_INTERFACE = os.getenv("CLICKHOUSE_INTERFACE", "http")
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_USER", "rugbrain")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 
-#: The OHLCV table. Falls back to wallet_memory because that is where the
-#: dex_ohlcv_hourly table lives; the rmi database has no price series.
-CLICKHOUSE_DATABASE = os.getenv("CLICKHOUSE_DATABASE", "wallet_memory")
+#: Re-exported names other modules and the public API rely on.
+DATABASE = os.getenv("CLICKHOUSE_DATABASE", "wallet_memory")
 OHLCV_TABLE = "dex_ohlcv_hourly"
-
 DEFAULT_TIMEOUT_S = 30.0
-#: Guard rail: a window is expressed in hours; 90d of hourly bars is 2160 rows.
-MAX_WINDOW_HOURS = 24 * 365
+
+_TS_FMT = "%Y-%m-%d %H:%M:%S"
 
 
 class CandleReadError(RuntimeError):
@@ -76,7 +78,7 @@ def _client() -> Any:
                 interface=CLICKHOUSE_INTERFACE,
                 username=CLICKHOUSE_USER,
                 password=CLICKHOUSE_PASSWORD,
-                database=CLICKHOUSE_DATABASE,
+                database=DATABASE,
             )
         except Exception as exc:  # a port may be down; try the next
             last = exc
@@ -103,6 +105,15 @@ def _row_to_candle(row: Sequence[Any], ref: PairRef) -> Candle:
     )
 
 
+def _rows(client: Any | None, sql: str, what: str) -> list[Sequence[Any]]:
+    """Run *sql* and return its rows, converting any failure to CandleReadError."""
+    ch = client if client is not None else _client()
+    try:
+        return ch.query(sql).result_rows
+    except Exception as exc:
+        raise CandleReadError(f"{what} failed: {type(exc).__name__}: {exc}") from exc
+
+
 def fetch_candles(
     ref: PairRef,
     hours: int = 168,
@@ -125,27 +136,13 @@ def fetch_candles(
         end_ts = end_ts.replace(tzinfo=UTC)
     start_ts = end_ts - timedelta(hours=hours)
 
-    # Table/column names come from module config; the only caller-supplied
-    # values go through _lit(), which escapes quotes. The S608 suppression
-    # mirrors rugbrain.fear_index.storage.
-    sql = (  # noqa: S608
-        "SELECT timestamp, open, high, low, close, volume, trades "
-        f"FROM {CLICKHOUSE_DATABASE}.{OHLCV_TABLE} "
-        "WHERE chain = {chain} AND pair_address = {pair} "
-        "AND timestamp >= {start} AND timestamp <= {end} "
-        "ORDER BY timestamp ASC"
-    ).format(
-        chain=_lit(ref.chain),
-        pair=_lit(ref.pair_address),
-        start=_lit(start_ts.strftime("%Y-%m-%d %H:%M:%S")),
-        end=_lit(end_ts.strftime("%Y-%m-%d %H:%M:%S")),
+    sql = candles_sql(
+        chain=ref.chain,
+        pair_address=ref.pair_address,
+        start=start_ts.strftime(_TS_FMT),
+        end=end_ts.strftime(_TS_FMT),
     )
-    ch = client if client is not None else _client()
-    try:
-        result = ch.query(sql)
-        rows = result.result_rows
-    except Exception as exc:
-        raise CandleReadError(f"ohlcv query failed for {ref}: {type(exc).__name__}: {exc}") from exc
+    rows = _rows(client, sql, f"ohlcv query for {ref}")
     log.info("ta_fetch_candles pair=%s rows=%d window_hours=%d", ref, len(rows), hours)
     return Series(_row_to_candle(r, ref) for r in rows)
 
@@ -159,41 +156,18 @@ def fetch_candles_upto(
 
 def table_stats(client: Any | None = None) -> dict[str, int]:
     """Row count, distinct pair count and freshness of the OHLCV table."""
-    sql = (  # noqa: S608
-        f"SELECT count() AS rows, uniqExact(pair_address) AS pairs, "
-        f"max(timestamp) AS fresh FROM {CLICKHOUSE_DATABASE}.{OHLCV_TABLE}"
-    )
-    ch = client if client is not None else _client()
-    try:
-        row = ch.query(sql).result_rows[0]
-    except Exception as exc:
-        raise CandleReadError(f"ohlcv stats failed: {type(exc).__name__}: {exc}") from exc
+    row = _rows(client, stats_sql(), "ohlcv stats")[0]
     return {"rows": int(row[0]), "pairs": int(row[1]), "fresh": str(row[2])}
 
 
 def top_pairs(days: int = 30, limit: int = 10, client: Any | None = None) -> list[PairRef]:
     """The pairs with the densest recent coverage — a sane default for demos."""
-    sql = (  # noqa: S608
-        "SELECT chain, pair_address, count() AS c FROM "
-        f"{CLICKHOUSE_DATABASE}.{OHLCV_TABLE} "
-        f"WHERE timestamp >= now() - INTERVAL {int(days)} DAY "
-        "GROUP BY chain, pair_address ORDER BY c DESC LIMIT " + str(int(limit))
-    )
-    ch = client if client is not None else _client()
-    try:
-        rows = ch.query(sql).result_rows
-    except Exception as exc:
-        raise CandleReadError(f"top_pairs failed: {type(exc).__name__}: {exc}") from exc
+    rows = _rows(client, top_pairs_sql(days=days, limit=limit), "top_pairs")
     return [PairRef(str(r[0]), str(r[1])) for r in rows]
 
 
-def _lit(value: str) -> str:
-    """Quote a ClickHouse string literal (values come from trusted config/rows)."""
-    escaped = str(value).replace("\\", "\\\\").replace("'", "\\'")
-    return f"'{escaped}'"
-
-
 __all__ = [
+    "DEFAULT_TIMEOUT_S",
     "MAX_WINDOW_HOURS",
     "OHLCV_TABLE",
     "CandleReadError",
