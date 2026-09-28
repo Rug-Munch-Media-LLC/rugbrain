@@ -34,12 +34,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from rugbrain.search.dual_tier import (
-    ENDPOINTS,
     ROUTING_THRESHOLD_WORDS,
     DualTierRetriever,
     pick_tier,
 )
 from rugbrain.search.rerank import apply_instruction
+from scripts.dual_tier.engine_endpoints import ENDPOINTS
 
 app = FastAPI(title="RugMunch Model Services Gateway", version="1.0.0")
 
