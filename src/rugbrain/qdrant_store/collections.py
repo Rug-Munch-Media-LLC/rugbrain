@@ -96,6 +96,12 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "standards",
         "market_data",
         "crime_reports",
+        # 2026-09-28: targets of three built sources that were writing into
+        # the void. rug_events <- crpwarner_rug_events.py; scam_signatures <-
+        # forta_malicious_contracts.py + fraudcoins_signatures.py. Same
+        # DEFAULT_COLLECTION-vs-owned-set drift as the 8 added above.
+        "rug_events",
+        "scam_signatures",
         # Explicitly reviewed, redacted ContextCrypto projection only.
         # Never add the internal ContextCrypto collections to this gate.
         "public_crypto_patterns",
