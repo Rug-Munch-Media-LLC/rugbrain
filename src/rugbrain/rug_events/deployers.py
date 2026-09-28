@@ -55,12 +55,24 @@ def serial_ruggers(events: list[dict[str, Any]], minimum: int = 2) -> dict[str, 
 
 
 def apply_prior_counts(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Stamp ``deployer_prior_rugs`` (and attribution) onto every event, in place."""
+    """Stamp ``deployer_prior_rugs`` (and attribution) onto every event, in place.
+
+    Every row also carries ``deployer_prior_rugs_known``, so a consumer reading
+    the count alone cannot mistake "unknown" for "clean". A retriever or an
+    agent that filters on ``deployer_prior_rugs == 0`` and ignores the flag
+    would otherwise be asserting a fact this corpus does not contain — which is
+    the specific failure the flag exists to make impossible to make silently.
+    """
+    from rugbrain.rug_events.schema import DEPLOYER_STATUS
+
     counts = prior_counts(events)
     for event in events:
         event_id = str(event.get("event_id") or "")
+        attributed = bool(str(event.get("deployer") or "").strip())
         event["deployer_prior_rugs"] = counts.get(event_id, 0)
-        event["deployer_attributed"] = bool(str(event.get("deployer") or "").strip())
+        event["deployer_attributed"] = attributed
+        event["deployer_prior_rugs_known"] = attributed
+        event["deployer_attribution_note"] = "" if attributed else DEPLOYER_STATUS
     return events
 
 

@@ -34,21 +34,22 @@ TOP_K = 10
 
 
 async def _qdrant_retriever(query: str, collection: str, top_k: int) -> list[dict[str, Any]]:
-    """Adapt the production retriever to the eval's ``(query, collection, k)``.
+    """Adapt the per-collection retriever to the eval's ``(query, collection, k)``.
 
     The eval grades on document text and id, so the result contexts are passed
     through as-is. A failure surfaces as an exception, which the runner records
     as a per-case error rather than a silent miss — a broken retrieval path must
     not be able to look like a poor corpus.
+
+    This searches the collection the CASE names. The production
+    ``DualTierRetriever`` cannot: it searches one module-level collection
+    (``RAG_COLLECTION``) and returns zero documents — with no error — when its
+    embed lane is down, which is how ``rug_history`` read 0.000 against a
+    corpus that could not have been searched at all.
     """
-    import aiohttp
+    from rugbrain.missioneval.collection_retriever import make_retriever
 
-    from rugbrain.search.dual_tier import DualTierRetriever
-
-    async with aiohttp.ClientSession() as http:
-        retriever = DualTierRetriever(http=http)
-        result = await retriever.retrieve(query, top_k=top_k)
-    return list(result.contexts or [])
+    return await make_retriever()(query, collection, top_k)
 
 
 def _default_retriever() -> Callable[..., Any]:
@@ -74,22 +75,20 @@ def _embedder_alive() -> tuple[bool, str]:
 
 
 async def _probe_embed_dim() -> int:
-    """Probe the SAME lane the dual-tier retriever embeds with.
+    """Probe the SAME lane the retriever embeds with.
 
-    `get_query_embedding` resolves `RAG_EMBED_BACKEND=auto` (DeepInfra here),
-    but `DualTierRetriever` embeds against `QWEN_EMBED_URL` (the local :8004
-    lane). Probing the wrong one reports a healthy system while retrieval
-    returns nothing, so the probe must hit the retriever's own URL.
+    The retriever used to embed against ``QWEN_EMBED_URL`` (the local :8004
+    lane, currently down), while ``get_query_embedding`` resolved
+    ``RAG_EMBED_BACKEND=auto`` (DeepInfra). Probing the wrong one reports a
+    healthy system while retrieval returns nothing, so the probe must hit the
+    retriever's own lane. Both now resolve through
+    ``rug_events.embedding.apply_lane_env``, so the probe and the retrieval
+    cannot disagree about which embedder is in use.
     """
-    import os
+    from rugbrain.rug_events.embedding import apply_lane_env, embed_sync
 
-    import aiohttp
-
-    url = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-    async with aiohttp.ClientSession() as http:
-        async with http.post(f"{url}/embeddings", json={"input": "liveness probe"}) as resp:
-            resp.raise_for_status()
-            return len((await resp.json())["data"][0]["embedding"])
+    apply_lane_env()
+    return len(embed_sync(["liveness probe"])[0])
 
 
 def main() -> int:

@@ -42,6 +42,9 @@ PAYLOAD_FIELDS: dict[str, str] = {
     "rug_ratio": "float — removed / added (>1 means more left than entered)",
     "holders_at_rug": "int — holder count at the rug (absent unless sourced)",
     "deployer_prior_rugs": "int — DERIVED: rugs already attributed to this deployer",
+    "deployer_attributed": "bool — READ THIS FIRST. False means the deployer is "
+    "UNKNOWN, not clean: no source in this corpus publishes a creator for these "
+    "rows, so a 0 prior-rug count carries no information. See DEPLOYER_STATUS.",
     "source": "str — provenance key; resolve to a URL via SOURCE_URLS",
     "confidence": "float — 0..1, how directly the row evidences the event",
     "severity": "str — triage",
@@ -82,6 +85,25 @@ SOURCE_URLS: dict[str, str] = {
 #: Required keys. A row missing any of these is not an event and is rejected.
 REQUIRED = ("token_address", "chain", "source", "confidence")
 
+#: Why ``deployer_attributed`` is False on every row today. Measured, not
+#: assumed — see the lane report of 2026-09-28.
+#:
+#: The only labelled creator field available offline is Forta's
+#: ``contract_creator`` (139,600 rows, fetched and scanned in full). The join
+#: was measured against all 1,527 distinct token addresses in this collection
+#: and returned **0 matches**. That is a chain mismatch, not a coverage gap:
+#:
+#:   * 1,508 / 1,527 token addresses are base58 Solana mints. Forta is EVM-only.
+#:   * The remaining 19 ARE EVM (all scythe-radar rows) and still miss: scythe
+#:     publishes no creator field, and none appear in Forta's contract set.
+#:
+#: So no row can be attributed from data this repo holds, and none is. The
+#: field stays False rather than being filled with a guess.
+DEPLOYER_STATUS = (
+    "unattributed — no creator published by any in-repo source; "
+    "Forta join measured 0/1527 (EVM-only vs 1508 Solana mints)"
+)
+
 
 def validate(row: dict[str, Any]) -> list[str]:
     """Return the names of REQUIRED fields missing from *row* ([] when valid)."""
@@ -91,6 +113,7 @@ def validate(row: dict[str, Any]) -> list[str]:
 __all__ = [
     "COLLECTION",
     "DATETIME",
+    "DEPLOYER_STATUS",
     "FLOAT",
     "INDEX_PLAN",
     "KEYWORD",
