@@ -81,14 +81,14 @@ async def _probe_embed_dim() -> int:
     lane, currently down), while ``get_query_embedding`` resolved
     ``RAG_EMBED_BACKEND=auto`` (DeepInfra). Probing the wrong one reports a
     healthy system while retrieval returns nothing, so the probe must hit the
-    retriever's own lane. Both now resolve through
-    ``rug_events.embedding.apply_lane_env``, so the probe and the retrieval
-    cannot disagree about which embedder is in use.
+    retriever's own lane. Both now go through
+    ``rugbrain.missioneval.collection_retriever._embed_one`` — literally the
+    same function the cases use, so the probe and the retrieval cannot
+    disagree about which embedder is live.
     """
-    from rugbrain.rug_events.embedding import apply_lane_env, embed_sync
+    from rugbrain.missioneval.collection_retriever import _embed_one
 
-    apply_lane_env()
-    return len(embed_sync(["liveness probe"])[0])
+    return len(await _embed_one("liveness probe"))
 
 
 def main() -> int:

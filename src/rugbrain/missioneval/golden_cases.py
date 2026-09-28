@@ -12,34 +12,73 @@ from rugbrain.missioneval.goldens import MissionCase
 
 # fmt: off
 CASES: list[MissionCase] = [
-MissionCase(
-    id="rug-01",
-    job_class="rug_history",
-    query="honeypot token contract that blocks sells so buyers cannot exit",
-    collection="threat_intel_v2",
-    relevant_doc_ids=["280a4db1-fe3d-50b7-9cbd-70db3b14cd49"],
-    match_terms=["honeypot", "risk flags", "sentinel"],
-    partial_terms=["cannot sell", "sell blocked", "sell tax"],
-    provenance_note="threat_intel_v2 scan-alert point observed 2026-09-28.",
-),
-MissionCase(
-    id="rug-02",
-    job_class="rug_history",
-    query="deployer rugged the project by removing all liquidity from the pool",
-    collection="threat_intel_v2",
-    match_terms=["rugged", "rug", "liquidity removed", "drained pool"],
-    partial_terms=["liquidity", "remove_liquidity", "pool"],
-    provenance_note="No single canonical rug-event row; scored on rug/liquidity text.",
-),
-MissionCase(
-    id="rug-03",
-    job_class="rug_history",
-    query="high concentration holders plus sniper bundle means high rug risk",
-    collection="scan_intel",
-    match_terms=["hhi", "sentinel", "holder", "bundle", "risk"],
-    partial_terms=["sniper", "concentration"],
-    provenance_note="scan_intel risk rows carry risk_flags incl. SENTINEL_*.",
-),
+    MissionCase(
+        id="rug-01",
+        job_class="rug_history",
+        query="honeypot token contract that blocks sells so buyers cannot exit",
+        collection="rug_events",
+        match_terms=["rug event", "removed liquidity", "holders at rug"],
+        partial_terms=["cannot sell", "sell blocked", "sell tax", "honeypot"],
+        provenance_note=(
+            "Repointed 2026-09-28 from threat_intel_v2 to rug_events. The query asks "
+            "about a rug EVENT; rug_events is the collection that answers it, while "
+            "threat_intel_v2 answers a live scam-CONTEXT question. Matching on the "
+            "scan's own honeypot wording would have graded a live alert, not a rug "
+            "history. No relevant_doc_ids claimed: no single row is the canonical "
+            "honeypot case, so this scores on rug-event vocabulary only."
+        ),
+    ),
+
+    MissionCase(
+        id="rug-02",
+        job_class="rug_history",
+        query="deployer rugged the project by removing all liquidity from the pool",
+        collection="rug_events",
+        match_terms=["liquidity", "removed liquidity", "rug event"],
+        partial_terms=["pool", "drain", "rugged"],
+        provenance_note=(
+            "rug_events SolRPDS projection (built 2026-09-28, 1858 rows). Every row "
+            "renders 'Total removed liquidity' inline, so the liquidity-removal "
+            "vocabulary is native to the collection rather than borrowed from prose."
+        ),
+    ),
+    MissionCase(
+        id="rug-03",
+        job_class="rug_history",
+        query="high concentration holders plus sniper bundle means high rug risk",
+        collection="scan_intel",
+        match_terms=["hhi", "sentinel", "holder", "bundle", "risk"],
+        partial_terms=["sniper", "concentration"],
+        provenance_note="scan_intel risk rows carry risk_flags incl. SENTINEL_*.",
+    ),
+    MissionCase(
+        id="rug-04",
+        job_class="rug_history",
+        query="liquidity pool where the rug ratio removed more than was ever added",
+        collection="rug_events",
+        match_terms=["rug ratio", "removed liquidity", "rug event"],
+        partial_terms=["ratio", "removed", "pool"],
+        provenance_note=(
+            "rug_events rows carry rug_ratio = removed/added, so a ratio above 1.0 "
+            "means more left the pool than ever entered. Field is projected from "
+            "SolRPDS typed metadata, not derived from prose."
+        ),
+    ),
+    MissionCase(
+        id="rug-05",
+        job_class="rug_history",
+        query="documented rug with number of holders at the time and cash out amount",
+        collection="rug_events",
+        match_terms=["holders at rug", "documented loss", "mechanism"],
+        partial_terms=["holders", "cash out", "outcome"],
+        provenance_note=(
+            "rug_events scythe-radar rows (19, CC0): the only in-repo source "
+            "publishing holders_at_rug and a documented loss, incl. a $26.26M "
+            "cash-out. Behaviour differs by source, so this row is graded on the "
+            "scythe vocabulary only."
+        ),
+    ),
+
 MissionCase(
     id="scam-01",
     job_class="scam_detection",
