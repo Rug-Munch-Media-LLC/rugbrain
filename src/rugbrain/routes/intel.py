@@ -1,9 +1,7 @@
-"""Intelligence routes: journalism research, evaluation, email accounts,
-news rating/top articles, fear index, and market context.
-
-Split out of ``rugbrain/endpoints.py`` (degodding phase 3, 2026-08-21).
-No URL prefix here — the parent router in ``endpoints.py`` supplies
-``/api/v1``.
+"""Intelligence routes: journalism research, evaluation, email accounts, news
+rating/top articles, fear index, and market context. Split out of
+``rugbrain/endpoints.py`` (phase 3, 2026-08-21); no URL prefix — the parent
+router in ``endpoints.py`` supplies ``/api/v1``.
 """
 
 from __future__ import annotations
@@ -15,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from rugbrain.content_story import article_headline
 from rugbrain.endpoints import _is_token_address
 
 logger = logging.getLogger(__name__)
@@ -242,9 +241,9 @@ async def news_top_articles(
 
     Scrolls the collection (payload has no vector score), keeps only points
     whose stored rating composite is >= ``min_quality`` (optionally filtered
-    by ``category``), and returns them sorted by quality descending. Legacy
-    unrated points are excluded — the rating engine runs at ingestion time.
-    Fails open to an empty list when Qdrant is unreachable.
+    by ``category``), sorted by quality descending. Legacy unrated points are
+    excluded — the rating engine runs at ingestion time. Fails open to an
+    empty list when Qdrant is unreachable.
     """
     from rugbrain.news_rating import rate_article_from_rating_dict
     from rugbrain.qdrant_store import QdrantVectorStore
@@ -288,6 +287,7 @@ async def news_top_articles(
         articles.append(
             {
                 "id": result.get("id"),
+                "headline": article_headline(result),  # plain text (site news)
                 "title": metadata.get("title", ""),
                 "source": metadata.get("source", result.get("source", "")),
                 "url": metadata.get("url", ""),
