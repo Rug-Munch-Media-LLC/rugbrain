@@ -58,7 +58,14 @@ ignore_imports =
     # KNOWN DEBT (2026-09-18): pre-existing transitive httpx paths surfaced
     # when lint-imports was first wired into CI. Same thin-router debt class.
     rugbrain.routes.core -> rugbrain.multi_embedder
-    rugbrain.routes.search -> rugbrain.crypto_code_retrieval
+    # Target corrected 2026-09-28: this rule named crypto_code_retrieval, but
+    # search.py:321 and search_chain_data.py:39 actually import chain_parquet
+    # (function-local imports). crypto_code_retrieval is imported by nobody
+    # from search, so the rule matched nothing and lint-imports reported
+    # 'No matches for ignored import' — the boundary looked clean because the
+    # rule was inert, not because the dependency was gone. Sibling rules
+    # already name chain_parquet for routes.rag_tools, so this is consistent.
+    rugbrain.routes.search -> rugbrain.chain_parquet
 
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)

@@ -36,11 +36,14 @@ ALLOWED_CANARY_SOURCES = frozenset(
         "market_health",
         "regulation_enforcement",
         "scam_patterns",
-        # 2026-09-28: Lane B adds scam_pattern_signatures_8b, the AGGREGATED
-        # pattern set. Listed separately from scam_patterns on purpose: that
-        # collection is per-victim cryptoscamdb, this is 90 signatures. Both
-        # can serve a canary and they answer different questions.
-        "scam_pattern_signatures_8b",
+        # 2026-09-28: scam_pattern_signatures_8b is deliberately NOT here. It was
+        # added in 721c451 and broke test_canary_routing, because
+        # ALLOWED_CANARY_SOURCES must be a subset of PUBLIC_COLLECTIONS and that
+        # collection is not publicly exposed. Adding it to the public contract is
+        # a decision, not a registration: it would expose the aggregated pattern
+        # set to the read path, and the collection is still empty. It stays
+        # owned (write gate) and it stays unregistered for canary. Promote it by
+        # adding it to PUBLIC_COLLECTIONS first, then here.
         "stablecoin_market",
         "wallet_profiles",
         "wallet_v2",
