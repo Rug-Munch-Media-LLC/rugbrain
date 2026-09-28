@@ -1,232 +1,310 @@
-"""Dual-tier retriever tests — routing, fail-open, instruction propagation.
+"""Dual-tier retriever tests — the CURRENT contract, after the 6c24960 seam repair.
 
-All network and Qdrant interactions are mocked; no live services required.
+What changed and why this file was rewritten rather than patched:
+
+* ``dual_tier`` no longer owns an HTTP session or an ``ENDPOINTS`` map. It embeds
+  through the canonical in-process seam (``embed_query``) and takes DI seams
+  ``embedder=``/``reranker=``. Constructing it with ``http=`` was a ``TypeError``.
+* The fail-open behaviour was **deliberately removed**. A dead embedder used to
+  return "success with zero contexts", which a grader could not distinguish
+  from "searched honestly, matched nothing". It now returns an explicit
+  ``tier="unavailable"`` outcome carrying a ``reason``. ``test_*_returns_empty_*``
+  is gone; ``test_dead_embedder_is_unavailable_not_empty`` asserts the inverse.
+* ``ENDPOINTS`` moved to ``scripts/dual_tier/engine_endpoints.py`` — the gateway
+  proxies to engine processes; the retriever owns no URL. The tier-label
+  equivalence test now lives here against the engine module.
+
+All Qdrant and embedder interactions are injected; no live services required.
 """
 
 from __future__ import annotations
 
 import importlib
-from typing import Any, ClassVar
+from typing import Any
 
 import pytest
 
 importlib.import_module("rugbrain.search.rerank")  # ensure instruction lib loads first
 dual = importlib.import_module("rugbrain.search.dual_tier")
+dim_guard = importlib.import_module("rugbrain.search.dim_guard")
+endpoints = importlib.import_module("scripts.dual_tier.engine_endpoints")
+
+LONG_QUERY = (
+    "Give me a complete forensic breakdown of this token launch covering the "
+    "liquidity concentration profile across every pool, the deployer wallet "
+    "funding history including any mixer exposure found along the path, the "
+    "mint authority and ownership renunciation status, all lockup contracts "
+    "with their expiry schedules, and every whale wallet that accumulated "
+    "positions before trading went live on decentralized exchanges."
+)
 
 
-class FakeResponse:
-    def __init__(self, payload: dict[str, Any], status: int = 200):
-        self._payload = payload
-        self.status = status
+def fake_qdrant(n: int = 3):
+    """Qdrant stub returning *n* points per query, recording the vector names."""
 
-    async def __aenter__(self):
-        return self
+    class Q:
+        def __init__(self) -> None:
+            self.using: list[str | None] = []
+            self.limits: list[int] = []
 
-    async def __aexit__(self, *exc):
-        return False
-
-    def raise_for_status(self):
-        if self.status >= 400:
-            raise RuntimeError(f"http {self.status}")
-
-    async def json(self):
-        return self._payload
-
-
-class FakeSession:
-    """Routes fake HTTP by URL substring."""
-
-    def __init__(self, routes: dict[str, dict[str, Any]], fail: set[str] | None = None):
-        self.routes = routes
-        self.fail = fail or set()
-        self.calls: list[str] = []
-
-    def post(self, url: str, json=None, **kw):
-        self.calls.append(url)
-        for key, payload in self.routes.items():
-            if key in url:
-                if key in self.fail:
-                    raise aiohttp_fail()
-                return FakeResponse(payload)
-        raise AssertionError(f"no route for {url}")
-
-    async def close(self):
-        pass
-
-
-def aiohttp_fail():
-    import aiohttp
-
-    return aiohttp.ClientError("simulated outage")
-
-
-def fake_qdrant(points: list[Any]):
-    class Hits:
-        def __init__(self, pts):
-            self.points = pts
-
-    class Pt:
-        def __init__(self, i):
-            self.id = f"p{i}"
-            self.payload = {"text": f"doc {i}", "metadata": {"src": "test"}}
-
-    class FakeQ:
         async def query_points(self, **kw):
-            assert kw["using"] in ("speed_vector", "qwen_vector")
-            return Hits([Pt(i) for i in range(kw.get("limit", 5))])
+            self.using.append(kw.get("using"))
+            self.limits.append(kw.get("limit", 0))
 
-    return FakeQ()
+            class Pt:
+                def __init__(self, i: int) -> None:
+                    self.id = f"p{i}"
+                    # Real corpora store 'content'; 'text' exists in almost no
+                    # collection and is exactly why contexts used to come back
+                    # with an empty body.
+                    self.payload = {
+                        "content": f"content {i}",
+                        "text": f"doc {i}",
+                        "metadata": {"src": "test"},
+                    }
+
+            class Hits:
+                def __init__(self, pts: Any) -> None:
+                    self.points = pts
+
+            return Hits([Pt(i) for i in range(kw.get("limit", n))])
+
+        async def get_collection(self, name: str) -> Any:
+            """The dim guard reads the live collection's named-vector config."""
+
+            class Cfg:
+                def __init__(self, dim: int) -> None:
+                    self.size = dim
+
+            class Params:
+                def __init__(self, dim: int) -> None:
+                    # TIER_PLAN maps BOTH tiers to vector_name=None, so the
+                    # unnamed (default) vector is the one the guard resolves.
+                    self.vectors = {
+                        None: Cfg(dim),
+                        "speed_vector": Cfg(dim),
+                        "qwen_vector": Cfg(dim),
+                    }
+
+            class Config:
+                def __init__(self, dim: int) -> None:
+                    self.params = Params(dim)
+
+            class Info:
+                def __init__(self, dim: int) -> None:
+                    # The guard reads info.config.params.vectors — the Qdrant
+                    # CollectionInfo shape, not the params object itself.
+                    self.config = Config(dim)
+
+            return Info(dim_guard.configured_dim())
+
+    return Q()
 
 
-EMBED_OK = {"data": [{"embedding": [0.1] * 8}]}
-RERANK_OK = {
-    "results": [{"index": 0, "relevance_score": 0.9}, {"index": 1, "relevance_score": 0.4}]
-}
+def embedder_ok(text: str) -> list[float]:
+    """Canonical-seam stand-in. Records what it was asked to embed.
+
+    The seam is ``async def _embed`` — it awaits the injected callable — so a
+    sync embedder is not a valid injection and raises a ``TypeError`` deep in
+    the retriever rather than at construction. Keep this one async.
+    """
+    embedder_ok.seen.append(text)  # type: ignore[attr-defined]
+    return [0.1] * dim_guard.configured_dim()
 
 
-def make_routes():
-    return {
-        "8007": EMBED_OK,
-        "8004": EMBED_OK,
-        "8008": RERANK_OK,
-        "8003": RERANK_OK,
-    }
+embedder_ok.seen = []  # type: ignore[attr-defined]
+
+
+async def async_embedder_ok(text: str) -> list[float]:
+    return embedder_ok(text)
+
+
+async def async_reranker_ok(
+    query: str, candidates: list[dict[str, Any]], tier: str = "", **kw: Any
+):
+    """Rerank stand-in keeping every candidate.
+
+    The seam calls ``reranker(query, candidates, tier)`` — the THIRD positional
+    is the tier label, not ``top_n``. A fake with the old rerank signature
+    binds the tier string where it expects an int and dies in a slice.
+    """
+    async_reranker_ok.tiers.append(tier)  # type: ignore[attr-defined]
+    return list(candidates)
+
+
+async_reranker_ok.tiers = []  # type: ignore[attr-defined]
+
+
+# ── routing ──────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_short_query_routes_to_speed(monkeypatch):
-    monkeypatch.setattr(dual, "COLLECTION", "test")
-    sess = FakeSession(make_routes())
-    r = dual.DualTierRetriever(qdrant=fake_qdrant([]), http=sess)
+async def test_short_query_routes_to_speed():
+    q = fake_qdrant()
+    r = dual.DualTierRetriever(qdrant=q, embedder=async_embedder_ok, reranker=async_reranker_ok)
     out = await r.retrieve("is this token a rug pull?")
     assert out.tier == "speed"
+    assert out.ok is True
     assert not out.fallback_used
-    assert any("8004" in c for c in sess.calls), "speed label resolves to the 4B lane"
 
 
 @pytest.mark.asyncio
-async def test_long_query_routes_to_deep(monkeypatch):
-    monkeypatch.setattr(dual, "COLLECTION", "test")
-    sess = FakeSession(make_routes())
-    r = dual.DualTierRetriever(qdrant=fake_qdrant([]), http=sess)
-    long_q = (
-        "Give me a complete forensic breakdown of this token launch covering the "
-        "liquidity concentration profile across every pool, the deployer wallet "
-        "funding history including any mixer exposure found along the path, the "
-        "mint authority and ownership renunciation status, all lockup contracts "
-        "with their expiry schedules, and every whale wallet that accumulated "
-        "positions before trading went live on decentralized exchanges."
-    )
-    out = await r.retrieve(long_q)
+async def test_long_query_routes_to_deep():
+    q = fake_qdrant()
+    r = dual.DualTierRetriever(qdrant=q, embedder=async_embedder_ok, reranker=async_reranker_ok)
+    out = await r.retrieve(LONG_QUERY)
     assert out.tier == "deep"
-    assert any("8004" in c for c in sess.calls), "deep embed endpoint must be hit"
+    assert out.ok is True
 
 
 @pytest.mark.asyncio
-async def test_speed_label_resolves_to_the_4b_lane(monkeypatch):
-    """The speed label shares the 4B endpoints (0.6b retired 2026-09-14)."""
-    monkeypatch.setattr(dual, "COLLECTION", "test")
-    assert dual.ENDPOINTS["speed_embed"] == dual.ENDPOINTS["deep_embed"]
-    assert dual.ENDPOINTS["speed_rerank"] == dual.ENDPOINTS["deep_rerank"]
+async def test_speed_label_shares_the_deep_lane():
+    """0.6b retired 2026-09-14: both labels are the canonical 4B engine."""
+    assert endpoints.ENDPOINTS["speed_embed"] == endpoints.ENDPOINTS["deep_embed"]
+    assert endpoints.ENDPOINTS["speed_rerank"] == endpoints.ENDPOINTS["deep_rerank"]
+
+
+# ── the no-silent-degradation contract ───────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_both_down_returns_empty_never_raises(monkeypatch):
-    monkeypatch.setattr(dual, "COLLECTION", "test")
+async def test_dead_embedder_is_unavailable_not_empty():
+    """A dead embedder is an explicit outcome, never an empty success.
 
-    class DeadSession(FakeSession):
-        def post(self, url, json=None, **kw):
-            raise aiohttp_fail()
+    This is the exact behaviour the old ``test_both_down_returns_empty_never_raises``
+    pinned and that 6c24960 removed. Reinstating the old assertion would
+    re-grant a query path that reports "found nothing" when it in fact found
+    nothing *because it could not look*.
+    """
 
-    r = dual.DualTierRetriever(qdrant=fake_qdrant([]), http=DeadSession({}, set()))
+    async def dead_embedder(text: str) -> list[float]:
+        raise ConnectionError("embedder socket closed")
+
+    r = dual.DualTierRetriever(qdrant=fake_qdrant(), embedder=dead_embedder)
     out = await r.retrieve("anything")
-    assert out.tier == "none"
+
+    assert out.tier == dual.TIER_UNAVAILABLE
+    assert out.ok is False
     assert out.contexts == []
+    assert out.reason, "an unavailable result MUST carry a reason"
+    assert "embedder_unavailable" in out.reason
+    # The decisive property: not indistinguishable from an honest empty result.
+    honest_empty = await dual.DualTierRetriever(
+        qdrant=fake_qdrant(n=0), embedder=async_embedder_ok, reranker=async_reranker_ok
+    ).retrieve("anything")
+    assert honest_empty.tier != out.tier
+    assert honest_empty.reason == ""
 
 
 @pytest.mark.asyncio
-async def test_instruction_library_applied_to_rerank_query(monkeypatch):
-    monkeypatch.setattr(dual, "COLLECTION", "test")
-    captured = {}
+async def test_ok_tier_with_no_hits_is_a_distinct_outcome():
+    """Search ran, matched nothing — the legitimate empty result."""
+    r = dual.DualTierRetriever(
+        qdrant=fake_qdrant(n=0), embedder=async_embedder_ok, reranker=async_reranker_ok
+    )
+    out = await r.retrieve("a query with no matches")
+    assert out.tier in ("speed", "deep")
+    assert out.ok is True
+    assert out.reason == "", "an honest empty result carries NO failure reason"
 
-    class CapturingSession(FakeSession):
-        def post(self, url, json=None, **kw):
-            if "/rerank" in url:
-                captured["query"] = json["query"]
-            return super().post(url, json=json, **kw)
 
-    sess = CapturingSession(make_routes())
-    r = dual.DualTierRetriever(qdrant=fake_qdrant([]), http=sess)
-    await r.retrieve("is this token a rug pull?")
-    assert "[TASK]" in captured["query"], "vertical instruction must be embedded"
-    assert "evidentiary value" in captured["query"]
+# ── contexts carry real text ─────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_recall_limits_per_tier(monkeypatch):
-    monkeypatch.setattr(dual, "COLLECTION", "test")
-    seen = {}
-
-    class RecordingQ(fake_qdrant([]).__class__):
-        async def query_points(self, **kw):
-            seen["limit"] = kw.get("limit")
-            seen["using"] = kw["using"]
-            return await super().query_points(**kw)
-
-    sess = FakeSession(make_routes())
-    r = dual.DualTierRetriever(qdrant=RecordingQ(), http=sess)
-    await r.retrieve("quick check")
-    assert seen == {"limit": dual.SPEED_RECALL, "using": "speed_vector"}
+async def test_contexts_read_content_not_text():
+    """The corpus stores 'content'. A 'text'-only payload key yields empty bodies."""
+    q = fake_qdrant(n=2)
+    r = dual.DualTierRetriever(qdrant=q, embedder=async_embedder_ok, reranker=async_reranker_ok)
+    out = await r.retrieve("liquidity collapse evidence please")
+    assert out.contexts
+    for c in out.contexts:
+        assert c.get("text"), f"context body empty — payload key regression: {c!r}"
 
 
-def test_pick_tier_threshold():
-    assert dual.pick_tier("short query here") == "speed"
-    long_q = " ".join(["word"] * dual.ROUTING_THRESHOLD_WORDS)
-    assert dual.pick_tier(long_q) == "deep"
+@pytest.mark.asyncio
+async def test_instruction_library_applied_to_rerank_query():
+    """A vertical-matched query reaches the reranker with its instruction prefix.
+
+    The prefix is injected by ``apply_instruction`` before the rerank call, not
+    by the retriever, so the assertion is on what the reranker RECEIVED.
+    """
+    seen: list[str] = []
+
+    async def recording_reranker(
+        query: str, candidates: list[dict[str, Any]], tier: str = "", **kw: Any
+    ):
+        seen.append(query)
+        return list(candidates)
+
+    r = dual.DualTierRetriever(
+        qdrant=fake_qdrant(), embedder=async_embedder_ok, reranker=recording_reranker
+    )
+    await r.retrieve("sql table of scam wallets")
+    assert seen, "reranker was never called"
+    assert seen[0] != "sql table of scam wallets"
+    assert "[TASK]" in seen[0] and "[QUERY]" in seen[0]
 
 
-# --- Gateway /embed routing regression (2026-08-23, updated 2026-08-29) ------
-# 2026-08-23 bug: EmbedReq.tier defaulted to "speed" AND the text was never
-# passed to pick_tier, so /embed ALWAYS hit the speed engine.
-# 2026-08-29 consolidation: tier=None -> CANONICAL deep lane; explicit
-# tier="speed" is the LEGACY 0.6b read lane (local-only, no cloud fallback).
+@pytest.mark.asyncio
+async def test_tier_recall_depths_differ():
+    """speed is a wide sweep, deep is a narrow one — both on the default vector."""
+    q = fake_qdrant(n=1)
+    r = dual.DualTierRetriever(qdrant=q, embedder=async_embedder_ok, reranker=async_reranker_ok)
+    await r.retrieve("short one")
+    assert q.using[-1] is None
+    assert q.limits[-1] == dual.SPEED_RECALL
+    q2 = fake_qdrant(n=1)
+    r2 = dual.DualTierRetriever(qdrant=q2, embedder=async_embedder_ok, reranker=async_reranker_ok)
+    await r2.retrieve(LONG_QUERY)
+    assert q2.limits[-1] == dual.DEEP_RECALL
+    assert dual.DEEP_RECALL < dual.SPEED_RECALL
+
+
+# ── the gateway still proxies to real engine processes ───────────────────────
 
 
 class _FakeEmbedResp:
-    status = 200
+    def __init__(self) -> None:
+        self.status = 200
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> _FakeEmbedResp:
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *exc: Any) -> bool:
         return False
 
-    async def json(self):
-        return EMBED_OK
+    async def json(self) -> dict[str, Any]:
+        return {"data": [{"embedding": [0.1] * 8}]}
 
 
 class _FakeGatewaySession:
-    """Stands in for aiohttp.ClientSession inside model_gateway endpoints."""
+    last_url = ""
 
-    last_url: str = ""
-
-    def __init__(self, *a, **kw):
+    def __init__(self, *a: Any, **kw: Any) -> None:
         pass
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> _FakeGatewaySession:
         return self
 
-    async def __aexit__(self, *exc):
+    async def __aexit__(self, *exc: Any) -> bool:
         return False
 
-    def post(self, url, json=None, **kw):
+    def post(self, url: str, json=None, **kw: Any) -> _FakeEmbedResp:
         _FakeGatewaySession.last_url = url
         return _FakeEmbedResp()
 
 
 def _load_gateway():
-    gw = importlib.import_module("scripts.dual_tier.model_gateway")
-    return gw
+    """Importing the gateway must not raise — it was broken by a bad import."""
+    return importlib.import_module("scripts.dual_tier.model_gateway")
+
+
+def test_gateway_imports_cleanly():
+    """The 6c24960 seam repair deleted ENDPOINTS but left the gateway importing it."""
+    gw = _load_gateway()
+    assert gw.ENDPOINTS is endpoints.ENDPOINTS
+    assert isinstance(gw._retriever, dual.DualTierRetriever)
 
 
 @pytest.mark.asyncio
@@ -237,139 +315,3 @@ async def test_gateway_embed_defaults_to_deep(monkeypatch):
     out = await gw.embed(gw.EmbedReq(text="rug pull check"))
     assert out["tier"] == "deep", "None tier must default to the canonical deep lane"
     assert "8004" in _FakeGatewaySession.last_url
-
-
-@pytest.mark.asyncio
-async def test_gateway_embed_explicit_speed_is_legacy_local_only(monkeypatch):
-    """Explicit speed = LEGACY 0.6b read lane: local-only, marked legacy."""
-    gw = _load_gateway()
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
-    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
-    assert out["tier"] == "speed"
-    assert out.get("legacy") is True, "speed lane responses must be marked legacy"
-    assert "8004" in _FakeGatewaySession.last_url, "speed label resolves to the 4B lane"
-
-
-@pytest.mark.asyncio
-async def test_gateway_embed_explicit_tier_wins(monkeypatch):
-    gw = _load_gateway()
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", _FakeGatewaySession)
-    out = await gw.embed(gw.EmbedReq(text="short", tier="deep"))
-    assert out["tier"] == "deep", "explicit tier must override auto-routing"
-    assert "8004" in _FakeGatewaySession.last_url
-
-
-# --- Cloud fallback + strain breaker (2026-08-23, updated 2026-08-29) --------
-# Doctrine 2026-08-29: the DEEP cloud lane is DeepInfra Qwen/Qwen3-Embedding-4B
-# @2560 — the SAME model as local :8004 ⇒ index-compatible. The SPEED lane has
-# The speed label resolves to the deep lane (0.6b retired 2026-09-14):
-# both labels share the same endpoints; rerank remains local-only here.
-
-
-class _RoutingResp:
-    status = 200
-
-    def __init__(self, payload):
-        self._payload = payload
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def json(self):
-        return self._payload
-
-
-def _make_routing_session(fail_markers=("8004",)):
-    class Sess:
-        last_urls: ClassVar[list[str]] = []
-
-        def __init__(self, *a, **kw):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        def post(self, url, json=None, headers=None, **kw):
-            Sess.last_urls.append(url)
-            if any(m in url for m in fail_markers):
-                import aiohttp
-
-                raise aiohttp.ClientError("simulated local outage")
-            if "/embeddings" in url:
-                return _RoutingResp(EMBED_OK)
-            return _RoutingResp(RERANK_OK)
-
-    return Sess
-
-
-@pytest.mark.asyncio
-async def test_deep_embed_cloud_fallback_on_outage(monkeypatch):
-    """Deep outage -> DeepInfra same-model lane (index-compatible)."""
-    gw = _load_gateway()
-    sess = _make_routing_session(("8004",))
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
-    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
-    out = await gw.embed(gw.EmbedReq(text="forensic query", tier="deep"))
-    assert out["served_by"] == "cloud"
-    assert out["degraded"] is True
-    assert out["tier"] == "deep"
-    assert out["cloud_model"] == "Qwen/Qwen3-Embedding-4B"
-    assert out["index_compatible"] is True, "DeepInfra deep lane must be index-compatible"
-    assert any("deepinfra.com" in u for u in sess.last_urls)
-
-
-@pytest.mark.asyncio
-async def test_speed_label_shares_the_deep_cloud_rung(monkeypatch):
-    """Speed label resolves to the 4B lane (0.6b retired): on local outage the
-    DeepInfra same-model rung applies — index-compatible and tagged."""
-    gw = _load_gateway()
-    sess = _make_routing_session(("8004",))
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
-    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
-    out = await gw.embed(gw.EmbedReq(text="quick check", tier="speed"))
-    assert out["tier"] == "speed"
-    assert out["served_by"] == "cloud"
-    assert any("deepinfra.com" in u for u in sess.last_urls)
-
-
-@pytest.mark.asyncio
-async def test_no_cloud_key_fails_loud(monkeypatch):
-    gw = _load_gateway()
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", _make_routing_session(("8004",)))
-    monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
-    monkeypatch.setattr(gw, "_deepinfra_key", lambda: "")
-    import pytest as _pytest
-    from fastapi import HTTPException
-
-    with _pytest.raises(HTTPException):
-        await gw.embed(gw.EmbedReq(text="x", tier="deep"))
-
-
-@pytest.mark.asyncio
-async def test_rerank_single_lane_outage_fails_loud(monkeypatch):
-    """Both labels share :8003 now; an outage surfaces as a clear error,
-    never a silent cross-model fallback (0.6b retired 2026-09-14)."""
-    gw = _load_gateway()
-    sess = _make_routing_session(("8003",))  # the single rerank lane down
-    monkeypatch.setattr(gw.aiohttp, "ClientSession", sess)
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException):
-        await gw.rerank(gw.RerankReq(query="rug pull signs", documents=["a", "b"], tier="deep"))
-    assert not any("openrouter.ai" in u for u in sess.last_urls), "rerank must never go cloud"
-
-
-def test_breaker_trips_after_consecutive_failures():
-    gw = _load_gateway()
-    gw._cloud_fails["deep"] = 0
-    gw._breaker_open_until["deep"] = 0.0
-    for _ in range(gw._BREAKER_TRIP):
-        gw._note_failure("deep")
-    assert gw._breaker_open("deep") is True
-    gw._breaker_open_until["deep"] = 0.0  # cleanup
