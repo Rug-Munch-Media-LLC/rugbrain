@@ -17,20 +17,18 @@ Emits two doc families: dead tokens → ``rug_events`` (doc_type ``rug_event``,
 STRUCTURED) and sanctioned addresses → ``known_scams`` (doc_type
 ``sanction_entity``).
 
-Design rules (consistent with ``base.py`` / ``deflabx.py``): fail-open per
-file, deterministic ``doc_id``, no credentials (raw.githubusercontent.com).
+Fail-open per file, deterministic ``doc_id``, no credentials.
 """
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 from typing import Any
 
 import httpx
 
 from rugbrain.ingest_sources.base import IngestDoc, Source
+from rugbrain.ingest_sources.corpora_fetch import get_text, load_csv
 
 log = logging.getLogger(__name__)
 
@@ -53,23 +51,8 @@ _STATUS_MAP = {
 }
 
 
-def _rows(text: str) -> list[dict[str, str]]:
-    """Parse a CSV payload into row dicts; ``[]`` on any parse failure."""
-    try:
-        return [
-            {(k or "").strip(): (v or "").strip() for k, v in row.items()}
-            for row in csv.DictReader(io.StringIO(text or ""))
-        ]
-    except Exception as e:
-        log.warning("scythe_csv_parse_failed err=%s", str(e)[:160])
-        return []
-
-
 def dead_token_to_doc(row: dict[str, str]) -> IngestDoc | None:
-    """One documented dead/rugged token → ``rug_events`` IngestDoc.
-
-    Returns ``None`` when the row has no contract address — the identity key.
-    """
+    """One documented dead/rugged token → ``rug_events`` IngestDoc (None w/o address)."""
     address = (row.get("contract_address") or "").strip()
     if not address:
         return None
@@ -191,16 +174,7 @@ class ScytheRadarDatasetsSource(Source):
     async def _fetch(self, client: httpx.AsyncClient, limit: int | None) -> list[IngestDoc]:
         docs: list[IngestDoc] = []
         for url, mapper in ((DEAD_TOKENS_URL, dead_token_to_doc), (OFAC_URL, ofac_to_doc)):
-            try:
-                r = await client.get(url, timeout=self.timeout)
-                if r.status_code != 200:
-                    log.debug("scythe_non200 url=%s status=%d", url, r.status_code)
-                    continue
-                rows = _rows(r.text)
-            except Exception as e:
-                log.warning("scythe_fetch_failed url=%s err=%s", url, str(e)[:160])
-                continue
-            for row in rows:
+            for row in load_csv(await get_text(client, url)):
                 doc = mapper(row)
                 if doc is not None:
                     docs.append(doc)

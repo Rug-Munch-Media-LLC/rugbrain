@@ -5,34 +5,27 @@ Source: https://huggingface.co/datasets/Fraudcoins/crypto-holder-concentration
 on-chain measurements of top-10 holder concentration plus the GoPlus Labs
 ``token_security`` owner-privilege / structural flags per token.
 
-This is the closest public analogue to the ``scam_signatures`` backbone
-RugBrain lacks: it supplies ``top10_pct`` (private-wallet corrected) and the
-privilege booleans ``isMintable`` / ``isBlacklisted`` / ``hiddenOwner`` /
-``selfDestruct`` / ``transferPausable`` / ``canTakeBackOwnership`` /
-``ownerChangeBalance`` plus the structural ``isProxy`` / ``isOpenSource``.
+Supplies ``top10_pct`` (private-wallet corrected) plus the owner-privilege
+booleans (``isMintable``/``isBlacklisted``/``hiddenOwner``/``selfDestruct``/
+``transferPausable``/``canTakeBackOwnership``/``ownerChangeBalance``) and the
+structural ``isProxy``/``isOpenSource``. One IngestDoc per token into
+``scam_signatures`` (doc_type ``scam_signature``) — STRUCTURED, so the payload
+is filterable and computable rather than prose-only.
 
-Emits one ``IngestDoc`` per token into the ``scam_signatures`` collection
-(doc_type ``scam_signature``) — STRUCTURED, so the payload is filterable
-(Qdrant payload indexes) and computable rather than prose-only.
-
-Design rules (consistent with ``base.py`` / ``deflabx.py``):
-
-  * Fail-open: a missing file or bad JSON logs + continues; all-failed → ``[]``.
-  * Deterministic ``doc_id`` (``fraudcoins:<chain>:<address>``) — idempotent.
-  * ``null`` upstream means "not reported", NOT "safe": kept as ``None`` and
-    never coerced to ``False`` (upstream says so explicitly in its caveat).
-  * Credentials: none — raw huggingface.co public resolve URLs.
+Fail-open per file; deterministic ``doc_id`` (``fraudcoins:<chain>:<address>``).
+``null`` upstream means "not reported", NOT "safe": kept as ``None`` and never
+coerced to ``False`` (upstream states this in its own caveat). No credentials.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 import httpx
 
 from rugbrain.ingest_sources.base import IngestDoc, Source
+from rugbrain.ingest_sources.corpora_fetch import load_json
 
 log = logging.getLogger(__name__)
 
@@ -58,24 +51,6 @@ STRUCTURAL_FIELDS = ("isProxy", "isOpenSource")
 RISK_FIELDS = ("top10_pct", "top10_pct_raw", "flagged")
 
 
-async def _load(client: httpx.AsyncClient, url: str) -> dict[str, Any]:
-    """GET + parse one JSON object; ``{}`` on any failure (fail-open).
-
-    The per-request deadline is the client's own (``Source.timeout``), so no
-    timeout parameter is threaded through.
-    """
-    try:
-        r = await client.get(url)
-        if r.status_code != 200:
-            log.debug("fraudcoins_fetch_non200 url=%s status=%d", url, r.status_code)
-            return {}
-        data = json.loads(r.text or "{}")
-    except Exception as e:
-        log.warning("fraudcoins_fetch_failed url=%s err=%s", url, str(e)[:160])
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def _pct_series(history: dict[str, Any], coin_id: str) -> list[list[Any]]:
     """Pull one coin's ``[[date, pct], ...]`` series out of history.json."""
     coins = history.get("coins") or {}
@@ -91,9 +66,8 @@ def token_to_doc(
 ) -> IngestDoc | None:
     """Normalize one token entry into a ``scam_signatures`` IngestDoc.
 
-    ``key`` is the upstream ``<chain>:<address>`` identifier. Returns ``None``
-    when the entry carries neither an address nor a coinId, so a malformed row
-    never creates a blank point.
+    ``key`` is the upstream ``<chain>:<address>`` id. ``None`` when the entry
+    carries neither address nor coinId, so a bad row never creates a blank point.
     """
     if not isinstance(entry, dict):
         return None
@@ -107,7 +81,6 @@ def token_to_doc(
     if not address:
         return None
 
-    # Concentration figures (private-wallet corrected + raw) from concentration.json.
     conc = (concentration.get("coins") or {}).get(coin_id) or {}
     if not isinstance(conc, dict):
         conc = {}
@@ -131,9 +104,7 @@ def token_to_doc(
     if measured:
         metadata["measured_at"] = str(measured)
 
-    # Owner privileges + structural properties. Preserve upstream ``None``
-    # (= not reported) rather than coercing to False — the dataset explicitly
-    # warns that null does not mean the capability is absent.
+    # Preserve upstream None (= "not reported"), never coerced to False.
     for field in PRIVILEGE_FIELDS + STRUCTURAL_FIELDS:
         if field in entry:
             metadata[field] = entry[field]
@@ -142,6 +113,7 @@ def token_to_doc(
         metadata["live_privileges"] = privileges_known
         metadata["labels"] = sorted({*metadata["labels"], "owner-privilege"})
 
+    # private-wallet corrected + raw concentration figures
     for field, src_key in (("top10_pct", "top10Pct"), ("top10_pct_raw", "top10PctRaw")):
         value = conc.get(src_key)
         if isinstance(value, int | float):
@@ -171,9 +143,7 @@ def token_to_doc(
             content_lines.append(f"Owner privilege present: {field}")
         elif value is False:
             content_lines.append(f"Owner privilege absent: {field}")
-    for field in STRUCTURAL_FIELDS:
-        if field in entry and entry[field] is not None:
-            content_lines.append(f"{field}: {entry[field]}")
+    content_lines += [f"{f}: {entry[f]}" for f in STRUCTURAL_FIELDS if entry.get(f) is not None]
 
     return IngestDoc(
         content="\n".join(content_lines) + "\n",
@@ -192,19 +162,17 @@ class FraudCoinsSignaturesSource(Source):
     name = "fraudcoins_signatures"
     doc_type = "scam_signature"
     default_collection = DEFAULT_COLLECTION
-    description = (
-        "FraudCoins on-chain holder-concentration + GoPlus owner privileges (scam_signatures)"
-    )
+    description = "FraudCoins holder concentration + GoPlus owner privileges"
     timeout = 90.0
 
     async def _fetch(self, client: httpx.AsyncClient, limit: int | None) -> list[IngestDoc]:
-        permissions = await _load(client, PERMISSIONS_URL)
+        permissions = await load_json(client, PERMISSIONS_URL)
         tokens = permissions.get("tokens") or {}
         if not isinstance(tokens, dict) or not tokens:
             log.warning("fraudcoins_permissions_empty")
             return []
-        concentration = await _load(client, CONCENTRATION_URL)
-        history = await _load(client, HISTORY_URL)
+        concentration = await load_json(client, CONCENTRATION_URL)
+        history = await load_json(client, HISTORY_URL)
 
         docs: list[IngestDoc] = []
         for key, entry in tokens.items():
