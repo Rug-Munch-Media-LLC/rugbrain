@@ -78,7 +78,7 @@ def _client() -> Any:
                 password=CLICKHOUSE_PASSWORD,
                 database=CLICKHOUSE_DATABASE,
             )
-        except Exception as exc:  # noqa: PERF203 - retry across ports
+        except Exception as exc:  # a port may be down; try the next
             last = exc
     raise CandleReadError(f"clickhouse unreachable on {attempts}: {type(last).__name__}: {last}")
 
@@ -125,7 +125,10 @@ def fetch_candles(
         end_ts = end_ts.replace(tzinfo=UTC)
     start_ts = end_ts - timedelta(hours=hours)
 
-    sql = (
+    # Table/column names come from module config; the only caller-supplied
+    # values go through _lit(), which escapes quotes. The S608 suppression
+    # mirrors rugbrain.fear_index.storage.
+    sql = (  # noqa: S608
         "SELECT timestamp, open, high, low, close, volume, trades "
         f"FROM {CLICKHOUSE_DATABASE}.{OHLCV_TABLE} "
         "WHERE chain = {chain} AND pair_address = {pair} "
@@ -156,7 +159,7 @@ def fetch_candles_upto(
 
 def table_stats(client: Any | None = None) -> dict[str, int]:
     """Row count, distinct pair count and freshness of the OHLCV table."""
-    sql = (
+    sql = (  # noqa: S608
         f"SELECT count() AS rows, uniqExact(pair_address) AS pairs, "
         f"max(timestamp) AS fresh FROM {CLICKHOUSE_DATABASE}.{OHLCV_TABLE}"
     )
@@ -170,7 +173,7 @@ def table_stats(client: Any | None = None) -> dict[str, int]:
 
 def top_pairs(days: int = 30, limit: int = 10, client: Any | None = None) -> list[PairRef]:
     """The pairs with the densest recent coverage — a sane default for demos."""
-    sql = (
+    sql = (  # noqa: S608
         "SELECT chain, pair_address, count() AS c FROM "
         f"{CLICKHOUSE_DATABASE}.{OHLCV_TABLE} "
         f"WHERE timestamp >= now() - INTERVAL {int(days)} DAY "

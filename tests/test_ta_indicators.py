@@ -7,8 +7,6 @@ instead of agreeing with itself.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from rugbrain.ta.indicators import (
@@ -250,16 +248,17 @@ def test_indicators_accept_tuples_and_lists_alike() -> None:
 
 
 def test_no_pandas_dependency_is_imported() -> None:
-    """Guard against a future 'convenience' pull-in of pandas/numpy."""
-    import sys
+    """Guard against a future 'convenience' pull-in of pandas/numpy.
 
-    for mod in ("pandas", "numpy"):
-        assert mod not in sys.modules or True  # numpy may arrive via another lib
+    pandas is not installed fleet-wide and a prior attempt to depend on it
+    failed hard, so the indicator module must stay pure stdlib.
+    """
+    import pathlib
+
     import rugbrain.ta.indicators as ind
 
-    src = ind.__file__
-    assert src is not None
-    text = open(src, encoding="utf-8").read()
+    src = pathlib.Path(ind.__file__ or "")
+    text = src.read_text(encoding="utf-8")
     assert "import pandas" not in text
     assert "import numpy" not in text
-    assert math  # module uses the stdlib, as documented
+    assert "import math" in text  # stdlib maths, as documented
