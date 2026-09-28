@@ -14,13 +14,14 @@ actually produces carry ``metadata["collection"] == "known_scams"`` — and
 So the declaration is documentation, the metadata is behaviour, and a check on
 the declaration alone is theatre.
 
-This check reads the *module* — the mappers and the ``DEFAULT_COLLECTION``
+This module scans the *module* — the mappers and the ``DEFAULT_COLLECTION``
 constants that build each document — and asserts that the collections a source
-can actually emit are all reachable through its declared contract. A source
-that routes to a collection it does not declare is a violation, and it is
-reported by name.
+can actually emit are all reachable through its declared contract. The AST
+readers live in :mod:`rugbrain.eval.source_contract_ast`; this file owns the
+DECISION and the reporting.
 
-It is read-only: modules are imported, never fetched, and nothing is written.
+It is read-only: modules are parsed, never imported and never fetched, and
+nothing is written.
 """
 
 from __future__ import annotations
@@ -32,7 +33,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from rugbrain.eval.source_contract_ast import (
+    collection_literals,
+    declared_collections,
+    defines_source_class,
+    source_name,
+)
+
 SOURCES_DIR = Path(__file__).resolve().parents[1] / "ingest_sources"
+
+#: Modules with no ingest contract of their own; skipping them by name keeps
+#: the scan focused on sources rather than shared base/helper code.
+_NON_SOURCE_FILES = frozenset({"__init__.py", "base.py"})
 
 
 @dataclass(frozen=True)
@@ -55,137 +67,11 @@ class Violation:
         }
 
 
-def _constant_strings(tree: ast.AST) -> set[str]:
-    """Every string literal assigned to a module-level or class-level name.
-
-    Static rather than dynamic on purpose: the contract we care about is what
-    the source *declares*, and reading the AST is deterministic and needs no
-    network. A source that computes its collection from a live API response
-    cannot be checked this way, and is reported as unverifiable rather than
-    assumed compliant.
-    """
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
-            if isinstance(node.value.value, str):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) or (
-                        isinstance(target, ast.Attribute) and target.attr == "default_collection"
-                    ):
-                        found.add(node.value.value)
-    return found
-
-
-def _module_constants(tree: ast.AST) -> dict[str, str]:
-    """Map module-level ``NAME = "literal"`` assignments to their values."""
-    out: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
-            if isinstance(node.value.value, str):
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        out[target.id] = node.value.value
-    return out
-
-
-def _collection_literals(tree: ast.AST) -> set[str]:
-    """Collections this module can stamp into a document.
-
-    The behavioural side of the contract: a mapper that stamps
-    ``{"collection": X}`` decides where the document is written.
-
-    ``X`` is resolved through module-level constants, not just read as a
-    literal. A source that writes ``{"collection": SCAM_COLLECTION}`` routes
-    exactly as hard as one that writes the string inline, and a check that
-    only matched inline literals would wave it through — which is precisely
-    how ``scythe_radar_datasets`` survived the per-source check.
-    """
-    constants = _module_constants(tree)
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        for key, value in zip(node.keys, node.values):
-            if not (isinstance(key, ast.Constant) and key.value == "collection"):
-                continue
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                found.add(value.value)
-            elif isinstance(value, ast.Name) and value.id in constants:
-                found.add(constants[value.id])
-    return found
-
-
-def _declared_collections(tree: ast.AST) -> set[str]:
-    """Every collection declared by a ``Source`` subclass in this module.
-
-    A module can register several sources with different targets (a shared RSS
-    base class, a multi-source module), so the contract is a SET of declared
-    collections rather than a single one. Comparing against only the first
-    class would report every sibling source as a violation.
-
-    A ``default_collection`` implemented as a ``@property`` is deliberately
-    not resolved: it is computed per-instance, so a static read cannot know
-    its value. Such a module is treated as declaring nothing rather than
-    guessed at.
-    """
-    constants = _module_constants(tree)
-    declared: set[str] = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        for stmt in node.body:
-            if not isinstance(stmt, ast.Assign):
-                continue
-            if not any(
-                isinstance(t, ast.Name) and t.id == "default_collection" for t in stmt.targets
-            ):
-                continue
-            value = stmt.value
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                declared.add(value.value)
-            elif isinstance(value, ast.Name) and value.id in constants:
-                declared.add(constants[value.id])
-    return declared
-
-
-def _declared_collection(tree: ast.AST) -> str | None:
-    """Single declared collection, for callers that want one value."""
-    found = _declared_collections(tree)
-    return sorted(found)[0] if len(found) == 1 else (sorted(found)[0] if found else None)
-
-
-def _defines_source_class(tree: ast.AST) -> bool:
-    """True when the module defines a class with a string ``name`` attribute.
-
-    A cheap structural proxy for "this module registers an ingest source",
-    which is how helper modules are told apart from real sources.
-    """
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and _source_name(node) is not None:
-            return True
-    return False
-
-
-def _source_name(tree: ast.AST) -> str | None:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            for stmt in node.body:
-                if (
-                    isinstance(stmt, ast.Assign)
-                    and any(isinstance(t, ast.Name) and t.id == "name" for t in stmt.targets)
-                    and isinstance(stmt.value, ast.Constant)
-                    and isinstance(stmt.value.value, str)
-                ):
-                    return stmt.value.value
-    return None
-
-
 def scan_module(path: Path) -> Violation | None:
     """Check one ingest-source module. Returns a Violation or None.
 
     A module is clean when it declares no collection, or when every collection
-    literal it can stamp into a document is its declared
-    ``default_collection``.
+    it can stamp into a document is its declared ``default_collection``.
 
     A module that defines no ``Source`` subclass at all is NOT a violation: it
     is a helper (fetch_state, channel_taxonomy, corpus helpers) that declares
@@ -204,14 +90,14 @@ def scan_module(path: Path) -> Violation | None:
             detail=f"unreadable module: {exc}",
         )
 
-    if not _defines_source_class(tree):
+    if not defines_source_class(tree):
         return None
 
-    declared = _declared_collections(tree)
+    declared = declared_collections(tree)
     if not declared:
         return None
 
-    emitted = _collection_literals(tree)
+    emitted = collection_literals(tree)
     if not emitted:
         return None
 
@@ -223,7 +109,7 @@ def scan_module(path: Path) -> Violation | None:
         return None
 
     return Violation(
-        source=_source_name(tree) or path.stem,
+        source=source_name(tree) or path.stem,
         module=path.name,
         declared=", ".join(sorted(declared)),
         emitted=tuple(sorted(unknown)),
@@ -258,7 +144,7 @@ def scan_all(sources_dir: Path = SOURCES_DIR) -> list[Violation]:
         ]
     violations: list[Violation] = []
     for path in sorted(sources_dir.glob("*.py")):
-        if path.name in {"__init__.py", "base.py"}:
+        if path.name in _NON_SOURCE_FILES:
             continue
         found = scan_module(path)
         if found is not None:

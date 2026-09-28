@@ -20,7 +20,6 @@
   "src/rugbrain/embeddings.py": 510,
   "src/rugbrain/endpoints.py": 249,
   "src/rugbrain/eval/gates.py": 207,
-  "src/rugbrain/eval/harness.py": 482,
   "src/rugbrain/eval/metrics.py": 339,
   "src/rugbrain/eval/retrieval_eval.py": 632,
   "src/rugbrain/eval/run_eval.py": 336,

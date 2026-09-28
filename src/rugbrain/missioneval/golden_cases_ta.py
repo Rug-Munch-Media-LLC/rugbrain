@@ -30,6 +30,20 @@ from rugbrain.missioneval.goldens import MissionCase
 # fmt: off
 TA_CASES: list[MissionCase] = [
 MissionCase(
+    id="ta-01",
+    job_class="technical_analysis",
+    query="which technical analysis library gives me candlestick pattern recognition and hundreds of indicators",
+    collection="master_skills",
+    relevant_doc_ids=["564311534", "1650223340"],
+    match_terms=["candlestick pattern recognition", "ta-lib", "pandas-ta"],
+    partial_terms=["technical analysis", "indicator"],
+    provenance_note=(
+        "Repointed 2026-09-28: the old row asked about liquidation cascades in "
+        "live_threats and scored a clean miss (rank 0, no error), which is why the "
+        "class read 0.000. Now answered from master_skills, ids fetched live."
+    ),
+),
+MissionCase(
     id="ta-02",
     job_class="technical_analysis",
     query="multi timeframe crypto analysis producing scored trading signals and a structured trade plan",
