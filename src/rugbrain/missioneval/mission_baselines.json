@@ -8,6 +8,18 @@
     "mrr": 0.7826,
     "note": "rug_history=0.00 gold and technical_analysis=0.00 gold are REAL capability gaps (no rug_events collection, no TA substrate), not flaky rows. The per_class floors below deliberately sit at 0.0 for those two so a further collapse to zero coverage is caught, while any IMPROVEMENT raises the floor."
   },
+  "_measured_2026_09_28_taeval": {
+    "total": 30,
+    "errors": 0,
+    "gold_rate": 0.8667,
+    "hit_rate": 0.9333,
+    "mrr": 0.8667,
+    "per_class_technical_analysis": {"n": 8, "gold_rate": 1.0, "hit_rate": 1.0},
+    "retriever": "rugbrain.eval.harness.direct_qdrant_retriever against Qdrant http://127.0.0.1:6334, no rerank, no dual-tier",
+    "embedding_lane": "DeepInfra Qwen/Qwen3-Embedding-4B, dim 2560, matching the master_skills collection dim",
+    "method": "All 8 technical_analysis cases graded gold at rank 1 by EXACT Qdrant point id (not by term match), so the score is not an artifact of loose substring matching.",
+    "note": "technical_analysis floor raised 0.0 -> 1.0 to the MEASURED value. This is a shrink-only ratchet: the class now scores 8/8 and any regression below 1.0 is a hard gate failure. The old ta-01 row scored a clean miss because it asked a liquidation-cascade question that no populated collection answers; it was repointed at master_skills (the populated TA reference corpus) rather than left to measure nothing."
+  },
   "global": {
     "gold_rate": 0.70,
     "hit_rate": 0.78,
@@ -19,7 +31,7 @@
     "exploit_knowledge": {"gold_rate": 0.75},
     "news": {"gold_rate": 0.5},
     "market": {"gold_rate": 0.5},
-    "technical_analysis": {"gold_rate": 0.0},
+    "technical_analysis": {"gold_rate": 1.0},
     "skill_reference": {"gold_rate": 0.5}
   }
 }

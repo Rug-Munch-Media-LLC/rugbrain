@@ -26,6 +26,7 @@ from rugbrain.missioneval.gate import (
 )
 from rugbrain.missioneval.golden_cases import CASES
 from rugbrain.missioneval.golden_cases_exploit import EXPLOIT_CASES
+from rugbrain.missioneval.golden_cases_ta import TA_CASES
 from rugbrain.missioneval.goldens import JOB_CLASSES, MissionCase, all_cases, cases_for
 from rugbrain.missioneval.judge import GOLD, MISS, PARTIAL, grade_hits
 from rugbrain.missioneval.runner import MissionReport, run_mission_eval
@@ -51,6 +52,20 @@ async def _boom(query: str, collection: str | None, limit: int) -> list[dict[str
 
 
 def _report(**kw: Any) -> MissionReport:
+    """A synthetic run that MEETS every floor in mission_baselines.json.
+
+    Each class is set to its own floor so this represents a passing run; a test
+    that wants a regression passes a lower value for one class explicitly.
+    """
+    floors = load_baselines()["per_class"]
+    per_class = {
+        cls: {
+            "n": 1,
+            **{m: float(v) for m, v in spec.items()},
+            "hit_rate": max(float(spec.get("hit_rate", 1.0)), 1.0),
+        }
+        for cls, spec in floors.items()
+    }
     base = {
         "total": 23,
         "errors": 0,
@@ -58,7 +73,7 @@ def _report(**kw: Any) -> MissionReport:
         "gold_rate": 0.78,
         "hit_rate": 0.87,
         "mrr": 0.78,
-        "per_class": {c: {"n": 1, "gold_rate": 0.8, "hit_rate": 1.0} for c in JOB_CLASSES},
+        "per_class": per_class,
     }
     base.update(kw)
     return MissionReport(**base)
@@ -114,7 +129,7 @@ class TestGoldenSet:
         assert cases_for(None) == all_cases()
 
     def test_both_case_modules_import(self) -> None:
-        assert len(CASES) + len(EXPLOIT_CASES) == len(all_cases())
+        assert len(CASES) + len(EXPLOIT_CASES) + len(TA_CASES) == len(all_cases())
 
 
 class TestBaselines:
