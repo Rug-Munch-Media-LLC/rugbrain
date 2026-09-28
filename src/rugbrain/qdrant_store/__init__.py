@@ -34,6 +34,7 @@ from rugbrain.qdrant_store.collections import (
     _existing_collections,
     _map_collection,
     dense_vector_dimensions,
+    gate_collection_name,
     unified_route,
 )
 from rugbrain.qdrant_store.connection import (
@@ -55,6 +56,16 @@ from rugbrain.qdrant_store.filters import (
     build_qdrant_filter,
     build_search_filters,
     normalize_filters,
+)
+from rugbrain.qdrant_store.lane_dims import fetch_live_dim
+from rugbrain.qdrant_store.lane_resolver import (
+    CANONICAL_LANE_DIM,
+    EIGHT_B_SUFFIX,
+    UnresolvedLane,
+    declared_lane_dim,
+    resolve_collection,
+    resolver_mode,
+    strip_twin_suffix,
 )
 from rugbrain.qdrant_store.store import QdrantVectorStore
 
@@ -79,7 +90,9 @@ async def get_qdrant_store() -> QdrantVectorStore:
 
 
 __all__ = [
+    "CANONICAL_LANE_DIM",
     "DENSE_VECTOR_NAME",
+    "EIGHT_B_SUFFIX",
     "FILTERABLE_MATCH_FIELDS",
     "FILTERABLE_RANGE_FIELDS",
     "QDRANT_FALLBACK_URLS",
@@ -89,6 +102,7 @@ __all__ = [
     "_RMI_RAG_OWNED_COLLECTIONS",
     "_RMI_RAG_QDRANT_WRITE_MODE",
     "QdrantVectorStore",
+    "UnresolvedLane",
     "_embed_sparse",
     "_ensure_collection",
     "_existing_collections",
@@ -100,8 +114,14 @@ __all__ = [
     "apply_payload_filter",
     "build_qdrant_filter",
     "build_search_filters",
+    "declared_lane_dim",
     "dense_vector_dimensions",
+    "fetch_live_dim",
+    "gate_collection_name",
     "get_qdrant_store",
     "normalize_filters",
+    "resolve_collection",
+    "resolver_mode",
+    "strip_twin_suffix",
     "unified_route",
 ]

@@ -117,17 +117,24 @@ def test_preflight_exits_two_when_retrieval_explodes(
 
 
 def test_probe_really_reports_a_dead_lane(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Unmocked: point the probe at a closed port and it must answer False.
+    """Unmocked: the probe must answer False when the embedder really fails.
 
-    This is the one test that touches the network — and it only proves a
-    connection is REFUSED, which cannot pass by accident.
+    This is the one test that touches the network, and it only proves a real
+    failure is surfaced, which cannot pass by accident.
+
+    It used to break the probe by pointing QWEN_EMBED_URL at a closed port.
+    That no longer works BY DESIGN: the seam fix (6c24960) moved the probe onto
+    `embed_query`, the single embedder seam, precisely so the retired local
+    :8004 lane cannot make a healthy system look dead. So the probe is now
+    broken the way a real outage breaks it - an invalid credential against the
+    live provider - and must still answer False rather than a healthy verdict.
     """
     from rugbrain.missioneval import __main__ as entry
 
-    monkeypatch.setenv("QWEN_EMBED_URL", "http://127.0.0.1:59999/v1")
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "definitely-not-a-valid-key")
     alive, detail = entry._embedder_alive()
-    assert alive is False
-    assert "59999" in detail or "refus" in detail.lower() or "connect" in detail.lower()
+    assert alive is False, f"probe reported healthy against a failing embedder: {detail}"
+    assert detail.strip(), "a failure must carry a reason an operator can act on"
 
 
 # ── the golden data is grounded, not decorative ───────────────────────

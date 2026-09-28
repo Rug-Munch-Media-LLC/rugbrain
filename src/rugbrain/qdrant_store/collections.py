@@ -9,6 +9,11 @@ from typing import Any
 
 import httpx
 
+from rugbrain.qdrant_store.lane_resolver import (
+    resolve_collection,
+    strip_twin_suffix,
+)
+
 logger = logging.getLogger(__name__)
 
 # ── Collection management ─────────────────────────────────────────────
@@ -57,6 +62,19 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         # RAG-owned auxiliary / graph collections.
         "rag_threats",
         "rag_docs",
+        # rag_documents is this repo's own UNIFIED corpus — every legacy RAG
+        # collection was consolidated into it (530k points, 2026-09-20) and it is
+        # the read target of the whole `RAG_UNIFIED_READS` route plus the
+        # guardrail examples in `rugbrain.guardrails`. It was missing from this
+        # gate, so the gate rejected writes to the corpus the repo itself
+        # creates and reads. This is the same class of defect as the entries
+        # added above — a target this repo owns, absent from the owned set — and
+        # it is what made the lane-resolver write-gate test fail: resolving
+        # `rag_documents` to its populated `rag_documents_8b` twin must be
+        # admissible, otherwise the fix trades a dim mismatch for a gate block.
+        # rmi-backend does not own this collection, so the gate's purpose is
+        # unaffected.
+        "rag_documents",
         "wallet_clusters",
         "bundle_patterns",
         "cluster_labels",
@@ -95,11 +113,13 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "privacy_protocol",
         "standards",
         "market_data",
-        "crime_reports",
         # 2026-09-28: targets of three built sources that were writing into
         # the void. rug_events <- crpwarner_rug_events.py; scam_signatures <-
         # forta_malicious_contracts.py + fraudcoins_signatures.py. Same
         # DEFAULT_COLLECTION-vs-owned-set drift as the 8 added above.
+        # (crime_reports is already listed in the group above, from
+        # ingest_sources/chainabuse.py — it was repeated here and ruff B033
+        # flagged the duplicate set item.)
         "rug_events",
         "scam_signatures",
         # 2026-09-28: target of scripts/ingest_scam_patterns.py (Lane B,
@@ -127,11 +147,65 @@ _RMI_RAG_QDRANT_WRITE_MODE = os.getenv("RMI_RAG_QDRANT_WRITE_MODE", "readonly").
 _INTERIM_SUFFIX = os.getenv("RAG_INTERIM_COLLECTION_SUFFIX", "")
 
 
+# ── Canonical-lane resolution (2026-09-28) ─────────────────────────────────
+# ``_map_collection`` is the single choke point every read, has_point, scroll and
+# insert passes through, so the base -> ``_8b`` rewrite is applied here once
+# rather than in each caller. Order matters: the interim suffix is applied
+# OUTERMOST, so a name arriving as ``threat_intel_v2`` becomes
+# ``threat_intel_v2_8b`` first and the interim shadow then wraps that
+# (``threat_intel_v2_8b<interim>``). A name arriving as
+# ``threat_intel_v2<interim>`` is left alone by the resolver (it does not end in
+# ``_8b`` and is not a declared base) and is only shadow-routed, which preserves
+# the existing interim behaviour exactly.
+#
+# A canonical-lane base with no declared twin raises UnresolvedLane (from
+# lane_resolver, not re-exported here) instead of silently writing 4096 vectors
+# into a 2560 collection — the defect this fixes. See lane_resolver for the
+# live-Qdrant evidence behind the mapping.
+
+
 def _map_collection(collection: str | None) -> str | None:
-    """Route to the interim shadow namespace when one is configured."""
-    if collection and _INTERIM_SUFFIX and not collection.endswith(_INTERIM_SUFFIX):
-        return f"{collection}{_INTERIM_SUFFIX}"
-    return collection
+    """Route a declared name to the live target: interim shadow, then lane.
+
+    The interim suffix is read from the PACKAGE namespace at call time, not from
+    this module's global, for the reason the package docstring gives: tests patch
+    ``rugbrain.qdrant_store._INTERIM_SUFFIX`` and internal callers resolve shared
+    names through the package. Reading the local global here would leave the
+    patch invisible — the same split-namespace hazard the pre-existing gate code
+    avoided by taking the suffix as a parameter.
+    """
+    import rugbrain.qdrant_store as _pkg
+
+    resolved = resolve_collection(collection)
+    interim = _pkg._INTERIM_SUFFIX
+    if resolved and interim and not resolved.endswith(interim):
+        return f"{resolved}{interim}"
+    return resolved
+
+
+def gate_collection_name(
+    collection: str | None,
+    interim_suffix: str | None = None,
+) -> str | None:
+    """Canonical base name for the write gate, stripping BOTH suffixes.
+
+    Ownership is a property of the corpus, not of the lane or the migration
+    window: ``threat_intel_v2_8b<interim>``, ``threat_intel_v2_8b`` and
+    ``threat_intel_v2`` are the same owned corpus, so all three must present
+    ``threat_intel_v2`` to the gate. Returns None for a None name.
+
+    *interim_suffix* is passed in rather than read from this module's global so
+    the caller stays the single patch point: tests patch the PACKAGE attribute
+    (``qdrant_store._INTERIM_SUFFIX``), and internal callers resolve shared
+    names through the package namespace at call time. Reading the module global
+    here would silently ignore those patches.
+    """
+    if not collection:
+        return None
+    base = collection
+    if interim_suffix and base.endswith(interim_suffix):
+        base = base[: -len(interim_suffix)]
+    return strip_twin_suffix(base)
 
 
 # ── Unified reads (2026-09-20 consolidation) ───────────────────────────────

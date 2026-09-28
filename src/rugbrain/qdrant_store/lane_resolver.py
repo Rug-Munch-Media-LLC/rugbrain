@@ -40,37 +40,31 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
 from typing import Final
 
-from rugbrain.dim_policy import COLLECTION_DIM
-
 # `fetch_live_dim` lives in `lane_dims` (it reads the dimension off a live
-# Qdrant collection). It is re-exported because `qdrant_store/__init__` and
-# the write gate treat this module as the single public surface: splitting
-# the module without carrying the re-export left the package unimportable.
-# Listed in __all__ so linters do not strip it as an unused import.
+# Qdrant collection) and the declared facts live in `lane_table`. Both are
+# re-exported here so this module stays the single public surface of the lane:
+# `qdrant_store/__init__` and callers resolve the resolver, and splitting the
+# module without carrying the names forward left the package unimportable.
 from rugbrain.qdrant_store.lane_dims import fetch_live_dim
-
-# `fetch_live_dim` lives in `lane_dims` (it reads the dimension off a live
-# Qdrant collection); it is re-exported here because `qdrant_store/__init__`
-# and the write gate import the resolver as the single public surface, and
-# splitting the module without carrying the re-export left the package
-# unimportable.
+from rugbrain.qdrant_store.lane_table import (
+    CANONICAL_LANE_DIM,
+)
+from rugbrain.qdrant_store.lane_table import (
+    DECLARED_TWINS as _DECLARED_TWINS,
+)
+from rugbrain.qdrant_store.lane_table import (
+    PINNED_DIMS as _PINNED_DIMS,
+)
 
 logger = logging.getLogger(__name__)
 
 #: Suffix of a migrated twin. Shared with ``canary_routing.CANARY_SUFFIX``.
 EIGHT_B_SUFFIX: Final = "_8b"
 
-#: The lane this repo writes on: qwen3-embedding-8b @ 4096.
-CANONICAL_LANE_DIM: Final = int(COLLECTION_DIM)
-
 #: Retired 2560 generation (qwen3-embedding-4b). Read-only, never a write target.
 RETIRED_LANE_DIM: Final = 2560
-
-#: The dim a base name is pinned to when this repo has not migrated it.
-_PRESERVED_LANE_DIM: Final = int(os.getenv("RAG_PRESERVED_LANE_DIM", str(RETIRED_LANE_DIM)))
 
 #: Escape hatch. Off by default; set ``RAG_LANE_RESOLVER=off`` to restore the
 #: pre-resolver behaviour for a single run. Values: off | warn | strict.
@@ -90,80 +84,6 @@ class UnresolvedLane(ValueError):
 
 def _lane_twin(name: str) -> str:
     return f"{name}{EIGHT_B_SUFFIX}"
-
-
-def _declared_twins() -> frozenset[str]:
-    """Bases whose ``_8b`` twin is the write target (owner's mapping, 2026-09-28).
-
-    Exactly the 21 owned names proven MIGRATED against live Qdrant: each has a
-    2560 base collection AND a populated 4096 twin, so the base is retained
-    read-only and every write must land on the twin.
-
-    NOT listed, and why — the two groups look the same ("no twin") but are not:
-
-    * Already canonical at 4096 with no base to retire (``privacy_protocol``,
-      ``l2_risk``, ``market_data``, ``crime_reports``, ``bridge_architecture``,
-      ``mev_architecture``, ``standards``, ``zk_circuits``, ``scam_signatures``,
-      ``newsletters``, ``podcast_episodes``). Adding a twin for these would
-      strand their data in a collection that does not exist.
-    * Pinned to the 2560 generation with no twin (``rug_events``,
-      ``coding_knowledge``, ``public_crypto_patterns``, ``solana_patterns``) or
-      to 1024 (``wallet_clusters``, ``youtube_videos``). A 4096 vector cannot
-      enter any of them — :func:`declared_lane_dim` returns the pinned dim and
-      the existing dimension guard refuses. That refusal is correct and loud.
-    * Owned names with no Qdrant collection at all (``bundle_patterns``,
-      ``cluster_labels``, ``cryptography``, ``rag_docs``, ``rag_threats``,
-      ``scanner_v2``, ``solidity_patterns``). Auto-creating a 4096 collection
-      for each would fork the corpus by accident.
-
-    Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
-    ``master_skills``, ``protocol_design``, ``scan_intel``, ``exploits``,
-    ``social_intel``, ``codebase_reference_v2``, ``security_patterns_test``) are
-    deliberately absent: routing a rugbrain source at them would widen write
-    ownership past the gate's boundary.
-    """
-    return frozenset(
-        {
-            "contract_audits",
-            "contract_security",
-            "crypto_vulnerabilities",
-            "defi_exploits",
-            "education",
-            "github_audits",
-            "hacks_v2",
-            "known_scams",
-            "live_threats",
-            "news_articles",
-            "news_v2",
-            "rag_documents",
-            "regulation_enforcement",
-            "research_v2",
-            "scam_intel_v2",
-            "security_alerts",
-            "security_feeds",
-            "security_patterns",
-            "stablecoin_market",
-            "threat_intel_v2",
-            "wallet_profiles",
-            "wallet_v2",
-        }
-    )
-
-
-def _pinned_dims() -> Mapping[str, int]:
-    """Owned names pinned below the canonical dim, and the dim they are at."""
-    return {
-        "coding_knowledge": _PRESERVED_LANE_DIM,
-        "public_crypto_patterns": _PRESERVED_LANE_DIM,
-        "rug_events": _PRESERVED_LANE_DIM,
-        "solana_patterns": _PRESERVED_LANE_DIM,
-        "wallet_clusters": 1024,
-        "youtube_videos": 1024,
-    }
-
-
-_DECLARED_TWINS: Final[frozenset[str]] = _declared_twins()
-_PINNED_DIMS: Final[Mapping[str, int]] = _pinned_dims()
 
 
 def resolver_mode() -> str:

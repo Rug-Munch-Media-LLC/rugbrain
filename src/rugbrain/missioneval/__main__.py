@@ -47,6 +47,8 @@ async def _qdrant_retriever(query: str, collection: str, top_k: int) -> list[dic
     embed lane is down, which is how ``rug_history`` read 0.000 against a
     corpus that could not have been searched at all.
     """
+    from rugbrain.missioneval.collection_retriever import make_retriever
+
     return await make_retriever()(query, collection, top_k)
 
 

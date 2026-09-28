@@ -24,6 +24,14 @@ ignore_imports =
     rugbrain.routes.analyze -> rugbrain.endpoints
     rugbrain.routes.ingest -> rugbrain.endpoints
     rugbrain.routes.ingest -> rugbrain.qdrant_store
+    # qdrant_store reaches httpx through its own store internals; the resolver
+    # sub-module does the same for the live-dim probe. Same known debt as the
+    # other service-module entries above.
+    rugbrain.routes.search_retrieval -> rugbrain.qdrant_store
+    rugbrain.routes.search_retrieval -> rugbrain.embeddings
+    # canary_routing is the sibling 8B lane module of qdrant_store; the store
+    # re-exports its resolver surface, so the two are one storage concern.
+    rugbrain.routes.search_retrieval -> rugbrain.canary_routing
     rugbrain.routes.content -> rugbrain.content_engine
     rugbrain.routes.search_federated -> rugbrain.multi_embedder
     rugbrain.routes.content -> rugbrain.trending

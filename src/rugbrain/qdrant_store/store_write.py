@@ -76,12 +76,10 @@ class WriteMixin(_types.StoreSurface):
 
         collection = _pkg._map_collection(collection) or "default"
         # Write gate: refuse writes to non-owned collections in readonly mode.
-        # Ownership is evaluated on the CANONICAL name — the interim suffix is
-        # a migration-window shim, not a different owner.
-        interim = _pkg._INTERIM_SUFFIX
-        gate_name = (
-            collection[: -len(interim)] if interim and collection.endswith(interim) else collection
-        )
+        # Ownership is evaluated on the CANONICAL name — neither the ``_8b``
+        # lane suffix nor the interim suffix denotes a different owner, so
+        # gate_collection_name strips both before the owned-set lookup.
+        gate_name = _pkg.gate_collection_name(collection, _pkg._INTERIM_SUFFIX)
         if (
             _pkg._RMI_RAG_QDRANT_WRITE_MODE == "readonly"
             and gate_name not in _pkg._RMI_RAG_OWNED_COLLECTIONS
