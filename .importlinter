@@ -109,6 +109,15 @@ ignore_imports =
     rugbrain.routes.search_pkg.threat -> rugbrain.canary_routing
     rugbrain.routes.search -> rugbrain.canary_routing
 
+    # be0da01 routed the SEARCH path through the lane resolver, as the write
+    # path already was. `lane_targets` is a resolution concern, not a storage
+    # client: the httpx at the end of the chain is qdrant_store's own
+    # connection module, which the entries above already acknowledge as debt.
+    # Adding the resolver edge here rather than chasing qdrant_store internals
+    # — and the httpx type annotations in lane_dims/collections were dropped
+    # while fixing this, so a client type no longer forces the import.
+    rugbrain.routes.search_retrieval -> rugbrain.search.lane_targets
+
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)
 type = independence

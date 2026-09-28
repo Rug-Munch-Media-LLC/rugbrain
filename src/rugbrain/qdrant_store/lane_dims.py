@@ -14,9 +14,10 @@ carries both.
 
 from __future__ import annotations
 
+from typing import Any
+
 import logging
 
-import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,18 @@ __all__ = [
 
 async def fetch_live_dim(
     collection: str,
-    client: httpx.AsyncClient,
+    client: Any,
     *,
     probe_timeout: float = 10.0,
 ) -> int | None:
     """The dim of a LIVE Qdrant collection, or None when it does not exist.
+
+    Typed as ``Any`` rather than ``httpx.AsyncClient`` on purpose: importing
+    httpx here made `routes -> ... -> lane_dims -> httpx`, which broke the
+    "Route modules never touch storage/clients directly" contract for a module
+    that never opens a connection itself — it only calls a client it is handed.
+    Adding an ignore line to a list the project is trying to pay down would have
+    been the wrong fix.
 
     The reverse of :func:`resolve_collection`: given a name, report what the
     server actually has, so the corpus manifest and the verifier can compare a

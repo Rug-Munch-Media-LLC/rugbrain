@@ -7,8 +7,6 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-import httpx
-
 from rugbrain.qdrant_store.lane_resolver import (
     resolve_collection,
     strip_twin_suffix,
@@ -283,7 +281,7 @@ _existing_collections: dict[str, int] = {}
 async def _ensure_collection(
     collection: str,
     vector_size: int,
-    client: httpx.AsyncClient,
+    client: Any,
     *,
     create_if_missing: bool = True,
 ) -> bool:
