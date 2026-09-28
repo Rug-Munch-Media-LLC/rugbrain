@@ -29,6 +29,7 @@ from typing import Any
 
 import httpx
 
+from rugbrain.ingest_sources import licenses
 from rugbrain.ingest_sources.base import IngestDoc, Source
 
 log = logging.getLogger(__name__)
@@ -85,22 +86,18 @@ def wallet_entity_to_doc(entity: dict[str, Any]) -> IngestDoc | None:
     datasets = [str(d) for d in raw_datasets if str(d)] if isinstance(raw_datasets, list) else []
     target = bool(entity.get("target"))
 
-    content_parts = [
-        f"OpenSanctions crypto wallet: {caption or address or entity_id}",
-    ]
-    if address:
-        content_parts.append(f"Address: {address}")
-    if asset:
-        content_parts.append(f"Asset: {asset}")
-    if blockchain:
-        content_parts.append(f"Blockchain: {blockchain}")
-    if datasets:
-        content_parts.append("Source datasets: " + ", ".join(sorted(set(datasets))))
-    if target:
-        content_parts.append("Target: yes (sanctioned entity)")
+    # NO DERIVATIVES (CC BY-NC-ND): the record is stored VERBATIM. The previous
+    # version built a templated sentence ("OpenSanctions crypto wallet: ...,
+    # Source datasets: ...") which is an adapted work and therefore a licence
+    # breach. Structured fields carry the same facts for matching without
+    # rewriting the source text.
+    content = str(entity.get("caption") or entity.get("name") or "").strip()
+    if not content:
+        content = address or entity_id
 
     metadata = {
         "collection": DEFAULT_COLLECTION,
+        **licenses.terms_for("opensanctions").payload_fields(),
         "entity_type": "address",
         "entity": address or entity_id,
         "address": address,
@@ -121,7 +118,7 @@ def wallet_entity_to_doc(entity: dict[str, Any]) -> IngestDoc | None:
 
     key = entity_id or _content_hash(address)
     return IngestDoc(
-        content="\n".join(content_parts) + "\n",
+        content=content + "\n",
         doc_id=f"opensanctions:{key}",
         metadata=metadata,
         doc_type="sanction_entity",
