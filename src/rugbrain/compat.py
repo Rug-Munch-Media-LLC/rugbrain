@@ -29,7 +29,54 @@ import os
 import re
 from typing import Any, cast
 
+# Retrieval-stage shims (ANN index, semantic cache, knowledge graph, MMR dedup,
+# reranker, parent retriever, query transform) live in compat_retrieval so this
+# module stays inside the 200-line limit. Re-exported because callers import
+# them from `rugbrain.compat`.
+# Capabilities that are genuinely unavailable standalone now live in
+# compat_unavailable (deployer-risk, cross-chain identity, wallet scan) for the
+# same reason. `score_deployer_risk` FAILS LOUDLY — it used to return a
+# hardcoded 0.5 that the HTTP layer published as a real wallet verdict.
+from rugbrain.compat_retrieval import (
+    AnnIndex,
+    QueryTransformResult,
+    SemanticCache,
+    get_ann_index,
+    get_knowledge_graph,
+    get_parent_retriever,
+    get_reranker,
+    get_semantic_cache,
+    mmr_dedup_results,
+    transform_query,
+)
+from rugbrain.compat_unavailable import (
+    DeployerScorerUnavailable,
+    resolve_cross_chain_identity,
+    scan_wallet,
+    score_deployer_risk,
+)
+
 logger = logging.getLogger(__name__)
+
+__all__ = [  # noqa: RUF022  (grouped by origin, not alphabetical)
+    # from compat_retrieval
+    "AnnIndex",
+    "QueryTransformResult",
+    "SemanticCache",
+    "get_ann_index",
+    "get_knowledge_graph",
+    "get_parent_retriever",
+    "get_reranker",
+    "get_semantic_cache",
+    "mmr_dedup_results",
+    "transform_query",
+    # from compat_unavailable
+    "DeployerScorerUnavailable",
+    "resolve_cross_chain_identity",
+    "scan_wallet",
+    "score_deployer_risk",
+]
+
 
 # ── Redis ─────────────────────────────────────────────────────────
 _redis_client: Any = None
@@ -118,92 +165,6 @@ class EntityLookup:
         """No-op entity index hook — standalone mode has no entity store."""
 
 
-# ── ANN Index ─────────────────────────────────────────────────────
-class AnnIndex:
-    """Placeholder ANN index that uses Qdrant directly."""
-
-    _instace: AnnIndex | None = None
-
-    def __new__(cls) -> AnnIndex:
-        if cls._instace is None:
-            cls._instace = super().__new__(cls)
-        return cls._instace
-
-    def is_built(self, collection: str) -> bool:
-        return True  # Qdrant handles indexing natively
-
-    async def search(
-        self, query_embedding: list[float], collection: str, **kwargs: Any
-    ) -> list[dict[str, Any]]:
-        return []
-
-    async def bump_version(self, collection: str) -> None:
-        """No-op version bump — Qdrant manages its own index state."""
-
-    async def stats(self) -> dict[str, Any]:
-        """No-op stats — Qdrant collection stats are served by get_stats()."""
-        return {}
-
-
-def get_ann_index() -> AnnIndex:
-    return AnnIndex()
-
-
-# ── Semantic Cache ───────────────────────────────────────────────
-class SemanticCache:
-    """No-op semantic cache — bypasses caching for standalone mode."""
-
-    async def check(self, query_vec: list[float]) -> Any | None:
-        return None
-
-    async def store(self, query_vec: list[float], results: list[dict[str, Any]]) -> None:
-        pass
-
-    async def stats(self) -> dict[str, Any]:
-        return {"enabled": False, "hits": 0, "misses": 0}
-
-
-def get_semantic_cache() -> SemanticCache:
-    return SemanticCache()
-
-
-# ── Knowledge Graph ──────────────────────────────────────────────
-async def get_knowledge_graph() -> Any | None:
-    return None
-
-
-# ── MMR Dedup ────────────────────────────────────────────────────
-async def mmr_dedup_results(results: list[dict[str, Any]], **kwargs: Any) -> list[dict[str, Any]]:
-    return results
-
-
-# ── Cross-encoder Reranker ───────────────────────────────────────
-async def get_reranker() -> Any | None:
-    try:
-        from rugbrain.reranker import get_reranker as _get_reranker
-
-        return _get_reranker()  # sync factory returning a Reranker instance
-    except Exception:
-        return None
-
-
-# ── Parent Retriever ─────────────────────────────────────────────
-async def get_parent_retriever() -> Any | None:
-    return None
-
-
-# ── Query Transform ──────────────────────────────────────────────
-class QueryTransformResult:
-    """Result shape expected by search_with_transform (pass-through)."""
-
-    def __init__(self, query: str, strategy: str = "auto") -> None:
-        self.transformed_queries: list[str] = [query]
-        self.strategy = strategy
-        self.metadata: dict[str, Any] = {"transform": "passthrough"}
-
-
-async def transform_query(query: str, **kwargs: Any) -> QueryTransformResult:
-    return QueryTransformResult(query, strategy=str(kwargs.get("strategy", "auto")))
 
 
 # ── Scam Sources / GoPlus ────────────────────────────────────────
@@ -231,32 +192,7 @@ def score_confidence(
         return {"confidence_score": 0.5, "confidence_label": "unknown", "breakdown": {}}
 
 
-# ── Deployer Reputation ──────────────────────────────────────────
-class DeployerScorerUnavailable(RuntimeError):
-    """No real deployer-risk scorer is wired (see score_deployer_risk)."""
-
-
-def score_deployer_risk(address: str, chain: str = "ethereum", **kwargs: Any) -> dict[str, Any]:
-    """Score deployer risk.
-
-    Unavailable standalone. This used to return a hardcoded
-    ``{"risk_score": 0.5, ...}``, which the HTTP layer surfaced as a real
-    verdict — false confidence on a public endpoint. Fail loudly instead; the
-    caller turns this into a 503. A real scorer lands with the `rug_events`
-    corpus (deployer → prior-rug history), not as a stub.
-    """
-    raise DeployerScorerUnavailable(
-        "deployer-risk scoring is not implemented: it requires the rug_events "
-        "corpus (deployer -> prior-rug history). Refusing to return a placeholder."
-    )
-
-
-# ── Cross-Chain Identity ─────────────────────────────────────────
-def resolve_cross_chain_identity(address: str, **kwargs: Any) -> list[dict[str, Any]]:
-    """Resolve cross-chain identity — no-op standalone."""
-    return []
-
-
+# Capabilities that are genuinely unavailable standalone now live in
 # ── Investigation Narratives ─────────────────────────────────────
 async def investigate(
     query: str = "",
@@ -299,9 +235,3 @@ async def generate_content(
     except Exception as exc:
         logger.debug("generate_content_failed %s", str(exc)[:60])
     return ""
-
-
-# ── Unified Scanner ──────────────────────────────────────────────
-async def scan_wallet(address: str, chain: str = "ethereum") -> dict[str, Any]:
-    """Scan wallet — no-op standalone."""
-    return {"address": address, "risk_score": 0.5, "flags": []}

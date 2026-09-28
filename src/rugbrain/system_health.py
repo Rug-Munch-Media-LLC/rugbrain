@@ -251,10 +251,9 @@ async def _scanner_section() -> dict[str, Any]:
         sentinel["error"] = str(e)[:120]
         databus["error"] = str(e)[:120]
 
-    # Standalone (2026-09-28): rmi-backend is not a dependency of this service.
-    # Probing its /health and folding the result into `ok` made RugBrain look
-    # healthy only when the backend was up. Sentinel/databus lanes are the only
-    # evidence that counts now.
+    # Standalone (2026-09-28): rmi-backend is not a dependency. Folding its
+    # /health into `ok` meant RugBrain looked healthy only while it was up.
+    # The sentinel/databus lanes are the only evidence that counts now.
     return {
         "ok": (sentinel.get("ok") is True) or (databus.get("ok") is True),
         "sentinel": sentinel,
