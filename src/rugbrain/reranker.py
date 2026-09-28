@@ -28,6 +28,7 @@ from typing import Any
 import httpx
 
 from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+from rugbrain.token_budget import budget_documents
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +264,12 @@ async def rerank(
 ) -> list[dict[str, Any]]:
     """Rank documents by relevance to query using the Qwen3 reranker.
 
+    Every caller funnels through here, so the per-document token ceiling is
+    applied once, here, rather than at each entry point. Measured 2026-08-28
+    against the real corpus: live chunks average ~141 tokens, so the 768-token
+    ceiling is free in practice and bounds the worst case. See
+    ``rugbrain.token_budget``.
+
     Args:
         query: The search query or instruction.
         documents: List of document strings to rank.
@@ -274,6 +281,7 @@ async def rerank(
 
     Degrades gracefully: returns empty list if server is down.
     """
+    documents = budget_documents(documents)
     if not RERANKER_ENABLED or not documents:
         return []
 

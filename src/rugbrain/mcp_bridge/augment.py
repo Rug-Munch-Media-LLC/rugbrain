@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 
-async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
+async def augment_code_query(
+    query: str, *, limit: int = 8, include_raw: bool = False
+) -> dict[str, Any]:
     """One-call entry point for code-related RAG queries.
 
     Runs ``search_codebase`` + ``get_security_context`` and merges the
@@ -21,13 +23,19 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
     Returns:
         {
           "ok", "bridge" ("mcp" | "rag_fallback" | "mixed"),
-          "query", "results", "security_patterns", "total", "raw": {...},
+          "query", "results", "security_patterns", "total",
+          "raw": {...} (only when include_raw=True),
           "guard": {...},
         }
 
     Guarded: the query is sanitized once here; sub-calls refuse before
     dispatch when nothing usable remains. Aggregated ``guard`` metadata is
     attached to the merged response.
+
+    ``include_raw`` is OFF by default. The merged ``raw`` block used to
+    re-echo the full ``search_codebase`` payload — a second verbatim copy of
+    ``results`` plus a third copy of the security patterns, on top of the
+    normalization the sub-calls had already done.
     """
     from rugbrain import mcp_bridge as _pkg
 
@@ -41,11 +49,10 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
             "results": [],
             "security_patterns": [],
             "total": 0,
-            "raw": None,
             "guard": guard,
             "error": "query_refused_after_injection_sanitization",
         }
-    search = await _pkg.search_codebase(safe_query, limit=limit)
+    search = await _pkg.search_codebase(safe_query, limit=limit, include_raw=include_raw)
     security = await _pkg.get_security_context(safe_query, top_k=min(limit, 5))
 
     bridges = {search.get("bridge"), security.get("bridge")}
@@ -67,7 +74,7 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
         or bool(search.get("guard", {}).get("refused"))
         or bool(security.get("guard", {}).get("refused")),
     }
-    return {
+    payload: dict[str, Any] = {
         "ok": bool(search.get("ok")) or bool(security.get("ok")),
         "bridge": bridge,
         "tool": "augment_code_query",
@@ -75,9 +82,11 @@ async def augment_code_query(query: str, *, limit: int = 8) -> dict[str, Any]:
         "results": results,
         "security_patterns": security_results,
         "total": len(results) + len(security_results),
-        "raw": {
-            "search": search.get("raw") if search.get("bridge") == "mcp" else None,
-            "security": security.get("results") if security.get("bridge") == "mcp" else None,
-        },
         "guard": agg_guard,
     }
+    if include_raw:
+        payload["raw"] = {
+            "search": search.get("raw") if search.get("bridge") == "mcp" else None,
+            "security": security.get("results") if security.get("bridge") == "mcp" else None,
+        }
+    return payload
