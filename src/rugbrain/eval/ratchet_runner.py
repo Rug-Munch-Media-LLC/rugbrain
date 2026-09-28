@@ -1,30 +1,7 @@
-"""Measurement runner — dense, hybrid, and rerank layers, read-only.
+"""Retrieval ratchet: measure recall/MRR/nDCG per layer and compare to a baseline.
 
-Deliberately decoupled from the graph layer
---------------------------------------------
-The previous nightly died on an ``ImportError`` raised by an unrelated graph
-refactor. That is the wrong dependency direction: retrieval quality did not
-change, but the monitor was taken out by code that cannot affect it.
-
-This module therefore touches ONLY ``rugbrain.qdrant_store``,
-``rugbrain.embeddings`` and ``rugbrain.search.rerank`` — never the MCP server,
-never the graph implementation. A change to graph assembly cannot make a
-retrieval monitor unrunnable. The store is constructed here, directly, rather
-than fetched through a façade that pulls in the whole server.
-
-Each layer is measured independently and records its OWN error count. A layer
-where every query errored is reported with ``measured=0`` so the verdict can
-say "could not measure" rather than "scored zero" — the distinction between
-an outage and a regression is the whole reason the exit codes are distinct.
-
-Read-only: this module calls ``search``/``hybrid_search``/rerank and GETs
-collection metadata. It never writes.
-
-Responsibility split:
-
-    corpus_fingerprint   what is being measured (the hash) + hit scoring
-    ratchet_retrievers   one retriever factory per layer
-    ratchet_runner (this) the run loop, plus the paths and env lookups
+Orchestration only after the 2026-09-28 split. Metric definitions live in
+`ratchet_metrics`; retriever construction in `ratchet_retrievers`.
 """
 
 from __future__ import annotations
@@ -32,33 +9,41 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from rugbrain.eval.corpus_fingerprint import _score_hits, corpus_hash
-from rugbrain.eval.ratchet_model import LayerMetrics, Measurement
-from rugbrain.eval.ratchet_retrievers import (
-    make_dense_retriever,
-    make_hybrid_retriever,
-    rerank_hits,
+from rugbrain.eval.baseline_ratchet import Layer, LayerMetrics, Measurement
+from rugbrain.eval.ratchet_metrics import (
+    _average,
+    _score_hits,
+    corpus_hash,
+    recall_from_gains,
 )
+from rugbrain.eval.ratchet_retrievers import (
+    _make_dense_retriever,
+    _make_hybrid_retriever,
+    _rerank,
+)
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LIMIT = 40
 DEFAULT_CANDIDATE_CAP = 40
 
-logger = logging.getLogger(__name__)
-
-
 async def measure(
     rows: list[dict[str, Any]],
-    layers: tuple[str, ...] = ("dense", "hybrid", "rerank"),
+    layers: tuple[Layer, ...] = ("dense", "hybrid", "rerank"),
     limit: int = DEFAULT_LIMIT,
     candidate_cap: int = DEFAULT_CANDIDATE_CAP,
     dim_checks: list[dict[str, Any]] | None = None,
     default_collection: str = "codebase_reference_v2",
 ) -> Measurement:
-    """Measure recall@5/@10, MRR and nDCG@10 on each requested layer."""
+    """Measure recall@5/@10, MRR and nDCG@10 on each requested layer.
+
+    Each layer is measured independently and records its own error count. A
+    layer where every query errored is reported with ``measured=0`` so the
+    verdict can say "could not measure" rather than "scored zero".
+    """
     from rugbrain.qdrant_store.store import QdrantVectorStore
 
     store = QdrantVectorStore()
@@ -67,8 +52,8 @@ async def measure(
     errors: dict[str, int] = {layer: 0 for layer in layers}
 
     retrievers = {
-        "dense": make_dense_retriever(store, limit),
-        "hybrid": make_hybrid_retriever(store, limit),
+        "dense": _make_dense_retriever(store, limit),
+        "hybrid": _make_hybrid_retriever(store, limit),
     }
 
     for row in rows:
@@ -81,20 +66,24 @@ async def measure(
             try:
                 if layer == "rerank":
                     base = await retrievers["hybrid"](query, collection)
-                    hits = await rerank_hits(query, base, candidate_cap)
+                    hits = await _rerank(query, base, candidate_cap)
                 else:
                     hits = await retrievers[layer](query, collection)
             except Exception as exc:
                 errors[layer] += 1
                 if errors[layer] == 1:
-                    logger.warning("eval_%s_error collection=%s: %s", layer, collection, exc)
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "eval_%s_error collection=%s: %s", layer, collection, exc
+                    )
                 continue
             if not hits:
                 errors[layer] += 1
                 continue
             per_layer[layer].append(_score_hits(row, hits, k_values))
 
-    return Measurement(
+    result = Measurement(
         corpus_hash=corpus_hash(rows),
         case_count=len(rows),
         layers={
@@ -111,13 +100,7 @@ async def measure(
         },
         dim_checks=list(dim_checks or []),
     )
-
-
-def _average(values: list[dict[str, float]]) -> LayerMetrics:
-    if not values:
-        return LayerMetrics()
-    keys = values[0].keys()
-    return LayerMetrics(**{k: round(sum(v[k] for v in values) / len(values), 4) for k in keys})
+    return result
 
 
 def load_rows(path: Path | str) -> list[dict[str, Any]]:
