@@ -177,6 +177,19 @@ def write_lane_for_dim(
             )
             return candidate
 
+    # A collection with NO declared lane (scratch, test, or interim-suffixed
+    # names) is outside this module's knowledge. Defer to the existing schema
+    # check in store_write rather than raising: the guard exists to stop a
+    # KNOWN lane from receiving the wrong-width vector, not to invent policy for
+    # collections it has never heard of.
+    if _declared_dim(twin) is None and _declared_dim(base) is None:
+        logger.debug(
+            "qdrant_write_lane_unknown collection=%s dim=%d action=defer_to_schema_check",
+            collection,
+            vector_dim,
+        )
+        return collection
+
     raise WriteLaneDimMismatch(
         f"write_lane_dim_mismatch collection={collection} requested_dim={vector_dim} "
         f"candidates={[(c, _declared_dim(c)) for c in (twin, base) if _declared_dim(c)]} "

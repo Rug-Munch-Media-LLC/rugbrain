@@ -63,9 +63,18 @@ class TestBaseEligibleNames:
 
 
 class TestUnclassifiedAndEmpty:
-    def test_unclassified_name_raises(self):
-        with pytest.raises(WriteLaneDimMismatch):
-            write_lane_for_dim("no_such_corpus", 4096)
+    def test_unclassified_name_defers_to_the_schema_check(self):
+        """A collection this module has never heard of is NOT its business.
+
+        Raising here broke legitimate writes: scratch collections, test
+        collections and interim-suffixed names are all undeclared, and they
+        were rejected outright. The guard exists to stop a KNOWN lane from
+        receiving the wrong-width vector, not to invent policy for names it has
+        no declaration for. The existing schema check in store_write is the
+        right place to judge those, so the name is returned unchanged.
+        """
+        assert write_lane_for_dim("no_such_corpus", 4096) == "no_such_corpus"
+        assert write_lane_for_dim("scratch_coll", 2560) == "scratch_coll"
 
     @pytest.mark.parametrize("name", [None, ""])
     def test_empty_collection_raises(self, name):

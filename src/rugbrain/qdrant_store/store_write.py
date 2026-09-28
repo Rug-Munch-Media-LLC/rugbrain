@@ -90,6 +90,16 @@ class WriteMixin(_types.StoreSurface):
             )
             return False
 
+        # Resolve the LANE from the vector's actual width before the schema
+        # check. The resolver rewrites a base collection to its `_8b` twin, but
+        # the twin is a different dimension (threat_intel_v2 2560 vs
+        # threat_intel_v2_8b 4096), so a 2560 vector routed to the 4096 lane was
+        # rejected and the write DROPPED SILENTLY. A dim mismatch must never
+        # look like a successful ingest.
+        from rugbrain.qdrant_store.write_lane import write_lane_for_dim
+
+        collection = write_lane_for_dim(collection, len(embedding))
+
         client = await self._get_client()
         if not await _pkg._ensure_collection(collection, len(embedding), client):
             logger.error(
