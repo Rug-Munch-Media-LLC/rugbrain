@@ -7,14 +7,24 @@ structured projection into ``rug_events``.
 
 Usage::
 
-    python scripts/build_rug_events.py --dry-run          # project + report
-    python scripts/build_rug_events.py --apply             # create + write
-    python scripts/build_rug_events.py --apply --scratch rug_events_smoke
-    python scripts/build_rug_events.py --sources-only      # scythe only, no embed
+    python scripts/build_rug_events.py                    # project + report only
+    python scripts/build_rug_events.py --apply            # create + write
+    python scripts/build_rug_events.py --apply --scratch rug_events_scratch2
+
+**A run is a dry run by default** — projecting and reporting touches nothing.
+``--apply`` is the only thing that writes, so a plain invocation cannot mutate
+the corpus. (There is deliberately no ``--dry-run`` flag: dry run is the
+absence of ``--apply``, and a flag that only restates the default is a way to
+let a production write through unnoticed.)
 
 ``--scratch`` writes to a DIFFERENT collection name and never touches
-``rug_events``; it exists so the write path can be smoke-tested without
+``rug_events``; it exists so the write path can be verified end to end before
 committing to a production write.
+
+The embed lane is pinned to the corpus's 2560-dim Qwen3-Embedding-4B before the
+first request (``rug_events.embedding``); run with the env sourced, e.g.
+``set -a; . /srv/secrets/rugbrain.env; set +a``, or the key is absent and every
+call fails.
 """
 
 from __future__ import annotations
@@ -27,13 +37,54 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# Pin the embed lane BEFORE importing anything from ``rugbrain``.
+#
+# ``import rugbrain.rug_events.embedding`` executes ``rugbrain/__init__.py``
+# first, which imports ``qwen_embedders``, which reads DEEPINFRA_EMBED_URL and
+# DEEPINFRA_EMBED_MODEL at *import* time into module constants. Setting them
+# afterwards is a silent no-op — every call then 404s on the doubled
+# ``/v1/embeddings/embeddings`` path. So the pin has to be plain os.environ
+# here, ahead of the first rugbrain import, not a call into the package.
+# Values are asserted against the module's own LANE_ENV below, so the two
+# cannot drift apart silently.
+for _key, _value in (
+    ("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1"),
+    ("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
+    ("RAG_EMBED_MODEL", "qwen3-embedding-4b"),
+    ("QWEN_EMBED_DIMS", "2560"),
+):
+    os.environ[_key] = _value
+
+from rugbrain.rug_events.embedding import (  # noqa: E402
+    CORPUS_DIM,
+    LANE_ENV,
+    DimMismatch,
+    embed_sync,
+)
 from rugbrain.rug_events.build_events import project_collection  # noqa: E402
 from rugbrain.rug_events.builder import apply_indexes, ensure_collection  # noqa: E402
 from rugbrain.rug_events.deployers import serial_ruggers  # noqa: E402
-from rugbrain.rug_events.qdrant_io import DEFAULT_URL, upsert_points  # noqa: E402
+from rugbrain.rug_events.qdrant_io import (  # noqa: E402
+    DEFAULT_URL,
+    collection_info,
+    point_id,
+    upsert_points,
+)
 from rugbrain.rug_events.schema import COLLECTION  # noqa: E402
 
-BATCH = 256
+# The prologue above and LANE_ENV must agree; a mismatch means the script pins
+# a lane the module does not know about, which is the failure this file exists
+# to prevent repeating.
+assert LANE_ENV == dict(
+    _LANE_PROLOGUE := {
+        "DEEPINFRA_EMBED_URL": os.environ["DEEPINFRA_EMBED_URL"],
+        "DEEPINFRA_EMBED_MODEL": os.environ["DEEPINFRA_EMBED_MODEL"],
+        "RAG_EMBED_MODEL": os.environ["RAG_EMBED_MODEL"],
+        "QWEN_EMBED_DIMS": os.environ["QWEN_EMBED_DIMS"],
+    }
+), f"embed lane prologue drifted from LANE_ENV: {_LANE_PROLOGUE} != {LANE_ENV}"
+
+BATCH = 128
 
 
 def summarize(events: list[dict]) -> dict:
@@ -60,26 +111,6 @@ def _count(values) -> dict[str, int]:
         key = str(v or "unknown")
         out[key] = out.get(key, 0) + 1
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
-
-
-def embed_batch(texts: list[str]) -> list[list[float]]:
-    """Embed with the repo's own query embedder (same model as the corpus)."""
-    from rugbrain.query_embedder import embed_query
-
-    vectors: list[list[float]] = []
-    for text in texts:
-        vectors.append(_run_coro(embed_query(text)))
-    return vectors
-
-
-def _run_coro(coro) -> list[float]:
-    import asyncio
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    raise RuntimeError("embed_batch must not be called from a running loop")
 
 
 def render(event: dict) -> str:
@@ -115,19 +146,41 @@ def render(event: dict) -> str:
 
 
 def write_events(events: list[dict], base: str, collection: str) -> int:
-    """Embed in batches and upsert; returns the number of points written."""
+    """Embed in pages and upsert; returns the number of points written."""
     written = 0
     for start in range(0, len(events), BATCH):
         batch = events[start : start + BATCH]
-        vectors = embed_batch([render(e) for e in batch])
+        # ONE request per page via embed() — embed_one() in a loop is 1,877
+        # round-trips, which is what made the first build take minutes.
+        vectors = embed_sync([render(e) for e in batch])
         points = [
-            {"id": e["event_id"], "vector": v, "payload": {**e, "content": render(e)}}
+            # point_id: Qdrant takes only int/UUID ids; event_id stays in the
+            # payload so the natural key remains auditable.
+            {"id": point_id(e["event_id"]), "vector": v, "payload": {**e, "content": render(e)}}
             for e, v in zip(batch, vectors, strict=True)
         ]
         upsert_points(base, collection, points)
         written += len(points)
         print(f"  upserted {written}/{len(events)}")
     return written
+
+
+def verify(base: str, collection: str, expected: int) -> dict:
+    """Check the ARTIFACT, not the exit code: point count and vector dim."""
+    info = collection_info(base, collection) or {}
+    cfg = (info.get("config") or {}).get("params") or {}
+    vectors = cfg.get("vectors") or {}
+    actual = int(info.get("points_count") or 0)
+    return {
+        "collection": collection,
+        "status": info.get("status"),
+        "points_count": actual,
+        "expected": expected,
+        "matches": actual == expected,
+        "dim": vectors.get("size") if isinstance(vectors, dict) else None,
+        "dim_ok": (vectors.get("size") if isinstance(vectors, dict) else None) == CORPUS_DIM,
+        "payload_indexes": sorted((info.get("payload_schema") or {}).keys()),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -155,7 +208,13 @@ def main(argv: list[str] | None = None) -> int:
     written = write_events(events, args.qdrant_url, target)
     for row in apply_indexes(args.qdrant_url, target):
         print(f"  index {row['field']}: {row['action']}")
+
+    check = verify(args.qdrant_url, target, written)
     print(f"\nwrote {written} rug events to '{target}'")
+    print(json.dumps(check, indent=2, ensure_ascii=False))
+    if not (check["matches"] and check["dim_ok"]):
+        print(f"VERIFY FAILED for '{target}' — artifact does not match the build", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -16,11 +16,25 @@ import json
 import logging
 import urllib.error
 import urllib.request
+import uuid
 from typing import Any
 
 log = logging.getLogger(__name__)
 
 DEFAULT_URL = "http://127.0.0.1:6334"
+
+#: Namespace for deterministic event_id -> UUIDv5. Fixed, so re-running the
+#: build produces the SAME point ids and upsert stays idempotent (no duplicates).
+#: Qdrant accepts only unsigned-int or UUID point ids, and the natural key here
+#: is a three-part string ("deflabx_solrpds:<token>:<year>"), so it is hashed
+#: into a UUID. The original key is kept in the payload as ``event_id``, so
+#: nothing is lost and the mapping stays auditable.
+EVENT_NAMESPACE = uuid.UUID("6f2c1d84-3a5b-5c7e-9d10-2b8c4e6f0a31")
+
+
+def point_id(event_id: str) -> str:
+    """Deterministic UUIDv5 point id for a string event identity."""
+    return str(uuid.uuid5(EVENT_NAMESPACE, str(event_id)))
 
 
 class QdrantError(RuntimeError):
@@ -133,9 +147,11 @@ def upsert_points(
 
 __all__ = [
     "DEFAULT_URL",
+    "EVENT_NAMESPACE",
     "QdrantError",
     "collection_info",
     "get_text",
+    "point_id",
     "request",
     "scroll",
     "scroll_all",
