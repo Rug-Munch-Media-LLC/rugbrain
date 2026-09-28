@@ -68,6 +68,34 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         "youtube_videos",
         "newsletters",
         "podcast_episodes",
+        # Ingest targets that are absent from Qdrant entirely, so their sources
+        # failed a THIRD time even once the collections were created
+        # (2026-09-28). Same class as the August finding above, same root
+        # cause: a source's DEFAULT_COLLECTION and this owned-set are two
+        # declarations of the same fact, kept in two places, and they drift.
+        #
+        # Each name below is the declared target of a rugbrain source:
+        #   l2_risk            <- ingest_sources/l2beat.py
+        #   zk_circuits        <- ingest_sources/zk.py
+        #   mev_architecture   <- ingest_sources/mev.py
+        #   bridge_architecture<- ingest_sources/bridges.py
+        #   privacy_protocol   <- ingest_sources/privacy.py
+        #   standards          <- ingest_sources/eips.py
+        #   market_data        <- ingest_sources/defillama.py
+        #   crime_reports      <- ingest_sources/chainabuse.py
+        #
+        # None of these is a ContextCrypto collection, so adding them widens
+        # nothing the gate exists to protect against. The gate's purpose is to
+        # stop rugbrain writing into the OTHER repo's data; these are this
+        # repo's own outputs.
+        "l2_risk",
+        "zk_circuits",
+        "mev_architecture",
+        "bridge_architecture",
+        "privacy_protocol",
+        "standards",
+        "market_data",
+        "crime_reports",
         # Explicitly reviewed, redacted ContextCrypto projection only.
         # Never add the internal ContextCrypto collections to this gate.
         "public_crypto_patterns",
