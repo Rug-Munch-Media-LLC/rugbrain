@@ -34,7 +34,7 @@ from typing import Any
 
 import httpx
 
-from rugbrain import content_story as story_shape
+from rugbrain import content_candidates
 from rugbrain.formatting.headline import style_for_site, style_headline
 
 logger = logging.getLogger("rugbrain.content")
@@ -158,35 +158,6 @@ def _story_age_hours(story: dict[str, Any]) -> float | None:
     return (datetime.now(UTC) - parsed).total_seconds() / 3600.0
 
 
-async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
-    from rugbrain.embeddings import get_query_embedding
-    from rugbrain.qdrant_store import get_qdrant_store
-
-    store = await get_qdrant_store()
-    embedding = await get_query_embedding(
-        "security exploit hack rug pull scam alert important development"
-    )
-    seen: dict[str, dict[str, Any]] = {}
-    # Only news_v2 (dated) is probed. threat_intel_v2 is an undated historical
-    # KB — including it re-introduces the stale-news incident (2026-08-26).
-    for collection in ("news_v2",):
-        try:
-            # interim embedder (nemotron) yields lower cosine scores than
-            # qwen — keep the floor low; importance rerank does the triage
-            results = await store.search(
-                embedding, collection=collection, limit=limit, min_similarity=0.15
-            )
-        except Exception as e:
-            logger.debug("content_probe_failed collection=%s err=%s", collection, str(e)[:80])
-            continue
-        for r in results:
-            key = story_shape.dedupe_key(r)
-            if not key or key in seen:
-                continue
-            seen[key] = story_shape.normalise(r, collection)
-    return story_shape.rank(seen)[:limit]
-
-
 async def select_scans(limit: int = 3) -> list[dict[str, Any]]:
     """Scans-of-interest drafts from REAL scanner feedback docs."""
     from rugbrain.qdrant_store import get_qdrant_store
@@ -244,7 +215,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
         return _drafts_cache["data"]  # type: ignore[no-any-return]  # cached drafts are typed Any
 
     started = time.time()
-    stories = await _recent_stories()
+    stories = await content_candidates.recent_stories()
 
     drafts: dict[str, list[dict[str, Any]]] = {"main": [], "alerts": [], "news": [], "scans": []}
 
