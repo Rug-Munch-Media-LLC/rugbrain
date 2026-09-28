@@ -59,11 +59,12 @@ class MissionCase(BaseModel):
 
 
 def all_cases() -> list[MissionCase]:
-    """Every mission case, in stable order (core rows, then exploit rows)."""
+    """Every mission case, in stable order (core, exploit, then TA rows)."""
     from rugbrain.missioneval.golden_cases import CASES
     from rugbrain.missioneval.golden_cases_exploit import EXPLOIT_CASES
+    from rugbrain.missioneval.golden_cases_ta import TA_CASES
 
-    return [*CASES, *EXPLOIT_CASES]
+    return [*CASES, *EXPLOIT_CASES, *TA_CASES]
 
 
 def cases_for(job_class: str | None = None) -> list[MissionCase]:
