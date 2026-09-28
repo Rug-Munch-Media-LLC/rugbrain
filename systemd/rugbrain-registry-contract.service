@@ -1,0 +1,50 @@
+# rugbrain-registry-contract — module-scoped ingest-source contract check.
+#
+# Why this is a live unit and not only a pytest:
+# fleet CI has had zero successful runs, so a test that only runs in CI is a
+# control that does not execute. This timer runs on a schedule whether or not
+# anyone pushes a commit.
+#
+# Why OnFailure= matters here:
+# a red oneshot that nobody is told about is indistinguishable from a green
+# one. The alert hook turns the violation into a message on the RugBrain sink
+# naming the offending sources.
+#
+# What it checks, and what a per-source check could not:
+# it reads the ingest_source MODULES and asserts that every collection a module
+# can stamp into a document is declared by a Source in that module. A check on
+# Source.default_collection alone passed all 50 sources while
+# scythe_radar_datasets declared `rug_events` and wrote to `known_scams` —
+# because ingest routes on metadata["collection"], not the declaration.
+#
+# Read-only: AST parse + import-free static scan. No network, no writes, no
+# service restarts. Exit 0 = clean, 1 = violation.
+#
+# Deploy:
+#   cp systemd/rugbrain-registry-contract.{service,timer} /etc/systemd/system/
+#   cp systemd/registry-contract-alert.sh /usr/local/bin/
+#   chmod +x /usr/local/bin/registry-contract-alert.sh
+#   systemctl daemon-reload
+#   systemctl enable --now rugbrain-registry-contract.timer
+[Unit]
+Description=RugBrain ingest registry contract check (module-scoped, read-only)
+After=network.target
+# The alert hook must not itself depend on the network being fully up.
+OnFailure=rugbrain-registry-contract-alert@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/rugbrain
+ExecStart=/path/to/rugbrain/.venv/bin/python -m rugbrain.eval.registry_contract
+# Write the JSON report the alert hook reads, so the message can name sources.
+ExecStartPost=/bin/sh -c '/path/to/rugbrain/.venv/bin/python -m rugbrain.eval.registry_contract --json > ${RUGBRAIN_STATE_DIR:-/var/lib/rugbrain}/registry-contract.json || true'
+Nice=10
+# Read-only gate: a modest slice ceiling keeps it from competing with ingest.
+MemoryMax=1G
+CPUQuota=25%
+# 0 = contract holds, 1 = at least one violation. Anything else is a fault in
+# the check itself and must stay visible.
+SuccessExitStatus=0
+
+[Install]
+WantedBy=multi-user.target

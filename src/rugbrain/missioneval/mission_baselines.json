@@ -21,17 +21,32 @@
     "note": "technical_analysis floor raised 0.0 -> 1.0 to the MEASURED value. This is a shrink-only ratchet: the class now scores 8/8 and any regression below 1.0 is a hard gate failure. The old ta-01 row scored a clean miss because it asked a liquidation-cascade question that no populated collection answers; it was repointed at master_skills (the populated TA reference corpus) rather than left to measure nothing."
   },
   "global": {
-    "gold_rate": 0.70,
+    "gold_rate": 0.7,
     "hit_rate": 0.78,
     "mrr": 0.65
   },
-  "per_class": {
-    "rug_history": {"gold_rate": 0.0, "hit_rate": 0.3},
-    "scam_detection": {"gold_rate": 0.8},
-    "exploit_knowledge": {"gold_rate": 0.75},
-    "news": {"gold_rate": 0.5},
-    "market": {"gold_rate": 0.5},
-    "technical_analysis": {"gold_rate": 1.0},
-    "skill_reference": {"gold_rate": 0.5}
-  }
-}
+    "per_class": {
+    "rug_history": {
+      "gold_rate": 0.8,
+      "hit_rate": 0.8
+    },
+    "scam_detection": {
+      "gold_rate": 0.8
+    },
+    "exploit_knowledge": {
+      "gold_rate": 0.75
+    },
+    "news": {
+      "gold_rate": 0.5
+    },
+    "market": {
+      "gold_rate": 0.5
+    },
+    "technical_analysis": {
+      "gold_rate": 1.0,
+      "hit_rate": 1.0
+    },
+    "skill_reference": {
+      "gold_rate": 0.5
+    }
+  }}

@@ -34,26 +34,20 @@ TOP_K = 10
 
 
 async def _qdrant_retriever(query: str, collection: str, top_k: int) -> list[dict[str, Any]]:
-    """Adapt the production retriever to the eval's ``(query, collection, k)``.
+    """Adapt the per-collection retriever to the eval's ``(query, collection, k)``.
 
     The eval grades on document text and id, so the result contexts are passed
-    through as-is.
+    through as-is. A failure surfaces as an exception, which the runner records
+    as a per-case error rather than a silent miss — a broken retrieval path must
+    not be able to look like a poor corpus.
 
-    Two rules, both of them the point of this adapter:
-
-    * the case's OWN collection is searched (the retriever's global default is
-      a different corpus entirely);
-    * ``tier="unavailable"`` RAISES. The old code returned ``result.contexts
-      or []``, so a dead embedder graded as "no hits" and the runner recorded
-      no error. Asserting on the artifact (a real search that produced
-      documents) is what makes the score mean something.
+    This searches the collection the CASE names. The production
+    ``DualTierRetriever`` cannot: it searches one module-level collection
+    (``RAG_COLLECTION``) and returns zero documents — with no error — when its
+    embed lane is down, which is how ``rug_history`` read 0.000 against a
+    corpus that could not have been searched at all.
     """
-    from rugbrain.search.dual_tier import TIER_UNAVAILABLE, DualTierRetriever
-
-    result = await DualTierRetriever().retrieve(query, top_k=top_k, collection=collection)
-    if result.tier == TIER_UNAVAILABLE:
-        raise RuntimeError(f"retrieval unavailable: {result.reason}")
-    return list(result.contexts or [])
+    return await make_retriever()(query, collection, top_k)
 
 
 def _default_retriever() -> Callable[..., Any]:

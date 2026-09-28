@@ -1,0 +1,24 @@
+# rugbrain-registry-contract-alert@%n — templated OnFailure alert hook.
+#
+# Instantiated by rugbrain-registry-contract.service's OnFailure=. Runs only
+# when the contract check exits non-zero.
+#
+# Separate unit rather than ExecStartPost= inside the check: a hook wired to
+# OnFailure fires for a *failed* check specifically, so an alerting path
+# cannot be skipped by a change to the check's own command line. That is the
+# whole reason the alerting half lives here instead of in the check.
+#
+# Paths are placeholders (see systemd/README.md): substitute the real repo root
+# and interpreter when installing.
+[Unit]
+Description=Alert for failed RugBrain registry contract check (%i)
+After=rugbrain-registry-contract.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/registry-contract-alert.sh %i
+# A failing alert must not compound the failure it is reporting.
+SuccessExitStatus=0
+Nice=10
+MemoryMax=256M
+CPUQuota=10%

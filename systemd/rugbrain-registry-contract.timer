@@ -1,0 +1,23 @@
+# rugbrain-registry-contract.timer — daily module-scoped registry contract check.
+#
+# Why a timer and not CI-only: fleet CI has had zero successful runs, so a
+# test that only executes there is a control that does not execute. This fires
+# on its own schedule, so the check runs whether or not anyone pushes.
+#
+# Off-peak and un-persistent-on-purpose: Persistent=false, because a missed
+# run while the box was off should not fire a burst of alerts at boot. The
+# check is daily and its value is in the trend, not in catching up.
+[Unit]
+Description=Daily RugBrain ingest registry contract check (module-scoped)
+
+[Timer]
+# 04:40 UTC — after the 03:00 ingest window and after the 03:30 registry
+# refresh, so a newly registered source is present in the tree before it is
+# scanned. A check that runs before ingest cannot see the day's sources.
+OnCalendar=*-*-* 04:40:00
+RandomizedDelaySec=300
+Persistent=false
+Unit=rugbrain-registry-contract.service
+
+[Install]
+WantedBy=timers.target

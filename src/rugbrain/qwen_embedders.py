@@ -54,6 +54,21 @@ def _deepinfra_key_from_file() -> str:
 DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "").strip() or _deepinfra_key_from_file()
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+
+
+def _embed_url() -> str:
+    """The full DeepInfra embeddings endpoint, suffix appended exactly once.
+
+    Tolerates an env value that already includes ``/embeddings``: appending a
+    second one yields ``/v1/embeddings/embeddings``, which DeepInfra answers
+    with a bare 404 that names neither the cause nor the fix.
+    """
+    base = (os.getenv("DEEPINFRA_EMBED_URL") or DEEPINFRA_EMBED_URL).rstrip("/")
+    if base.endswith("/embeddings"):
+        return base
+    return f"{base}/embeddings"
+
+
 # 2026-08-25: defaults were placeholders ("openrouter/your-model-here") — if
 # RAG_PRIMARY_EMBED_MODEL was unset, the cloud rung fired at a nonexistent
 # model. Default to the verified-live free slug; also honor the env var name
@@ -104,28 +119,53 @@ class Qwen3Embedder:
         if self.provider not in ("deepinfra", "local"):
             raise RuntimeError(f"EMBED_PROVIDER={self.provider!r} unknown (use deepinfra|local)")
 
+    @property
+    def dims(self) -> int:
+        """Expected vector dim, resolved at CALL time.
+
+        The class attribute ``DIMS`` is frozen at import from whatever model
+        was configured then. An operator switching the model afterwards (the
+        8B lane is 4096-dim, the corpus is 2560-dim) would otherwise be
+        validated against the previous model's dim, which either truncates
+        silently or rejects good vectors.
+        """
+        override = os.getenv("QWEN_EMBED_DIMS")
+        if override:
+            return int(override)
+        return default_dim_for_model(self.MODEL)
+
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if self.provider == "deepinfra":
             return await self._embed_deepinfra(texts)
         return await self._embed_llamacpp(texts)
 
     async def _embed_deepinfra(self, texts: list[str]) -> list[list[float]]:
-        """Hosted DeepInfra lane — batched OpenAI-compatible /embeddings."""
+        """Hosted DeepInfra lane — batched OpenAI-compatible /embeddings.
+
+        The URL and model are re-read from the environment on every call, not
+        captured at import time. Two reasons, both learned the hard way:
+
+        * A ``DEEPINFRA_EMBED_URL`` that already ends in ``/embeddings`` made
+          the client post to ``.../v1/embeddings/embeddings`` and every call
+          404'd. Normalising the suffix here fixes that shape for every caller
+          instead of requiring each one to pre-strip it.
+        * Module-level constants are frozen at import, so a caller that fixes
+          the env after importing the package was silently ignored.
+        """
         import httpx
 
+        url = _embed_url()
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         payload = {
-            "model": DEEPINFRA_EMBED_MODEL,
+            "model": os.getenv("DEEPINFRA_EMBED_MODEL") or DEEPINFRA_EMBED_MODEL,
             "input": [t[:8000] for t in texts],
         }
         try:
             async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(
-                    f"{DEEPINFRA_EMBED_URL}/embeddings", headers=headers, json=payload
-                )
+                resp = await client.post(url, headers=headers, json=payload)
                 if resp.status_code != 200:
                     raise RuntimeError(
                         f"qwen_embedder deepinfra HTTP {resp.status_code}: {resp.text[:200]}"
@@ -139,16 +179,16 @@ class Qwen3Embedder:
         results: list[list[float]] = []
         for item in sorted(data, key=lambda x: x.get("index", 0)):
             vec = item.get("embedding", [])
-            if len(vec) == self.DIMS:
+            if len(vec) == self.dims:
                 results.append(vec)
                 continue
-            if len(vec) > self.DIMS:
+            if len(vec) > self.dims:
                 # MRL truncate + renormalize (dim_policy)
                 from rugbrain.dim_policy import normalize_dims
 
-                results.append(normalize_dims(vec, self.DIMS))
+                results.append(normalize_dims(vec, self.dims))
                 continue
-            raise RuntimeError(f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.DIMS}")
+            raise RuntimeError(f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.dims}")
         if len(results) != len(texts):
             raise RuntimeError(
                 f"deepinfra embed returned {len(results)} vectors for {len(texts)} inputs"
@@ -170,17 +210,17 @@ class Qwen3Embedder:
                         data = resp.json().get("data", [])
                         if data:
                             vec = data[0].get("embedding", [])
-                            if len(vec) == self.DIMS:
+                            if len(vec) == self.dims:
                                 results.append(vec)
                                 continue
-                            if len(vec) > self.DIMS:
+                            if len(vec) > self.dims:
                                 # MRL truncate + renormalize (dim_policy)
                                 from rugbrain.dim_policy import normalize_dims
 
-                                results.append(normalize_dims(vec, self.DIMS))
+                                results.append(normalize_dims(vec, self.dims))
                                 continue
                             raise RuntimeError(
-                                f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.DIMS}"
+                                f"qwen_embedder dim mismatch: got {len(vec)}, want >= {self.dims}"
                             )
                         raise RuntimeError("qwen_embedder returned no data")
                 except RuntimeError:
@@ -281,7 +321,7 @@ class HuggingFaceEmbedder:
                         results.append(data)
                 else:
                     logger.warning("HF returned unexpected shape: %s", type(data))
-                    results.append([0.0] * self.DIMS)
+                    results.append([0.0] * self.dims)
             return results
 
     async def embed_one(self, text: str, model: str | None = None) -> list[float]:
