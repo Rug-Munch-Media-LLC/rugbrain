@@ -108,6 +108,12 @@ paths = [
   '''tests/test_guardrails\.py''',
   # BIP39 wordlist data table — public data, not a secret
   '''src/rugbrain/guardrails/_wordlist\.py''',
+  # The MCP integration runbook documents the gopass PATHS the operator must
+  # create for the digestion service. A secret-store path is a name, not a
+  # secret: no value is written, and `gopass insert` prompts for it
+  # interactively. The rule stays enabled everywhere else — this is scoped to
+  # one file so a path pasted into any other file is still flagged.
+  '''docs/INTEGRATION-RUNBOOK\.md''',
 ]
 
 # Stopwords (false-positive patterns to ignore)
