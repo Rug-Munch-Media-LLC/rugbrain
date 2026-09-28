@@ -24,7 +24,6 @@ Env: QDRANT_URL, DEEPINFRA_API_KEY / DEEPINFRA_KEY_FILE, QWEN_EMBED_URL.
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import logging
 import os
@@ -36,13 +35,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import httpx
 
-from rugbrain.ingest_sources import SOURCES, fetch_source, list_sources
+from rugbrain.ingest_sources import SOURCES, FetchFailure, fetch_source, list_sources
 from rugbrain.qdrant_store import QdrantVectorStore
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
-from ingest_common import chunk_text, embed_many  # noqa: E402
+from ingest_common import chunk_text, embed_many
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_all_sources")
@@ -127,6 +126,11 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
         "dry_run": dry_run,
     }
     per_source: dict[str, dict[str, int]] = {}
+    # Sources whose FETCH failed, as opposed to a source that genuinely returned
+    # nothing. A non-empty list means the run did not do all the work it
+    # reported, which is the whole point: a green exit that silently ingested
+    # nothing is the failure mode this whole path exists to prevent.
+    failed_sources: list[str] = []
     names = [source_filter] if source_filter else list_sources()
     async with httpx.AsyncClient(timeout=60.0) as client:
         for name in names:
@@ -136,6 +140,32 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
                 continue
             try:
                 docs = await fetch_source(name, limit=limit)
+            except FetchFailure as e:
+                # A FETCH FAILURE IS NOT AN EMPTY SOURCE.
+                #
+                # This block used to catch every Exception and set docs=[], which
+                # is precisely how 15+ GitHub-backed sources sat dead while the
+                # run reported success: fetch failed, the caller saw an empty
+                # list, stats["errors"] stayed 0, and the process exited 0. The
+                # registry now distinguishes the two cases, so the distinction
+                # has to survive to the exit status or the distinction is wasted.
+                logger.error(
+                    "source_fetch_fail name=%s reason=%s err=%s",
+                    name,
+                    e.reason,
+                    str(e)[:150],
+                )
+                per_source[name] = {
+                    "fetched": 0,
+                    "embedded": 0,
+                    "skipped": 0,
+                    "errors": 1,
+                    "dry_run": dry_run,
+                }
+                totals["fetch_failed"] += 1
+                totals["sources"] += 1
+                failed_sources.append(name)
+                continue
             except Exception as e:
                 logger.warning("source_fetch_fail name=%s err=%s", name, str(e)[:150])
                 docs = []
@@ -155,10 +185,12 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
             )
     await store.close()
     totals["per_source"] = per_source
+    # Names only, never contents. This is the signal a timer keys on.
+    totals["fetch_failed_sources"] = sorted(failed_sources)
     return totals
 
 
-def main() -> None:
+def main() -> int:
     import argparse
     import json
 
@@ -178,6 +210,23 @@ def main() -> None:
             f"  {name:<28} fetched={st['fetched']:<5} embedded={st['embedded']:<5} skipped={st['skipped']:<5} errors={st['errors']}"
         )
 
+    # Non-zero when any source failed to FETCH. Deliberately distinct from
+    # totals["errors"], which counts per-document embed/upsert errors: a run can
+    # embed 5,000 documents successfully and still have failed to read one whole
+    # source, and that is exactly the case that used to hide.
+    failed = totals.get("fetch_failed_sources") or []
+    if failed:
+        print(f"\nFETCH FAILED for {len(failed)} source(s): {', '.join(failed)}")
+    return 1 if failed else 0
+
 
 if __name__ == "__main__":
-    main()
+    # A fetch failure is a non-zero exit. Not an error count buried in a JSON
+    # blob that nobody reads and no timer keys on: a source that could not be
+    # read is a failed run, and the exit status is the only signal a scheduler,
+    # a CI job or an OnFailure= hook reliably sees.
+    #
+    # 0 = every source fetched (a source may still legitimately return nothing).
+    # 1 = at least one source failed to fetch.
+    _rc = main()
+    raise SystemExit(1 if _rc else 0)

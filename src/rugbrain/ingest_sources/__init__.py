@@ -37,7 +37,12 @@ Each source implements the ``Source.fetch() -> list[IngestDoc]`` interface
 Fetching is deliberately scaffolding-grade: sources do one tree-listing call
 plus per-file raw fetches (bounded by ``limit``), never multi-GB clones.
 Chunking/embedding/storage stay in the existing ingest pipelines — use
-``to_crawl_document`` to bridge into ``ingest_common.store_documents``.
+    ``to_crawl_document`` to bridge into ``ingest_common.store_documents``.
+
+A zero-document source is NOT automatically healthy: HTTP failures are
+recorded on the :mod:`fetch_state` channel with an operator reason token, and
+``fetch_source`` / the CLI turn that into an error count and a non-zero exit.
+See ``fetch_state`` for the protocol.
 
 Usage::
 
@@ -49,6 +54,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from dataclasses import dataclass, field
 
 from rugbrain.ingest_sources.base import IngestDoc, Source, to_crawl_document
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
@@ -70,6 +77,11 @@ from rugbrain.ingest_sources.feeds import (
     NeodymeBlogSource,
     TrailOfBitsBlogSource,
     ZellicBlogSource,
+)
+from rugbrain.ingest_sources.fetch_state import (
+    FetchError,
+    clear_fetch_error,
+    take_fetch_error,
 )
 from rugbrain.ingest_sources.forta_malicious_contracts import FortaMaliciousContractsSource
 from rugbrain.ingest_sources.fraudcoins_signatures import FraudCoinsSignaturesSource
@@ -177,25 +189,112 @@ def list_sources() -> list[str]:
     return [s.name for s in SOURCES]
 
 
+class FetchFailure(Exception):
+    """A source fetch hit an HTTP/transport failure (reason + partial docs).
+
+    Raised by :func:`fetch_source` so a failure can never be reported as a
+    successful zero. ``reason`` is the operator token (``github_not_found``,
+    ``github_rate_limited``, ``network_timeout``, …) and ``docs`` keeps any
+    partial result so a caller can still store what did arrive.
+    """
+
+    def __init__(self, error: FetchError, *, name: str, docs: list[IngestDoc]) -> None:
+        super().__init__(f"source_fetch_failed name={name} {error.as_log_line()}")
+        self.reason = error
+        self.name = name
+        self.docs = docs
+
+
+@dataclass(frozen=True)
+class SourceResult:
+    """Outcome of one source fetch: documents + the failure reason, if any.
+
+    ``error is None`` means a clean run — including a legitimately empty
+    source. ``error`` carries the reason token that makes a dead source
+    visible instead of a silent zero.
+    """
+
+    name: str
+    docs: list[IngestDoc] = field(default_factory=list)
+    error: FetchError | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+    @property
+    def count(self) -> int:
+        return len(self.docs)
+
+
 async def fetch_source(name: str, limit: int | None = None) -> list[IngestDoc]:
-    """Fetch *name* via its Source; [] when unknown or on failure."""
+    """Fetch *name*; ``[]`` when unknown, or on a failure that is *recorded*.
+
+    Still returns ``list[IngestDoc]`` — the contract does not change. A failed
+    fetch is no longer indistinguishable from a healthy empty source, though:
+    it is logged with a ``reason=`` token and re-raised, so the caller MUST
+    wrap this in ``try/except`` (or use :func:`fetch_source_result`) to report
+    it. The previous behaviour — swallow the failure and hand back a bare
+    ``[]`` the caller then counted as a successful zero — is what let 15+
+    sources die silently behind a green exit.
+    """
     src = get_source(name)
     if src is None:
         log.warning("unknown_source name=%s available=%s", name, list_sources())
         return []
-    return await src.fetch(limit=limit)
+    clear_fetch_error()
+    docs = await src.fetch(limit=limit)
+    err = take_fetch_error()
+    if err is not None:
+        raise FetchFailure(err, name=name, docs=docs)
+    return docs
+
+
+async def fetch_source_result(name: str, limit: int | None = None) -> SourceResult:
+    """Outcome-bearing fetch: never raises, reports failure explicitly."""
+    try:
+        return SourceResult(name=name, docs=await fetch_source(name, limit), error=None)
+    except FetchFailure as exc:
+        return SourceResult(name=exc.name, docs=exc.docs, error=exc.reason)
 
 
 async def fetch_all(limit: int | None = None) -> dict[str, list[IngestDoc]]:
-    """Fetch every source; returns ``{source_name: [IngestDoc, ...]}``."""
+    """Fetch every source; returns ``{source_name: [IngestDoc, ...]}``.
+
+    A failing source is re-raised as :class:`FetchFailure` *after* logging, so
+    a batch run cannot be mistaken for a full pass. Use
+    :func:`fetch_all_results` to collect outcomes without aborting.
+    """
     out: dict[str, list[IngestDoc]] = {}
     for src in SOURCES:
-        out[src.name] = await src.fetch(limit=limit)
+        out[src.name] = await fetch_source(src.name, limit)
         log.info("source_done name=%s docs=%d", src.name, len(out[src.name]))
     return out
 
 
-def _main() -> None:
+async def fetch_all_results(limit: int | None = None) -> list[SourceResult]:
+    """Fetch every source, one failure never aborts the batch."""
+    results: list[SourceResult] = []
+    for src in SOURCES:
+        result = await fetch_source_result(src.name, limit)
+        results.append(result)
+        state = "ok" if result.error is None else f"ERROR {result.error.as_log_line()}"
+        log.info("source_done name=%s docs=%d %s", result.name, len(result.docs), state)
+    return results
+
+
+def _print_result(result: SourceResult) -> None:
+    """One operator line: count plus the reason when the source is dead."""
+    if result.ok:
+        print(f"{result.name}: fetched {result.count} docs")
+        return
+    print(
+        f"{result.name}: fetched {result.count} docs — FAILED {result.error.as_log_line()}",
+        file=sys.stderr,
+    )
+
+
+def _main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="RugBrain programmatic data sources")
@@ -211,31 +310,38 @@ def _main() -> None:
     if args.list:
         for s in SOURCES:
             print(f"{s.name:<26} {s.doc_type:<22} {s.description}")
-        return
+        return 0
     if args.source:
         src = get_source(args.source)
         if src is None:
             print(f"unknown source: {args.source}; available: {list_sources()}")
-            return
-        docs = asyncio.run(src.fetch(limit=args.limit))
-        print(f"{src.name}: fetched {len(docs)} docs (doc_type={src.doc_type})")
-        for d in docs[:5]:
+            return 2
+        result = asyncio.run(fetch_source_result(args.source, args.limit))
+        _print_result(result)
+        for d in result.docs[:5]:
             print(f"  - {d.title or d.doc_id} | {d.url}")
-        return
+        # A failed fetch is a non-zero exit: a green run must mean documents
+        # were fetched, not that the HTTP layer quietly returned nothing.
+        return 0 if result.ok else 1
     parser.print_help()
+    return 0
 
 
 if __name__ == "__main__":
-    _main()
+    sys.exit(_main())
 
 
 __all__ = [
     "DOC_TYPES",
     "SOURCES",
+    "FetchFailure",
     "IngestDoc",
     "Source",
+    "SourceResult",
     "fetch_all",
+    "fetch_all_results",
     "fetch_source",
+    "fetch_source_result",
     "get_source",
     "list_sources",
     "to_crawl_document",

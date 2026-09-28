@@ -11,7 +11,13 @@ Plus ``pick_files`` for suffix/directory filtering.
 Rate limits: the unauthenticated GitHub core API allows 60 requests/hour
 per IP; raw.githubusercontent.com is not subject to the same limit. Set
 ``GITHUB_TOKEN`` to lift the API limit to 5000/hour. All helpers degrade
-gracefully (log + return empty) so a rate-limited run never aborts.
+gracefully (return empty, never raise) so a rate-limited run never aborts.
+
+An empty return is NOT the same as a healthy empty source: every HTTP error
+is recorded on the :mod:`rugbrain.ingest_sources.fetch_state` channel with an
+operator-readable ``reason=`` token (rate_limited / auth_invalid / not_found /
+network_error / …), so the caller can fail the run instead of reporting a
+green zero. See ``fetch_state`` for the protocol.
 """
 
 from __future__ import annotations
@@ -23,6 +29,12 @@ from typing import Any
 import httpx
 
 from rugbrain.ingest_sources.base import USER_AGENT
+from rugbrain.ingest_sources.fetch_state import (
+    classify_exception,
+    classify_status,
+    raw_not_found_reason,
+    record_fetch_error,
+)
 
 log = logging.getLogger(__name__)
 
@@ -46,14 +58,20 @@ async def list_repo_files(
 ) -> list[dict[str, Any]]:
     """List every blob in *repo* at *ref* via the git trees API.
 
-    Returns a list of ``{"path", "size", "url"}`` dicts, or ``[]`` on any
-    failure (rate limit, missing ref, network error).
+    Returns a list of ``{"path", "size"}`` dicts, or ``[]`` on any failure
+    (rate limit, missing ref, deleted repo, network error) — but a failure is
+    *recorded* on the fetch channel, so the caller can tell it apart from a
+    repo that genuinely has no blobs.
     """
     url = f"{GITHUB_API}/repos/{repo}/git/trees/{ref}?recursive=1"
     try:
         r = await client.get(url, headers=github_api_headers())
         if r.status_code != 200:
             log.warning("github_tree_failed repo=%s ref=%s status=%d", repo, ref, r.status_code)
+            record_fetch_error(
+                classify_status(r.status_code, headers=r.headers, body=r.text),
+                f"list_repo_files repo={repo} ref={ref} status={r.status_code}",
+            )
             return []
         entries = r.json().get("tree") or []
         return [
@@ -63,20 +81,35 @@ async def list_repo_files(
         ]
     except Exception as e:
         log.warning("github_tree_error repo=%s ref=%s err=%s", repo, ref, str(e)[:200])
+        record_fetch_error(
+            classify_exception(e), f"list_repo_files repo={repo} ref={ref} err={str(e)[:160]}"
+        )
         return []
 
 
 async def fetch_raw(client: httpx.AsyncClient, repo: str, ref: str, path: str) -> str:
-    """Fetch a raw file from raw.githubusercontent.com; '' on failure."""
+    """Fetch a raw file from raw.githubusercontent.com; ``''`` on failure.
+
+    A failure is recorded on the fetch channel (raw misses use their own
+    reason token — raw is unauthenticated and unthrottled, so a raw 404 says
+    nothing about whether the api.github.com path is live).
+    """
     url = f"{GITHUB_RAW}/{repo}/{ref}/{path}"
     try:
         r = await client.get(url)
         if r.status_code != 200:
             log.debug("github_raw_failed path=%s status=%d", path, r.status_code)
+            record_fetch_error(
+                raw_not_found_reason(r.status_code),
+                f"fetch_raw repo={repo} ref={ref} path={path} status={r.status_code}",
+            )
             return ""
         return r.text or ""
     except Exception as e:
         log.warning("github_raw_error path=%s err=%s", path, str(e)[:200])
+        record_fetch_error(
+            classify_exception(e), f"fetch_raw repo={repo} ref={ref} path={path} err={str(e)[:160]}"
+        )
         return ""
 
 
@@ -125,6 +158,16 @@ def max_size(entries: list[dict[str, Any]], limit: int | None) -> list[dict[str,
     return kept
 
 
+def tree_has_blob(entries: list[dict[str, Any]], suffix: str) -> bool:
+    """True when *entries* contains at least one blob whose path ends with *suffix*.
+
+    A liveness assert must target a CONCRETE file, never a directory: a
+    bare-prefix/directory fetch returns 200-with-nothing for a deleted repo
+    on some hosts, so "the directory read fine" proves nothing.
+    """
+    return any(str(e.get("path", "")).endswith(suffix) for e in entries)
+
+
 __all__ = [
     "GITHUB_API",
     "GITHUB_RAW",
@@ -133,4 +176,5 @@ __all__ = [
     "list_repo_files",
     "max_size",
     "pick_files",
+    "tree_has_blob",
 ]
