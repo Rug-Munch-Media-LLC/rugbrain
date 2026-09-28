@@ -132,18 +132,66 @@ class TestLogging:
 
 
 class TestMissingTwin:
+    def test_undeclared_name_passes_through_and_is_unclassified(self):
+        """The real no-twin case, exercised on a name the table cannot contain.
+
+        Iterating ``_DECLARED_TWINS`` cannot reach this branch — every name it
+        yields has a twin by construction, which is why the previous version of
+        this test was a tautology. These names are absent from BOTH tables, so
+        they exercise the undeclared path: unchanged, and classified as unknown.
+        """
+        for name in ("totally_made_up_collection", "rmi_documents", "typo_threat_intel_v2"):
+            assert name not in lr._DECLARED_TWINS
+            assert name not in lr._PINNED_DIMS
+            assert lr.resolve_collection(name) == name
+            assert lr.declared_lane_dim(name) is None
+
+    def test_resolve_collection_never_raises_on_any_name(self):
+        """``resolve_collection`` is a total function: it cannot reject a name.
+
+        Asserted directly on a genuinely unknown name, so the documented
+        pass-through is a checked property rather than an unexercised claim.
+        """
+        assert lr.resolve_collection("totally_made_up_collection") == "totally_made_up_collection"
+
+    def test_require_resolved_raises_on_a_name_with_no_twin(self):
+        """The fail-loud guarantee, where it is actually reachable.
+
+        ``require_resolved`` is the strict counterpart callers opt into, and
+        this is the one test that raises for a name with no twin. It is what
+        the module docstring promises, and unlike the old tautology the name
+        here provably has no declared lane.
+        """
+        with pytest.raises(lr.UnresolvedLane) as excinfo:
+            lr.require_resolved("totally_made_up_collection")
+        assert "no_canonical_lane_twin" in str(excinfo.value)
+
+    def test_require_resolved_raises_for_pinned_and_already_canonical(self):
+        """Passing through is only an error for a name that should be canonical.
+
+        The 11 already-4096 names and the 6 pinned names are CLASSIFIED, not
+        canonical-resolvable, so asserting they do not raise would be wrong —
+        this pins that decision so a future edit cannot quietly claim a
+        pass-through is a twin.
+        """
+        for name in ("privacy_protocol", "rug_events", "wallet_clusters"):
+            with pytest.raises(lr.UnresolvedLane):
+                lr.require_resolved(name)
+
+    def test_require_resolved_returns_the_twin_for_a_declared_base(self):
+        """The happy path, so the raise above is not the only behaviour."""
+        assert lr.require_resolved("threat_intel_v2") == "threat_intel_v2_8b"
+        assert lr.require_resolved("threat_intel_v2_8b") == "threat_intel_v2_8b"
+
+    def test_require_resolved_rejects_an_empty_name(self):
+        """A lost DEFAULT_COLLECTION must not become an empty "default" corpus."""
+        for empty in ("", None):
+            with pytest.raises(lr.UnresolvedLane):
+                lr.require_resolved(empty)  # type: ignore[arg-type]
+
     def test_unresolved_lane_is_importable_and_is_a_value_error(self):
         """Failing loud must be catchable as a ValueError, not a bare crash."""
         assert issubclass(lr.UnresolvedLane, ValueError)
-
-    def test_missing_twin_never_silently_falls_back(self):
-        """The contract: a base that is on the canonical lane but has no twin
-        must be IMPOSSIBLE to get past. Declared at 4096 and resolvable is the
-        only consistent state; anything else raises rather than reverting."""
-        for base in lr._DECLARED_TWINS:
-            resolved = lr.resolve_collection(base)
-            assert resolved.endswith(lr.EIGHT_B_SUFFIX)
-            assert lr.declared_lane_dim(resolved) == lr.CANONICAL_LANE_DIM
 
     def test_resolver_mode_off_bypasses_resolution(self, monkeypatch):
         """Documented escape hatch, off by default."""

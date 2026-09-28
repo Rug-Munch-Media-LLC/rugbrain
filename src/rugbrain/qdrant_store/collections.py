@@ -158,10 +158,10 @@ _INTERIM_SUFFIX = os.getenv("RAG_INTERIM_COLLECTION_SUFFIX", "")
 # ``_8b`` and is not a declared base) and is only shadow-routed, which preserves
 # the existing interim behaviour exactly.
 #
-# A canonical-lane base with no declared twin raises UnresolvedLane (from
-# lane_resolver, not re-exported here) instead of silently writing 4096 vectors
-# into a 2560 collection — the defect this fixes. See lane_resolver for the
-# live-Qdrant evidence behind the mapping.
+# A name absent from the declared lane table is NOT rewritten and NOT rejected:
+# it passes through, and ``declared_lane_dim`` reports None for it. A caller
+# that knows its name must resolve calls ``lane_resolver.require_resolved``.
+# See lane_resolver for the live-Qdrant evidence behind the mapping.
 
 
 def _map_collection(collection: str | None) -> str | None:

@@ -51,7 +51,10 @@ def _declared_twins() -> frozenset[str]:
     * Owned names with no Qdrant collection at all (``bundle_patterns``,
       ``cluster_labels``, ``cryptography``, ``rag_docs``, ``rag_threats``,
       ``scanner_v2``, ``solidity_patterns``). Auto-creating a 4096 collection
-      for each would fork the corpus by accident.
+      for each would fork the corpus by accident. An unlisted name is therefore
+      NOT a lane error: it passes through and ``declared_lane_dim`` reports
+      ``None`` for it. Use ``require_resolved`` where a pass-through would
+      mean a declared write source silently missed the canonical lane.
 
     Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
     ``master_skills``, ``protocol_design``, ``scan_intel``, ``exploits``,

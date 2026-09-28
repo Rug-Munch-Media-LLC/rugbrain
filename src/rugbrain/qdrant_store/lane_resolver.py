@@ -17,10 +17,22 @@ THE RULE
 
 Never a silent rewrite: every rewrite logs ``base`` and ``resolved`` at INFO.
 
-FAIL LOUD
-    A base name on the canonical lane with NO declared twin raises
-    :class:`UnresolvedLane`. Falling back to the base name is the defect, not a
-    recovery — it reproduces the exact dim-mismatch this module exists to stop.
+AN UNKNOWN NAME IS NOT A LANE ERROR
+    A name absent from the declared table and not already canonical passes
+    through UNCHANGED, and this is deliberate. It is NOT silently swallowed:
+    :func:`declared_lane_dim` returns ``None`` for it, and the dimension guard
+    is the backstop. The important caveat is that for a *genuinely* unknown
+    name the guard does not refuse — ``_ensure_collection`` defaults to
+    ``create_if_missing=True`` and a fresh 4096 collection is created and
+    written. So "the guard will catch it" is true for the two CLASSIFIED
+    no-twin groups (already-4096 names pass cleanly, pinned names are refused
+    loudly) and FALSE for a typo: a typo silently forks a new empty corpus.
+
+    :class:`UnresolvedLane` is retained for the failure it was built for and is
+    raised ONLY by :func:`require_resolved`, an explicit opt-in assertion for
+    callers that already KNOW their name must resolve. ``resolve_collection``
+    itself does not raise: making it raise would reject every name outside the
+    owned set, including read-only corpora this repo does not write.
 
 WHY A DECLARED TABLE, NOT "DOES THE TWIN EXIST?"
     Live Qdrant (96 collections, 33 twins) proves the two are not the same
@@ -71,15 +83,6 @@ RETIRED_LANE_DIM: Final = 2560
 #: ``warn`` logs and falls through; ``strict`` is the default (fail loud).
 RESOLVER_MODE_ENV: Final = "RAG_LANE_RESOLVER"
 RESOLVER_MODES: Final = frozenset({"off", "warn", "strict"})
-
-
-class UnresolvedLane(ValueError):
-    """A canonical-lane base name has no declared ``_8b`` twin.
-
-    Raised instead of falling back to the base name: the base name is the
-    defect. Catching this and writing to the base would recreate the 2560/4096
-    split at the next ingest.
-    """
 
 
 def _lane_twin(name: str) -> str:
@@ -155,6 +158,20 @@ def strip_twin_suffix(collection: str | None) -> str | None:
     return collection
 
 
+# ``UnresolvedLane`` and ``require_resolved`` live in ``lane_strict``, which
+# imports THIS module, so the re-export is at the BOTTOM on purpose: at the top
+# it would be a circular import, because this module imports ``lane_dims``, the
+# package ``__init__`` imports ``collections``, and ``collections`` imports this
+# module. Importing the sibling only after every name above is defined breaks
+# the cycle while keeping one public surface. These are the SAME class object,
+# not a subclass, so ``except UnresolvedLane`` still catches a raise.
+from rugbrain.qdrant_store.lane_strict import (  # noqa: E402
+    UnresolvedLane as UnresolvedLane,
+)
+from rugbrain.qdrant_store.lane_strict import (  # noqa: E402
+    require_resolved as require_resolved,
+)
+
 __all__ = [  # noqa: RUF022 -- kept alphabetical for review
     "CANONICAL_LANE_DIM",
     "EIGHT_B_SUFFIX",
@@ -164,6 +181,7 @@ __all__ = [  # noqa: RUF022 -- kept alphabetical for review
     "UnresolvedLane",
     "declared_lane_dim",
     "fetch_live_dim",
+    "require_resolved",
     "resolver_mode",
     "resolve_collection",
     "strip_twin_suffix",
