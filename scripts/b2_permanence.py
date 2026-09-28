@@ -38,7 +38,10 @@ Usage:
 Environment:
     B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY   (required)
     B2_BUCKET_NAME                              (default rmi-rag-permanence)
-    B2_EXCLUDE_SUFFIXES                         (default _8b; generated mirror collections)
+    B2_PREFER_TWIN=1 (default)                 prefer the _8b twin per collection, fall
+                                            back to the base when no twin exists
+    B2_CANONICAL_SUFFIX                        (default _8b)
+    B2_EXCLUDE_SUFFIXES                         (legacy; only when B2_PREFER_TWIN=0)
     B2_PAYLOAD_ONLY_COLLECTIONS                 (default codebase_reference_v2; large vector corpus)
     B2_ENCRYPTION_KEY                           DEPRECATED — SSE-B2 encrypts
                                                 at rest; kept only for
@@ -76,6 +79,7 @@ from b2_common import (
     NDJSON_SUFFIX,
     PARQUET_SUFFIX,
     compress_file,
+    download_file,
     ensure_bucket,
     env_or,
     get_b2_api,
@@ -163,7 +167,27 @@ def filter_collections(collections: list[str], excluded_suffixes: tuple[str, ...
 
 
 def resolve_payload_only_collections(explicit: list[str] | None) -> set[str]:
-    """Resolve collections whose vectors are too large for the nightly window."""
+    """Resolve collections whose vectors are too large for the nightly window.
+
+    LINEAGE-AWARE (2026-09-28). This used to return the configured names
+    verbatim, and that became a landmine the moment the writer started shipping
+    `_8b` twins instead of base collections.
+
+    B2_PAYLOAD_ONLY_COLLECTIONS names `codebase_reference_v2`. The writer now
+    snapshots `codebase_reference_v2_8b` for that lineage, and
+    collection_has_vectors() tests membership by exact name — so the twin was
+    NOT payload-only. with_vectors defaults to True and the unit passes no
+    arguments, so the canonical collection would have exported its VECTORS:
+    2,126,630 points x 4096 floats, roughly 35 GB for one collection, in a job
+    capped at 4G RAM and a 45-minute window.
+
+    A payload-only decision is a property of the CONTENT, not of the collection
+    name — the twin holds the same chunks with a different embedding, so if the
+    base is payload-only the twin must be too. Every configured name therefore
+    expands to itself plus its canonical suffix variant, and any live collection
+    that either maps onto a configured name is covered regardless of which
+    generation is currently being shipped.
+    """
     raw = (
         explicit
         if explicit is not None
@@ -171,7 +195,19 @@ def resolve_payload_only_collections(explicit: list[str] | None) -> set[str]:
             "B2_PAYLOAD_ONLY_COLLECTIONS", ",".join(DEFAULT_PAYLOAD_ONLY_COLLECTIONS)
         ).split(",")
     )
-    return {part.strip() for part in raw if part.strip()}
+    configured = {part.strip() for part in raw if part.strip()}
+    suffix = os.getenv("B2_CANONICAL_SUFFIX", "_8b")
+
+    # A name is payload-only if it, its twin, or its base is configured. This is
+    # deliberately symmetric so the set is correct whichever generation the
+    # selection logic picks on a given day.
+    expanded = set(configured)
+    for name in configured:
+        if name.endswith(suffix):
+            expanded.add(name[: -len(suffix)])
+        else:
+            expanded.add(name + suffix)
+    return expanded
 
 
 def collection_has_vectors(name: str, requested: bool, payload_only: set[str]) -> bool:
@@ -360,7 +396,67 @@ def snapshot_collection(
 def upload_manifest(
     b2_api: B2Api, bucket_name: str, date_str: str, entries: list[dict[str, Any]]
 ) -> None:
-    """Upload manifest.json for the day plus the latest.json pointer."""
+    """Upload manifest.json for the day plus the latest.json pointer.
+
+    MERGES, never replaces (2026-09-28). This used to overwrite the day's
+    manifest with whatever the current run happened to snapshot, which is a
+    data-integrity bug rather than a cosmetic one.
+
+    Observed live, caused by a `--collection hacks_v2_8b` proof run against a
+    day that already held a full 54-collection snapshot: the parquet objects
+    were all still in B2 (55 of them), but the manifest was replaced with a
+    single-entry document. Anyone restoring from that manifest would restore
+    ONE collection and believe the backup was complete — a silently truncated
+    restore is worse than a failed one, because it does not announce itself.
+
+    The failure is invisible in the object listing: the files are all there.
+    Only the manifest lies, and the manifest is what restore trusts.
+
+    So: if the day already has a manifest, read it, index its entries by
+    collection, and overlay this run's entries on top. A re-snapshot of a
+    collection replaces its own entry (the newer sha256/point count is the
+    truth); a collection absent from this run keeps its previous entry. That
+    makes partial and repeated runs composable instead of destructive.
+    """
+    manifest_key = f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}"
+    by_collection: dict[str, dict[str, Any]] = {}
+    prior_count = 0
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as pt:
+            prior_path = Path(pt.name)
+        try:
+            # download_file raises when the object does not exist — the normal
+            # case on a first run of the day, not an error condition.
+            download_file(b2_api, bucket_name, manifest_key, prior_path)
+            prior = json.loads(prior_path.read_text(encoding="utf-8"))
+        finally:
+            prior_path.unlink(missing_ok=True)
+        if isinstance(prior, dict):
+            prior_entries = prior.get("collections")
+            if isinstance(prior_entries, list):
+                prior_count = len(prior_entries)
+                for e in prior_entries:
+                    if isinstance(e, dict) and e.get("collection"):
+                        by_collection[str(e["collection"])] = e
+    except Exception as exc:  # a missing/unreadable prior manifest is fine
+        logger.info("manifest_merge no_prior_manifest key=%s (%s)", manifest_key, exc)
+
+    for e in entries:
+        name = e.get("collection")
+        if name:
+            by_collection[str(name)] = e
+
+    merged = [by_collection[k] for k in sorted(by_collection)]
+    if prior_count:
+        logger.info(
+            "manifest_merge date=%s prior=%d incoming=%d merged=%d "
+            "(partial runs no longer truncate the day)",
+            date_str,
+            prior_count,
+            len(entries),
+            len(merged),
+        )
+
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
@@ -373,9 +469,9 @@ def upload_manifest(
             "at rest for free. No client-side encryption is applied; client-side "
             "AES-256-GCM was removed 2026-08-01.",
         },
-        "formats": sorted({str(e.get("format", "ndjson")) for e in entries}),
-        "collections": entries,
-        "total_points": sum(int(e.get("point_count", 0)) for e in entries),
+        "formats": sorted({str(e.get("format", "ndjson")) for e in merged}),
+        "collections": merged,
+        "total_points": sum(int(e.get("point_count", 0)) for e in merged),
     }
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
         json.dump(manifest, tmp, indent=2)
@@ -767,6 +863,71 @@ def main() -> int:
             logger.critical("unknown collection(s): %s (have: %s)", sorted(missing), collections)
             return 1
         collections = [c for c in collections if c in requested]
+    elif os.getenv("B2_PREFER_TWIN", "1") == "1":
+        # 2026-09-28 — operator decision: 8B/4096 is the canonical lane, so the
+        # CANONICAL data must be backed up. The old rule excluded `_8b`, which
+        # meant the latest snapshot held ZERO _8b objects while the serving
+        # store — codebase_reference_v2_8b, 2,126,630 points — had no backup at
+        # all. A backup of a lane you are not serving is worthless.
+        #
+        # But simply including `_8b` would roughly DOUBLE nightly volume, and
+        # for nothing: the `_8b` collections are MIRRORS of the base ones (same
+        # payload text, different vectors) and vectors are not backed up, so
+        # both copies serialise to nearly the same parquet. Backing up both is
+        # pure duplication.
+        #
+        # So the rule is LINEAGE-AWARE rather than a suffix filter: for every
+        # base collection, back up its `_8b` twin if one exists, otherwise back
+        # up the base. As of this change: 33 of 53 base collections have a twin
+        # (base is the retired generation -> backup the twin), and 20 have none
+        # (agent_memory, wallet_clusters, scams_v2, youtube_videos, newsletters,
+        # token_unlocks, ... -> nothing to substitute, so the base IS the
+        # canonical copy and must be backed up).
+        #
+        # An "exclude all base, keep all _8b" shortcut was rejected: it would
+        # silently drop those 20. An "include everything" shortcut was rejected:
+        # it doubles volume for byte-identical payloads.
+        #
+        # Set B2_PREFER_TWIN=0 to restore the legacy suffix-filter behaviour
+        # (needed only to reproduce an old snapshot for comparison).
+        canonical_suffix = os.getenv("B2_CANONICAL_SUFFIX", "_8b")
+        before = len(collections)
+        known = set(collections)
+        selected: list[str] = []
+        twins_used: list[str] = []
+        base_kept: list[str] = []
+        for name in collections:
+            if name.endswith(canonical_suffix):
+                # Already a canonical collection — keep it, and suppress its
+                # base counterpart if that is also present.
+                selected.append(name)
+                continue
+            twin = name + canonical_suffix
+            if twin in known:
+                twins_used.append(twin)
+            else:
+                selected.append(name)
+                base_kept.append(name)
+        collections = selected
+        logger.info(
+            "collection_filter prefer_twin suffix=%s in=%d out=%d "
+            "twins_selected=%d base_without_twin_kept=%d",
+            canonical_suffix,
+            before,
+            len(collections),
+            len(twins_used),
+            len(base_kept),
+        )
+        if base_kept:
+            # Log the fallbacks explicitly. A collection silently dropped from
+            # the backup is indistinguishable from a collection that was never
+            # meant to be backed up, and that is how the 2026-09-26 gap and the
+            # zero-_8b snapshots went unnoticed.
+            logger.info(
+                "no %s twin exists, backing up the base collection directly: %s",
+                canonical_suffix,
+                ",".join(sorted(base_kept)),
+            )
     else:
         configured = args.exclude_suffix
         if configured is None:
