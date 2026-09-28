@@ -5,7 +5,7 @@ Entity extraction for ingested documents and news — public surface.
 This module is a **facade**. The responsibilities behind it each live in
 one module with one job:
 
-  * ``lexicons``      — the word lists (data only)
+  * ``lexicons``      — one import point over the word lists (data only)
   * ``entity_shapes`` — address / domain / ticker shape recognisers
   * ``severity``      — text to a severity level
   * ``entity_types``  — the EntitySet value type and its serialisation
