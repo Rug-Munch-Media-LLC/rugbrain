@@ -1,0 +1,135 @@
+{
+  "acceptanceCriteria": [],
+  "acknowledgedSkips": [],
+  "allowedChangeTypes": [],
+  "allowedPaths": [
+    ".agent-guardrails/evidence/",
+    "docs/DATA-PLACEMENT.md",
+    "docs/PROJECT_STATE.md",
+    "docs/RAG-MCP-BOUNDARY.md",
+    "data/public_crypto_patterns_seed.jsonl",
+    "scripts/ingest_public_contextcrypto.py",
+    "src/rugbrain/crypto_code_retrieval.py",
+    "src/rugbrain/knowledge_boundary.py",
+    "src/rugbrain/public_projection.py",
+    "src/rugbrain/public_crypto_code.py",
+    "src/rugbrain/qdrant_store/collections.py",
+    "src/rugbrain/routes/core.py",
+    "src/rugbrain/routes/ingest.py",
+    "src/rugbrain/routes/rag_tools.py",
+    "src/rugbrain/routes/search.py",
+    "src/rugbrain/search/engine/knowledge.py",
+    "tests/",
+    "docs/COLLECTION_REGISTRY.md",
+    "docs/PR_CHECKLIST.md",
+    ".agent-guardrails/config.json",
+    ".agent-guardrails/prompts/",
+    ".agent-guardrails/tasks/",
+    ".serena/",
+    "scripts/pre-commit-methodology-check.sh.pre-guard-generic-20260920-132814"
+  ],
+  "assumptions": [],
+  "autoFilledFields": [
+    "allowedPaths",
+    "requiredCommands",
+    "riskLevel",
+    "guardRules"
+  ],
+  "continuityRequirements": [],
+  "createdAt": "1790247736820",
+  "dependencyRequirements": [],
+  "evidencePaths": [
+    ".agent-guardrails/evidence/current-task.md"
+  ],
+  "expectedBehaviorChanges": [],
+  "expectedBoundaryExceptions": [
+    "docs/COLLECTION_REGISTRY.md (pre-existing generated/registry drift)",
+    "docs/PR_CHECKLIST.md (pre-existing)",
+    ".agent-guardrails/config.json (pre-existing generated)",
+    ".agent-guardrails/prompts/ (pre-existing generated)",
+    ".agent-guardrails/tasks/ (pre-existing generated)",
+    ".serena/ (pre-existing generated)",
+    "scripts/pre-commit-methodology-check.sh.pre-guard-generic-20260920-132814 (pre-existing artifact)"
+  ],
+  "expectedConcurrencyImpact": "",
+  "expectedLoadSensitivePaths": [],
+  "expectedPublicSurfaceChanges": [],
+  "expectedTestTargets": [],
+  "guardRules": [
+    "Do not change production logic unless the contract says so."
+  ],
+  "intendedFiles": [],
+  "intendedSymbols": [],
+  "nfrRequirements": [],
+  "nonGoals": [],
+  "observabilityRequirements": [],
+  "patternSummary": "",
+  "performanceRequirements": [],
+  "preset": "python-fastapi",
+  "productionProfile": "",
+  "protectedPaths": [],
+  "requiredCommands": [
+    "pytest",
+    "ruff check src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py scripts/ingest_public_contextcrypto.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_routes_ingest.py",
+    ".venv/bin/mypy src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py --ignore-missing-imports"
+  ],
+  "requiresReviewNotes": false,
+  "riskJustification": "",
+  "riskLevel": "low",
+  "rollbackNotes": "",
+  "roughIntent": {
+    "confidence": 0.8,
+    "detected": true,
+    "sources": {
+      "paths": "task-type-defaults",
+      "riskLevel": "task-type-or-keyword",
+      "taskType": "keyword-match",
+      "testCommand": "repo-default"
+    },
+    "taskType": "test"
+  },
+  "schemaVersion": 3,
+  "securityRequirements": [],
+  "session": {
+    "archaeologyNotes": [],
+    "autoFilledFields": [
+      "allowedPaths",
+      "requiredCommands",
+      "riskLevel",
+      "guardRules"
+    ],
+    "changedFiles": [],
+    "contractSource": "rough-intent",
+    "createdAt": "1790247736820",
+    "evidencePathSuggested": ".agent-guardrails/evidence/current-task.md",
+    "finishCheckHints": [
+      "Report the commands you actually ran: pytest",
+      "Keep the evidence note current: .agent-guardrails/evidence/current-task.md",
+      "Finish with npx agent-guardrails check --review before handing off or merging."
+    ],
+    "nextActions": [
+      "Run agent-guardrails check after the implementation."
+    ],
+    "repoRoot": "/srv/work/repos/rugbrain",
+    "requiredCommandsSuggested": [
+      "pytest"
+    ],
+    "riskDimensions": {
+      "continuityRequirements": [],
+      "dependencyRequirements": [],
+      "performanceRequirements": [],
+      "securityRequirements": [],
+      "understandingRequirements": []
+    },
+    "riskSignals": [],
+    "selectedFiles": [],
+    "sessionId": "rust-plan-8108-1790247736820",
+    "taskRequest": "Implement a fail-closed public/internal audience boundary in RugBrain: allowlist public crypto-intelligence collections, sanitize public responses, gate raw ContextCrypto code retrieval, add a reviewed public projection contract and importer, add tests/docs, preserve the 2560-dim path, and do not touch the incomplete 8B re-embedding service.",
+    "version": 1
+  },
+  "smallestViableChange": "",
+  "task": "Implement a fail-closed public/internal audience boundary in RugBrain: allowlist public crypto-intelligence collections, sanitize public responses, gate raw ContextCrypto code retrieval, add a reviewed public projection contract and importer, add tests/docs, preserve the 2560-dim path, and do not touch the incomplete 8B re-embedding service.",
+  "understandingRequirements": [],
+  "userVisibleEffects": [],
+  "validationProfile": "standard"
+}

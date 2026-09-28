@@ -86,11 +86,16 @@ def test_filter_collections_can_be_disabled() -> None:
 
 
 def test_payload_only_policy_skips_large_vector_corpus() -> None:
+    """Payload-only is a property of the CONTENT, not the collection name.
+
+    The writer ships `_8b` twins of the same chunks with a different embedding,
+    so resolving by exact name left the twin exporting its vectors: 2.1M points
+    x 4096 floats is ~35GB in a 4G/45min job. The twin must be payload-only too.
+    """
     payload_only = b2_permanence.resolve_payload_only_collections(None)
-    assert payload_only == {"codebase_reference_v2"}
-    assert (
-        b2_permanence.collection_has_vectors("codebase_reference_v2", True, payload_only) is False
-    )
+    assert payload_only == {"codebase_reference_v2", "codebase_reference_v2_8b"}
+    for name in ("codebase_reference_v2", "codebase_reference_v2_8b"):
+        assert b2_permanence.collection_has_vectors(name, True, payload_only) is False
     assert b2_permanence.collection_has_vectors("threat_intel_v2", True, payload_only) is True
 
 

@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 2,
+  "preset": "python-fastapi",
+  "workflow": {
+    "planDefaults": {
+      "allowedPaths": [
+        "src/rugbrain/",
+        "scripts/",
+        "tests/",
+        "docs/DATA-PLACEMENT.md",
+        "docs/PROJECT_STATE.md",
+        "docs/RAG-MCP-BOUNDARY.md",
+        "data/public_crypto_patterns_seed.jsonl",
+        ".agent-guardrails/evidence/current-task.md"
+      ],
+      "requiredCommands": [
+        "pytest",
+        "ruff check src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py scripts/ingest_public_contextcrypto.py tests/test_knowledge_boundary.py tests/test_public_projection.py tests/test_public_crypto_code.py tests/test_routes_ingest.py",
+        ".venv/bin/mypy src/rugbrain/knowledge_boundary.py src/rugbrain/public_projection.py src/rugbrain/public_crypto_code.py src/rugbrain/routes/search.py src/rugbrain/routes/ingest.py src/rugbrain/routes/core.py src/rugbrain/routes/rag_tools.py src/rugbrain/crypto_code_retrieval.py src/rugbrain/search/engine/knowledge.py --ignore-missing-imports"
+      ],
+      "evidencePaths": [
+        ".agent-guardrails/evidence/current-task.md"
+      ]
+    },
+    "readBeforeWrite": [
+      "AGENTS.md",
+      "docs/PROJECT_STATE.md",
+      "README.md (if it exists)",
+      "app",
+      "tests"
+    ],
+    "constraints": [
+      "Reuse the current API, schema, and service layout before creating new modules.",
+      "Keep endpoint changes paired with request and response validation updates when needed.",
+      "Prefer incremental extension of dependency wiring over parallel setup paths."
+    ],
+    "definitionOfDone": [
+      "Behavior changes have test coverage.",
+      "The change stays within the configured file budget.",
+      "The implementation still matches current FastAPI structure."
+    ]
+  },
+  "checks": {
+    "maxChangedFilesPerTask": 40,
+    "requireTestsWithSourceChanges": true,
+    "allowedPaths": [
+      "src/rugbrain/",
+      "scripts/",
+      "tests/",
+      "docs/DATA-PLACEMENT.md",
+      "docs/PROJECT_STATE.md",
+      "docs/RAG-MCP-BOUNDARY.md",
+      "data/public_crypto_patterns_seed.jsonl",
+      ".agent-guardrails/evidence/current-task.md",
+      "docs/COLLECTION_REGISTRY.md",
+      "docs/PR_CHECKLIST.md",
+      ".agent-guardrails/config.json",
+      ".agent-guardrails/prompts/",
+      ".agent-guardrails/tasks/",
+      ".serena/",
+      "scripts/pre-commit-methodology-check.sh.pre-guard-generic-20260920-132814"
+    ],
+    "consistency": {
+      "maxChangedFilesPerTask": 40,
+      "maxTopLevelEntries": 6,
+      "maxBreadthMultiplier": 4,
+      "warnOnBroadChanges": true
+    },
+    "correctness": {
+      "requireTestsWithSourceChanges": true,
+      "requireCommandsReported": true,
+      "requireEvidenceFiles": true
+    },
+    "risk": {
+      "requireReviewNotesForProtectedAreas": true,
+      "warnOnInterfaceChangesWithoutContract": true,
+      "warnOnConfigOrMigrationChanges": true
+    },
+    "sourceRoots": [
+      "src/rugbrain",
+      "scripts"
+    ],
+    "sourceExtensions": [
+      ".py"
+    ],
+    "testRoots": [
+      "tests"
+    ],
+    "testExtensions": [
+      ".py"
+    ],
+    "testFileSignals": [
+      "test_",
+      "_test.py"
+    ],
+    "mutation": {
+      "enabled": false,
+      "survivalThreshold": 50,
+      "maxMutations": 20,
+      "timeoutMs": 15000
+    },
+    "scope": {
+      "violationSeverity": "error",
+      "violationBudget": 5
+    }
+  },
+  "protectedAreas": [
+    {
+      "path": "app/api/",
+      "label": "API handlers",
+      "minimumRiskLevel": "medium",
+      "requiresReviewNotes": true
+    },
+    {
+      "path": "app/auth/",
+      "label": "auth flows",
+      "minimumRiskLevel": "high",
+      "requiresReviewNotes": true
+    },
+    {
+      "path": "alembic/",
+      "label": "database migrations",
+      "minimumRiskLevel": "medium",
+      "requiresReviewNotes": true
+    }
+  ],
+  "productionProfiles": {
+    "default-api": {
+      "focus": [
+        "correctness",
+        "reliability",
+        "observability"
+      ],
+      "validationProfile": "standard"
+    },
+    "high-throughput-api": {
+      "focus": [
+        "performance",
+        "concurrency",
+        "reliability",
+        "observability"
+      ],
+      "validationProfile": "strict"
+    }
+  },
+  "nfrPolicies": {
+    "security": {
+      "evidenceHint": "Mention auth, secrets, permissions, and sensitive-data handling explicitly."
+    },
+    "dependency": {
+      "evidenceHint": "Mention new or upgraded packages, lockfile changes, and dependency impact explicitly."
+    },
+    "performance": {
+      "evidenceHint": "Mention endpoint latency, query cost, or load-sensitive behavior in evidence."
+    },
+    "understanding": {
+      "evidenceHint": "Explain the main tradeoffs so future maintainers can follow the change."
+    },
+    "continuity": {
+      "evidenceHint": "Mention reuse targets and any deliberate continuity break in evidence."
+    },
+    "observability": {
+      "evidenceHint": "Mention logs, metrics, tracing, or monitoring impact in evidence."
+    }
+  },
+  "languagePlugins": {},
+  "criticalPaths": [
+    "app/api/",
+    "app/auth/",
+    "alembic/"
+  ],
+  "runtimeSurfaces": [
+    "app/",
+    "alembic/"
+  ],
+  "performanceSensitiveAreas": [
+    "app/api/",
+    "app/cache/",
+    "app/queue/"
+  ],
+  "review": {
+    "includeEvidenceSummary": true
+  }
+}

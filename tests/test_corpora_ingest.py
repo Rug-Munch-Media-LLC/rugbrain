@@ -336,7 +336,9 @@ async def test_crpwarner_gated_on_unlicensed(monkeypatch: pytest.MonkeyPatch) ->
 async def test_crpwarner_opt_in_then_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     import io as _io
 
-    import pandas as pd
+    # pandas is an OPTIONAL dependency (used only for the .xlsx rug-events
+    # reader). Skip rather than fail the suite when it is not installed.
+    pd = pytest.importorskip("pandas")
 
     src = mod.get_source("crpwarner_rug_events")
     monkeypatch.setenv(crpwarner_rug_events.ALLOW_ENV, "1")
