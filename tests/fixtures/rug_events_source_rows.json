@@ -1,0 +1,163 @@
+{
+ "defi_exploits_solrpds": [
+  {
+   "id": "00407242-f90d-522d-a2c4-0cf23961f32b",
+   "payload": {
+    "content": "Solana rug-pull token: ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx\nYear: 2021\nLiquidity pool: 2bnZ1edbvK3CK3LTNZ5jH9anvXYCmzPR4W2HQ6Ngsv5K\nTotal added liquidity: 2484074009.7339\nTotal removed liquidity: 1890366323.55995\nAdd/remove ratio: 1.314070177\nFirst pool activity: 2021-09-02 11:08:56.000\nLast pool activity: 2021-12-30 23:59:41.000\nStatus: Active",
+    "metadata": {
+     "collection": "defi_exploits",
+     "entity_type": "token",
+     "entity": "ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx",
+     "token_address": "ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx",
+     "labels": [
+      "rugpull"
+     ],
+     "category": "rug-pull",
+     "chain": "Solana",
+     "ecosystem": "Solana",
+     "severity": "critical",
+     "year": 2021,
+     "source": "deflabx_solrpds",
+     "source_url": "https://github.com/DeFiLabX/SolRPDS",
+     "knowledge_type": "rug_pull_dataset",
+     "pool_address": "2bnZ1edbvK3CK3LTNZ5jH9anvXYCmzPR4W2HQ6Ngsv5K",
+     "total_added_liquidity": "2484074009.7339",
+     "total_removed_liquidity": "1890366323.55995",
+     "add_to_remove_ratio": "1.314070177",
+     "first_pool_activity": "2021-09-02 11:08:56.000",
+     "last_pool_activity": "2021-12-30 23:59:41.000",
+     "inactivity_status": "Active",
+     "root_doc_id": "deflabx_solrpds:ATLASXmbPQxBUYbxPsV97usA3fPQYEqzQBUHgiFCUsXx:2021"
+    },
+    "source": "deflabx_solrpds",
+    "severity": "medium",
+    "chain": "",
+    "collection": "defi_exploits"
+   }
+  },
+  {
+   "id": "008cb3ef-74f6-56e9-b5b5-ab737698aeeb",
+   "payload": {
+    "content": "Solana rug-pull token: DhfF81uahANRYQ4rn8VZKSGVmLE4k2nzccgfZMazmLJ2\nYear: 2022\nLiquidity pool: 6wKyWstu6VkvUYHWnADVd81vZhbNaWd9qvhbi5T6Gocd\nTotal added liquidity: 68000000\nTotal removed liquidity: 104901072.66705\nAdd/remove ratio: 0.6482297871\nFirst pool activity: 2022-02-26 02:58:37.000\nLast pool activity: 2022-11-23 20:54:57.000\nStatus: Inactive",
+    "metadata": {
+     "collection": "defi_exploits",
+     "entity_type": "token",
+     "entity": "DhfF81uahANRYQ4rn8VZKSGVmLE4k2nzccgfZMazmLJ2",
+     "token_address": "DhfF81uahANRYQ4rn8VZKSGVmLE4k2nzccgfZMazmLJ2",
+     "labels": [
+      "rugpull"
+     ],
+     "category": "rug-pull",
+     "chain": "Solana",
+     "ecosystem": "Solana",
+     "severity": "critical",
+     "year": 2022,
+     "source": "deflabx_solrpds",
+     "source_url": "https://github.com/DeFiLabX/SolRPDS",
+     "knowledge_type": "rug_pull_dataset",
+     "pool_address": "6wKyWstu6VkvUYHWnADVd81vZhbNaWd9qvhbi5T6Gocd",
+     "total_added_liquidity": "68000000",
+     "total_removed_liquidity": "104901072.66705",
+     "add_to_remove_ratio": "0.6482297871",
+     "first_pool_activity": "2022-02-26 02:58:37.000",
+     "last_pool_activity": "2022-11-23 20:54:57.000",
+     "inactivity_status": "Inactive",
+     "root_doc_id": "deflabx_solrpds:DhfF81uahANRYQ4rn8VZKSGVmLE4k2nzccgfZMazmLJ2:2022"
+    },
+    "source": "deflabx_solrpds",
+    "severity": "medium",
+    "chain": "",
+    "collection": "defi_exploits"
+   }
+  },
+  {
+   "id": "00c5a61d-b397-50d4-9715-b9947ceff09c",
+   "payload": {
+    "content": "Solana rug-pull token: 51tMb3zBKDiQhNwGqpgwbavaGH54mk8fXFzxTc1xnasg\nYear: 2021\nLiquidity pool: 43UHp4TuwQ7BYsaULN1qfpktmg7GWs9GpR8TDb8ovu9c\nTotal added liquidity: 1503441.83238857\nTotal removed liquidity: 1479163.17554008\nAdd/remove ratio: 1.016413779\nFirst pool activity: 2021-07-05 18:18:07.000\nLast pool activity: 2021-12-30 23:03:08.000\nStatus: Active",
+    "metadata": {
+     "collection": "defi_exploits",
+     "entity_type": "token",
+     "entity": "51tMb3zBKDiQhNwGqpgwbavaGH54mk8fXFzxTc1xnasg",
+     "token_address": "51tMb3zBKDiQhNwGqpgwbavaGH54mk8fXFzxTc1xnasg",
+     "labels": [
+      "rugpull"
+     ],
+     "category": "rug-pull",
+     "chain": "Solana",
+     "ecosystem": "Solana",
+     "severity": "critical",
+     "year": 2021,
+     "source": "deflabx_solrpds",
+     "source_url": "https://github.com/DeFiLabX/SolRPDS",
+     "knowledge_type": "rug_pull_dataset",
+     "pool_address": "43UHp4TuwQ7BYsaULN1qfpktmg7GWs9GpR8TDb8ovu9c",
+     "total_added_liquidity": "1503441.83238857",
+     "total_removed_liquidity": "1479163.17554008",
+     "add_to_remove_ratio": "1.016413779",
+     "first_pool_activity": "2021-07-05 18:18:07.000",
+     "last_pool_activity": "2021-12-30 23:03:08.000",
+     "inactivity_status": "Active",
+     "root_doc_id": "deflabx_solrpds:51tMb3zBKDiQhNwGqpgwbavaGH54mk8fXFzxTc1xnasg:2021"
+    },
+    "source": "deflabx_solrpds",
+    "severity": "medium",
+    "chain": "",
+    "collection": "defi_exploits"
+   }
+  }
+ ],
+ "exploits_rug": [
+  {
+   "id": "00722ef2-2fc0-4a1f-9122-31a11e6527ce",
+   "payload": {
+    "title": "DeFiHackLabs unknown () \u2014 {'collection': 'defi_exploits', 'entity_type': 'token', 'entity': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'token_address': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'labels': ['rugpull'], 'category': 'rug-pull'",
+    "description": "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'token_address': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'Solana', 'ecosystem': 'Solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/DeFiLabX/SolRPDS', 'knowledge_type': 'rug_pull_dataset', 'pool_address': 'HrDzSFaurGfJWNjy8yeGaimqXWKhRgyxfEJ7UP93r5My', 'total_added_liquidity': '883943.52', 'total_removed_liquidity': '2691364.08', 'add_to_remove_ratio': '0.32843",
+    "code_block": "Solana rug-pull token: 6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR\nYear: 2022\nLiquidity pool: HrDzSFaurGfJWNjy8yeGaimqXWKhRgyxfEJ7UP93r5My\nTotal added liquidity: 883943.52\nTotal removed liquidity: 2691364.08\nAdd/remove ratio: 0.328436991\nFirst pool activity: 2022-03-23 20:38:17.000\nLast pool activity: 2022-09-08 23:16:56.000\nStatus: Inactive",
+    "category": "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': '6qQnzsoH89TWZ",
+    "chain": "evm",
+    "severity": "medium",
+    "protocol": "unknown",
+    "date": "",
+    "verdict": "malicious",
+    "ecosystem": "evm",
+    "tags": [
+     "exploit",
+     "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'token_address': '6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'Solana', 'ecosystem': 'Solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/DeFiLabX/SolRPDS', 'knowledge_type': 'rug_pull_dataset', 'pool_address': 'HrDzSFaurGfJWNjy8yeGaimqXWKhRgyxfEJ7UP93r5My', 'total_added_liquidity': '883943.52', 'total_removed_liquidity': '2691364.08', 'add_to_remove_ratio': '0.328436991', 'first_pool_activity': '2022-03-23 20:38:17.000', 'last_pool_activity': '2022-09-08 23:16:56.000', 'inactivity_status': 'Inactive', 'root_doc_id': 'deflabx_solrpds:6qQnzsoH89TWZirgZS9AJN3NrxS7Y4K7oNt5N93E6QDR:2022'}"
+    ],
+    "source_key": "defihacklabs:unknown::{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': '6qqnzsoh89twzirgzs9ajn3nrxs7y4k7ont5n93e6qdr', 'token_address': '6qqnzsoh89twzirgzs9ajn3nrxs7y4k7ont5n93e6qdr', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'solana', 'ecosystem': 'solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/defilabx/solrpds', 'knowledge_type': 'rug_pull_dataset', 'pool_address': 'hrdzsfaurgfjwnjy8yegaimqxwkhrgyxfej7up93r5my', 'total_added_liquidity': '883943.52', 'total_removed_liquidity': '2691364.08', 'add_to_remove_ratio': '0.328436991', 'first_pool_activity': '2022-03-23 20:38:17.000', 'last_pool_activity': '2022-09-08 23:16:56.000', 'inactivity_status': 'inactive', 'root_doc_id': 'deflabx_solrpds:6qqnzsoh89twzirgzs9ajn3nrxs7y4k7ont5n93e6qdr:2022'}",
+    "source_type": "exploit",
+    "provenance": {
+     "source": "defihacklabs",
+     "source_url": "",
+     "source_commit": ""
+    }
+   }
+  },
+  {
+   "id": "00a62d35-600b-42e7-a14a-d5c4925b1b4a",
+   "payload": {
+    "title": "DeFiHackLabs unknown () \u2014 {'collection': 'defi_exploits', 'entity_type': 'token', 'entity': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'token_address': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'labels': ['rugpull'], 'category': 'rug-pull'",
+    "description": "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'token_address': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'Solana', 'ecosystem': 'Solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/DeFiLabX/SolRPDS', 'knowledge_type': 'rug_pull_dataset', 'pool_address': '14MDXFwbr5gPdzTS43XBD6oZEjiKifTziujR1216jrBe', 'total_added_liquidity': '100000', 'total_removed_liquidity': '140643899.926822', 'add_to_remove_ratio': '0.00",
+    "code_block": "Solana rug-pull token: AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx\nYear: 2022\nLiquidity pool: 14MDXFwbr5gPdzTS43XBD6oZEjiKifTziujR1216jrBe\nTotal added liquidity: 100000\nTotal removed liquidity: 140643899.926822\nAdd/remove ratio: 0.000711015551\nFirst pool activity: 2022-01-02 02:09:19.000\nLast pool activity: 2022-12-13 16:38:35.000\nStatus: Inactive",
+    "category": "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': 'AWW5UQfMBnPsT",
+    "chain": "evm",
+    "severity": "medium",
+    "protocol": "unknown",
+    "date": "",
+    "verdict": "malicious",
+    "ecosystem": "evm",
+    "tags": [
+     "exploit",
+     "{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'token_address': 'AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'Solana', 'ecosystem': 'Solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/DeFiLabX/SolRPDS', 'knowledge_type': 'rug_pull_dataset', 'pool_address': '14MDXFwbr5gPdzTS43XBD6oZEjiKifTziujR1216jrBe', 'total_added_liquidity': '100000', 'total_removed_liquidity': '140643899.926822', 'add_to_remove_ratio': '0.000711015551', 'first_pool_activity': '2022-01-02 02:09:19.000', 'last_pool_activity': '2022-12-13 16:38:35.000', 'inactivity_status': 'Inactive', 'root_doc_id': 'deflabx_solrpds:AWW5UQfMBnPsTaaxCK7cSEmkj1kbX2zUrqvgKXStjBKx:2022'}"
+    ],
+    "source_key": "defihacklabs:unknown::{'collection': 'defi_exploits', 'entity_type': 'token', 'entity': 'aww5uqfmbnpstaaxck7csemkj1kbx2zurqvgkxstjbkx', 'token_address': 'aww5uqfmbnpstaaxck7csemkj1kbx2zurqvgkxstjbkx', 'labels': ['rugpull'], 'category': 'rug-pull', 'chain': 'solana', 'ecosystem': 'solana', 'severity': 'critical', 'year': 2022, 'source': 'deflabx_solrpds', 'source_url': 'https://github.com/defilabx/solrpds', 'knowledge_type': 'rug_pull_dataset', 'pool_address': '14mdxfwbr5gpdzts43xbd6ozejikiftziujr1216jrbe', 'total_added_liquidity': '100000', 'total_removed_liquidity': '140643899.926822', 'add_to_remove_ratio': '0.000711015551', 'first_pool_activity': '2022-01-02 02:09:19.000', 'last_pool_activity': '2022-12-13 16:38:35.000', 'inactivity_status': 'inactive', 'root_doc_id': 'deflabx_solrpds:aww5uqfmbnpstaaxck7csemkj1kbx2zurqvgkxstjbkx:2022'}",
+    "source_type": "exploit",
+    "provenance": {
+     "source": "defihacklabs",
+     "source_url": "",
+     "source_commit": ""
+    }
+   }
+  }
+ ]
+}
