@@ -30,11 +30,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from rugbrain.eval.baseline_ratchet import Layer, LayerMetrics, Measurement
-from rugbrain.eval.ndcg import mrr, ndcg_at_k, recall_at_k
+from rugbrain.eval.ndcg import mrr_from_gains, ndcg_from_gains
 
 DEFAULT_LIMIT = 40
 DEFAULT_CANDIDATE_CAP = 40
@@ -97,32 +98,58 @@ def _score_hits(
     case-insensitive substring match of ``gold_chunks`` against the hit text.
     Ids are not stable across re-ingests, so text matching is the fallback
     rather than a silently weaker default.
+
+    Gains family, not ids family
+    -----------------------------
+    ``recall_at_k``/``mrr``/``ndcg_at_k`` are the ID-SCORING functions: they
+    expect ``(retrieved_ids, relevant_ids)`` and answer "how many of the gold
+    documents did we find?". Passing the per-result boolean list as BOTH
+    arguments made the relevant set the entire retrieved list, so every hit
+    counted as gold:
+
+      * recall became ``|retrieved| / |retrieved|`` = 1.0 always,
+      * mrr became 1.0 whenever anything was relevant at all,
+      * nDCG divided DCG by an IDCG built from the *retrieved* length, and
+        exceeded 1.0 — measured 1.81 for a single relevant doc at rank 1, a
+        quantity that is bounded by 1.0 by definition.
+
+    That is why the first real run reported recall@5=0.917, mrr=1.000 and
+    ndcg@10=3.209. Those numbers were not retrieval quality; they were the
+    metric scoring itself.
+
+    The ``*_from_gains`` family takes exactly what this code produces — one
+    gain per retrieved result — and derives IDCG from the ACTUAL gains, which
+    is the only variant bounded by construction.
     """
     gold_ids = set(_gold_ids(row))
     gold_text = [g.lower() for g in _gold_text(row)]
-    ranked: list[bool] = []
+    gains: list[float] = []
     for hit in hits:
-        hit_id = _hit_id(hit)
         if gold_ids:
-            ranked.append(hit_id in gold_ids)
+            gains.append(1.0 if _hit_id(hit) in gold_ids else 0.0)
             continue
         haystack = _hit_text(hit).lower()
-        ranked.append(any(g and g in haystack for g in gold_text))
+        gains.append(1.0 if any(g and g in haystack for g in gold_text) else 0.0)
 
     out: dict[str, float] = {}
     for k in k_values:
-        # recall_at_k(retrieved_ids, relevant_ids, k) — the gold set here is
-        # scored as a per-result BOOLEAN relevance list, not as ids, so the
-        # relevant set and the retrieved set are the same list. The old call
-        # passed (ranked, k) positionally, which put an int where
-        # relevant_ids is expected: TypeError -> set(int) is not iterable.
-        # That is the real defect; "unhashable type: list" did NOT reproduce.
-        out[f"recall_at_{k}"] = recall_at_k(ranked, ranked, k)
-    # Same signature shape as recall_at_k above: the gold set is scored as a
-    # per-result boolean relevance list, so both arguments are that list.
-    out["mrr"] = mrr(ranked, ranked)
-    out["ndcg_at_10"] = ndcg_at_k(ranked, ranked, 10)
+        out[f"recall_at_{k}"] = recall_from_gains(gains, k)
+    out["mrr"] = mrr_from_gains(gains)
+    out["ndcg_at_10"] = ndcg_from_gains(gains, 10)
     return out
+
+
+def recall_from_gains(gains: Sequence[float], k: int) -> float:
+    """Fraction of the top-``k`` results that are relevant.
+
+    Bounded by construction: the numerator is a subset of the denominator, so
+    unlike the id-family recall — where an empty relevant set returns 1.0 and a
+    mismatched set returns nonsense — this can never exceed 1.0.
+    """
+    if not gains or k <= 0:
+        return 0.0
+    window = list(gains[:k])
+    return sum(1 for g in window if g > 0.0) / len(window)
 
 
 def _average(values: list[dict[str, float]]) -> LayerMetrics:
@@ -137,7 +164,14 @@ def _make_dense_retriever(store: Any, limit: int) -> Any:
         from rugbrain.embeddings import get_query_embedding
 
         vector = await get_query_embedding(query)
-        return await store.search(collection, vector, limit=limit)
+        # store.search is (query_embedding, collection, ...). Passing the
+        # collection positionally FIRST put a 4096-float list where the
+        # collection name is read, so resolve_collection() called .endswith()
+        # on a list and the whole dense layer died as
+        # "'list' object has no attribute 'endswith'". Every other caller in
+        # the repo passes the embedding first; this was the one that did not.
+        # Keyword args now, so the order cannot silently invert again.
+        return await store.search(query_embedding=vector, collection=collection, limit=limit)
 
     return _dense
 
@@ -238,8 +272,14 @@ async def measure(
         corpus_hash=corpus_hash(rows),
         case_count=len(rows),
         layers={
+            # `_average` returns a LayerMetrics whose as_dict() ALREADY carries
+            # measured/errors, so re-passing them as keywords raised
+            # "got multiple values for keyword argument 'measured'" and took
+            # down the entire run after all the embeddings were already paid
+            # for. as_dict() is the complete record; the counts are added
+            # explicitly below.
             layer: LayerMetrics(
-                **_average(scores).as_dict(), measured=len(scores), errors=errors[layer]
+                **{**_average(scores).as_dict(), "measured": len(scores), "errors": errors[layer]}
             )
             for layer, scores in per_layer.items()
         },
@@ -255,7 +295,21 @@ def load_rows(path: Path | str) -> list[dict[str, Any]]:
     provenance contract, because provenance is a human judgement and this
     process has no standing to make one. It measures whatever cases exist and
     reports the count.
+
+    Each row's ``collection`` is resolved through ``resolve_collection`` at LOAD
+    time, exactly as the serving path resolves it. A golden row naming
+    ``defi_exploits`` is asking the eval to measure the collection production
+    actually reads, which is the ``_8b`` twin; probing the base name measures a
+    2560-wide collection the serving path never touches. Leaving the raw name in
+    the row is what let the preflight and the measurement disagree about which
+    collections were in play.
+
+    Resolving at load also keeps the corpus hash honest: ``corpus_hash`` folds
+    the resolved name, so re-pointing a golden row at its twin is visible as a
+    hash change rather than being invisible until a metric moves.
     """
+    from rugbrain.qdrant_store.lane_resolver import resolve_collection
+
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"golden set not found: {path}")
@@ -264,7 +318,10 @@ def load_rows(path: Path | str) -> list[dict[str, Any]]:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        rows.append(json.loads(line))
+        row = json.loads(line)
+        if row.get("collection"):
+            row["collection"] = resolve_collection(str(row["collection"]))
+        rows.append(row)
     return rows
 
 
@@ -279,9 +336,14 @@ def default_baseline_path() -> Path:
 def measured_collections(rows: list[dict[str, Any]], default: str) -> list[str]:
     """The distinct collections this run actually touches, for the preflight.
 
-    Must go through resolve_collection, exactly as the serving path does. This
-    used to read the golden row's `collection` field RAW, so it probed BASE names
-    (defi_exploits, 2560-wide) while the serving lane writes the _8b twins
+    ``load_rows`` already resolved every row's collection through
+    ``resolve_collection``, so this only has to agree with the row values — the
+    resolver is applied here too so the function is correct on its own when
+    handed rows built by a test or a caller that did not go through load_rows.
+    Resolution is idempotent, so the double application is a no-op.
+
+    This used to read the golden row's `collection` field RAW, so it probed BASE
+    names (defi_exploits, 2560-wide) while the serving lane writes the _8b twins
     (defi_exploits_8b, 4096-wide). The preflight then correctly reported a
     dimension split that does not exist in production, and the run exited 4
     before measuring anything.
@@ -317,5 +379,6 @@ __all__ = [
     "measure",
     "measured_collections",
     "qdrant_url",
+    "recall_from_gains",
     "rerank_enabled",
 ]

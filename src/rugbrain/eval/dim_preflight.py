@@ -126,6 +126,32 @@ async def embed_probe(text: str = PROBE_TEXT) -> tuple[int, str]:
     return len(vector), current_backend()
 
 
+def declared_dim(collection: str) -> int | None:
+    """The width this repo DECLARES it writes ``collection`` at.
+
+    This is the correct counterpart to the embedder probe, and using the probe
+    alone is what produced a false dimension split on every pinned collection.
+
+    One embedder emits one global width (4096 on the canonical lane). Six
+    collections are DELIBERATELY pinned narrower — ``coding_knowledge``,
+    ``public_crypto_patterns``, ``rug_events``, ``solana_patterns`` at 2560 and
+    ``wallet_clusters``/``youtube_videos`` at 1024. A preflight that compares
+    the 4096 probe against those declares a split that does not exist in
+    production, and a monitor that cries wolf on the pinned set is a monitor
+    people learn to disable.
+
+    So the question is not "does one global probe equal every width" — it never
+    does, by design. The question is: for THIS collection, does what the
+    embedder produces match what the store holds AND what the repo declares it
+    writes? A declared dim is the only per-collection ground truth available
+    without embedding per collection, which would multiply DeepInfra cost for
+    no extra signal.
+    """
+    from rugbrain.qdrant_store.lane_resolver import declared_lane_dim
+
+    return declared_lane_dim(collection)
+
+
 async def preflight(
     collections: list[str],
     qdrant_url: str = DEFAULT_QDRANT_URL,
@@ -136,24 +162,52 @@ async def preflight(
     One probe is embedded and reused for every collection: the embedder's
     output width is a property of the embedder, not of the collection, and
     re-embedding per collection would multiply cost for no extra signal.
+
+    The probe is compared against the collection's DECLARED width, not against
+    the probe alone — see :func:`declared_dim`. A collection that declares a
+    narrower pinned width is correct, and flagging it is a false split.
     """
     probe_dim, backend = await embed_probe(probe_text)
     checks: list[DimCheck] = []
     for collection in collections:
         store_dim, source = await fetch_collection_dim(collection, qdrant_url)
+        declared = declared_dim(collection)
         if store_dim == 0:
             ok = False
             detail = f"could not read store width for {collection!r}: {source}"
-        elif probe_dim == store_dim:
+        elif declared is None:
+            # No declared fact and no usable probe comparison: the store width
+            # stands alone. That is genuinely unknown, so it is not a pass and
+            # not a false alarm — it is reported, and the caller decides.
+            ok = probe_dim == store_dim
+            detail = (
+                f"unclassified collection: probe {probe_dim} vs store {store_dim} "
+                f"({backend}); {source}"
+            )
+        elif declared == store_dim and declared != probe_dim:
+            # Deliberate narrow pin. The store matches the declaration, and the
+            # difference from the global probe is the DESIGN, not a split.
             ok = True
-            detail = f"probe {probe_dim} == store {store_dim} ({backend})"
-        else:
+            detail = (
+                f"pinned by design: declared {declared} == store {store_dim} "
+                f"({source}); global probe is {probe_dim} ({backend})"
+            )
+        elif declared != store_dim:
+            ok = False
+            detail = (
+                f"DIMENSION SPLIT: repo declares {declared} for {collection!r} "
+                f"but store is {store_dim}-wide ({source})"
+            )
+        elif probe_dim != store_dim:
             ok = False
             detail = (
                 f"DIMENSION SPLIT: embedder returned {probe_dim} "
                 f"(backend={backend}) but {collection!r} is {store_dim}-wide "
                 f"({source}). Queries will be refused or mis-scored."
             )
+        else:
+            ok = True
+            detail = f"probe {probe_dim} == store {store_dim} == declared ({backend})"
         checks.append(
             DimCheck(
                 collection=collection,
@@ -189,6 +243,7 @@ __all__ = [
     "DimCheck",
     "PROBE_TEXT",
     "collections_from_env",
+    "declared_dim",
     "embed_probe",
     "extract_store_dim",
     "fetch_collection_dim",
