@@ -21,7 +21,6 @@ ignore_imports =
     rugbrain.routes.core -> httpx
     rugbrain.routes.rag_tools -> rugbrain.chain_parquet
     rugbrain.routes.ingest -> rugbrain.embeddings
-    rugbrain.routes.search -> rugbrain.chain_parquet
     rugbrain.routes.analyze -> rugbrain.endpoints
     rugbrain.routes.ingest -> rugbrain.endpoints
     rugbrain.routes.ingest -> rugbrain.qdrant_store
@@ -65,7 +64,14 @@ ignore_imports =
     # 'No matches for ignored import' — the boundary looked clean because the
     # rule was inert, not because the dependency was gone. Sibling rules
     # already name chain_parquet for routes.rag_tools, so this is consistent.
-    rugbrain.routes.search -> rugbrain.chain_parquet
+    #
+    # REMOVED 2026-09-28 (lane F): the storage reach moved to
+    # rugbrain.chain_data_service, outside routes/. There is no longer an
+    # edge to ignore. The rule is deleted rather than left in place: a stale
+    # ignore re-creates exactly the false green this correction just exposed
+    # — it can never match again, and lint-imports only reports
+    # 'No matches for ignored import', which reads like a clean bill of
+    # health. rag_tools still reaches chain_parquet and keeps its own rule.
 
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)

@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from rugbrain import endpoints as _ep
+from rugbrain.chain_data_service import merge_chain_data
 from rugbrain.knowledge_boundary import (
     CollectionNotPublic,
     require_public_collection,
@@ -313,40 +314,14 @@ async def search_threat_intel(
     # ("recent ETH transfers", "who deployed tokens on Base yesterday"), fall
     # back to the indexer's B2 chain-data parquet via the shared DuckDB path.
     # Tagged with source=chain-data-parquet so consumers can distinguish.
-    chain_data_applied = False
-    chain_data_intent = False
-    chain_data_error: str | None = None
-    if chain_data:
-        try:
-            from rugbrain.chain_parquet import (
-                build_intent_sql,
-                detect_chain_data_intent,
-                extract_chain_from_query,
-                extract_date_from_query,
-                run_chain_query,
-            )
-
-            chain_data_intent = detect_chain_data_intent(q)
-            if not results or chain_data_intent:
-                chain = extract_chain_from_query(q)
-                date = extract_date_from_query(q)
-                sql = build_intent_sql(q, chain=chain, date=date, limit=limit)
-                chain_result = run_chain_query(sql, chain=chain, date=date, limit=limit)
-                if chain_result.get("row_count", 0):
-                    chain_rows = []
-                    cols = chain_result["columns"]
-                    for row in chain_result["rows"]:
-                        rec = dict(zip(cols, row, strict=False))
-                        rec["source"] = "chain-data-parquet"
-                        rec["data_source"] = "b2:chain-data/parquet"
-                        rec["chain_data"] = True
-                        chain_rows.append(rec)
-                    results = list(results) + chain_rows
-                    chain_data_applied = True
-        except Exception as e:
-            # Never break vector search on a fallback failure.
-            chain_data_error = str(e)[:200]
-            logger.debug("chain_data_fallback failed (non-critical): %s", e)
+    # The storage reach (chain_parquet → parquet_analytics → duckdb) lives in
+    # rugbrain.chain_data_service, outside routes/ — this route must not touch
+    # it. Identical fail-open semantics to the previous inline copy.
+    chain_outcome = merge_chain_data(list(results), q, limit, chain_data)
+    results = chain_outcome.results
+    chain_data_applied = chain_outcome.applied
+    chain_data_intent = chain_outcome.intent
+    chain_data_error = chain_outcome.error
 
     # ── Historical pattern matching (token-address queries) ──
     # When the caller searches a bare token/contract address, augment the
