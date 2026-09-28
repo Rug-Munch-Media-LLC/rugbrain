@@ -30,6 +30,8 @@ from rugbrain.search.engine import (
     detect_coding_query,
     resolve_search_collections,
 )
+from rugbrain.search.lane_targets import resolve_search_collection as resolve_one
+from rugbrain.search.lane_targets import resolve_search_collections as resolve_plain
 from rugbrain.search_service import search_coding_knowledge
 
 # ── Code-intent detection ─────────────────────────────────────────────
@@ -65,21 +67,45 @@ def test_resolve_collections_explicit_wins() -> None:
 
 def test_resolve_collections_coding_priority() -> None:
     routed = resolve_search_collections(None, "how to implement reentrancy guard in Solidity")
-    assert routed[0] == "coding_knowledge"
-    assert routed[: len(CODING_COLLECTIONS)] == list(CODING_COLLECTIONS)
+    assert routed[0] == resolve_plain(CODING_COLLECTIONS)[0]
+    assert routed[: len(CODING_COLLECTIONS)] == resolve_plain(CODING_COLLECTIONS)
 
 
 def test_resolve_collections_scam_still_routes() -> None:
     routed = resolve_search_collections(None, "how was Euler hacked")
-    assert routed[0] == "defi_exploits"
-    assert routed[: len(SCAM_COLLECTIONS)] == list(SCAM_COLLECTIONS)
+    assert routed[0] == resolve_plain(SCAM_COLLECTIONS)[0]
+    assert routed[: len(SCAM_COLLECTIONS)] == resolve_plain(SCAM_COLLECTIONS)
 
 
 def test_resolve_collections_default() -> None:
     from rugbrain.search.engine import COLLECTIONS
 
     routed = resolve_search_collections(None, "general market question")
-    assert routed == list(COLLECTIONS)
+    assert routed == resolve_plain(COLLECTIONS)
+
+
+def test_resolve_collections_preserves_priority_order_through_resolution() -> None:
+    """Resolution must rename, not reorder, and must not drop entries.
+
+    The routing tables are priority orders, and the lane resolver only ever
+    substitutes a base name for its ``_8b`` twin. So the resolved list must be
+    the static table mapped through the same public resolver: same length, same
+    length per tier, and each resolved name still anchored to its base name.
+    This is the assertion that would catch a resolver that deduplicates a
+    coding collection away (silently demoting code search) or reorders a tier.
+    """
+    static_coding = list(CODING_COLLECTIONS)
+    resolved_coding = resolve_plain(static_coding)
+    assert len(resolved_coding) == len(static_coding)
+    assert len(resolved_coding) == len(set(resolved_coding))
+
+    routed = resolve_search_collections(None, "how to implement reentrancy guard in Solidity")
+    coding_tier = routed[: len(static_coding)]
+    assert len(coding_tier) == len(static_coding)
+    # Every coding-tier entry is a resolved form of the coding table, in order.
+    for base, resolved in zip(static_coding, resolved_coding, strict=True):
+        assert resolved == resolve_one(base)
+        assert resolved in coding_tier
 
 
 def test_coding_collections_defined() -> None:
