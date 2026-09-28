@@ -1,200 +1,63 @@
 """Measurement runner — dense, hybrid, and rerank layers, read-only.
 
 Deliberately decoupled from the graph layer
--------------------------------------------
+--------------------------------------------
 The previous nightly died on an ``ImportError`` raised by an unrelated graph
 refactor. That is the wrong dependency direction: retrieval quality did not
 change, but the monitor was taken out by code that cannot affect it.
 
-This module therefore imports ONLY from ``rugbrain.qdrant_store``,
+This module therefore touches ONLY ``rugbrain.qdrant_store``,
 ``rugbrain.embeddings`` and ``rugbrain.search.rerank`` — never the MCP server,
 never the graph implementation. A change to graph assembly cannot make a
 retrieval monitor unrunnable. The store is constructed here, directly, rather
 than fetched through a façade that pulls in the whole server.
 
-Layer definitions
------------------
-dense   ``store.search`` — semantic only.
-hybrid  ``store.hybrid_search`` — dense + BM25 sparse with native RRF fusion.
-        This is what production serves, so this is what the gate decides on.
-rerank  hybrid, then the rerank stage reorders the candidate pool. Reordering
-        changes which documents survive truncation, so a corpus that passes
-        hybrid can still fail rerank. Both are measured; only hybrid gates.
+Each layer is measured independently and records its OWN error count. A layer
+where every query errored is reported with ``measured=0`` so the verdict can
+say "could not measure" rather than "scored zero" — the distinction between
+an outage and a regression is the whole reason the exit codes are distinct.
 
 Read-only: this module calls ``search``/``hybrid_search``/rerank and GETs
 collection metadata. It never writes.
+
+Responsibility split:
+
+    corpus_fingerprint   what is being measured (the hash) + hit scoring
+    ratchet_retrievers   one retriever factory per layer
+    ratchet_runner (this) the run loop, plus the paths and env lookups
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
-from rugbrain.eval.baseline_ratchet import Layer, LayerMetrics, Measurement
-from rugbrain.eval.ndcg import mrr, ndcg_at_k, recall_at_k
+from rugbrain.eval.corpus_fingerprint import _score_hits, corpus_hash
+from rugbrain.eval.ratchet_model import LayerMetrics, Measurement
+from rugbrain.eval.ratchet_retrievers import (
+    make_dense_retriever,
+    make_hybrid_retriever,
+    rerank_hits,
+)
 
 DEFAULT_LIMIT = 40
 DEFAULT_CANDIDATE_CAP = 40
 
-# Golden rows carry a target collection; rows naming a collection we do not
-# measure are reported as errors rather than silently skipped.
-_SKIP_KEYS = frozenset({"__comment__", "notes"})
-
-
-def corpus_hash(rows: list[dict[str, Any]]) -> str:
-    """Fingerprint the measured corpus: ids, queries and gold, sorted.
-
-    A baseline is only comparable against the same corpus. Hashing the
-    *content* (not the file mtime) means a reformat that changes nothing
-    measurable does not invalidate the baseline, while a real edit — a gold
-    chunk rewritten, a case added — does.
-    """
-    payload = sorted(
-        json.dumps(
-            {
-                "query": r.get("query", ""),
-                "collection": r.get("collection"),
-                "gold_chunks": sorted(r.get("gold_chunks") or []),
-                "relevant_doc_ids": sorted(r.get("relevant_doc_ids") or []),
-            },
-            sort_keys=True,
-        )
-        for r in rows
-        if not (_SKIP_KEYS & set(r))
-    )
-    return hashlib.sha256("\n".join(payload).encode("utf-8")).hexdigest()
-
-
-def _gold_ids(row: dict[str, Any]) -> list[str]:
-    return [str(i) for i in (row.get("relevant_doc_ids") or []) if i]
-
-
-def _gold_text(row: dict[str, Any]) -> list[str]:
-    return [str(c) for c in (row.get("gold_chunks") or []) if c]
-
-
-def _hit_id(hit: dict[str, Any]) -> str:
-    for key in ("id", "doc_id", "uuid", "chunk_id"):
-        val = hit.get(key)
-        if val is not None:
-            return str(val)
-    return ""
-
-
-def _hit_text(hit: dict[str, Any]) -> str:
-    return str(hit.get("content") or hit.get("text") or "")
-
-
-def _score_hits(
-    row: dict[str, Any], hits: list[dict[str, Any]], k_values: tuple[int, ...]
-) -> dict[str, float]:
-    """Score one query's ranked hits against its gold.
-
-    Exact id match when the row carries ``relevant_doc_ids``; otherwise a
-    case-insensitive substring match of ``gold_chunks`` against the hit text.
-    Ids are not stable across re-ingests, so text matching is the fallback
-    rather than a silently weaker default.
-    """
-    gold_ids = set(_gold_ids(row))
-    gold_text = [g.lower() for g in _gold_text(row)]
-    ranked: list[bool] = []
-    for hit in hits:
-        hit_id = _hit_id(hit)
-        if gold_ids:
-            ranked.append(hit_id in gold_ids)
-            continue
-        haystack = _hit_text(hit).lower()
-        ranked.append(any(g and g in haystack for g in gold_text))
-
-    out: dict[str, float] = {}
-    for k in k_values:
-        # recall_at_k(retrieved_ids, relevant_ids, k) — the gold set here is
-        # scored as a per-result BOOLEAN relevance list, not as ids, so the
-        # relevant set and the retrieved set are the same list. The old call
-        # passed (ranked, k) positionally, which put an int where
-        # relevant_ids is expected: TypeError -> set(int) is not iterable.
-        # That is the real defect; "unhashable type: list" did NOT reproduce.
-        out[f"recall_at_{k}"] = recall_at_k(ranked, ranked, k)
-    # Same signature shape as recall_at_k above: the gold set is scored as a
-    # per-result boolean relevance list, so both arguments are that list.
-    out["mrr"] = mrr(ranked, ranked)
-    out["ndcg_at_10"] = ndcg_at_k(ranked, ranked, 10)
-    return out
-
-
-def _average(values: list[dict[str, float]]) -> LayerMetrics:
-    if not values:
-        return LayerMetrics()
-    keys = values[0].keys()
-    return LayerMetrics(**{k: round(sum(v[k] for v in values) / len(values), 4) for k in keys})
-
-
-def _make_dense_retriever(store: Any, limit: int) -> Any:
-    async def _dense(query: str, collection: str) -> list[dict[str, Any]]:
-        from rugbrain.embeddings import get_query_embedding
-
-        vector = await get_query_embedding(query)
-        return await store.search(collection, vector, limit=limit)
-
-    return _dense
-
-
-def _make_hybrid_retriever(store: Any, limit: int) -> Any:
-    async def _hybrid(query: str, collection: str) -> list[dict[str, Any]]:
-        from rugbrain.embeddings import get_query_embedding
-
-        vector = await get_query_embedding(query)
-        return await store.hybrid_search(
-            query_text=query,
-            query_embedding=vector,
-            collection=collection,
-            limit=limit,
-        )
-
-    return _hybrid
-
-
-async def _rerank(query: str, hits: list[dict[str, Any]], cap: int) -> list[dict[str, Any]]:
-    """Apply the rerank stage to a candidate pool, tolerating its absence.
-
-    Rerank is best-effort by design: ``search/rerank.py`` returns documents in
-    their original order when the reranker is unreachable. That is correct
-    production behaviour but it would silently make the rerank layer a copy of
-    hybrid, so the applied method is reported and an absent rerank is visible
-    in the measurement rather than hidden.
-    """
-    from rugbrain.search import rerank as rerank_mod
-
-    if not rerank_mod.RERANKER_ENABLED:
-        return hits
-    try:
-        out = await rerank_mod.rerank(query, list(hits[:cap]))
-    except Exception:  # noqa: BLE001 - rerank failure must not kill the eval
-        return hits
-    if not isinstance(out, list) or len(out) != len(hits[:cap]):
-        # A length-mismatched order is discarded in silence downstream and
-        # looks exactly like "rerank ran and did nothing".
-        return hits
-    return out
+logger = logging.getLogger(__name__)
 
 
 async def measure(
     rows: list[dict[str, Any]],
-    layers: tuple[Layer, ...] = ("dense", "hybrid", "rerank"),
+    layers: tuple[str, ...] = ("dense", "hybrid", "rerank"),
     limit: int = DEFAULT_LIMIT,
     candidate_cap: int = DEFAULT_CANDIDATE_CAP,
     dim_checks: list[dict[str, Any]] | None = None,
     default_collection: str = "codebase_reference_v2",
 ) -> Measurement:
-    """Measure recall@5/@10, MRR and nDCG@10 on each requested layer.
-
-    Each layer is measured independently and records its own error count. A
-    layer where every query errored is reported with ``measured=0`` so the
-    verdict can say "could not measure" rather than "scored zero".
-    """
+    """Measure recall@5/@10, MRR and nDCG@10 on each requested layer."""
     from rugbrain.qdrant_store.store import QdrantVectorStore
 
     store = QdrantVectorStore()
@@ -203,8 +66,8 @@ async def measure(
     errors: dict[str, int] = {layer: 0 for layer in layers}
 
     retrievers = {
-        "dense": _make_dense_retriever(store, limit),
-        "hybrid": _make_hybrid_retriever(store, limit),
+        "dense": make_dense_retriever(store, limit),
+        "hybrid": make_hybrid_retriever(store, limit),
     }
 
     for row in rows:
@@ -217,24 +80,20 @@ async def measure(
             try:
                 if layer == "rerank":
                     base = await retrievers["hybrid"](query, collection)
-                    hits = await _rerank(query, base, candidate_cap)
+                    hits = await rerank_hits(query, base, candidate_cap)
                 else:
                     hits = await retrievers[layer](query, collection)
-            except Exception as exc:  # noqa: BLE001 - one bad query must not abort the run
+            except Exception as exc:
                 errors[layer] += 1
                 if errors[layer] == 1:
-                    import logging
-
-                    logging.getLogger(__name__).warning(
-                        "eval_%s_error collection=%s: %s", layer, collection, exc
-                    )
+                    logger.warning("eval_%s_error collection=%s: %s", layer, collection, exc)
                 continue
             if not hits:
                 errors[layer] += 1
                 continue
             per_layer[layer].append(_score_hits(row, hits, k_values))
 
-    result = Measurement(
+    return Measurement(
         corpus_hash=corpus_hash(rows),
         case_count=len(rows),
         layers={
@@ -245,7 +104,13 @@ async def measure(
         },
         dim_checks=list(dim_checks or []),
     )
-    return result
+
+
+def _average(values: list[dict[str, float]]) -> LayerMetrics:
+    if not values:
+        return LayerMetrics()
+    keys = values[0].keys()
+    return LayerMetrics(**{k: round(sum(v[k] for v in values) / len(values), 4) for k in keys})
 
 
 def load_rows(path: Path | str) -> list[dict[str, Any]]:
