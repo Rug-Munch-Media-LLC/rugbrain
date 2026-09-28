@@ -111,9 +111,17 @@ def _score_hits(
 
     out: dict[str, float] = {}
     for k in k_values:
-        out[f"recall_at_{k}"] = recall_at_k(ranked, k)
-    out["mrr"] = mrr(ranked)
-    out["ndcg_at_10"] = ndcg_at_k(ranked, 10)
+        # recall_at_k(retrieved_ids, relevant_ids, k) — the gold set here is
+        # scored as a per-result BOOLEAN relevance list, not as ids, so the
+        # relevant set and the retrieved set are the same list. The old call
+        # passed (ranked, k) positionally, which put an int where
+        # relevant_ids is expected: TypeError -> set(int) is not iterable.
+        # That is the real defect; "unhashable type: list" did NOT reproduce.
+        out[f"recall_at_{k}"] = recall_at_k(ranked, ranked, k)
+    # Same signature shape as recall_at_k above: the gold set is scored as a
+    # per-result boolean relevance list, so both arguments are that list.
+    out["mrr"] = mrr(ranked, ranked)
+    out["ndcg_at_10"] = ndcg_at_k(ranked, ranked, 10)
     return out
 
 
@@ -269,10 +277,24 @@ def default_baseline_path() -> Path:
 
 
 def measured_collections(rows: list[dict[str, Any]], default: str) -> list[str]:
-    """The distinct collections this run actually touches, for the preflight."""
-    return sorted({str(r.get("collection") or default) for r in rows if r.get("query")}) or [
-        default
-    ]
+    """The distinct collections this run actually touches, for the preflight.
+
+    Must go through resolve_collection, exactly as the serving path does. This
+    used to read the golden row's `collection` field RAW, so it probed BASE names
+    (defi_exploits, 2560-wide) while the serving lane writes the _8b twins
+    (defi_exploits_8b, 4096-wide). The preflight then correctly reported a
+    dimension split that does not exist in production, and the run exited 4
+    before measuring anything.
+
+    That is the worst shape of bug: a safety check that is simultaneously
+    correct in isolation and wrong in context, so it trains you to ignore it.
+    Any component that decides WHICH collections are in play has to agree with
+    the component that decides WHICH collections are WRITTEN.
+    """
+    from rugbrain.qdrant_store.lane_resolver import resolve_collection
+
+    names = {str(r.get("collection") or default) for r in rows if r.get("query")}
+    return sorted({resolve_collection(n) for n in names}) or [resolve_collection(default)]
 
 
 def rerank_enabled() -> bool:
