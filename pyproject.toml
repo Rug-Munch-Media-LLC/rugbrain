@@ -72,6 +72,10 @@ ignore = ["E501", "B008", "S101", "N818", "S110", "S112", "RUF002", "RUF003"]
 [tool.ruff.lint.per-file-ignores]
 # Tests use deliberate importlib-import patterns and unused loop vars for data-driven asserts
 "tests/*" = ["E402", "B007"]
+# corpora fixtures embed real upstream rows (contract addresses, bilingual
+# token names, fullwidth CJK punctuation copied from the source CSV) — the
+# secret-scanner and ambiguity heuristics misfire on those literals only.
+"tests/test_corpora_ingest.py" = ["S105", "RUF001"]
 "src/rugbrain/firehose/direct_sources.py" = ["S314"]
 
 [tool.mypy]

@@ -57,6 +57,7 @@ from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroS
 from rugbrain.ingest_sources.chainabuse import ChainabuseSource
 from rugbrain.ingest_sources.cisa_kev import CISAKevSource
 from rugbrain.ingest_sources.coinspect_evm_attacks import CoinspectEVMAttacksSource
+from rugbrain.ingest_sources.crpwarner_rug_events import CRPWarnerRugEventsSource
 from rugbrain.ingest_sources.crypto_rekts import CryptoRektsSource
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
@@ -70,6 +71,8 @@ from rugbrain.ingest_sources.feeds import (
     TrailOfBitsBlogSource,
     ZellicBlogSource,
 )
+from rugbrain.ingest_sources.forta_malicious_contracts import FortaMaliciousContractsSource
+from rugbrain.ingest_sources.fraudcoins_signatures import FraudCoinsSignaturesSource
 from rugbrain.ingest_sources.hf_audit_archive import GCF3711AuditArchiveSource
 from rugbrain.ingest_sources.incidents import (
     BlockSecDefiPocSource,
@@ -88,10 +91,12 @@ from rugbrain.ingest_sources.privacy import TornadoSource
 from rugbrain.ingest_sources.rekt import RektSource
 from rugbrain.ingest_sources.safe import SafeSource
 from rugbrain.ingest_sources.samczsun import SamczsunSource
+from rugbrain.ingest_sources.scythe_radar_datasets import ScytheRadarDatasetsSource
 from rugbrain.ingest_sources.seal911 import Seal911Source
 from rugbrain.ingest_sources.swc import SWCSource
 from rugbrain.ingest_sources.trailofbits_publications import TrailOfBitsPublicationsSource
 from rugbrain.ingest_sources.urlhaus import URLHausSource
+from rugbrain.ingest_sources.vulnerability_severity import VulnerabilitySeveritySource
 from rugbrain.ingest_sources.whitepapers import WhitepapersSource
 from rugbrain.ingest_sources.yaudit_fork_bugs import YAuditForkBugsSource
 from rugbrain.ingest_sources.zk import CircomSource, SnarkJSSource
@@ -146,6 +151,11 @@ SOURCES: tuple[Source, ...] = (
     URLHausSource(),
     YAuditForkBugsSource(),
     CoinspectEVMAttacksSource(),
+    FraudCoinsSignaturesSource(),
+    ScytheRadarDatasetsSource(),
+    FortaMaliciousContractsSource(),
+    CRPWarnerRugEventsSource(),
+    VulnerabilitySeveritySource(),
 )
 
 # Semantic doc_type → source names (for quick lookup / filtering).
