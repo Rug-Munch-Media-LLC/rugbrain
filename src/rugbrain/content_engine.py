@@ -20,6 +20,7 @@ Channel routing rules:
 Quality bar (enforced in prompts AND fallback templates):
     - No hype words. Every post: what happened → why it matters → source.
     - Scanner posts include actual verdict fields + deep-dive URL.
+    - Headline presentation lives in :mod:`rugbrain.formatting`.
 """
 
 from __future__ import annotations
@@ -32,6 +33,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+
+from rugbrain import content_story as story_shape
+from rugbrain.formatting.headline import style_for_site, style_headline
 
 logger = logging.getLogger("rugbrain.content")
 
@@ -106,17 +110,16 @@ async def _write_post(notes: str) -> str | None:
 
 
 def _template_post(story: dict[str, Any]) -> str:
-    title = (story.get("title") or story.get("content", "")[:90]).strip()
-    sev = story.get("severity", "medium").upper()
     src = story.get("source", "telegram")
     url = story.get("url") or ""
-    lines = [f"[{sev}] {title}"]
+    # Category label + rotating emoji + credibility cue, HTML-safe for the
+    # bot's parse_mode=HTML (see rugbrain.formatting).
+    head = story.get("headline") or style_headline(story)
+    title = (story.get("title") or story.get("content", "")[:90]).strip()
     body = (story.get("content") or "").strip()
     if len(body) > 260:
         body = body[:257].rsplit(" ", 1)[0] + "…"
-    if body and body.lower() != title.lower():
-        lines.append("")
-        lines.append(body)
+    lines = [head, "", body] if body and body.lower() != title.lower() else [head]
     lines.append("")
     lines.append(f"Source: {src}" + (f" · {url}" if url else ""))
     return "\n".join(lines)
@@ -177,29 +180,11 @@ async def _recent_stories(limit: int = 60) -> list[dict[str, Any]]:
             logger.debug("content_probe_failed collection=%s err=%s", collection, str(e)[:80])
             continue
         for r in results:
-            md = r.get("metadata", {}) or {}
-            key = (r.get("content") or "")[:120]
+            key = story_shape.dedupe_key(r)
             if not key or key in seen:
                 continue
-            seen[key] = {
-                "title": md.get("title", ""),
-                "content": r.get("content", ""),
-                "severity": (md.get("severity") or "medium").lower(),
-                "source": r.get("source", ""),
-                "url": md.get("url", ""),
-                "importance": float(md.get("importance") or 0),
-                "kind": md.get("kind", "story"),
-                "collection": collection,
-                "ts": md.get("ts") or r.get("ts"),
-            }
-    ranked = sorted(
-        seen.values(),
-        key=lambda s: (
-            -s["importance"],
-            {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(s["severity"], 2),
-        ),
-    )
-    return ranked[:limit]
+            seen[key] = story_shape.normalise(r, collection)
+    return story_shape.rank(seen)[:limit]
 
 
 async def select_scans(limit: int = 3) -> list[dict[str, Any]]:
@@ -298,6 +283,11 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
         drafts[channel].append(
             {
                 "text": text,
+                # `headline` is Telegram HTML (bot sends parse_mode=HTML);
+                # `headline_site` is plain text for the site/API. Plain-text
+                # consumers must read `headline_site`, never `headline`.
+                "headline": style_headline(story),
+                "headline_site": style_for_site(story),
                 "story_ref": story["source"],
                 "mirror": channel == "main",
                 "kind": story.get("kind", "story"),
