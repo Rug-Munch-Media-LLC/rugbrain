@@ -7,6 +7,9 @@ Sources, all already-owned collections in this repo (READ ONLY):
   * ``exploits``       — the same SolRPDS dataset reached through the PoC
     wrapper; ``metadata`` is a stringified dict and the values are also in
     ``code_block`` (137 rows).
+  * the scythe-radar dead-token archive (CC0-1.0) — 19 human-documented
+    events, the only verified source that carries ``holders_at_rug`` and a
+    documented cash-out. Fetched from its static URL.
 
 Deduplication is by ``event_id`` (``deflabx_solrpds:<token>:<year>``), the
 identity the source itself uses, so a token that appears in both collections
@@ -23,13 +26,18 @@ import logging
 from typing import Any
 
 from rugbrain.rug_events.deployers import apply_prior_counts
-from rugbrain.rug_events.qdrant_io import DEFAULT_URL, scroll_all
+from rugbrain.rug_events.qdrant_io import DEFAULT_URL, get_text, scroll_all
 from rugbrain.rug_events.schema import validate
+from rugbrain.rug_events.scythe import (
+    DEAD_TOKENS_URL,
+    SOURCE as SCYTHE,
+    build_events as scythe_events,
+)
 from rugbrain.rug_events.solrpds import SOURCE, build_event
 
 log = logging.getLogger(__name__)
 
-#: (collection, payload filter) for each source of rug telemetry.
+#: (collection, payload filter) for each Qdrant-side source of rug telemetry.
 SOURCES: list[tuple[str, dict[str, Any] | None]] = [
     ("defi_exploits", {"must": [{"key": "source", "match": {"value": SOURCE}}]}),
     ("exploits", None),
@@ -83,6 +91,19 @@ def project_collection(
         log.info(
             "project_collection name=%s scanned=%d rug_events=%d", collection, len(points), found
         )
+
+    # scythe-radar: a static CC0 CSV, the only source with holders_at_rug.
+    try:
+        text = get_text(DEAD_TOKENS_URL)
+    except Exception as e:  # network failure must degrade, never abort
+        log.warning("scythe_fetch_failed err=%s", str(e)[:160])
+        text = ""
+    if text:
+        fetched = scythe_events(text)
+        raw.extend(fetched)
+        log.info("project_scythe events=%d", len(fetched))
+    else:
+        log.warning("scythe_fetch_empty — holders_at_rug will be absent this run")
 
     events = dedupe(raw)
     rejected = [e for e in events if validate(e)]

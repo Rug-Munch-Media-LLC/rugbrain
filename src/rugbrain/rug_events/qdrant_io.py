@@ -13,9 +13,12 @@ the collection this module exists to populate.
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 DEFAULT_URL = "http://127.0.0.1:6334"
 
@@ -71,12 +74,19 @@ def scroll_all(
     collection: str,
     page: int = 2000,
     max_points: int = 200_000,
+    query_filter: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Scroll an entire collection, paging until it is exhausted."""
     out: list[dict[str, Any]] = []
     offset: Any = None
     while len(out) < max_points:
-        points = scroll(base, collection, limit=min(page, max_points - len(out)), offset=offset)
+        points = scroll(
+            base,
+            collection,
+            limit=min(page, max_points - len(out)),
+            offset=offset,
+            query_filter=query_filter,
+        )
         if not points:
             break
         out.extend(points)
@@ -84,6 +94,21 @@ def scroll_all(
         if len(points) < page:
             break
     return out
+
+
+def get_text(url: str, timeout: int = 60) -> str:
+    """GET *url* and return the body, or ``""`` when unavailable (fail-open).
+
+    Static CSV/JSON dataset URLs for the structured rug sources. A flaky
+    upstream must degrade the corpus, never abort the build.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
+            body = resp.read()
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+        log.warning("fetch_failed url=%s err=%s", url, str(exc)[:160])
+        return ""
+    return body.decode("utf-8", errors="replace")
 
 
 def collection_info(base: str, collection: str) -> dict[str, Any]:
@@ -110,6 +135,7 @@ __all__ = [
     "DEFAULT_URL",
     "QdrantError",
     "collection_info",
+    "get_text",
     "request",
     "scroll",
     "scroll_all",

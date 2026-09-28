@@ -35,6 +35,10 @@ from typing import Any
 
 from rugbrain.rug_events.scythe_text import parse_holders, parse_money, parse_peak_tvl
 
+#: Static archive URL. Owned by ``ingest_sources/scythe_radar_datasets``; the
+#: projection reuses its constant so there is one declaration of where this
+#: data lives, not two that can drift.
+DEAD_TOKENS_URL = "https://raw.githubusercontent.com/scytheradar/scythe-radar-datasets/main/data/dead-token-archive.csv"
 SOURCE = "scythe_radar"
 SOURCE_URL = "https://github.com/scytheradar/scythe-radar-datasets"
 LICENSE = "CC0-1.0"
