@@ -82,6 +82,47 @@ TERMS: dict[str, SourceTerms] = {
         redistribute=True,
         note="US Government work carries no copyright. Safe default for sanctions lookups.",
     ),
+    # 2026-09-28: the two verified rug datasets, added because
+    # ``rug_events`` derives structured rows from both and the registry is the
+    # gate that says whether that derivation is permitted.
+    "scythe_radar": SourceTerms(
+        source_id="scythe_radar",
+        license="CC0-1.0",
+        permitted_use=INTERNAL,
+        chunkable=True,
+        redistribute=True,
+        note=(
+            "CC0-1.0 public-domain dedication: no rights reserved, so deriving "
+            "structured rug_events rows and redistributing them are both fine. "
+            "The archive itself is bilingual (zh+en)."
+        ),
+    ),
+    "deflabx_solrpds": SourceTerms(
+        source_id="deflabx_solrpds",
+        license="see source_url - derivative measurements, no licence declared",
+        permitted_use=INTERNAL,
+        chunkable=True,
+        redistribute=False,
+        note=(
+            "On-chain liquidity measurements already ingested into this repo's "
+            "own defi_exploits/exploits collections. Projecting them into "
+            "structured rug_events rows is re-organisation of data we already "
+            "hold, not redistribution of the upstream project."
+        ),
+    ),
+    "crpwarner": SourceTerms(
+        source_id="crpwarner",
+        license="UNDECLARED - no SPDX licence in the repository",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=False,
+        redistribute=False,
+        note=(
+            "USENIX Sec'22 academic artifact with no declared licence. Stored "
+            "VERBATIM: never templated, rewritten or summarised. Research use "
+            "only. Gated in crpwarner_rug_events.py on "
+            "ALLOW_UNLICENSED_CORPORA=1; lead decision still open."
+        ),
+    ),
 }
 
 
