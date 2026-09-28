@@ -89,14 +89,22 @@ async def test_find_similar_historical_tokens_qdrant_fallback(
 
     monkeypatch.setattr("rugbrain.embeddings.get_embedding", fake_embedding)
 
+    # The lane resolver rewrites a base collection to its `_8b` twin (strict
+    # mode), so the mocks must name the RESOLVED collections or they silently
+    # stop intercepting and the fallback reports backend="none".
+    from rugbrain.qdrant_store.lane_resolver import resolve_collection
+
+    threat = resolve_collection("threat_intel_v2")
+    scams = resolve_collection("scams_v2")
+
     with respx.mock(base_url="http://rmi-qdrant-v2:6334", assert_all_called=False) as respx_mock:
         # Resolver probe (GET /) must answer so the primary URL is picked.
         respx_mock.get("/").respond(200, json={})
-        respx_mock.get("/collections/threat_intel_v2").respond(
+        respx_mock.get(f"/collections/{threat}").respond(
             200,
             json={"result": {"config": {"params": {"vectors": {"dense": {"size": 1024}}}}}},
         )
-        respx_mock.post("/collections/threat_intel_v2/points/search").respond(
+        respx_mock.post(f"/collections/{threat}/points/search").respond(
             200,
             json={
                 "result": [
@@ -118,11 +126,11 @@ async def test_find_similar_historical_tokens_qdrant_fallback(
                 ]
             },
         )
-        respx_mock.get("/collections/scams_v2").respond(
+        respx_mock.get(f"/collections/{scams}").respond(
             200,
             json={"result": {"config": {"params": {"vectors": {"dense": {"size": 1024}}}}}},
         )
-        respx_mock.post("/collections/scams_v2/points/search").respond(200, json={"result": []})
+        respx_mock.post(f"/collections/{scams}/points/search").respond(200, json={"result": []})
 
         result = await find_similar_historical_tokens(VALID_ADDRESS, chain="ethereum", limit=5)
 
