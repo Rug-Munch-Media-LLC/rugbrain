@@ -10,18 +10,25 @@ in the default path at all.
 Order is deliberate: extract first (cheap, offline), then flag, then
 decide. An empty or whitespace document never reaches Qdrant or Neo4j —
 the cheapest possible rejection is the right one. Nothing here raises:
-a result dict always comes back.
+a result dict always comes back. The two storage sinks and the outcome
+they produce live in ``digest_sinks``; this module is the decision.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
+from rugbrain.digest.digest_sinks import (
+    QdrantWriter,
+    outcome_reason,
+    prepare,
+    write_to_graph,
+    write_to_qdrant,
+)
 from rugbrain.digest.entities import EntitySet, extract
-from rugbrain.digest.graph import GraphWriteResult, write_episode
-from rugbrain.digest.payload import build_payload, stable_point_id
+from rugbrain.digest.graph import GraphWriteResult
 from rugbrain.digest.routing import (
     COLLECTION_NEWS,
     WRITABLE_COLLECTIONS,
@@ -58,32 +65,6 @@ class DigestResult:
         }
 
 
-class QdrantWriter(Protocol):
-    """The write surface this module needs. Implemented by an adapter."""
-
-    async def upsert(
-        self, collection: str, point_id: str, vector: list[float], payload: dict[str, Any]
-    ) -> bool: ...
-
-
-async def _upsert(
-    writer: QdrantWriter, embedder: Any, content: str, target: str, point_id: str, payload: dict
-) -> tuple[bool, bool]:
-    """Embed and write. Returns ``(written, failed)``.
-
-    Never raises: a dead Qdrant is a degraded capability, so the caller
-    gets a flag to report rather than an exception to propagate.
-    """
-    if embedder is None:
-        logger.info("no embedder supplied — skipping qdrant write for %s", point_id)
-        return False, False
-    try:
-        return await writer.upsert(target, point_id, await embedder(content), payload), False
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("qdrant write failed for %s: %s", target, str(exc)[:140])
-        return False, True
-
-
 async def digest_document(
     content: str,
     *,
@@ -117,30 +98,20 @@ async def digest_document(
             reason="collection_not_writable",
         )
 
-    point_id = stable_point_id(source, external_id, clean)
-    payload = build_payload(
+    point_id, payload = prepare(
         collection=target,
-        content=scrub(clean),
+        clean=scrub(clean),
         source=source,
         entities=entities,
         external_id=external_id,
         published_at=published_at,
     )
-
-    written, embedder_failed = await _upsert(writer, embedder, clean, target, point_id, payload)
-
-    graph_result: GraphWriteResult | None = None
-    if graph_driver is not None:
-        graph_result = write_episode(
-            graph_driver,
-            stable_id=point_id,
-            name=(name or clean[:120]).strip()[:200],
-            content=clean[:20_000],
-            source=source,
-            entities=entities,
-            severity=entities.severity,
-            source_description=source,
-        )
+    written, failed = await write_to_qdrant(
+        writer, embedder, content=clean, target=target, point_id=point_id, payload=payload
+    )
+    graph_result = write_to_graph(
+        graph_driver, point_id=point_id, clean=clean, name=name, source=source, entities=entities
+    )
 
     return DigestResult(
         ok=True,
@@ -150,19 +121,5 @@ async def digest_document(
         injection_flagged=flagged,
         qdrant_written=written,
         graph=graph_result,
-        reason=_reason(written, graph_result, embedder_failed),
+        reason=outcome_reason(written, graph_result, failed),
     )
-
-
-def _reason(written: bool, graph: GraphWriteResult | None, embedder_failed: bool) -> str | None:
-    """Distinguish "the graph is carrying this" from "nothing was stored".
-
-    A caller that ingests without an embedder still wants to know the
-    episode landed, or it will report success for a write that never
-    happened. ``None`` means the Qdrant write is the success.
-    """
-    if written:
-        return None
-    if graph is not None and graph.ok:
-        return "graph_only"
-    return "qdrant_write_failed" if embedder_failed else "not_written"

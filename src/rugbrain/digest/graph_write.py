@@ -10,7 +10,6 @@ string rather than propagating.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 from rugbrain.digest.graph_cypher import (
@@ -22,29 +21,10 @@ from rugbrain.digest.graph_cypher import (
     rel_query,
 )
 from rugbrain.digest.graph_driver import DEFAULT_GROUP, Driver, now_iso, stable_key
+from rugbrain.digest.graph_result import GraphWriteResult
 from rugbrain.digest.graph_rows import entity_rows
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class GraphWriteResult:
-    """Outcome of one episodic write. Never raises."""
-
-    ok: bool
-    nodes_created: int = 0
-    relationships_created: int = 0
-    entities_linked: int = 0
-    error: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "ok": self.ok,
-            "nodes_created": self.nodes_created,
-            "relationships_created": self.relationships_created,
-            "entities_linked": self.entities_linked,
-            "error": self.error,
-        }
 
 
 def _link_entities(session: Any, episode_key: str, rows: list[tuple], group_id: str) -> int:
