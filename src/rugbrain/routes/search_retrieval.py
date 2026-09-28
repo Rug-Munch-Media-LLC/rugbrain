@@ -58,9 +58,7 @@ def resolve_collection(collection: str) -> str:
     try:
         return require_public_collection(collection)
     except CollectionNotPublic as exc:
-        raise HTTPException(
-            status_code=403, detail={"error": "collection_not_available"}
-        ) from exc
+        raise HTTPException(status_code=403, detail={"error": "collection_not_available"}) from exc
 
 
 def resolve_canary(collection: str) -> str | None:
@@ -101,11 +99,23 @@ async def embed(query: str, canary_collection: str | None) -> list[float]:
 
 
 async def retrieve(req: RetrievalRequest, canary_collection: str | None) -> RetrievalResult:
-    """Embed, then run the hybrid dense+BM25 search against the store."""
+    """Embed, then run the hybrid dense+BM25 search against the store.
+
+    The target is lane-resolved BEFORE it is handed to ``hybrid_search``. This
+    is the call site that produced the live
+    ``qdrant_hybrid_search_blocked collection=rag_documents requested_dim=4096
+    reason=incompatible_schema``: the base name reached ``unified_route``, whose
+    consolidated-source leg returns ``UNIFIED_COLLECTION`` raw, so the query was
+    sent to the 2560 base while the serving lane had written the 4096 ``_8b``
+    twin. Resolving here is safe for the canary path because a canary target is
+    an already-provisioned distinct name, and ``resolve_collection`` passes any
+    name it does not own straight through.
+    """
     from rugbrain.qdrant_store import QdrantVectorStore
+    from rugbrain.search.lane_targets import resolve_search_collection
 
     embedding = await embed(req.query, canary_collection)
-    target = canary_collection or req.collection
+    target = canary_collection or resolve_search_collection(req.collection)
     candidate_limit = (
         min(max(req.limit * CANDIDATE_MULTIPLE, MIN_CANDIDATES), MAX_CANDIDATES)
         if req.rerank

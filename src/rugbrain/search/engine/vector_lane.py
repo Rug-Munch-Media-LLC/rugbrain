@@ -22,13 +22,24 @@ async def search_similar(
 ) -> list[dict[str, Any]]:
     """
     Semantic search across any collection.
-    Uses FAISS ANN index for fast retrieval, with semantic cache.
+    Uses FAISS ANN index for fast fallback, with semantic cache.
+
+    ``collection`` may be a BASE name. It is resolved here to the ``_8b`` twin
+    the serving lane populates, because ``resolve_search_collections`` already
+    resolves and this is the last point before the collection name reaches the
+    embedder and the index. Resolution is idempotent, so a caller that resolved
+    earlier is unaffected. The semantic cache is keyed on the RESOLVED name —
+    cache hits must never return rows from the retired 2560 generation under a
+    name that now means 4096.
 
     ``content_limit`` caps per-result content (see ``_enrich_ann_results``).
     """
     t0 = time.time()
 
     from rugbrain.search import engine as _e
+    from rugbrain.search.lane_targets import resolve_search_collection
+
+    collection = resolve_search_collection(collection) or collection
 
     embedder = await _e.get_embedder()
     query_vec = await embedder.embed_query(query)
@@ -137,11 +148,16 @@ async def _enrich_ann_results(
         return []
 
     from rugbrain.search import engine as _e
+    from rugbrain.search.lane_targets import redis_content_collection
 
+    # Redis content keys are written by ingest under the BASE collection name.
+    # `collection` here may already be lane-resolved (`*_8b`); strip the suffix
+    # so the enrichment finds the doc body instead of returning a bare hit.
+    key_coll = redis_content_collection(collection) or collection
     r = await _e._get_redis()
     pipe = r.pipeline()
     for ar in ann_results:
-        pipe.get(f"rag:{collection}:{ar['id']}")
+        pipe.get(f"rag:{key_coll}:{ar['id']}")
 
     raw_docs = await pipe.execute()
     enriched = []

@@ -6,6 +6,7 @@ collection-list resolution used by the search entry points.
 """
 
 from rugbrain.crypto_embeddings import COLLECTIONS
+from rugbrain.search import lane_targets as _lane
 
 from .constants import CODING_COLLECTIONS, SCAM_COLLECTIONS
 from .hints import (
@@ -65,11 +66,24 @@ def resolve_search_collections(
     - Otherwise, code-intent queries search CODING_COLLECTIONS first, then the
       default COLLECTIONS; scam/exploit queries search SCAM_COLLECTIONS first;
       general queries use only COLLECTIONS.
+
+    LANE RESOLUTION IS NOT OPTIONAL. This is the function that builds the
+    collection list for every orchestrated search (multi_collection,
+    three_pillar, knowledge), so a base name leaving here reaches
+    ``search_similar``/``query_points`` verbatim. The write path resolves the
+    same names through ``lane_resolver.resolve_collection``; if the read side
+    does not, the system ingests into a collection it cannot read. That is the
+    ``qdrant_hybrid_search_blocked requested_dim=4096`` defect — correct in
+    isolation (each name is a legal Qdrant collection), wrong in context, and
+    therefore invisible. So the routing decision and the resolution happen in
+    ONE place, and nothing downstream re-derives a name.
+
+    Order is preserved: this list is a priority order, not a set.
     """
     if collections:
-        return list(collections)
+        return _lane.resolve_search_collections(collections)
     if query and detect_coding_query(query):
-        return [*CODING_COLLECTIONS, *COLLECTIONS]
+        return _lane.resolve_search_collections((*CODING_COLLECTIONS, *COLLECTIONS))
     if query and detect_scam_query(query):
-        return [*SCAM_COLLECTIONS, *COLLECTIONS]
-    return list(COLLECTIONS)
+        return _lane.resolve_search_collections((*SCAM_COLLECTIONS, *COLLECTIONS))
+    return _lane.resolve_search_collections(COLLECTIONS)

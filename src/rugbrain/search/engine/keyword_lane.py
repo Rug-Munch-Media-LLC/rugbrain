@@ -14,6 +14,7 @@ import logging
 from typing import Any
 
 from rugbrain.rrf_fusion import _rrf_fuse
+from rugbrain.search.lane_targets import redis_content_collection
 from rugbrain.splade_bm25 import BM25Index
 
 from .constants import (
@@ -32,15 +33,21 @@ async def _collect_keyword_corpus(
     """Read chunk docs from Redis for the BM25 lane."""
     corpus: list[tuple[str, str, str, dict[str, Any]]] = []
     for coll in collections:
+        # Redis content keys are NOT lane-scoped: the ingest path writes
+        # `rag:{base}:{id}` and the resolver only renames the Qdrant collection.
+        # Search callers now hand us RESOLVED (`*_8b`) names, so strip the lane
+        # suffix back off before touching Redis. Skipping this makes the whole
+        # keyword lane return zero docs — a silent degradation, not an error.
+        key_coll = redis_content_collection(coll) or coll
         try:
-            doc_ids = list(await r.smembers(f"rag:idx:{coll}"))
+            doc_ids = list(await r.smembers(f"rag:idx:{key_coll}"))
         except Exception as e:
             logger.debug("hybrid: doc index read failed for %s: %s", coll, e)
             continue
         if not doc_ids:
             continue
         sample = doc_ids[:max_docs_per_collection]
-        keys = [f"rag:{coll}:{did}" for did in sample]
+        keys = [f"rag:{key_coll}:{did}" for did in sample]
         try:
             pipe = r.pipeline()
             for k in keys:

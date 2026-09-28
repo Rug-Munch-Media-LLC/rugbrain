@@ -41,6 +41,7 @@ from rugbrain.search.dim_guard import (
     EmbeddingDimMismatch,
     guard_query_dim,
 )
+from rugbrain.search.lane_targets import resolve_search_collection
 from rugbrain.search.rerank import apply_instruction, rerank_chunks
 
 # ── configuration ────────────────────────────────────────────────────────────
@@ -217,7 +218,13 @@ class DualTierRetriever:
         t0 = time.perf_counter()
         primary = pick_tier(query)
         inst_query = apply_instruction(query)
-        coll = collection or COLLECTION
+        # Resolve to the name the serving lane populated, BEFORE the guard reads
+        # the collection and BEFORE query_points names it. `COLLECTION` defaults
+        # to the base `rag_documents`; querying that base at 4096 dims is the
+        # exact mismatch this module's guard would then have to report as a
+        # collection fault. Resolving first makes the guard check the collection
+        # we actually intend to read.
+        coll = resolve_search_collection(collection or COLLECTION) or COLLECTION
         limit = TIER_PLAN[primary][1]
 
         try:

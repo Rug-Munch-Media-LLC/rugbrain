@@ -22,10 +22,10 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
 from typing import Any, Final
 
 from rugbrain.dim_policy import COLLECTION_DIM
+from rugbrain.search.vector_shapes import read_vector_dims, resolve_requested_dim
 
 log = logging.getLogger(__name__)
 
@@ -55,21 +55,16 @@ class EmbeddingDimMismatch(RuntimeError):
 
 
 def _collection_dims(params: Any) -> dict[str | None, int]:
-    """Normalise Qdrant vector params to ``{named_vector | None: size}``."""
-    raw = getattr(params, "vectors", None)
-    if raw is None:
-        return {}
-    if isinstance(raw, Mapping):
-        out: dict[str | None, int] = {}
-        for name, vp in raw.items():
-            size = getattr(vp, "size", None)
-            if size is None and isinstance(vp, Mapping):
-                size = vp.get("size")
-            if isinstance(size, int):
-                out[name] = size
-        return out
-    size = getattr(raw, "size", None)
-    return {None: size} if isinstance(size, int) else {}
+    """Normalise Qdrant vector params to ``{named_vector | None: size}``.
+
+    Delegates to :mod:`rugbrain.search.vector_shapes`, which owns BOTH shapes
+    (bare ``{"size": N}`` and named ``{"dense": {"size": N}}``). This module
+    used to carry its own copy and read only the named one, so a live bare
+    collection such as ``threat_intel_v2_8b`` parsed as "no vector config" and
+    raised ``UnknownCollection`` — a false report about a healthy 4096
+    collection. Do not re-inline the parsing here; the single parser is the fix.
+    """
+    return read_vector_dims(params)
 
 
 async def assert_collection_dim(
@@ -94,17 +89,11 @@ async def assert_collection_dim(
     if not dims:
         raise UnknownCollection(collection, RuntimeError("collection exposes no vector config"))
 
-    if vector_name is not None and vector_name not in dims:
-        raise UnknownCollection(
-            collection, f"vector name {vector_name!r} not in {sorted(map(str, dims))}"
-        )
-    present = dims.get(vector_name) if vector_name is not None else dims.get(None)
-    if present is None and len(dims) == 1:
-        # A single unnamed vector in a named-params collection.
-        present = next(iter(dims.values()))
+    present = resolve_requested_dim(dims, vector_name)
     if present is None:
         raise UnknownCollection(
-            collection, f"cannot resolve vector dim (names={sorted(map(str, dims))})"
+            collection,
+            f"cannot resolve vector dim (requested={vector_name!r} names={sorted(map(str, dims))})",
         )
     if present != want:
         raise EmbeddingDimMismatch(
