@@ -9,17 +9,41 @@
     "note": "rug_history=0.00 gold and technical_analysis=0.00 gold are REAL capability gaps (no rug_events collection, no TA substrate), not flaky rows. The per_class floors below deliberately sit at 0.0 for those two so a further collapse to zero coverage is caught, while any IMPROVEMENT raises the floor."
   },
   "global": {
-    "gold_rate": 0.70,
+    "gold_rate": 0.7,
     "hit_rate": 0.78,
     "mrr": 0.65
   },
   "per_class": {
-    "rug_history": {"gold_rate": 0.0, "hit_rate": 0.3},
-    "scam_detection": {"gold_rate": 0.8},
-    "exploit_knowledge": {"gold_rate": 0.75},
-    "news": {"gold_rate": 0.5},
-    "market": {"gold_rate": 0.5},
-    "technical_analysis": {"gold_rate": 0.0},
-    "skill_reference": {"gold_rate": 0.5}
+    "rug_history": {
+      "gold_rate": 0.8,
+      "hit_rate": 0.8
+    },
+    "scam_detection": {
+      "gold_rate": 0.8
+    },
+    "exploit_knowledge": {
+      "gold_rate": 0.75
+    },
+    "news": {
+      "gold_rate": 0.5
+    },
+    "market": {
+      "gold_rate": 0.5
+    },
+    "technical_analysis": {
+      "gold_rate": 0.0
+    },
+    "skill_reference": {
+      "gold_rate": 0.5
+    }
+  },
+  "_measured_2026_09_28_rug_events": {
+    "total": 25,
+    "errors": 0,
+    "gold_rate": 0.88,
+    "hit_rate": 0.92,
+    "mrr": 0.88,
+    "rug_history_gold_rate": 0.8,
+    "note": "Re-measured 2026-09-28 after the rug_events write landed and the eval started searching the collection each case names. Before this, the eval was UNAVAILABLE (embedder :8004 down) and the old retriever searched a non-existent crypto_intelligence, so every class scored as a clean miss. rug_history floor raised 0.0 -> 0.8: the substrate exists, so a drop below it is a real regression, not a capability gap. technical_analysis stays 0.0 - still genuinely no TA substrate. rug-03 (scan_intel) is the one remaining rug_history miss."
   }
 }
