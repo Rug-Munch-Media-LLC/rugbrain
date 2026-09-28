@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Fail when a crypto collection's newest document is older than THRESHOLD_DAYS.
+"""Fail when a crypto collection\'s newest ingest is older than THRESHOLD_DAYS.
 
 READ-ONLY against Qdrant. Scrolls payloads for the newest ingest-side timestamp
 per collection. It never writes, upserts or deletes a point and never triggers
@@ -8,36 +7,45 @@ exists to report. Exit 0 fresh / 1 stale / 2 config or runtime error.
 
 CONTENT DATES ARE NOT INGEST DATES
 ----------------------------------
-Content dates ("when the exploit happened", `metadata.due_date`) are
-properties of the world, not of the corpus. Measured: `rag_documents` and
-`defi_exploits` both carry content dates of 2026-12-08 - eleven days in the
-FUTURE - which read as "fresh". Only a field the ingester stamps on arrival
-answers "when was this collection last fed".
+Content dates ("when the exploit happened", `metadata.due_date`) are properties
+of the world, not of the corpus. Measured: `rag_documents` and `defi_exploits`
+both carry content dates of 2026-12-08 - eleven days in the FUTURE - which read
+as "fresh". Only a field the ingester stamps on arrival answers "when was this
+collection last fed".
+
+MEASUREMENT AND BLINDNESS ARE SEPARATE ANSWERS
+-----------------------------------------------
+This check used to report 61 collections and could not measure 48, which is
+where the blindness came from: an unmeasurable collection was a silent omission,
+not a finding. Measurement now lives in `rugbrain.collection_freshness`, which
+returns exactly one of two outcomes per collection:
+
+  MEASURED      an ingest-side field was found; the age is real and is judged.
+  UNMEASURABLE  no such field, the collection is empty, or it is served from
+                another store. Carries the reason.
+
+A QDRANT GAP IS NOT A FLEET GAP. The wallet-label corpora are declared
+`internal://neo4j/wallet-labels`; a Qdrant-side absence for one of those is
+reported `off_qdrant` with its declared home, never as stale. Calling a
+well-fed Neo4j corpus stale is a false alarm that teaches people to ignore this.
+
+Gate policy is unchanged and deliberate: exit 1 on MEASURED staleness only. A
+permanently-red gate gets muted, and a muted gate is worse than none - so the
+unmeasurable set is printed in full every run and named in
+docs/FRESHNESS-UNBLIND-2026-09-28.md rather than left as a gap nobody owns.
 
 THRESHOLD = 5 days, from the measured age distribution (2026-09-27)
 ---------------------------------------------------------------------
-The 10 collections carrying an ingest timestamp split cleanly in two:
+The collections carrying an ingest timestamp split cleanly in two: alive
+(0-4d) and stale (17d+), with an EMPTY gap between. sqrt(2 * 16) = 5.66, floored
+to 5: inside that gap with margin on BOTH sides, 2.5x above the alive cluster
+(so a weekend outage cannot false-alarm) and 3.2x below the first stale
+collection (a dead feed alerts in 5 days, not 17).
 
-    alive   0d 0d 0d 0d 1d 2d 2d 2d     (max 2d)
-    stale  16d 27d 27d ...               (min 16d)
-
-The sorted ages leave an EMPTY gap between 2d and 16d - nothing lands in it.
-sqrt(2 * 16) = 5.66, floored to 5: inside that gap with margin on BOTH sides,
-2.5x above the alive cluster (a weekend outage plus a missed run cannot
-false-alarm) and 3.2x below the first stale collection (a dead feed alerts in
-5 days, not 16).
-
-One threshold, not per-feed: ingestion runs at 15 min (telegram web/userbot),
-6 h (threat-intel sweep) and 24 h (retention + consolidation). A 5-day budget
-is ~480 missed cycles of the fastest lane, so one number covers every cadence
-without per-feed tuning that could re-baseline a dead feed into looking alive.
-
-MISSING TIMESTAMPS ARE REPORTED, NOT FAILED
--------------------------------------------
-30 of 40 crypto collections carry no ingest-side field at all. That is a real
-instrumentation gap, but a permanently-red gate gets muted and a muted gate is
-worse than none - so the check fails on MEASURED staleness only and lists the
-unverifiable set, keeping the gap visible and shrinking.
+One threshold, not per-feed: ingestion runs at 15 min (telegram), 6 h
+(threat-intel) and 24 h (retention). A 5-day budget is ~480 missed cycles of the
+fastest lane, so one number covers every cadence without per-feed tuning that
+could re-baseline a dead feed into looking alive.
 """
 
 from __future__ import annotations
@@ -46,30 +54,20 @@ import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-# Ingest-side fields, most-trusted first. Ordered deliberately: a collection
-# that stamps `ingested_at` is preferred over one that only stamps `ts`.
-INGEST_FIELDS = (
-    "metadata.ingested_at",
-    "ingested_at",
-    "metadata.detected_at",
-    "detected_at",
-    "metadata.ts",
-    "ts",
-    "created_at",
-    "metadata.created_at",
-    "metadata.first_seen",
-    "first_seen",
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+
+from rugbrain.collection_freshness import (
+    DEFAULT_QDRANT_URL,
+    FreshnessVerdict,
+    Measurement,
+    build_report,
+    list_collections,
 )
+from rugbrain.freshness_transport import QdrantError
 
 THRESHOLD_DAYS = 5
-SAMPLE_CAP = 25_000  # per collection; see coverage note in main()
-DEFAULT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334")
-PAGE = 2000
-TIMEOUT = 60
 
 # Owned by a different change: the `_8b` duplicates and the `*_test` scratch
 # collections are NOT checked here, and this script must never touch them.
@@ -77,154 +75,100 @@ EXCLUDED_SUFFIXES = ("_8b", "_test", "_tailtest")
 EXCLUDED_NAMES = frozenset({"sp_tailtest", "security_patterns_test"})
 
 
-class QdrantError(RuntimeError):
-    """Qdrant was unreachable or answered something unusable."""
+def included(name: str) -> bool:
+    """True when this collection is in scope for the crypto staleness gate.
 
-
-def qget(path: str, url: str, body: dict | None = None) -> dict:
-    """GET (or POST-scroll) Qdrant. Raises QdrantError, never bare-excepts."""
-    req = urllib.request.Request(
-        url + path,
-        data=json.dumps(body).encode() if body is not None else None,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            return json.load(resp)
-    except urllib.error.URLError as exc:
-        raise QdrantError("qdrant unreachable at %s: %s" % (path, exc.reason)) from exc
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise QdrantError("qdrant returned non-JSON for %s" % path) from exc
-
-
-def leaves(node: object, prefix: str = "") -> dict:
-    """Flatten a payload to dotted-path leaves. Lists are sampled, not walked."""
-    if isinstance(node, dict):
-        out: dict = {}
-        for key, val in node.items():
-            out.update(leaves(val, prefix + key + "."))
-        return out
-    if isinstance(node, list):
-        out = {}
-        for item in node[:5]:
-            out.update(leaves(item, prefix))
-        return out
-    return {prefix.rstrip("."): node}
-
-
-def parse_ts(value: object) -> datetime | None:
-    """Parse a scalar into an aware UTC datetime, or None if unusable."""
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        secs = float(value)
-        if secs > 1e12:
-            secs /= 1000.0
-        if secs <= 1e9:
-            return None
-        try:
-            return datetime.fromtimestamp(secs, timezone.utc)
-        except (OverflowError, OSError, ValueError):
-            return None
-    if not isinstance(value, str) or len(value) < 8:
-        return None
-    text = value.strip().replace("Z", "+00:00")
-    for fmt in (None, "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y"):
-        try:
-            got = datetime.fromisoformat(text) if fmt is None else datetime.strptime(text, fmt)
-        except (ValueError, TypeError):
-            continue
-        return got.replace(tzinfo=timezone.utc) if got.tzinfo is None else got
-    return None
-
-
-def iter_points(coll: str, url: str, cap: int):
-    """Yield up to `cap` points by scroll. Read-only; fails closed."""
-    offset, seen = None, 0
-    while seen < cap:
-        body = {"limit": min(PAGE, cap - seen), "with_payload": True, "with_vector": False}
-        if offset is not None:
-            body["offset"] = offset
-        result = qget("/collections/%s/points/scroll" % coll, url, body).get("result", {})
-        points = result.get("points") or []
-        for point in points:
-            yield point
-        seen += len(points)
-        offset = result.get("next_page_offset")
-        if not points or offset is None:
-            return
-
-
-def inspect(coll: str, url: str, cap: int) -> dict:
-    """Newest ingest timestamp for one collection, plus coverage evidence."""
-    best, field, dated, scanned = None, None, 0, 0
-    for point in iter_points(coll, url, cap):
-        scanned += 1
-        if not isinstance(point, dict):
-            continue
-        flat = leaves(point.get("payload"))
-        for name in INGEST_FIELDS:
-            if name not in flat:
-                continue
-            got = parse_ts(flat[name])
-            if got is not None:
-                dated += 1
-                if best is None or got > best:
-                    best, field = got, name
-                break
-    return {
-        "collection": coll,
-        "newest": best.isoformat() if best else None,
-        "field": field,
-        "age_days": (datetime.now(timezone.utc) - best).days if best else None,
-        "scanned": scanned,
-        "dated": dated,
-    }
-
-
-def list_collections(url: str) -> list[str]:
-    """Names of existing collections, minus the ones this check must not touch."""
-    names = [c["name"] for c in qget("/collections", url).get("result", {}).get("collections", [])]
-    return sorted(n for n in names if n not in EXCLUDED_NAMES and not n.endswith(EXCLUDED_SUFFIXES))
+    The `_8b` twins and the scratch collections are a different change's
+    business. This script must not touch them.
+    """
+    return name not in EXCLUDED_NAMES and not name.endswith(EXCLUDED_SUFFIXES)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the check. Returns 0 fresh, 1 stale, 2 configuration error."""
+    """Run the check. Returns 0 fresh, 1 measured-stale, 2 config error."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--threshold-days", type=int, default=THRESHOLD_DAYS)
-    ap.add_argument("--sample-cap", type=int, default=SAMPLE_CAP)
-    ap.add_argument("--url", default=DEFAULT_URL)
+    ap.add_argument("--sample-cap", type=int, default=250)
+    ap.add_argument("--url", default=DEFAULT_QDRANT_URL)
     ap.add_argument("--json", action="store_true", dest="as_json")
     args = ap.parse_args(argv)
 
     try:
-        rows = [inspect(c, args.url, args.sample_cap) for c in list_collections(args.url)]
+        names = [n for n in list_collections(args.url) if included(n)]
     except QdrantError as exc:
-        print("STALENESS-CHECK ERROR: %s" % exc, file=sys.stderr)
+        print(f"STALENESS-CHECK ERROR: {exc}", file=sys.stderr)
         return 2
 
-    stale = [r for r in rows if r["age_days"] is not None and r["age_days"] > args.threshold_days]
-    blind = [r for r in rows if r["age_days"] is None]
+    probes = build_report(args.url, cap=args.sample_cap, only=names)
+    measured = [p for p in probes if p.measurement is Measurement.MEASURED]
+    stale = [
+        p
+        for p in measured
+        if p.verdict is FreshnessVerdict.STALE or (p.age_days or 0) > args.threshold_days
+    ]
+    blind = [p for p in probes if p.measurement is Measurement.UNMEASURABLE]
+
     if args.as_json:
-        print(json.dumps({"threshold_days": args.threshold_days, "rows": rows}, indent=1))
+        print(
+            json.dumps(
+                {
+                    "threshold_days": args.threshold_days,
+                    "checked_at": datetime.now(UTC).isoformat(),
+                    "rows": [p.as_dict() for p in sorted(probes, key=lambda r: r.collection)],
+                },
+                indent=1,
+            )
+        )
         return 1 if stale else 0
 
-    for row in sorted(stale, key=lambda r: -r["age_days"]):
+    for probe in sorted(stale, key=lambda p: -(p.age_days or 0)):
         print(
-            "STALE  %-26s newest=%s (%s) age=%sd  threshold=%sd"
-            % (row["collection"], row["newest"], row["field"], row["age_days"], args.threshold_days)
+            f"STALE  {probe.collection:<26} newest_ingest={probe.newest.isoformat()}"
+            f" ({probe.field}) age={probe.age_days}d  threshold={args.threshold_days}d"
         )
-    for row in blind:
+    for probe in sorted(measured, key=lambda p: p.collection):
+        if probe in stale:
+            continue
+        print(f"OK     {probe.collection:<26} age={probe.age_days}d  field={probe.field}")
+
+    off_qdrant = [p for p in blind if p.reason == "off_qdrant"]
+    no_field = [p for p in blind if p.reason == "no_ingest_field"]
+    empty = [p for p in blind if p.reason == "empty"]
+    errors = [p for p in blind if p.reason.startswith("probe_error")]
+
+    print(f"\n--- UNMEASURABLE ({len(blind)}) — a collection that cannot state its own age ---")
+    for probe in sorted(no_field, key=lambda p: -p.points):
         print(
-            "BLIND  %-26s no ingest timestamp in %d scanned docs"
-            % (row["collection"], row["scanned"])
+            f"BLIND  {probe.collection:<26} no ingest field in {probe.scanned} scanned"
+            f" · {probe.points} pts"
         )
+    for probe in sorted(off_qdrant, key=lambda p: p.collection):
+        print(
+            f"OTHER  {probe.collection:<26} served from"
+            f" {probe.store.value if probe.store else '?'} (declared home) — not a Qdrant gap"
+        )
+    for probe in sorted(empty, key=lambda p: p.collection):
+        print(f"EMPTY  {probe.collection:<26} declared, never fed · {probe.points} pts")
+    for probe in errors:
+        print(f"ERROR  {probe.collection:<26} {probe.reason}")
+
+    blind_points = sum(p.points for p in blind)
+    total_points = sum(p.points for p in probes)
+    share = (100.0 * blind_points / total_points) if total_points else 0.0
     print(
-        "\n%d collection(s) checked · %d stale · %d unmeasurable · threshold=%sd"
-        % (len(rows), len(stale), len(blind), args.threshold_days)
+        f"\n{len(probes)} collection(s) checked · {len(measured)} measured · {len(stale)} stale"
+        f" · {len(blind)} unmeasurable · blind mass {blind_points}/{total_points} pts"
+        f" ({share:.1f}%) · threshold={args.threshold_days}d"
     )
+    if blind:
+        print(
+            f"\nThe unmeasurable set is NOT clean. {len(blind)} collections carry no ingest"
+            f" timestamp ({blind_points} blind points, {share:.1f}% of corpus mass) — see"
+        )
+        print("docs/FRESHNESS-UNBLIND-2026-09-28.md for the per-item reason and what it would take")
+        print("to measure each one.")
     if stale:
-        print("\nA collection with no recent document is a DEAD FEED. Check its unit/cron:")
+        print("\nA collection with no recent ingest is a DEAD FEED. Check its unit/cron:")
         print("  systemctl list-timers | grep -Ei 'rag|ingest'")
         print("  journalctl -u <unit> --since '-48 hours'")
     return 1 if stale else 0
