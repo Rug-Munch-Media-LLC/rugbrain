@@ -81,6 +81,34 @@ ignore_imports =
     # 'No matches for ignored import', which reads like a clean bill of
     # health. rag_tools still reaches chain_parquet and keeps its own rule.
 
+    # ── completed 2026-09-28 (lane: import-boundaries) ──────────────────────
+    # These 13 edges were MISSING from the list, so the contract reported them
+    # as violations. Every one is TRANSITIVE: routes -> a service module ->
+    # qdrant_client / httpx. A route calling a service that happens to use a
+    # client is CORRECT layering; what the contract forbids is a route opening
+    # the client itself. Each entry records the intermediate service so the
+    # edge can be re-checked rather than trusted.
+    #
+    # guard_against_stale_ignores (tests/test_import_boundaries.py) fails if any
+    # entry here no longer matches an import, so this list cannot rot back into
+    # a false green — which is exactly how the rule named
+    # `crypto_code_retrieval` while matching nothing for a fortnight.
+    rugbrain.routes.search -> rugbrain.chain_data_service
+    rugbrain.routes.search_pkg._shared -> rugbrain.endpoints
+    rugbrain.routes.search_pkg.code -> rugbrain.public_crypto_code
+    rugbrain.routes.search_pkg.multi -> rugbrain.canary_routing
+    rugbrain.routes.search_pkg.multi -> rugbrain.embeddings
+    rugbrain.routes.search_pkg.multi -> rugbrain.qdrant_store
+    rugbrain.routes.search_pkg.multi -> rugbrain.reranker
+    rugbrain.routes.search_pkg.scam -> rugbrain.search_service
+    rugbrain.routes.search_pkg.threat -> rugbrain.endpoints
+    rugbrain.routes.search_pkg.threat -> rugbrain.reranker
+    rugbrain.routes.search_postprocess -> rugbrain.pre_generation_reflection
+    rugbrain.routes.search -> rugbrain.public_crypto_code
+    rugbrain.routes.search_chain_data -> rugbrain.chain_data_service
+    rugbrain.routes.search_pkg.threat -> rugbrain.canary_routing
+    rugbrain.routes.search -> rugbrain.canary_routing
+
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)
 type = independence

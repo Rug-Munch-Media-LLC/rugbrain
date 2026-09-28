@@ -764,6 +764,10 @@ def test_ingest_document_parent_child_splits_and_links(monkeypatch: pytest.Monke
     monkeypatch.setattr(filters_mod, "_get_redis", _async_get_redis(fake_redis))
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(filters_mod, "get_embedder", _async_get_embedder(embedder))
+    # `_embed_by_collection`'s default branch calls the module-level
+    # `embed_query`, NOT the injected embedder, so a unit test that only fakes
+    # `get_embedder` still opens a real network connection. Patch both.
+    monkeypatch.setattr(filters_mod, "embed_query", embedder.embed_query)
 
     fake_pr = parent_retriever_mod.ParentRetriever(redis="unused")
     stored: list[dict[str, Any]] = []
@@ -822,6 +826,10 @@ def test_ingest_document_parent_child_falls_back_on_unsplittable(monkeypatch: py
     monkeypatch.setattr(filters_mod, "_get_redis", _async_get_redis(fake_redis))
     embedder = _RecordingEmbedder()
     monkeypatch.setattr(filters_mod, "get_embedder", _async_get_embedder(embedder))
+    # `_embed_by_collection`'s default branch calls the module-level
+    # `embed_query`, NOT the injected embedder, so a unit test that only fakes
+    # `get_embedder` still opens a real network connection. Patch both.
+    monkeypatch.setattr(filters_mod, "embed_query", embedder.embed_query)
 
     async def run() -> Any:
         return await filters_mod.ingest_document("news_articles", "   \n  ", parent_child=True)
