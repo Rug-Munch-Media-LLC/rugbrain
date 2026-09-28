@@ -71,6 +71,17 @@ async def _store_docs(
         coll = _route_collection(source_name, default_collection, d.metadata)
         by_collection[coll].append((d.doc_id, d.content, dict(d.metadata), d.source or source_name))
 
+    # Per-collection attempt/success accounting. A collection asked to take N
+    # documents and accepting NONE is not a per-document problem, it is being
+    # refused wholesale — overwhelmingly a dimension/schema mismatch where the
+    # store's guard correctly fails closed:
+    #   qdrant_insert_blocked collection=privacy_protocol requested_dim=2560
+    #                                            configured_dims=[4096]
+    # Counting that as N ordinary errors was correct but INVISIBLE: errors was a
+    # number nobody keyed on, so the run exited 0 having written nothing.
+    attempted_by_collection: dict[str, int] = defaultdict(int)
+    embedded_by_collection: dict[str, int] = defaultdict(int)
+
     for coll, group in sorted(by_collection.items()):
         pending: list[tuple[str, str, dict[str, Any], str]] = []
         for doc_id, content, metadata, source in group:
@@ -83,6 +94,7 @@ async def _store_docs(
             pending.append((doc_id, content, metadata, source))
         if not pending:
             continue
+        attempted_by_collection[coll] += len(pending)
         if dry_run:
             stats["embedded"] += len(pending)
             continue
@@ -110,8 +122,24 @@ async def _store_docs(
             )
             if ok:
                 stats["embedded"] += 1
+                embedded_by_collection[coll] += 1
             else:
                 stats["errors"] += 1
+
+    blocked = sorted(
+        c
+        for c, n in attempted_by_collection.items()
+        if n > 0 and embedded_by_collection.get(c, 0) == 0
+    )
+    if blocked:
+        stats["blocked_collections"] = blocked
+        logger.error(
+            "collections_blocked source=%s collections=%s — the store refused "
+            "every write; most likely a vector-dimension mismatch, not a document "
+            "problem",
+            source_name,
+            blocked,
+        )
     return stats
 
 
@@ -131,6 +159,8 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
     # reported, which is the whole point: a green exit that silently ingested
     # nothing is the failure mode this whole path exists to prevent.
     failed_sources: list[str] = []
+    # source->collection pairs the store refused outright.
+    blocked_collections: set[str] = set()
     names = [source_filter] if source_filter else list_sources()
     async with httpx.AsyncClient(timeout=60.0) as client:
         for name in names:
@@ -173,6 +203,8 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
             per_source[name] = stats
             for k in ("fetched", "embedded", "skipped", "errors"):
                 totals[k] += stats[k]
+            for bc in stats.get("blocked_collections", []):
+                blocked_collections.add(f"{name}->{bc}")
             totals["sources"] += 1
             logger.info(
                 "source_stored name=%s coll=%s fetched=%d embedded=%d skipped=%d errors=%d",
@@ -187,6 +219,7 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
     totals["per_source"] = per_source
     # Names only, never contents. This is the signal a timer keys on.
     totals["fetch_failed_sources"] = sorted(failed_sources)
+    totals["blocked_collections"] = sorted(blocked_collections)
     return totals
 
 
@@ -217,7 +250,19 @@ def main() -> int:
     failed = totals.get("fetch_failed_sources") or []
     if failed:
         print(f"\nFETCH FAILED for {len(failed)} source(s): {', '.join(failed)}")
-    return 1 if failed else 0
+
+    # A blocked collection is the WRITE-side twin of a failed fetch. Fetching
+    # 500 documents and having the store refuse every one of them is not a
+    # successful run, and reporting it as one is how privacy_protocol sat at 0
+    # points while the pipeline reported green.
+    blocked = totals.get("blocked_collections") or []
+    if blocked:
+        print(
+            f"\nBLOCKED (store refused every write) for {len(blocked)} "
+            f"source/collection pair(s):\n  {', '.join(blocked)}"
+        )
+
+    return 1 if (failed or blocked) else 0
 
 
 if __name__ == "__main__":
