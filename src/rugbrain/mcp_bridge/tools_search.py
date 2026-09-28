@@ -35,6 +35,7 @@ async def search_codebase(
     chain: str | None = None,
     code_type: str | None = None,
     limit: int = 20,
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Search the RMI codebase + security-pattern KB (MCP ``rmi_search``).
 
@@ -42,7 +43,7 @@ async def search_codebase(
         {
           "ok", "bridge" ("mcp" | "rag_fallback"), "tool": "search_codebase",
           "query", "results": [{kind, id, content, score, metadata}], "total",
-          "raw": <MCP payload when bridge=mcp>,
+          "raw": <MCP payload when include_raw=True and bridge=mcp>,
         }
 
     Falls back to RugBrain's own coding knowledge when the MCP is unreachable.
@@ -50,6 +51,12 @@ async def search_codebase(
     Guarded: the query is sanitized for prompt injection before dispatch
     (``guard`` metadata on the response; refusal when nothing remains).
     Result content is redacted for secret patterns before returning.
+
+    ``include_raw`` is OFF by default. Measured 2026-09-28 over 20 real
+    results: the normalized payload is 7,821 tokens and the ``raw`` echo of
+    the same objects is 7,799 — 50% of the response was a verbatim duplicate
+    of data already in ``results``. A caller debugging the bridge asks for it
+    explicitly; a model paying per token never does.
     """
     from rugbrain import mcp_bridge as _pkg
 
@@ -90,16 +97,18 @@ async def search_codebase(
     results = [
         _pkg._redact_result(r, ("content", "document", "code_answer", "title")) for r in results
     ]
-    return {
+    payload: dict[str, Any] = {
         "ok": True,
         "bridge": "mcp",
         "tool": "search_codebase",
         "query": query,
         "results": results[:limit],
         "total": len(results),
-        "raw": raw,
         "guard": guard,
     }
+    if include_raw:
+        payload["raw"] = raw
+    return payload
 
 
 async def trace_codebase(

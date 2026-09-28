@@ -34,6 +34,7 @@ from typing import Any, cast
 import httpx
 
 from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+from rugbrain.token_budget import clip, record
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +74,25 @@ def _clear_strain(url: str | None = None) -> None:
     else:
         _strain_failures.pop(url, None)
 
+
 # Max content chars fed to the cross-encoder per chunk (truncation guard).
 # Server ctx raised 4096 -> 8192 (2026-08-22); query+doc must fit the budget,
 # so ~6000 chars of doc text is safe for typical queries.
 _RERANK_TEXT_LIMIT = 6000
+
+# ── Token budget (measured 2026-09-28) ─────────────────────────────────
+# The 6000-char cap above is 2142 tokens (measured corpus ratio 0.357
+# tok/char), which is 2.8x more cross-encoder context than a rerank decision
+# needs. Measured on the content path: the top-12 news_v2 chunks place 69.8%
+# of their tokens in the first 400 chars, and 768 tok covers p99 of every
+# collection measured (known_scams p99=744). See ``rugbrain.token_budget``.
+_TOKEN_BUDGET_CAP = int(os.getenv("RUGBRAIN_TOKEN_RERANK", "768"))
+
+# The deep tier used to score EVERY fused candidate. A code-intent query fans
+# out over 8 collections x limit=10 -> 80 candidates -> measured 17,488
+# tokens to the cross-encoder for one query (35,976 at limit=20), while the
+# live tier capped at 40 the whole time. This bounds the deep tier the same way.
+DEEP_CANDIDATE_CAP: int = int(os.getenv("RERANKER_DEEP_CANDIDATE_CAP", "40"))
 
 # ── Vertical instruction library ─────────────────────────────────────────────
 # Qwen3-Reranker is instruction-aware (official docs: +1-5% retrieval; FollowIR
@@ -259,11 +275,18 @@ async def get_reranker() -> Reranker:
 
 
 def _chunk_text(doc: dict[str, Any]) -> str:
-    """Extract searchable text from a chunk dict."""
+    """Extract searchable text from a chunk dict, clamped to the rerank budget.
+
+    The char cap stays as a cheap pre-filter (it avoids handing a 200k-char
+    blob to the tokenizer); the token cap is what actually bounds what the
+    cross-encoder sees.
+    """
     for key in ("content", "text", "chunk_text", "title", "summary"):
         val = doc.get(key)
         if isinstance(val, str) and val.strip():
-            return val[:_RERANK_TEXT_LIMIT]
+            clipped = clip(val[:_RERANK_TEXT_LIMIT], _TOKEN_BUDGET_CAP)
+            record("rerank_doc", clipped)
+            return clipped
     return ""
 
 
@@ -348,9 +371,7 @@ async def _score_candidates(
                 for r in hosted_results:
                     pos = r.get("index")
                     if isinstance(pos, int) and 0 <= pos < len(hosted_capped):
-                        scores_hosted[hosted_capped[pos][0]] = float(
-                            r.get("relevance_score", 0.0)
-                        )
+                        scores_hosted[hosted_capped[pos][0]] = float(r.get("relevance_score", 0.0))
                 return scores_hosted, "deepinfra:qwen3-reranker-4b"
         # 1st rung (the only local lane): the 4B, candidate-capped. The
         # 0.6B speed tier that used to sit here is retired (endpoint gone).
@@ -370,9 +391,13 @@ async def _score_candidates(
         return scores, served
 
     # ── deep tier (default): local 4B first (free), hosted fallback ──
+    # Bounded: the deep tier used to score every fused candidate uncapped,
+    # while the live tier was capped at 40. A code-intent query produced 80
+    # candidates (17,488 measured tokens); this makes the two rungs agree.
+    deep_valid = valid[:DEEP_CANDIDATE_CAP]
     if await _fast_health():
         results = await _post_rerank(
-            RERANKER_URL, query, [t for _, t in valid], RERANKER_TIMEOUT, "4B"
+            RERANKER_URL, query, [t for _, t in deep_valid], RERANKER_TIMEOUT, "4B"
         )
         if results is not None:
             async with _lock:
@@ -381,8 +406,8 @@ async def _score_candidates(
             scores_deep: list[float] = [0.0] * len(candidates)
             for r in results:
                 pos = r.get("index")
-                if isinstance(pos, int) and 0 <= pos < len(valid):
-                    orig_idx = valid[pos][0]
+                if isinstance(pos, int) and 0 <= pos < len(deep_valid):
+                    orig_idx = deep_valid[pos][0]
                     scores_deep[orig_idx] = float(r.get("relevance_score", 0.0))
             return scores_deep, "qwen3-reranker-4b"
         async with _lock:
