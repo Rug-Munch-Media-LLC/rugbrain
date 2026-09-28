@@ -51,7 +51,6 @@
   "src/rugbrain/ingest_sources/trailofbits_publications.py": 227,
   "src/rugbrain/ingestion_quality.py": 373,
   "src/rugbrain/journalism.py": 490,
-  "src/rugbrain/main.py": 811,
   "src/rugbrain/market_awareness.py": 358,
   "src/rugbrain/market_context.py": 372,
   "src/rugbrain/market_data.py": 227,

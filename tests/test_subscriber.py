@@ -134,8 +134,15 @@ class TestRAGAuthMiddleware:
         import importlib
 
         # Reload to pick up new env
+        import rugbrain.app.auth
+        import rugbrain.app.config
         import rugbrain.main
 
+        # RMI_RAG_API_KEY / DEV_MODE moved to app.config at import time, so a
+        # reload of main alone no longer re-reads the environment. Reload config
+        # first, then main (the bare RAGAuthMiddleware ref follows it).
+        importlib.reload(rugbrain.app.config)
+        importlib.reload(rugbrain.app.auth)
         importlib.reload(rugbrain.main)
 
         # Patch app instantiation
@@ -169,8 +176,16 @@ class TestRAGAuthMiddleware:
 
         import importlib
 
+        import rugbrain.app.config
+        import rugbrain.app.config as cfg
         import rugbrain.main
 
+        # RMI_RAG_API_KEY / DEV_MODE moved to app.config at import time, so a
+        # reload of main alone no longer re-reads the environment. Reload config
+        # first, then main (the bare RAGAuthMiddleware ref follows it).
+        importlib.reload(cfg)
+        importlib.reload(rugbrain.app.config)
+        importlib.reload(rugbrain.app.auth)
         importlib.reload(rugbrain.main)
 
         from fastapi import FastAPI
@@ -249,8 +264,15 @@ class TestRAGAuthMiddleware:
         os.environ.pop("RMI_RAG_API_KEY", None)
         os.environ.pop("DEV_MODE", None)
 
+        import rugbrain.app.auth
+        import rugbrain.app.config
         import rugbrain.main
 
+        # RMI_RAG_API_KEY / DEV_MODE moved to app.config at import time, so a
+        # reload of main alone no longer re-reads the environment. Reload config
+        # first, then main (the bare RAGAuthMiddleware ref follows it).
+        importlib.reload(rugbrain.app.config)
+        importlib.reload(rugbrain.app.auth)
         importlib.reload(rugbrain.main)
 
         from fastapi import FastAPI

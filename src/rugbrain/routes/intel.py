@@ -252,7 +252,6 @@ async def news_top_articles(
     used per article, so a reader can tell rated content from heuristic-ranked
     content. Fails open to an empty list when Qdrant is unreachable.
     """
-    from rugbrain.news_rating import rate_article_from_rating_dict
     from rugbrain.qdrant_store import QdrantVectorStore
 
     store = QdrantVectorStore()
