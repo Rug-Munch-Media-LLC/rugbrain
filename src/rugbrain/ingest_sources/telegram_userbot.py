@@ -27,6 +27,9 @@ Config (env):
     TELETHON_SESSION_STRING               exported StringSession (preferred)
     RAG_TG_STATE_FILE                     default /var/lib/rugbrain/tg_ingest_state.json
     RAG_TG_MAX_MESSAGES_PER_CHANNEL       default 40 per cycle
+    RAG_TG_MAX_CHANNELS_PER_CYCLE         default 150 per cycle (BUDGET, not a
+                                          filter — see sweep_order.py: channels
+                                          rotate by staleness so none starves)
     RAG_TG_SHILL_WINDOW_MINUTES           default 90
     RAG_TG_SHILL_MIN_CHANNELS             default 4
 
@@ -55,6 +58,17 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+# Classification (channel_taxonomy) and sweep ordering (sweep_order) live in
+# their own modules — one purpose each, both unit-testable without a session.
+# Re-exported here: CATEGORY_RULES/CATEGORY_WEIGHT/categorize were part of this
+# module's surface and stay part of it.
+from rugbrain.ingest_sources.channel_taxonomy import (
+    CATEGORY_RULES,  # noqa: F401 — re-exported: part of this module's surface
+    CATEGORY_WEIGHT,
+    categorize,
+)
+from rugbrain.ingest_sources.sweep_order import mark_swept, order_for_sweep, track_channels
+
 logger = logging.getLogger("rugbrain.tg_userbot")
 
 # ── Config ────────────────────────────────────────────────────────────────
@@ -68,17 +82,6 @@ MAX_PER_CHANNEL = int(os.getenv("RAG_TG_MAX_MESSAGES_PER_CHANNEL", "40"))
 SHILL_WINDOW_MIN = int(os.getenv("RAG_TG_SHILL_WINDOW_MINUTES", "90"))
 SHILL_MIN_CHANNELS = int(os.getenv("RAG_TG_SHILL_MIN_CHANNELS", "4"))
 MAX_CHANNELS_PER_CYCLE = int(os.getenv("RAG_TG_MAX_CHANNELS_PER_CYCLE", "150"))
-
-# Category keyword rules (lowercase substring match on channel title/username).
-# Order matters: first match wins.
-CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
-    ("scam_caller", ("scam", "fraud", "call out", "callout", "expose", "rug alert", "honeypot")),
-    ("shiller", ("shill", "alpha caller", "calls", "100x", "gem", "moonshot", "degen calls")),
-    ("security", ("security", "exploit", "hack", "certik", "blocksec", "cisa", "phishing")),
-    ("news", ("news", "journal", "times", "post", "wire", "daily", "broadcast", "herald")),
-    ("data", ("data", "analytics", "onchain", "on-chain", "whale", "defi", "tvl", "metrics")),
-    ("market", ("market", "trading", "signals", "futures", "perps", "btc", "eth")),
-]
 
 TICKER_RE = re.compile(r"\$[A-Za-z][A-Za-z0-9]{1,15}\b")
 CA_RE = re.compile(r"\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b")
@@ -104,24 +107,6 @@ IMPORTANCE_KEYWORDS: dict[str, float] = {
     "listing": 0.5,
     "airdrop": 0.5,
 }
-
-CATEGORY_WEIGHT: dict[str, float] = {
-    "scam_caller": 1.4,
-    "security": 1.35,
-    "shiller": 1.1,
-    "news": 1.0,
-    "data": 0.95,
-    "market": 0.8,
-    "general": 0.7,
-}
-
-
-def categorize(title: str, username: str) -> str:
-    blob = f"{title} {username}".lower()
-    for cat, needles in CATEGORY_RULES:
-        if any(n in blob for n in needles):
-            return cat
-    return "general"
 
 
 def normalize_text(text: str) -> str:
@@ -196,7 +181,9 @@ async def _get_client() -> Any:
     from telethon.sessions import StringSession
 
     if not API_ID or not API_HASH:
-        raise RuntimeError("TELEGRAM_API_ID / TELEGRAM_API_HASH not set (gopass [INTERNAL_SECRET_PATH])")
+        raise RuntimeError(
+            "TELEGRAM_API_ID / TELEGRAM_API_HASH not set (gopass [INTERNAL_SECRET_PATH])"
+        )
     if SESSION_STRING:
         return TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
     return TelegramClient(SESSION_FILE, API_ID, API_HASH)
@@ -365,34 +352,29 @@ async def run_cycle(max_channels: int = MAX_CHANNELS_PER_CYCLE) -> dict[str, Any
         summary["channels_seen"] = len(inventory)
         state["inventory"] = inventory  # full categorized inventory persists
 
-        # Round-robin across categories so every lane advances each cycle
-        by_cat: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for ch in inventory:
-            by_cat[ch["category"]].append(ch)
-        ordered: list[dict[str, Any]] = []
-        i = 0
-        while len(ordered) < max_channels:
-            added = False
-            for cat in sorted(by_cat):
-                if i < len(by_cat[cat]):
-                    ordered.append(by_cat[cat][i])
-                    added = True
-                    if len(ordered) >= max_channels:
-                        break
-            if not added:
-                break
-            i += 1
+        # Every enumerated channel is tracked, so state converges on the
+        # inventory instead of trailing it by the quiet channels.
+        summary["channels_tracked_added"] = track_channels(state, inventory)
+
+        # Staleness order: never-swept first, then oldest last_swept. The cap
+        # is a per-cycle BUDGET — with a rotating cursor no channel starves.
+        ordered = order_for_sweep(inventory, state, max_channels)
+        summary["channels_swept"] = len(ordered)
+        logger.info(
+            "tg_sweep_budget inventory=%d budget=%d swept=%d tracked=%d",
+            len(inventory),
+            max_channels,
+            len(ordered),
+            len(state.get("channels") or {}),
+        )
 
         all_msgs: list[TgMessage] = []
         for ch in ordered:
             msgs = await _fetch_new_messages(client, ch, state)
             all_msgs.extend(msgs)
-            if msgs:
-                state["channels"][str(ch["id"])] = {
-                    "last_msg_id": max(m.msg_id for m in msgs),
-                    "title": ch["title"],
-                    "category": ch["category"],
-                }
+            # Stamp EVERY swept channel, including those with 0 messages,
+            # otherwise a quiet channel is re-fetched first on every cycle.
+            mark_swept(state, ch["id"], max((m.msg_id for m in msgs), default=0))
         summary["messages"] = len(all_msgs)
 
         # Cross-channel echo counts (dedup signal + importance amplifier)
