@@ -21,10 +21,18 @@ import os
 import re
 import time
 from collections import defaultdict
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+
+from rugbrain.ingest_sources import ingest_cycle
+from rugbrain.ingest_sources.ingest_scoring import (
+    CATEGORY_RULES,
+    CATEGORY_WEIGHT,
+    IMPORTANCE_KEYWORDS,
+    TICKER_RE,
+)
+from rugbrain.ingest_sources.tg_preview import parse_preview_page
 
 logger = logging.getLogger("rugbrain.tgweb")
 
@@ -46,135 +54,6 @@ _TEXT_RE = re.compile(
     r'<div class="tgme_widget_message_text[^"]*"[^>]*>(?P<text>.*?)</div>', re.DOTALL
 )
 _TIME_RE = re.compile(r'<time[^>]*datetime="(?P<dt>[^"]+)"')
-_TAG_RE = re.compile(r"<[^>]+>")
-
-
-def _clean(fragment: str) -> str:
-    text = _TAG_RE.sub(" ", fragment)
-    text = (
-        text.replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-    )
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def parse_preview_page(html: str, channel: str) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for m in _MSG_RE.finditer(html):
-        body = m.group("body")
-        tm = _TEXT_RE.search(body)
-        if not tm:
-            continue
-        text = _clean(tm.group("text"))
-        if len(text) < 30:
-            continue
-        dtm = _TIME_RE.search(body)
-        try:
-            dt = datetime.fromisoformat(dtm.group("dt")) if dtm else None
-        except ValueError:
-            dt = None
-        out.append(
-            {
-                "channel": m.group("channel") or channel,
-                "msg_id": int(m.group("msg_id")),
-                "text": text,
-                "ts": (dt or datetime.now(UTC)).isoformat(),
-            }
-        )
-    return out
-
-
-CATEGORY_RULES: list[tuple[str, tuple[str, ...]]] = [
-    (
-        "scam_caller",
-        ("scam", "fraud", "call out", "callout", "expose", "rug alert", "honeypot", "rugpull"),
-    ),
-    (
-        "shiller",
-        ("shill", "alpha caller", "calls", "100x", "gem", "moonshot", "degen", "ape", "pump"),
-    ),
-    (
-        "security",
-        ("security", "exploit", "hack", "certik", "blocksec", "cisa", "phishing", "audit"),
-    ),
-    (
-        "news",
-        (
-            "news",
-            "journal",
-            "times",
-            "post",
-            "wire",
-            "daily",
-            "broadcast",
-            "herald",
-            "media",
-            "feed",
-            "digest",
-        ),
-    ),
-    (
-        "data",
-        (
-            "data",
-            "analytics",
-            "onchain",
-            "on-chain",
-            "whale",
-            "defi",
-            "tvl",
-            "metrics",
-            "scanner",
-            "tracker",
-        ),
-    ),
-    (
-        "market",
-        (
-            "market",
-            "trading",
-            "signals",
-            "futures",
-            "perps",
-            "btc",
-            "eth",
-            "solana",
-            "crypto",
-            "coin",
-            "token",
-        ),
-    ),
-]
-CATEGORY_WEIGHT = {
-    "scam_caller": 1.4,
-    "security": 1.35,
-    "shiller": 1.1,
-    "news": 1.0,
-    "data": 0.95,
-    "market": 0.8,
-    "general": 0.7,
-}
-IMPORTANCE_KEYWORDS = {
-    "hack": 3.0,
-    "exploit": 3.0,
-    "drained": 3.0,
-    "stolen": 2.5,
-    "rug": 2.5,
-    "rugpull": 3.0,
-    "honeypot": 2.5,
-    "scam": 2.0,
-    "liquidity": 1.5,
-    "audit": 1.0,
-    "warning": 1.5,
-    "alert": 1.5,
-}
-TICKER_RE = re.compile(r"\$[A-Za-z][A-Za-z0-9]{1,15}\b")
-CA_RE = re.compile(r"\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b")
-
 
 def categorize(channel: str) -> str:
     blob = channel.lower()
@@ -286,9 +165,18 @@ async def run_cycle(max_channels: int = MAX_PER_CYCLE) -> dict[str, Any]:
     for m in all_msgs:
         m["chash"] = hashlib.sha256(m["text"].lower().encode()).hexdigest()[:16]
         echo[m["chash"]] += 1
-    seen_ring = set(state.get("seen_hashes", []))
-    fresh = [m for m in all_msgs if m["chash"] not in seen_ring]
-    state["seen_hashes"] = list(seen_ring | {m["chash"] for m in fresh})
+    # Dedupe against the bounded ring, then the crypto-relevance gate. This path
+    # writes the bulk of news_v2 and had no gate at all, which is how war
+    # channels and forex spam reached a crypto collection. Shared with the
+    # userbot path via ingest_cycle so the policy cannot drift.
+    fresh, state["seen_hashes"], gate_stats = ingest_cycle.gate_and_bound(
+        all_msgs,
+        seen_hashes=state.get("seen_hashes", []),
+        get_text=lambda m: m["text"],
+        get_category=lambda m: categorize(m["channel"]),
+        get_hash=lambda m: m["chash"],
+    )
+    summary.update(gate_stats)
 
     campaigns = detect_campaigns(fresh)
     docs: list[dict[str, Any]] = []

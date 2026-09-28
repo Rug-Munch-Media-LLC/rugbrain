@@ -48,6 +48,31 @@ class Scored(Protocol):
     c_hash: str
 
 
+def gate_items(
+    items: list[Any],
+    *,
+    get_text: Any,
+    get_category: Any,
+    min_verdict: str = "crypto-general",
+) -> tuple[list[Any], dict[str, int]]:
+    """Gate items of ANY shape, given accessors for their text and category.
+
+    The policy should not care whether a message arrives as the userbot's
+    dataclass or the web ingester's dict, so the accessors are the seam rather
+    than a shared type. Returns (kept, verdict_counts).
+    """
+    order = {"noise": 0, "crypto-general": 1, "topical": 2}
+    floor = order.get(min_verdict, 1)
+    kept: list[Any] = []
+    counts: dict[str, int] = defaultdict(int)
+    for item in items:
+        verdict = classify_text(get_category(item), get_text(item))
+        counts[verdict] += 1
+        if order.get(verdict, 0) >= floor:
+            kept.append(item)
+    return kept, dict(counts)
+
+
 def gate(
     messages: list[Any], *, min_verdict: str = "crypto-general"
 ) -> tuple[list[Any], dict[str, int]]:
@@ -58,16 +83,12 @@ def gate(
     (``security``, ``scam_caller``, ``defi`` …) is topical regardless of body
     text, which is what keeps a bare alert from a security firm in.
     """
-    order = {"noise": 0, "crypto-general": 1, "topical": 2}
-    floor = order.get(min_verdict, 1)
-    kept: list[Any] = []
-    counts: dict[str, int] = defaultdict(int)
-    for message in messages:
-        verdict = classify_text(message.category, message.text)
-        counts[verdict] += 1
-        if order.get(verdict, 0) >= floor:
-            kept.append(message)
-    return kept, dict(counts)
+    return gate_items(
+        messages,
+        get_text=lambda m: m.text,
+        get_category=lambda m: m.category,
+        min_verdict=min_verdict,
+    )
 
 
 def representative_score(

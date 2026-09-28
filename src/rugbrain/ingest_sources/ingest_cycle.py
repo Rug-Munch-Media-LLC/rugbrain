@@ -69,3 +69,33 @@ def echo_counts(messages: list[Fetched]) -> dict[str, int]:
     for message in messages:
         counts[message.c_hash] += 1
     return counts
+
+
+def gate_and_bound(
+    items: list[Any],
+    *,
+    seen_hashes: list[str],
+    get_text: Any,
+    get_category: Any,
+    get_hash: Any,
+    max_seen: int = MAX_SEEN_HASHES,
+) -> tuple[list[Any], list[str], dict[str, Any]]:
+    """Drop already-seen items, bound the ring, and apply the crypto gate.
+
+    Shared by the userbot and the t.me/s web path so both get the same policy
+    and the same ring bound. The earlier code kept the ring unbounded, which is
+    how it saturated at 20,000 and began re-admitting old items every cycle.
+    """
+    from rugbrain.ingest_sources.ingest_quality import gate_items
+
+    known = set(seen_hashes)
+    fresh = [item for item in items if get_hash(item) not in known]
+    bounded = list(deque(seen_hashes, maxlen=max_seen))
+    bounded.extend(h for h in (get_hash(i) for i in fresh) if h not in set(bounded))
+    pre_gate = len(fresh)
+    kept, verdicts = gate_items(fresh, get_text=get_text, get_category=get_category)
+    return (
+        kept,
+        bounded[-max_seen:],
+        {"gated_out": pre_gate - len(kept), "gate": verdicts},
+    )
