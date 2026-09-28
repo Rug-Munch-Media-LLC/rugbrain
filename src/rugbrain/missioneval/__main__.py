@@ -37,17 +37,22 @@ async def _qdrant_retriever(query: str, collection: str, top_k: int) -> list[dic
     """Adapt the production retriever to the eval's ``(query, collection, k)``.
 
     The eval grades on document text and id, so the result contexts are passed
-    through as-is. A failure surfaces as an exception, which the runner records
-    as a per-case error rather than a silent miss — a broken retrieval path must
-    not be able to look like a poor corpus.
+    through as-is.
+
+    Two rules, both of them the point of this adapter:
+
+    * the case's OWN collection is searched (the retriever's global default is
+      a different corpus entirely);
+    * ``tier="unavailable"`` RAISES. The old code returned ``result.contexts
+      or []``, so a dead embedder graded as "no hits" and the runner recorded
+      no error. Asserting on the artifact (a real search that produced
+      documents) is what makes the score mean something.
     """
-    import aiohttp
+    from rugbrain.search.dual_tier import TIER_UNAVAILABLE, DualTierRetriever
 
-    from rugbrain.search.dual_tier import DualTierRetriever
-
-    async with aiohttp.ClientSession() as http:
-        retriever = DualTierRetriever(http=http)
-        result = await retriever.retrieve(query, top_k=top_k)
+    result = await DualTierRetriever().retrieve(query, top_k=top_k, collection=collection)
+    if result.tier == TIER_UNAVAILABLE:
+        raise RuntimeError(f"retrieval unavailable: {result.reason}")
     return list(result.contexts or [])
 
 
@@ -58,38 +63,31 @@ def _default_retriever() -> Callable[..., Any]:
 def _embedder_alive() -> tuple[bool, str]:
     """Can a query actually be embedded right now?
 
-    This exists because the dual-tier retriever DEGRADES SILENTLY: when the
-    embedder is down it logs "both tiers unavailable" and returns zero docs.
-    The runner records no error, so an infrastructure outage is indistinguishable
-    from a corpus that genuinely cannot answer — and the gate would then fail
+    This exists because a retrieval path that DEGRADES SILENTLY reports zero
+    docs with no error, so an infrastructure outage is indistinguishable from
+    a corpus that genuinely cannot answer — and the gate would then fail
     every capability class on every blip. A gate that cries wolf during
     incidents gets ignored, which is worse than no gate at all. So probe first
     and report UNAVAILABLE separately from a regression.
+
+    The probe goes through :func:`embed_query` — the SAME seam
+    :class:`~rugbrain.search.dual_tier.DualTierRetriever` embeds with. It
+    used to POST to ``QWEN_EMBED_URL`` directly, which probed the retriever's
+    own (now retired) local lane: a system could be perfectly healthy on
+    DeepInfra while the preflight reported it dead. One seam, one probe.
     """
+    from rugbrain.search.dim_guard import configured_dim
+    from rugbrain.search.dual_tier import embed_query
+
+    want = configured_dim()
     try:
-        dims = asyncio.run(_probe_embed_dim())
+        vec = asyncio.run(embed_query("liveness probe"))
     except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"
-    return True, f"query embedding dim = {dims}"
-
-
-async def _probe_embed_dim() -> int:
-    """Probe the SAME lane the dual-tier retriever embeds with.
-
-    `get_query_embedding` resolves `RAG_EMBED_BACKEND=auto` (DeepInfra here),
-    but `DualTierRetriever` embeds against `QWEN_EMBED_URL` (the local :8004
-    lane). Probing the wrong one reports a healthy system while retrieval
-    returns nothing, so the probe must hit the retriever's own URL.
-    """
-    import os
-
-    import aiohttp
-
-    url = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-    async with aiohttp.ClientSession() as http:
-        async with http.post(f"{url}/embeddings", json={"input": "liveness probe"}) as resp:
-            resp.raise_for_status()
-            return len((await resp.json())["data"][0]["embedding"])
+    got = len(vec)
+    if got != want:
+        return False, f"query_dim_mismatch embedder={got} configured={want}"
+    return True, f"query embedding dim = {got} (matches RAG_EMBED_DIM={want})"
 
 
 def main() -> int:
