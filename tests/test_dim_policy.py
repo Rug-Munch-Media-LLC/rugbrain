@@ -7,9 +7,15 @@ import pytest
 from rugbrain.dim_policy import COLLECTION_DIM, is_valid_for_collection, normalize_dims
 
 
-def test_collection_dim_is_canonical_qwen4b():
-    """Canonical write dim: qwen3-embedding-4b native (2560), local == hosted."""
-    assert COLLECTION_DIM == 2560
+def test_collection_dim_is_canonical_qwen8b():
+    """Canonical write dim: qwen3-embedding-8b native (4096), local == hosted.
+
+    Renamed from test_collection_dim_is_canonical_qwen4b. The 2560 assertion
+    here was the last thing actively defending the retired 4B lane: it failed
+    the moment COLLECTION_DIM was corrected, which is exactly what a test is
+    for, but it means the old default had a test guarding it.
+    """
+    assert COLLECTION_DIM == 4096
 
 
 def test_exact_passthrough_renormalized():

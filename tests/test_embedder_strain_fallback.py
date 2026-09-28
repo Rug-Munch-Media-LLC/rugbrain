@@ -32,7 +32,7 @@ def _no_live_lanes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_query_served_by_deepinfra_primary(monkeypatch):
-    """Queries resolve via the canonical DeepInfra lane (2560, same space)."""
+    """Queries resolve via the canonical DeepInfra lane (4096, same space)."""
     called: list[str] = []
 
     async def _di(text, dim=emb.EMBEDDING_DIM, query=False, timeout=30.0):  # noqa: ASYNC109 - mirrors prod signature
@@ -42,7 +42,7 @@ async def test_query_served_by_deepinfra_primary(monkeypatch):
 
     monkeypatch.setattr(emb, "_deepinfra_embed", _di)
     vec = await emb.get_query_embedding("flash loan attack")
-    assert len(vec) == 2560
+    assert len(vec) == emb.EMBEDDING_DIM == 4096
     assert called == ["deepinfra"]
 
 

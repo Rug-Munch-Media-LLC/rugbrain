@@ -5,20 +5,41 @@ confidently-wrong results (non-semantic vectors). When all neural
 backends fail, the RAG system now fails LOUDLY instead of returning
 gibberish.
 
-Tier 1: DeepInfra Qwen/Qwen3-Embedding-4B (2560d, hosted, keyed) - CANONICAL primary
-Tier 2: Qwen3-Embedding-4B (2560d, local llama.cpp :8004) - same-model fallback
+Tier 1: DeepInfra Qwen/Qwen3-Embedding-8B (4096d, hosted, keyed) - CANONICAL primary
+Tier 2: Qwen3-Embedding-8B (4096d, local llama.cpp :8004) - same-model fallback
 
 2026-08-29 embed consolidation (locked doctrine): ONE canonical embedder for
-all new writes — qwen3-embedding-4b @ 2560-dim, DeepInfra primary + local
-:8004 fallback (same model ⇒ same vector space, fallback stays
-index-compatible). The 0.6b speed-embed tier is retired for NEW writes;
-gateway (:8010) / OpenRouter / NVIDIA NIM remain only as explicit
-``RAG_EMBED_BACKEND`` overrides below (legacy lanes). The 0.6b RERANK
-ladder is text-based and unaffected.
+all new writes — DeepInfra primary + local :8004 fallback (same model ⇒ same
+vector space, fallback stays index-compatible). The 0.6b speed-embed tier is
+retired for NEW writes; gateway (:8010) / OpenRouter / NVIDIA NIM remain only
+as explicit ``RAG_EMBED_BACKEND`` overrides below (legacy lanes). The 0.6b
+RERANK ladder is text-based and unaffected.
+
+2026-09-28 (operator decision): the canonical lane is 8B @ 4096-dim, and that
+is now the CODE DEFAULT, not only the env default. The 4B/2560 generation is
+retired. This docstring previously said "Qwen3-Embedding-4B (2560d) -
+CANONICAL primary" and "all new writes — qwen3-embedding-4b @ 2560-dim", which
+was a false statement of fact that survived the migration and would have
+misled every later reader.
+
+Why the default had to move with the env: the env files and all collections
+were already 4096, but every code path that lacked the env fell back to 2560
+and was then refused by the store's dimension guard:
+
+  qdrant_insert_blocked collection=privacy_protocol requested_dim=2560
+                                         configured_dims=[4096]
+
+The guard is correct and stays. The default was the bug.
+
+The base (non-``_8b``) collections are 2560 and are deliberately RETAINED
+under the no-overwrite rule, so this module can no longer write to them. That
+is intended: a 4096 default must not be coerced into a 2560 space. A module
+still pointing at a base name will now fail loudly instead of silently
+writing to the wrong lane.
 
 Design (per DESIGN.md M4):
 - Single async API: `await get_embedding(text) -> list[float]`
-- qwen3-embedding-4b preferred (via llama.cpp /embeddings)
+- qwen3-embedding-8b preferred (via llama.cpp /embeddings)
 - Embedding dim is reported via EMBEDDING_DIM; collections use same dim
 - All embeddings are float lists (JSON-serializable) for Redis storage
 - FAIL LOUD: if both backends fail, raise RAGUnavailableError
@@ -39,11 +60,16 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-# 2026-08-29 CONSOLIDATION: canonical corpus dim is the 4B native 2560
-# (DeepInfra + local :8004 both serve it — see dim_policy.MODEL_DIMS). The
-# interim RAG_EMBED_DIM=2048 (nemotron migration era) is retired; override
-# only if you truly run a different corpus dim.
-EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "2560"))
+# CANONICAL LANE IS 8B @ 4096 (operator decision 2026-09-28). This block used
+# to default to 4B @ 2560 and to call that CANONICAL, and it stayed wrong
+# through the entire 8B migration: env and every collection were already 4096,
+# so paths WITH the env were correct and paths WITHOUT it fell back to 2560 and
+# were refused by the store's dimension guard. The guard was right; the default
+# was the bug. 2048 (nemotron era) and 2560 (4B) are retired as defaults.
+# A 2560 base collection is deliberately retained under the no-overwrite rule, so
+# this module can no longer write to it — intended, because a 4096 vector must
+# never be coerced into a 2560 space.
+EMBEDDING_DIM: Final = int(os.getenv("RAG_EMBED_DIM", "4096"))
 
 # Qwen3-Embedding query instruction template. The model was trained with an
 # instruction prefix on the QUERY side and plain text on the DOCUMENT side.
@@ -58,19 +84,19 @@ QUERY_INSTRUCT = (
 # Embedding versioning (ADR-0007 compliance)
 # Stamped on every embedding so downstream consumers can migrate
 # when the model changes. Format: {model}:{version}:{dim}
-EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 EMBED_MODEL_VERSION = os.getenv("RAG_EMBED_VERSION", "2.0")
 EMBED_VERSION_STAMP = f"{EMBED_MODEL_NAME}:{EMBED_MODEL_VERSION}:{EMBEDDING_DIM}"
 EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI build number
 # Backends
 _BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
-# Qwen3-Embedding-4B served by llama.cpp (OpenAI-compatible /embeddings).
-# QWEN_EMBED_URL is the canonical embedder endpoint (llama.cpp Qwen3-4B).
+# Qwen3-Embedding-8B served by llama.cpp (OpenAI-compatible /embeddings).
+# QWEN_EMBED_URL is the canonical embedder endpoint (llama.cpp Qwen3-8B).
 QWEN_EMBED_URL = os.getenv(
     "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
 ).rstrip("/")
 GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://127.0.0.1:8010")
-QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
+QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"))
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
 OPENROUTER_MODEL = os.getenv("RAG_OPENROUTER_EMBED_MODEL", "openrouter/your-model-here")
 
@@ -98,7 +124,7 @@ class RAGUnavailableError(Exception):
 
 
 def _int_reachable() -> bool:
-    """Quick probe: is Qwen3-4B listening? Cached per process via env.
+    """Quick probe: is Qwen3-8B listening? Cached per process via env.
 
     Cache expires after 30s so a cold-start llama.cpp that was unreachable
     during early startup will be retried automatically. Set
@@ -133,7 +159,9 @@ def _resize(vec: list[float], dim: int) -> list[float]:
     """L2-normalize a vector; REJECT dim mismatches (TOP-100 #25).
 
     Silent zero-pad/truncate masked provider contract drift (a 1024-dim vec
-    silently padded into a 2560-dim index poisons retrieval). Fail loud.
+    silently padded into a 2560-dim index poisons retrieval). Fail loud. See
+    # EMBEDDING_DIM below: the canonical dim is now 4096 and a 2560 index is a
+    # retained retired generation this module must not write to.
     """
     if len(vec) != dim:
         log.error("embedding_dim_mismatch got=%d want=%d", len(vec), dim)
@@ -151,7 +179,7 @@ async def _int_embed(
     query: bool = False,
     timeout: float = 300.0,  # noqa: ASYNC109 - per-call policy: queries fail fast
 ) -> list[float] | None:
-    """Try Qwen3-Embedding-4B via the OpenAI-compatible /embeddings.
+    """Try Qwen3-Embedding-8B via the OpenAI-compatible /embeddings.
 
     Returns None on any failure.
 
@@ -181,12 +209,12 @@ async def _int_embed(
 
 
 # ── DeepInfra hosted lane (2026-08-29 consolidation) ─────────────────────────
-# CANONICAL primary: DeepInfra hosts the exact same Qwen3-Embedding-4B the
-# local :8004 serves — 2560-dim, same vector space, always warm, no local
+# CANONICAL primary: DeepInfra hosts the exact same Qwen3-Embedding-8B the
+# local :8004 serves — 4096-dim, same vector space, always warm, no local
 # CPU contention. Key: DEEPINFRA_API_KEY env var, else
 # a file at DEEPINFRA_KEY_FILE (pattern: the deepinfra_embed embed lane).
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
-DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 
 
 def _deepinfra_ready() -> bool:
@@ -205,7 +233,7 @@ async def _deepinfra_embed(
     query: bool = False,
     timeout: float = 30.0,  # noqa: ASYNC109 - per-call policy: queries fail fast
 ) -> list[float] | None:
-    """DeepInfra Qwen/Qwen3-Embedding-4B (2560-dim) — CANONICAL primary lane.
+    """DeepInfra Qwen/Qwen3-Embedding-8B (4096-dim) — CANONICAL primary lane.
 
     Same model as local :8004 ⇒ identical vector space, so fallback between
     the two lanes never breaks index compatibility. Larger-than-target
@@ -251,7 +279,7 @@ async def _gateway_embed(
 ) -> list[float] | None:
     """Model Services Gateway :8010 lane (breaker + cloud fallback inside).
 
-    Tier is chosen by DIM COMPATIBILITY with the target index: 2560 -> deep
+    Tier is chosen by DIM COMPATIBILITY with the target index: 4096 -> deep
     lane, anything else -> speed lane. Cloud-served responses are REFUSED for
     indexing (different model space poisons retrieval) — logged and None'd so
     the caller falls through / fails loud per T04.
@@ -273,12 +301,12 @@ async def _gateway_embed(
             return None
         if d.get("served_by") == "cloud":
             # 2026-08-29 consolidation: the gateway's deep cloud lane is now
-            # DeepInfra Qwen/Qwen3-Embedding-4B — the SAME model as local
+            # DeepInfra Qwen/Qwen3-Embedding-8B — the SAME model as local
             # :8004 ⇒ its vectors are index-compatible. Cross-model cloud
             # (legacy qwen3-8b / liquid / nemotron lanes) is still refused:
             # a different model space poisons retrieval.
             cloud_model = str(d.get("cloud_model", ""))
-            same_model = cloud_model.split("/")[-1].lower() == "qwen3-embedding-4b"
+            same_model = cloud_model.split("/")[-1].lower() == "qwen3-embedding-8b"
             if not same_model:
                 log.warning(
                     "gateway_served_cloud tier=%s model=%s dims=%s — refused for "
@@ -401,7 +429,7 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
     """Core embedding resolution (separated for latency instrumentation).
 
     2026-08-29 consolidation: auto = DeepInfra → local :8004 → fail loud.
-    Both lanes serve the SAME qwen3-embedding-4b ⇒ one 2560 vector space,
+    Both lanes serve the SAME qwen3-embedding-8b ⇒ one 4096 vector space,
     so fallback never breaks index compatibility. Gateway (:8010),
     OpenRouter and NIM are DROPPED from auto — legacy lanes kept only for
     the explicit ``RAG_EMBED_BACKEND`` overrides below.
@@ -456,12 +484,12 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
         "no embedding backend available (deepinfra + local :8004 failed). "
         "Per T04, hash fallback removed to prevent false-confidence in RAG results. "
         f"Verify: DEEPINFRA_API_KEY set? QWEN_EMBED_URL={QWEN_EMBED_URL} "
-        "qwen3-embedding-4b loaded?"
+        "qwen3-embedding-8b loaded?"
     )
 
 
 async def get_embedding(text: str, query: bool = False) -> list[float]:
-    """Async embedding API. Returns 2560d float list.
+    """Async embedding API. Returns 4096d float list.
 
     Per T04: NO hash fallback. If both neural backends fail,
     raises RAGUnavailableError. The RAG endpoint translates this to

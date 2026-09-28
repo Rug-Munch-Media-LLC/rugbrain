@@ -2,18 +2,21 @@ from rugbrain.embeddings import EMBED_MODEL_NAME, EMBED_VERSION_STAMP, EMBEDDING
 
 
 def test_embedding_dim() -> None:
-    # Registry-driven since the dim-policy work: qwen3-embedding-4b serves
-    # its native 2560 on :8004 (was hard-padded to 1024 pre-migration).
-    assert EMBEDDING_DIM == 2560
+    # Registry-driven since the dim-policy work. 4096 = qwen3-embedding-8b
+    # native, the canonical lane since the operator decision of 2026-09-28.
+    # This asserted 2560 until then, so the DEFAULT was 2560 with a test
+    # proving it was intentional. It was not intentional; it was a migration
+    # that stopped halfway and took the test with it.
+    assert EMBEDDING_DIM == 4096
 
 
 def test_model_name() -> None:
-    assert EMBED_MODEL_NAME == "qwen3-embedding-4b"
+    assert EMBED_MODEL_NAME == "qwen3-embedding-8b"
 
 
 def test_version_stamp() -> None:
-    assert "qwen3-embedding-4b" in EMBED_VERSION_STAMP
-    assert "2560" in EMBED_VERSION_STAMP
+    assert "qwen3-embedding-8b" in EMBED_VERSION_STAMP
+    assert "4096" in EMBED_VERSION_STAMP
     assert ":" in EMBED_VERSION_STAMP
 
 
