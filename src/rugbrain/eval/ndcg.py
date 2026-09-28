@@ -190,3 +190,21 @@ def mrr(retrieved_ids: Sequence[str], relevant_ids: Iterable[str]) -> float:
         if doc_id in rel_set:
             return 1.0 / (i + 1)
     return 0.0
+
+
+def recall_from_gains(gains: Sequence[float], k: int) -> float:
+    """Fraction of the top-``k`` results that are relevant.
+
+    Bounded by construction: the numerator is a subset of the denominator, so
+    unlike the id-family recall — where an empty relevant set returns 1.0 and a
+    mismatched set returns nonsense — this can never exceed 1.0.
+
+    Lives here with the other metrics rather than in ``ratchet_runner``, which
+    the 2026-09-28 split reduced to orchestration. The split briefly dropped the
+    definition while leaving the name in ``__all__``, which is how a phantom
+    export survives a refactor looking like a live API.
+    """
+    if not gains or k <= 0:
+        return 0.0
+    window = list(gains[:k])
+    return sum(1 for g in window if g > 0.0) / len(window)
