@@ -159,7 +159,22 @@ def _parse_funds_lost(value: Any) -> float:
     if not text:
         return 0.0
     multiplier = 1.0
-    match = re.search(r"([\d,\.]+)\s*([KMB])?", text, re.IGNORECASE)
+    # The suffix must NOT be followed by another letter. Without that guard the
+    # regex matched the leading B of a TOKEN TICKER and read it as "billions":
+    #   '15114 BUSD' -> 15114 x 1e9 = $15,114,000,000,000  (observed 2026-09-28)
+    #   '~ 50 BNB'   -> 50   x 1e9 = $50,000,000,000
+    #   '3.3 BNB'    -> $3.3bn
+    # so a single BUSD loss was reported as 15 TRILLION dollars, and it was the
+    # top-ranked pattern in the whole collection. BNB and BUSD are both real,
+    # common tokens in this corpus, so the bug fired constantly and always
+    # upward. The guard is ONLY on the single-letter forms; the spelled-out
+    # forms are matched explicitly, because putting (?![A-Za-z]) on a group that
+    # also covers "billion" broke '2.5 billion' -> 2.
+    match = re.search(
+        r"([\d,\.]+)\s*(billion|million|thousand|[KMB](?![A-Za-z]))?",
+        text,
+        re.IGNORECASE,
+    )
     if not match:
         return 0.0
     try:
@@ -167,11 +182,11 @@ def _parse_funds_lost(value: Any) -> float:
     except ValueError:
         return 0.0
     suffix = (match.group(2) or "").upper()
-    if suffix == "K":
+    if suffix == "K" or suffix == "THOUSAND":
         multiplier = 1_000
-    elif suffix == "M":
+    elif suffix == "M" or suffix == "MILLION":
         multiplier = 1_000_000
-    elif suffix == "B":
+    elif suffix == "B" or suffix == "BILLION":
         multiplier = 1_000_000_000
     return number * multiplier
 
