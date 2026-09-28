@@ -36,6 +36,11 @@ ALLOWED_CANARY_SOURCES = frozenset(
         "market_health",
         "regulation_enforcement",
         "scam_patterns",
+        # 2026-09-28: Lane B adds scam_pattern_signatures_8b, the AGGREGATED
+        # pattern set. Listed separately from scam_patterns on purpose: that
+        # collection is per-victim cryptoscamdb, this is 90 signatures. Both
+        # can serve a canary and they answer different questions.
+        "scam_pattern_signatures_8b",
         "stablecoin_market",
         "wallet_profiles",
         "wallet_v2",

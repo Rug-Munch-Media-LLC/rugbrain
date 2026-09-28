@@ -102,6 +102,12 @@ _RMI_RAG_OWNED_COLLECTIONS: frozenset[str] = frozenset(
         # DEFAULT_COLLECTION-vs-owned-set drift as the 8 added above.
         "rug_events",
         "scam_signatures",
+        # 2026-09-28: target of scripts/ingest_scam_patterns.py (Lane B,
+        # commit d17b4fa). Deliberately a NEW name: scam_patterns already holds
+        # 7,102 cryptoscamdb PER-VICTIM records, and these are 90 AGGREGATED
+        # attack-pattern signatures. Operator rule is that nothing is overwritten,
+        # so the two meanings must never share a collection. Both stay.
+        "scam_pattern_signatures_8b",
         # Explicitly reviewed, redacted ContextCrypto projection only.
         # Never add the internal ContextCrypto collections to this gate.
         "public_crypto_patterns",
