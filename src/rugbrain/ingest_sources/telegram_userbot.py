@@ -62,7 +62,7 @@ from typing import Any
 # their own modules — one purpose each, both unit-testable without a session.
 # Re-exported here: CATEGORY_RULES/CATEGORY_WEIGHT/categorize were part of this
 # module's surface and stay part of it.
-from rugbrain.ingest_sources import ingest_cycle
+from rugbrain.ingest_sources import ingest_cycle, tg_client
 from rugbrain.ingest_sources.channel_taxonomy import (
     CATEGORY_RULES,  # noqa: F401 — re-exported: part of this module's surface
     CATEGORY_WEIGHT,
@@ -74,10 +74,10 @@ logger = logging.getLogger("rugbrain.tg_userbot")
 
 # ── Config ────────────────────────────────────────────────────────────────
 
-API_ID = int(os.getenv("TELEGRAM_API_ID", "0") or 0)
-API_HASH = os.getenv("TELEGRAM_API_HASH", "")
-SESSION_STRING = os.getenv("TELETHON_SESSION_STRING", "")
-SESSION_FILE = os.getenv("RAG_TG_SESSION_FILE", "/var/lib/rugbrain/tg_ingest.session")
+# Session file and credentials are resolved by tg_client at call time, so a
+# second account only needs its own env file. (The old module-level constants
+# also misspelled the session-string env var as TELETHON_SESSION_STRING, so
+# RAG_TG_SESSION_STRING could never have worked.)
 STATE_FILE = os.getenv("RAG_TG_STATE_FILE", "/var/lib/rugbrain/tg_ingest_state.json")
 MAX_PER_CHANNEL = int(os.getenv("RAG_TG_MAX_MESSAGES_PER_CHANNEL", "40"))
 SHILL_WINDOW_MIN = int(os.getenv("RAG_TG_SHILL_WINDOW_MINUTES", "90"))
@@ -178,16 +178,9 @@ def _save_state(state: dict[str, Any]) -> None:
 
 
 async def _get_client() -> Any:
-    from telethon import TelegramClient
-    from telethon.sessions import StringSession
-
-    if not API_ID or not API_HASH:
-        raise RuntimeError(
-            "TELEGRAM_API_ID / TELEGRAM_API_HASH not set (gopass [INTERNAL_SECRET_PATH])"
-        )
-    if SESSION_STRING:
-        return TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
-    return TelegramClient(SESSION_FILE, API_ID, API_HASH)
+    # Client construction (including proxy egress) lives in tg_client so this
+    # module does not grow and so a second account can reuse the same cycle.
+    return tg_client.build_client()
 
 
 async def _enumerate_channels(client: Any) -> list[dict[str, Any]]:
