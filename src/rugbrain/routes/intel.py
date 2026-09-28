@@ -13,7 +13,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from rugbrain.content_story import article_headline
 from rugbrain.endpoints import _is_token_address
 
 logger = logging.getLogger(__name__)
@@ -237,13 +236,21 @@ async def news_top_articles(
     ),
     limit: int = Query(default=20, ge=1, le=100, description="Max articles to return"),
 ) -> dict[str, Any]:
-    """Return the best-rated articles from the Qdrant `news_v2` collection.
+    """Return the best articles from the Qdrant `news_v2` collection.
 
-    Scrolls the collection (payload has no vector score), keeps only points
-    whose stored rating composite is >= ``min_quality`` (optionally filtered
-    by ``category``), sorted by quality descending. Legacy unrated points are
-    excluded — the rating engine runs at ingestion time. Fails open to an
-    empty list when Qdrant is unreachable.
+    Scrolls the collection (payload has no vector score) and ranks by the best
+    quality signal a point actually carries:
+
+    1. ``metadata.rating`` — the news_rating composite, when the rating engine
+       has run for that point.
+    2. ``metadata.importance`` — the Telegram ingester's own importance score
+       (keyword weight x category weight, amplified by cross-channel echo).
+
+    (2) exists because nothing runs the rating engine on the Telegram path, so
+    requiring ``metadata.rating`` made this endpoint return an empty list for
+    every request while looking healthy. The response reports which signal was
+    used per article, so a reader can tell rated content from heuristic-ranked
+    content. Fails open to an empty list when Qdrant is unreachable.
     """
     from rugbrain.news_rating import rate_article_from_rating_dict
     from rugbrain.qdrant_store import QdrantVectorStore
@@ -272,36 +279,9 @@ async def news_top_articles(
             "error": str(exc)[:200],
         }
 
-    articles: list[dict[str, Any]] = []
-    for result in collected:
-        metadata = result.get("metadata") or {}
-        if category and str(metadata.get("category", "")).lower() != str(category).lower():
-            continue
-        rating = metadata.get("rating")
-        if not isinstance(rating, dict):
-            continue  # unrated legacy points carry no quality signal
-        payload = rate_article_from_rating_dict(rating)
-        quality = int(payload.get("quality_score", 0))
-        if quality < min_quality:
-            continue
-        articles.append(
-            {
-                "id": result.get("id"),
-                "headline": article_headline(result),  # plain text (site news)
-                "title": metadata.get("title", ""),
-                "source": metadata.get("source", result.get("source", "")),
-                "url": metadata.get("url", ""),
-                "published_at": metadata.get("published_at", ""),
-                "category": metadata.get("category", ""),
-                "quality": quality,
-                "tier": payload.get("tier", "fair"),
-                "factuality": payload.get("factuality", "reported"),
-                "axes": payload.get("axes", {}),
-                "rating": payload,
-            }
-        )
+    from rugbrain.news_selection import select_articles
 
-    articles.sort(key=lambda article: article["quality"], reverse=True)
+    articles = select_articles(collected, category=category, min_quality=min_quality)
     return {
         "articles": articles[:limit],
         "total": len(articles),

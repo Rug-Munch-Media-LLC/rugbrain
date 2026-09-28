@@ -62,6 +62,7 @@ from typing import Any
 # their own modules — one purpose each, both unit-testable without a session.
 # Re-exported here: CATEGORY_RULES/CATEGORY_WEIGHT/categorize were part of this
 # module's surface and stay part of it.
+from rugbrain.ingest_sources import ingest_cycle
 from rugbrain.ingest_sources.channel_taxonomy import (
     CATEGORY_RULES,  # noqa: F401 — re-exported: part of this module's surface
     CATEGORY_WEIGHT,
@@ -377,18 +378,29 @@ async def run_cycle(max_channels: int = MAX_CHANNELS_PER_CYCLE) -> dict[str, Any
             mark_swept(state, ch["id"], max((m.msg_id for m in msgs), default=0))
         summary["messages"] = len(all_msgs)
 
-        # Cross-channel echo counts (dedup signal + importance amplifier)
-        echo: dict[str, int] = defaultdict(int)
-        for m in all_msgs:
-            echo[m.c_hash] += 1
+        # Intelligence stage (2026-09-28): gate -> cluster -> score -> credit.
+        # Before this the seen-hash ring was the whole dedupe story and it was
+        # saturated, so older items were re-admitted every cycle while five
+        # syndications of one story were stored as separate documents.
+        kept, state["channel_credit"], cycle_stats = ingest_cycle.process_cycle(
+            all_msgs,
+            seen_hashes=state.get("seen_hashes", []),
+            credit=state.get("channel_credit") or {},
+        )
+        # Echo counts: how many messages share a content hash (cross-channel
+        # corroboration, used by the importance score and campaign detection).
+        echo = ingest_cycle.echo_counts(all_msgs)
+        state["seen_hashes"] = cycle_stats.pop("seen_hashes")
+        summary.update(cycle_stats)
+        if cycle_stats.get("channels_to_retire"):
+            logger.info(
+                "tg_credit_floor count=%d sample=%s",
+                len(cycle_stats["channels_to_retire"]),
+                cycle_stats["channels_to_retire"][:5],
+            )
 
-        # Seen-hash filter against state ring
-        seen_ring = set(state.get("seen_hashes", []))
-        fresh = [m for m in all_msgs if m.c_hash not in seen_ring]
-        state["seen_hashes"] = list(seen_ring | {m.c_hash for m in fresh})
-
-        campaigns = _detect_shill_campaigns(fresh)
-        docs = _docs_from_messages(fresh, echo) + _campaign_docs(campaigns)
+        campaigns = _detect_shill_campaigns(kept)
+        docs = _docs_from_messages(kept, echo) + _campaign_docs(campaigns)
         summary["unique_docs"] = len(docs)
         summary["campaigns"] = len(campaigns)
 
@@ -424,12 +436,16 @@ async def run_cycle(max_channels: int = MAX_CHANNELS_PER_CYCLE) -> dict[str, Any
         _save_state(state)
         summary["seconds"] = round(time.time() - started, 1)
         logger.info(
-            "tg_cycle_done channels=%d msgs=%d unique=%d campaigns=%d ingested=%d",
+            "tg_cycle_done channels=%d msgs=%d unique=%d campaigns=%d ingested=%d "
+            "gated_out=%d clusters=%d collapsed=%d",
             summary["channels_seen"],
             summary["messages"],
             summary["unique_docs"],
             summary["campaigns"],
             summary["ingested"],
+            summary.get("gated_out", 0),
+            summary.get("clusters", 0),
+            summary.get("collapsed", 0),
         )
         return summary
     finally:
