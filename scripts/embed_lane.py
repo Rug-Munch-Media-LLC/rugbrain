@@ -114,9 +114,26 @@ async def embed_batch(
     payload = {"model": model, "input": [t[:8000] for t in texts]}
     own_client = client is None
     http = client or httpx.AsyncClient()
+    # Do not blindly append "/embeddings".
+    #
+    # DEEPINFRA_EMBED_URL is written two ways across the fleet's env files:
+    #   base form  https://api.deepinfra.com/v1            (the default here)
+    #   full form  https://api.deepinfra.com/v1/embeddings (rugbrain.env:14)
+    # An unconditional f"{base}/embeddings" turned the full form into
+    #   POST https://api.deepinfra.com/v1/embeddings/embeddings  ->  404
+    # which silently failed EVERY hosted embed. Symptom seen 2026-09-28:
+    #   source_stored name=defillama coll=market_data fetched=25 embedded=0
+    #   errors=25, every one an "embed_http_fail lane=deepinfra status=404".
+    # The multi_embedder lane already guards this; this one did not, so the same
+    # env var was correct in one caller and fatal in the other.
+    #
+    # Accepting both forms is the durable fix: the env no longer has to be
+    # written exactly one way for this lane to work.
+    _base = base.rstrip("/")
+    url = _base if _base.endswith("/embeddings") else f"{_base}/embeddings"
     try:
         r = await http.post(
-            f"{base}/embeddings",
+            url,
             json=payload,
             headers=headers,
             timeout=_TIMEOUT[provider],
