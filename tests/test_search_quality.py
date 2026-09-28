@@ -33,6 +33,7 @@ from rugbrain.search.engine import (
     detect_scam_query,
     resolve_search_collections,
 )
+from rugbrain.search.lane_targets import resolve_search_collections as resolve_plain
 from rugbrain.search_service import search_coding_knowledge, search_scam_knowledge
 
 # Acceptance queries from the spec.
@@ -135,14 +136,19 @@ def _uninstall_mock() -> None:
 def test_reentrancy_query_routes_to_coding() -> None:
     assert detect_coding_query(REENTRANCY_QUERY)
     routed = resolve_search_collections(None, REENTRANCY_QUERY)
-    assert routed[0] == "coding_knowledge"
-    assert routed[: len(CODING_COLLECTIONS)] == list(CODING_COLLECTIONS)
+    # Resolved-to-resolved: the search path resolves every routed name through
+    # the lane resolver, so the expected tier is resolved through the same
+    # public function. Comparing against the raw static table would assert the
+    # pre-resolver routing and break again on the next lane change.
+    expected_coding = resolve_plain(CODING_COLLECTIONS)
+    assert routed[0] == expected_coding[0]
+    assert routed[: len(CODING_COLLECTIONS)] == expected_coding
 
 
 def test_pda_query_routes_to_coding() -> None:
     assert detect_coding_query(PDA_QUERY)
     routed = resolve_search_collections(None, PDA_QUERY)
-    assert routed[0] == "coding_knowledge"
+    assert routed[0] == resolve_plain(CODING_COLLECTIONS)[0]
 
 
 def test_flash_loan_query_routes_to_scam_knowledge() -> None:
@@ -150,8 +156,9 @@ def test_flash_loan_query_routes_to_scam_knowledge() -> None:
     # the exploit knowledge base so RugBrain answers with attack specifics.
     assert detect_scam_query(FLASH_LOAN_QUERY)
     routed = resolve_search_collections(None, FLASH_LOAN_QUERY)
-    assert routed[0] == "defi_exploits"
-    assert routed[: len(SCAM_COLLECTIONS)] == list(SCAM_COLLECTIONS)
+    expected_scam = resolve_plain(SCAM_COLLECTIONS)
+    assert routed[0] == expected_scam[0]
+    assert routed[: len(SCAM_COLLECTIONS)] == expected_scam
 
 
 # ── Answer quality (mocked search) ─────────────────────────────────────

@@ -27,6 +27,7 @@ from rugbrain.search.engine import (
     format_code_answer,
     resolve_search_collections,
 )
+from rugbrain.search.lane_targets import resolve_search_collections as resolve_plain
 from rugbrain.search_service import search_coding_knowledge
 
 # ── 1. code-intent detection (regex term tier) ─────────────────────────
@@ -62,7 +63,10 @@ def test_detect_coding_query_preserves_non_code_negatives() -> None:
 
 def test_code_term_queries_route_to_coding_collections() -> None:
     routed = resolve_search_collections(None, "what is the ABI of a function")
-    assert routed[: len(CODING_COLLECTIONS)] == list(CODING_COLLECTIONS)
+    # Resolved-to-resolved: the search path maps every routed name through the
+    # lane resolver, so the expected coding tier must be mapped through the
+    # same public function rather than compared against the raw static table.
+    assert routed[: len(CODING_COLLECTIONS)] == resolve_plain(CODING_COLLECTIONS)
 
 
 # ── 2. code-chunk bias + answer formatting ─────────────────────────────
@@ -147,7 +151,9 @@ def test_search_coding_knowledge_surfaces_code_blocks() -> Any:
         {"content": "prose about CEI ordering", "similarity": 0.8},
     ]
 
-    async def fake_search(query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4) -> Any:
+    async def fake_search(
+        query: Any, collections: Any, limit: int = 10, min_similarity: float = 0.4
+    ) -> Any:
         return [dict(r) for r in results]
 
     original = engine_mod.search_multi_collection
