@@ -232,9 +232,23 @@ def score_confidence(
 
 
 # ── Deployer Reputation ──────────────────────────────────────────
+class DeployerScorerUnavailable(RuntimeError):
+    """No real deployer-risk scorer is wired (see score_deployer_risk)."""
+
+
 def score_deployer_risk(address: str, chain: str = "ethereum", **kwargs: Any) -> dict[str, Any]:
-    """Score deployer risk — no-op standalone (extra signals accepted, unused)."""
-    return {"risk_score": 0.5, "deployer_age_days": 0, "rugs_deployed": 0}
+    """Score deployer risk.
+
+    Unavailable standalone. This used to return a hardcoded
+    ``{"risk_score": 0.5, ...}``, which the HTTP layer surfaced as a real
+    verdict — false confidence on a public endpoint. Fail loudly instead; the
+    caller turns this into a 503. A real scorer lands with the `rug_events`
+    corpus (deployer → prior-rug history), not as a stub.
+    """
+    raise DeployerScorerUnavailable(
+        "deployer-risk scoring is not implemented: it requires the rug_events "
+        "corpus (deployer -> prior-rug history). Refusing to return a placeholder."
+    )
 
 
 # ── Cross-Chain Identity ─────────────────────────────────────────

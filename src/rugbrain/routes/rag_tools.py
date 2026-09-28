@@ -12,7 +12,7 @@ import logging
 from typing import Any, cast
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from rugbrain.knowledge_boundary import sanitize_public_result
@@ -167,17 +167,26 @@ async def rag_chunk_solidity(request: Request, data: dict[str, Any]) -> dict[str
 
 @router.post("/scanner/deployer-risk")
 async def scanner_deployer_risk(request: Request, data: dict[str, Any]) -> dict[str, Any]:
-    from rugbrain.compat import score_deployer_risk  # external dependency
+    """Deployer risk — 503 until a real scorer is wired.
 
-    return score_deployer_risk(
-        address=data.get("address", ""),
-        deployment_count=data.get("deployment_count", 0),
-        mixer_funded=data.get("mixer_funded", False),
-        source_verified=data.get("source_verified", False),
-        code_similarity=data.get("code_similarity", 0.0),
-        rapid_deploy=data.get("rapid_deploy", False),
-        funded_by_scammer=data.get("funded_by_scammer", False),
-    )
+    The compat stub returned a hardcoded risk_score of 0.5 with zero rugs and
+    zero deploy age. Over HTTP that reads as "this deployer is medium risk",
+    which is a fabricated accusation. Refuse instead of guessing.
+    """
+    from rugbrain.compat import DeployerScorerUnavailable, score_deployer_risk
+
+    try:
+        return score_deployer_risk(
+            address=data.get("address", ""),
+            deployment_count=data.get("deployment_count", 0),
+            mixer_funded=data.get("mixer_funded", False),
+            source_verified=data.get("source_verified", False),
+            code_similarity=data.get("code_similarity", 0.0),
+            rapid_deploy=data.get("rapid_deploy", False),
+            funded_by_scammer=data.get("funded_by_scammer", False),
+        )
+    except DeployerScorerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/rag/cross-chain")

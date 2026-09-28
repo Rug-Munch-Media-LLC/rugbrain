@@ -77,7 +77,9 @@ async def test_email_accounts_returns_list(client: Any, monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_email_accounts_unconfigured_empty(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_email_accounts_unconfigured_empty(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Unset RMI_EMAIL_ACCOUNTS returns an empty list (no hardcoded emails)."""
     monkeypatch.delenv("RMI_EMAIL_ACCOUNTS", raising=False)
     resp = await client.get("/api/v1/email/accounts")
@@ -130,14 +132,21 @@ async def test_cross_chain_basic(client: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_deployer_risk_exists(client: Any) -> None:
-    """POST /api/v1/scanner/deployer-risk — skip if external dep not installed."""
-    pytest.importorskip("app.deployer_reputation", reason="External dep not installed")
+async def test_deployer_risk_fails_closed(client: Any) -> None:
+    """POST /api/v1/scanner/deployer-risk must refuse, never invent a score.
+
+    The compat stub used to answer 200 with a hardcoded risk_score of 0.5 and
+    zero rugs, which is a fabricated accusation on a public endpoint. Until the
+    rug_events corpus backs a real scorer, the only correct answer is 503.
+    """
     resp = await client.post(
         "/api/v1/scanner/deployer-risk",
         json={"address": "0xabc", "deployment_count": 0},
     )
-    assert resp.status_code in (200, 500)
+    assert resp.status_code == 503, resp.text
+    body = resp.json()
+    assert "risk_score" not in body
+    assert "rug_events" in str(body.get("detail", ""))
 
 
 @pytest.mark.asyncio
@@ -246,7 +255,9 @@ async def test_analyze_valid_address_fail_open(client: Any, monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
-async def test_search_token_address_includes_pattern_matches(client: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+async def test_search_token_address_includes_pattern_matches(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> Any:
     """GET /api/v1/search?q=<address> attaches pattern_matches findings."""
     import rugbrain.endpoints as ep
 

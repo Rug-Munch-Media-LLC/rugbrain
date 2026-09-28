@@ -41,7 +41,6 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
 B2_S3_ENDPOINT = os.getenv("B2_S3_ENDPOINT", "").rstrip("/")
 B2_BUCKET_NAME = os.getenv("B2_BUCKET_NAME", "")
-BACKEND_HEALTH_URL = os.getenv("BACKEND_HEALTH_URL", "http://localhost:8000/health")
 
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "rmi-clickhouse")
 CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
@@ -252,12 +251,14 @@ async def _scanner_section() -> dict[str, Any]:
         sentinel["error"] = str(e)[:120]
         databus["error"] = str(e)[:120]
 
-    backend_ok = await _http_ok(BACKEND_HEALTH_URL, timeout_s=2.0)
+    # Standalone (2026-09-28): rmi-backend is not a dependency of this service.
+    # Probing its /health and folding the result into `ok` made RugBrain look
+    # healthy only when the backend was up. Sentinel/databus lanes are the only
+    # evidence that counts now.
     return {
-        "ok": (sentinel.get("ok") is True) or (databus.get("ok") is True) or backend_ok,
+        "ok": (sentinel.get("ok") is True) or (databus.get("ok") is True),
         "sentinel": sentinel,
         "databus": databus,
-        "backend": {"ok": backend_ok, "url": BACKEND_HEALTH_URL},
     }
 
 

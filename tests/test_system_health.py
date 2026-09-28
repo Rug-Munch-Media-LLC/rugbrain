@@ -142,9 +142,7 @@ async def test_indexer_section_ch_unreachable(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.asyncio
 async def test_indexer_section_with_chains(monkeypatch: pytest.MonkeyPatch) -> Any:
     class FakeCh:
-        def query(
-            self, sql: Any, parameters: Any = None, settings: Any = None
-        ) -> Any:
+        def query(self, sql: Any, parameters: Any = None, settings: Any = None) -> Any:
             return _FakeRows([("ethereum", 22_000_000, "2026-08-04 12:00:00")])
 
         def close(self) -> None:
@@ -164,14 +162,12 @@ class _FakeRows:
 
 
 @pytest.mark.asyncio
-async def test_scanner_section_backend_ok(monkeypatch: pytest.MonkeyPatch) -> Any:
+async def test_scanner_section_ok_from_sentinel_alone(monkeypatch: pytest.MonkeyPatch) -> Any:
     class FakeRedis:
         async def ping(self) -> bool:
             return True
 
-        def scan_iter(
-            self, match: str | None = None, count: int | None = None
-        ) -> Any:
+        def scan_iter(self, match: str | None = None, count: int | None = None) -> Any:
             async def _gen() -> Any:
                 yield "sentinel_scanner"
                 yield "rmi_databus_cache_hits_total"
@@ -184,15 +180,12 @@ async def test_scanner_section_backend_ok(monkeypatch: pytest.MonkeyPatch) -> An
     import redis.asyncio as real_aioredis
 
     monkeypatch.setattr(real_aioredis, "Redis", lambda *a, **k: FakeRedis())
-
-    async def backend_ok(url: Any, timeout_s: float | None = None) -> bool:
-        return True
-
-    monkeypatch.setattr(sh, "_http_ok", backend_ok)
     section = await sh._scanner_section()
     assert section["ok"] is True
     assert "sentinel_scanner" in section["sentinel"]["modules"]
-    assert section["backend"]["ok"] is True
+    # Standalone (2026-09-28): no rmi-backend probe. `ok` must follow the
+    # sentinel/databus lanes alone, and no `backend` key may be reported.
+    assert "backend" not in section
 
 
 # ═══════════════════════════════════════════════════════════════════════
