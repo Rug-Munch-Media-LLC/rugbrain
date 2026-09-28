@@ -77,6 +77,9 @@ ignore = ["E501", "B008", "S101", "N818", "S110", "S112", "RUF002", "RUF003"]
 # secret-scanner and ambiguity heuristics misfire on those literals only.
 "tests/test_corpora_ingest.py" = ["S105", "RUF001"]
 "src/rugbrain/firehose/direct_sources.py" = ["S314"]
+# CLI entry points are invoked as files, not imported as modules (dash naming
+# matches the sibling run-eval-*.sh scripts).
+"scripts/run-mission-eval.py" = ["N999"]
 
 [tool.mypy]
 python_version = "3.12"

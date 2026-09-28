@@ -1,0 +1,160 @@
+"""
+Mission golden set DATA — rug / scam / news / market / TA / skill rows.
+
+Split out only to respect the 200-line rule. Same contract; see ``goldens.py``
+for the rationale and the grading model. Every ``relevant_doc_ids`` entry was
+observed live in Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-4B).
+"""
+
+from __future__ import annotations
+
+from rugbrain.missioneval.goldens import MissionCase
+
+# fmt: off
+CASES: list[MissionCase] = [
+MissionCase(
+    id="rug-01",
+    job_class="rug_history",
+    query="honeypot token contract that blocks sells so buyers cannot exit",
+    collection="threat_intel_v2",
+    relevant_doc_ids=["280a4db1-fe3d-50b7-9cbd-70db3b14cd49"],
+    match_terms=["honeypot", "risk flags", "sentinel"],
+    partial_terms=["cannot sell", "sell blocked", "sell tax"],
+    provenance_note="threat_intel_v2 scan-alert point observed 2026-09-28.",
+),
+MissionCase(
+    id="rug-02",
+    job_class="rug_history",
+    query="deployer rugged the project by removing all liquidity from the pool",
+    collection="threat_intel_v2",
+    match_terms=["rugged", "rug", "liquidity removed", "drained pool"],
+    partial_terms=["liquidity", "remove_liquidity", "pool"],
+    provenance_note="No single canonical rug-event row; scored on rug/liquidity text.",
+),
+MissionCase(
+    id="rug-03",
+    job_class="rug_history",
+    query="high concentration holders plus sniper bundle means high rug risk",
+    collection="scan_intel",
+    match_terms=["hhi", "sentinel", "holder", "bundle", "risk"],
+    partial_terms=["sniper", "concentration"],
+    provenance_note="scan_intel risk rows carry risk_flags incl. SENTINEL_*.",
+),
+MissionCase(
+    id="scam-01",
+    job_class="scam_detection",
+    query="ponzi scheme promising daily returns investment scam",
+    collection="scam_patterns",
+    relevant_doc_ids=["f42cb39c-0035-5078-8b79-97663b9dd98d"],
+    match_terms=["ponzi"],
+    partial_terms=["investment", "returns", "scamming"],
+    provenance_note="CryptoScamDB ponzi point observed live 2026-09-28.",
+),
+MissionCase(
+    id="scam-02",
+    job_class="scam_detection",
+    query="fake exchange that scams deposits then claims withdrawal fees",
+    collection="scam_patterns",
+    relevant_doc_ids=["49af5773-a193-5a38-90d9-aad1e52563aa"],
+    match_terms=["fake exchange", "category: scamming (exchange)"],
+    partial_terms=["withdrawal", "deposit"],
+    provenance_note="CryptoScamDB exchange-scam point observed live 2026-09-28.",
+),
+MissionCase(
+    id="scam-03",
+    job_class="scam_detection",
+    query="trust trading scam site lures users into fake profit",
+    collection="scam_patterns",
+    match_terms=["trust trading", "trust-trading"],
+    partial_terms=["fake profit", "trading"],
+    provenance_note="CryptoScamDB trust-trading points observed live 2026-09-28.",
+),
+MissionCase(
+    id="scam-04",
+    job_class="scam_detection",
+    query="phishing domain blacklisted that drains a connected wallet",
+    collection="scam_intel_v2",
+    relevant_doc_ids=["33ce83c4-683c-57e9-8660-08f302beafff"],
+    match_terms=["phishing domain", "phishing"],
+    partial_terms=["wallet drain", "drainer", "blacklist"],
+    provenance_note="eth-phishing-detect point observed live 2026-09-28.",
+),
+MissionCase(
+    id="scam-05",
+    job_class="scam_detection",
+    query="fake airdrop claim site that steals seed phrase or drains wallet",
+    collection="known_scams",
+    relevant_doc_ids=["bbe92dca-0836-55e0-a68c-aae7af030ea8"],
+    match_terms=["phishing", "airdrop", "claim"],
+    partial_terms=["metamask", "scamsniffer"],
+    provenance_note="ScamSniffer phishing-domain mapping point observed 2026-09-28.",
+),
+MissionCase(
+    id="news-01",
+    job_class="news",
+    query="exchange hacked for hundreds of millions, Lazarus Group suspected",
+    collection="news_v2",
+    match_terms=["bitget", "hacked", "lazarus"],
+    partial_terms=["exchange hack", "stolen", "breach"],
+    provenance_note="news_v2 alert rows; scored on entity text (exchange/lazarus/hacked).",
+),
+MissionCase(
+    id="news-02",
+    job_class="news",
+    query="regulator sues or freezes stablecoin over reserves and enforcement",
+    collection="news_articles",
+    match_terms=["tether", "lawsuit", "securities", "freeze"],
+    partial_terms=["sue", "enforcement", "regulator"],
+    provenance_note="news_articles legal rows observed live 2026-09-28.",
+),
+MissionCase(
+    id="market-01",
+    job_class="market",
+    query="current fear and greed index reading for the crypto market",
+    collection="market_health",
+    relevant_doc_ids=["498d3cde-d1a0-5403-ac6b-2311fa00c111"],
+    match_terms=["fear & greed", "fear and greed"],
+    partial_terms=["greed", "sentiment"],
+    provenance_note="Fear&Greed point observed live 2026-09-28.",
+),
+MissionCase(
+    id="market-02",
+    job_class="market",
+    query="USDC and USDT stablecoin peg and reserve backing",
+    collection="stablecoin_market",
+    relevant_doc_ids=["cf0bfc68-2cf1-58ec-81b6-a60dbb42c76d"],
+    match_terms=["stablecoin", "peg", "usdc", "usdt"],
+    partial_terms=["reserve", "fiat-backed", "depeg"],
+    provenance_note="CoinGecko stablecoin point observed live 2026-09-28.",
+),
+MissionCase(
+    id="ta-01",
+    job_class="technical_analysis",
+    query="leveraged liquidation cascade as positions get liquidated in a crash",
+    collection="live_threats",
+    match_terms=["liquidation", "liquidat"],
+    partial_terms=["leverage", "crash", "margin"],
+    provenance_note="live_threats critical_alert rows; scored on liquidation text.",
+),
+MissionCase(
+    id="skill-01",
+    job_class="skill_reference",
+    query="meme coin rug pull detection honeypot and deployer history",
+    collection="master_skills",
+    relevant_doc_ids=["2994137634"],
+    match_terms=["meme coin rug", "rug pull detection", "honeypot"],
+    partial_terms=["deployer history", "lp analysis"],
+    provenance_note="master_skills meme-coin-audit point observed 2026-09-28.",
+),
+MissionCase(
+    id="skill-02",
+    job_class="skill_reference",
+    query="professional crypto journalism and editorial fact-checking standards",
+    collection="master_skills",
+    relevant_doc_ids=["2805645418"],
+    match_terms=["professional writing", "journalism", "editorial"],
+    partial_terms=["fact-checking", "investigative"],
+    provenance_note="master_skills editorial-standards point observed 2026-09-28.",
+),
+]
+# fmt: on

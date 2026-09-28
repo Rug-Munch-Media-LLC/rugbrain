@@ -1,0 +1,25 @@
+{
+  "_comment": "Shrink-only quality floors for the crypto-crime mission eval. An actual below a floor is a HARD CI FAILURE (see gate.py). Raising a floor is an explicit reviewable edit; lowering one requires a written justification, exactly like the eval/baselines ratchet. These numbers were MEASURED live on 2026-09-28 against Qdrant dim 2560 with the direct-Qdrant retriever (no rerank). They are the honest starting point, not an aspiration.",
+  "_measured_2026_09_28": {
+    "total": 23,
+    "errors": 0,
+    "gold_rate": 0.7826,
+    "hit_rate": 0.8696,
+    "mrr": 0.7826,
+    "note": "rug_history=0.00 gold and technical_analysis=0.00 gold are REAL capability gaps (no rug_events collection, no TA substrate), not flaky rows. The per_class floors below deliberately sit at 0.0 for those two so a further collapse to zero coverage is caught, while any IMPROVEMENT raises the floor."
+  },
+  "global": {
+    "gold_rate": 0.70,
+    "hit_rate": 0.78,
+    "mrr": 0.65
+  },
+  "per_class": {
+    "rug_history": {"gold_rate": 0.0, "hit_rate": 0.3},
+    "scam_detection": {"gold_rate": 0.8},
+    "exploit_knowledge": {"gold_rate": 0.75},
+    "news": {"gold_rate": 0.5},
+    "market": {"gold_rate": 0.5},
+    "technical_analysis": {"gold_rate": 0.0},
+    "skill_reference": {"gold_rate": 0.5}
+  }
+}
