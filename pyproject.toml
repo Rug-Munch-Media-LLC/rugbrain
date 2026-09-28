@@ -52,6 +52,10 @@ markers = [
 ]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Prepend the in-tree src/ so tests always exercise THIS checkout. Without it a
+# globally-installed editable install (rugbrain.pth) can shadow the working tree
+# and silently test the wrong code — which is what happened in agent worktrees.
+pythonpath = ["src"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
