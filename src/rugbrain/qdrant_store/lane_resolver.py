@@ -46,6 +46,13 @@ from typing import Final
 from rugbrain.dim_policy import COLLECTION_DIM
 
 # `fetch_live_dim` lives in `lane_dims` (it reads the dimension off a live
+# Qdrant collection). It is re-exported because `qdrant_store/__init__` and
+# the write gate treat this module as the single public surface: splitting
+# the module without carrying the re-export left the package unimportable.
+# Listed in __all__ so linters do not strip it as an unused import.
+from rugbrain.qdrant_store.lane_dims import fetch_live_dim
+
+# `fetch_live_dim` lives in `lane_dims` (it reads the dimension off a live
 # Qdrant collection); it is re-exported here because `qdrant_store/__init__`
 # and the write gate import the resolver as the single public surface, and
 # splitting the module without carrying the re-export left the package
@@ -236,6 +243,7 @@ __all__ = [  # noqa: RUF022 -- kept alphabetical for review
     "RETIRED_LANE_DIM",
     "UnresolvedLane",
     "declared_lane_dim",
+    "fetch_live_dim",
     "resolver_mode",
     "resolve_collection",
     "strip_twin_suffix",
