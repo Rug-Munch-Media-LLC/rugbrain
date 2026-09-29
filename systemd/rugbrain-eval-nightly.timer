@@ -1,0 +1,13 @@
+# RugBrain nightly RAG eval — 03:30 daily
+# Install: sudo cp deploy/systemd/rugbrain-eval-nightly.timer /etc/systemd/system/ && sudo systemctl enable --now rugbrain-eval-nightly.timer
+
+[Unit]
+Description=RugBrain nightly RAG eval at 03:30 (full golden set)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

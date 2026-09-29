@@ -1,0 +1,13 @@
+[Unit]
+Description=RugBrain t.me/s public-channel web ingestion (accountless)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.ingest_sources.telegram_web
+EnvironmentFile=/srv/secrets/rugbrain-tg.env
+TimeoutStartSec=1800
+SuccessExitStatus=0 1

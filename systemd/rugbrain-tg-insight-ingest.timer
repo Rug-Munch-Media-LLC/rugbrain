@@ -1,0 +1,14 @@
+[Unit]
+Description=Run RM Insight Telegram ingestion every 30 minutes
+
+[Timer]
+OnBootSec=9min
+OnUnitActiveSec=30min
+# Staggered off the primary account's 15min cycle so both accounts are not
+# hitting Telegram at the same moment from adjacent egress.
+OnUnitInactiveSec=20min
+AccuracySec=45s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

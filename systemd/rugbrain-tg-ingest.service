@@ -1,0 +1,14 @@
+[Unit]
+Description=RugBrain Telegram user-account ingestion cycle
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.ingest_sources.telegram_userbot --cycle
+EnvironmentFile=/srv/secrets/rugbrain-tg.env
+TimeoutStartSec=1800
+# Ingestion is best-effort: a failed cycle must not block the timer chain
+SuccessExitStatus=0 1

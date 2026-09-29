@@ -1,0 +1,21 @@
+[Unit]
+Description=RugBrain Telegram ingestion — RM Insight backup account
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+After=network-online.target
+Wants=network-online.target
+# Joins are done by the mirror; this unit only reads what the account is in.
+After=rmi-insight-tg-mirror.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+# Refresh this account's private session copy so the joiner and the reader
+# never contend on one SQLite file.
+ExecStartPre=/bin/cp -f /var/lib/rugbrain/insight/tg_insight.session /var/lib/rugbrain/insight/tg_insight_ingest.session
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.ingest_sources.telegram_userbot --cycle
+EnvironmentFile=/srv/secrets/rmi-insight-tg-ingest.env
+TimeoutStartSec=2400
+# Deliberately NO `SuccessExitStatus=0 1`: a cycle that ingests nothing must be
+# a visible failure, which is how the 16-day news outage stayed hidden.
