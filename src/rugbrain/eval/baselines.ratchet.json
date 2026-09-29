@@ -48,10 +48,10 @@
       "dense": {
         "errors": 8,
         "measured": 42,
-        "mrr": 0.3595,
-        "ndcg_at_10": 0.376,
-        "recall_at_10": 0.1127,
-        "recall_at_5": 0.1365
+        "mrr": 0.3831,
+        "ndcg_at_10": 0.3999,
+        "recall_at_10": 0.1151,
+        "recall_at_5": 0.1413
       },
       "hybrid": {
         "errors": 8,
@@ -64,9 +64,9 @@
       "rerank": {
         "errors": 8,
         "measured": 42,
-        "mrr": 0.483,
-        "ndcg_at_10": 0.5016,
-        "recall_at_10": 0.1249,
+        "mrr": 0.5234,
+        "ndcg_at_10": 0.5338,
+        "recall_at_10": 0.1246,
         "recall_at_5": 0.1651
       }
     }

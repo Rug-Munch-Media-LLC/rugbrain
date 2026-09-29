@@ -23,12 +23,14 @@ from rugbrain.eval.ratchet_retrievers import (
     _make_dense_retriever,
     _make_hybrid_retriever,
     _rerank,
+    rerank_method_of,
 )
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_LIMIT = 40
 DEFAULT_CANDIDATE_CAP = 40
+
 
 async def measure(
     rows: list[dict[str, Any]],
@@ -50,6 +52,7 @@ async def measure(
     k_values = (5, 10)
     per_layer: dict[str, list[dict[str, float]]] = {layer: [] for layer in layers}
     errors: dict[str, int] = {layer: 0 for layer in layers}
+    rerank_methods: list[str] = []
 
     retrievers = {
         "dense": _make_dense_retriever(store, limit),
@@ -67,16 +70,13 @@ async def measure(
                 if layer == "rerank":
                     base = await retrievers["hybrid"](query, collection)
                     hits = await _rerank(query, base, candidate_cap)
+                    rerank_methods.append(rerank_method_of(hits))
                 else:
                     hits = await retrievers[layer](query, collection)
             except Exception as exc:
                 errors[layer] += 1
                 if errors[layer] == 1:
-                    import logging
-
-                    logging.getLogger(__name__).warning(
-                        "eval_%s_error collection=%s: %s", layer, collection, exc
-                    )
+                    logger.warning("eval_%s_error collection=%s: %s", layer, collection, exc)
                 continue
             if not hits:
                 errors[layer] += 1

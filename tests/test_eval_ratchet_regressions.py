@@ -13,7 +13,7 @@ reporting confident numbers that mean nothing.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -171,3 +171,142 @@ class TestPreflightRespectsDeclaredPins:
         split = await dim_preflight.preflight(["defi_exploits_8b"])
         assert not split[0].ok, "declared 4096 vs store 2560 IS a split"
         assert "DIMENSION SPLIT" in split[0].detail
+
+
+class TestRerankLayerIsNotAnAliasOfHybrid:
+    """The rerank layer called `rerank_mod.rerank` — a symbol that does not exist.
+
+    `search.rerank` exports `rerank_chunks`; it has no `rerank` function. The
+    call raised AttributeError on every query and a bare
+    `except Exception: return hits` turned that into "return the hybrid order
+    unchanged". The rerank layer was therefore a byte-for-byte copy of the
+    hybrid layer, and the recorded baseline attributed two names to one order.
+
+    A third defect hid behind it: `rerank_chunks` defaults to `keep=5`, so a
+    40-document pool came back with 5 documents and the length guard rejected
+    it as a shape mismatch — again identical to a no-op.
+    """
+
+    POOL: ClassVar[list[dict[str, Any]]] = [
+        {"id": str(i), "content": f"document {i}", "score": 1.0 - i * 0.01} for i in range(40)
+    ]
+
+    def test_rerank_module_has_no_bare_rerank_symbol(self) -> None:
+        """Pins the root cause: the name the ratchet called does not exist."""
+        from rugbrain.search import rerank as rerank_mod
+
+        assert not hasattr(rerank_mod, "rerank"), (
+            "search.rerank re-introduced a bare `rerank` symbol; the ratchet "
+            "call site must be revisited"
+        )
+        assert callable(rerank_mod.rerank_chunks)
+
+    @pytest.mark.asyncio
+    async def test_length_is_preserved_not_truncated_to_default_keep(
+        self, monkeypatch: Any
+    ) -> None:
+        from rugbrain.eval import ratchet_retrievers as rr
+
+        seen: dict[str, int] = {}
+
+        async def fake_rerank_chunks(
+            query: str, pool: list[dict[str, Any]], top_n: int = 20, keep: int = 5, **_: Any
+        ) -> list[dict[str, Any]]:
+            seen["top_n"] = top_n
+            seen["keep"] = keep
+            return [dict(h, rerank_method="fake", reranked=True) for h in pool]
+
+        monkeypatch.setattr("rugbrain.search.rerank.rerank_chunks", fake_rerank_chunks)
+        out = await rr._rerank("q", self.POOL, 40)
+
+        assert seen["top_n"] == 40 and seen["keep"] == 40, (
+            "top_n/keep must be pinned to the pool size or the default keep=5 "
+            "truncates the pool and looks like a no-op"
+        )
+        assert len(out) == len(self.POOL)
+
+    @pytest.mark.asyncio
+    async def test_disabled_reranker_raises_instead_of_passing_through(
+        self, monkeypatch: Any
+    ) -> None:
+        from rugbrain.eval import ratchet_retrievers as rr
+        from rugbrain.search import rerank as rerank_mod
+
+        monkeypatch.setattr(rerank_mod, "RERANKER_ENABLED", False)
+        with pytest.raises(rr.RerankUnavailableError, match="disabled"):
+            await rr._rerank("q", self.POOL, 40)
+
+    @pytest.mark.asyncio
+    async def test_module_noop_shape_raises(self, monkeypatch: Any) -> None:
+        """`rerank_method="none"` is production's graceful no-op, not a rerank."""
+        from rugbrain.eval import ratchet_retrievers as rr
+
+        async def fake_noop(
+            query: str, pool: list[dict[str, Any]], **_: Any
+        ) -> list[dict[str, Any]]:
+            return [dict(h, rerank_method="none", reranked=False) for h in pool]
+
+        monkeypatch.setattr("rugbrain.search.rerank.rerank_chunks", fake_noop)
+        with pytest.raises(rr.RerankUnavailableError, match="rerank_method=none"):
+            await rr._rerank("q", self.POOL, 40)
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_raises_not_swallows(self, monkeypatch: Any) -> None:
+        from rugbrain.eval import ratchet_retrievers as rr
+
+        async def boom(query: str, pool: list[dict[str, Any]], **_: Any) -> list[dict[str, Any]]:
+            raise RuntimeError("deepinfra 500")
+
+        monkeypatch.setattr("rugbrain.search.rerank.rerank_chunks", boom)
+        with pytest.raises(rr.RerankUnavailableError, match="rerank call failed"):
+            await rr._rerank("q", self.POOL, 40)
+
+    @pytest.mark.asyncio
+    async def test_length_mismatch_raises(self, monkeypatch: Any) -> None:
+        from rugbrain.eval import ratchet_retrievers as rr
+
+        async def fake_short(
+            query: str, pool: list[dict[str, Any]], **_: Any
+        ) -> list[dict[str, Any]]:
+            return pool[:3]
+
+        monkeypatch.setattr("rugbrain.search.rerank.rerank_chunks", fake_short)
+        with pytest.raises(rr.RerankUnavailableError, match="expected 40"):
+            await rr._rerank("q", self.POOL, 40)
+
+    @pytest.mark.asyncio
+    async def test_rerank_actually_reorders_relative_to_input(self, monkeypatch: Any) -> None:
+        """A layer that cannot change the order is not measuring a rerank.
+
+        This is the case the bug made unrepresentable: the cross-encoder puts
+        the relevant document first even though retrieval ranked it last.
+        """
+        from rugbrain.eval import ratchet_retrievers as rr
+
+        pool = [
+            {"id": "a", "content": "nice weather in the city", "score": 1.0},
+            {"id": "b", "content": "python tutorial for beginners", "score": 0.9},
+            {"id": "c", "content": "flash loan drained the pool", "score": 0.5},
+            {"id": "d", "content": "reentrancy lets an attacker drain funds", "score": 0.1},
+        ]
+
+        async def fake_rerank_chunks(
+            query: str, chunks: list[dict[str, Any]], top_n: int = 20, keep: int = 5, **_: Any
+        ) -> list[dict[str, Any]]:
+            out = [dict(c) for c in reversed(chunks)]  # cross-encoder disagrees
+            for c in out:
+                c["rerank_method"] = "fake"
+                c["reranked"] = True
+            return out
+
+        monkeypatch.setattr("rugbrain.search.rerank.rerank_chunks", fake_rerank_chunks)
+        out = await rr._rerank("reentrancy drain", pool, 4)
+        assert [h["id"] for h in out] != [h["id"] for h in pool]
+        assert out[0]["id"] == "d"
+
+    def test_method_is_attributable(self) -> None:
+        from rugbrain.eval.ratchet_retrievers import rerank_method_of
+
+        assert rerank_method_of([]) == "none"
+        assert rerank_method_of([{"id": "a"}]) == "none"
+        assert rerank_method_of([{"id": "a", "rerank_method": "deepinfra:x"}]) == "deepinfra:x"
