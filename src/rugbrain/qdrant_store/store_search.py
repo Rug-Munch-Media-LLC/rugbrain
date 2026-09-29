@@ -17,7 +17,7 @@ class SearchMixin(_types.StoreSurface):
         limit: int = 10,
         min_similarity: float = 0.6,
         filters: dict[str, Any] | None = None,
-        allow_create: bool = True,
+        allow_create: bool = False,
     ) -> list[dict[str, Any]]:
         """Semantic search with optional payload filters.
 
@@ -27,8 +27,12 @@ class SearchMixin(_types.StoreSurface):
             by ``build_search_filters``.
 
 
-        Set ``allow_create=False`` for fail-closed reads against
-        pre-provisioned shadow collections.
+        Reads FAIL CLOSED by default: a search against an unknown collection
+        name returns empty rather than materializing one. A read must never be
+        the thing that forks a corpus. Pass ``allow_create=True`` explicitly
+        for a deliberate provisioning read; the width is still checked against
+        the registry's canonical lane, so it cannot create a retired-width
+        fork.
 
         """
         import logging

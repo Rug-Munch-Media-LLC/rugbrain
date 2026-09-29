@@ -16,6 +16,7 @@ Package layout (split from the former single-module qdrant_store.py):
   namespace           — name routing: interim shadow, canonical lane, unified reads
   collection_schema   — parse dims out of a Qdrant vector config (no I/O)
   collection_lifecycle— probe/create a collection, the only Qdrant-I/O module
+  create_policy       — CREATE-TIME width policy: refuse the retired generation
   collections         — compat facade re-exporting the five above
   lane_widths         — MEASURED lane widths, pinned as constants
   write_lane          — pick the lane that fits the vector in hand, or raise
@@ -34,6 +35,7 @@ call time (``import rugbrain.qdrant_store as _pkg``) so patches apply.
 from __future__ import annotations
 
 from rugbrain.qdrant_store.collection_lifecycle import (
+    CREATE_IF_MISSING_DEFAULT,
     _ensure_collection,
     _existing_collections,
 )
@@ -43,6 +45,11 @@ from rugbrain.qdrant_store.connection import (
     QDRANT_URL,
     _probe_qdrant,
     _resolve_qdrant_url,
+)
+from rugbrain.qdrant_store.create_policy import (
+    CANONICAL_CREATE_DIM,
+    RetiredWidthCreationRefused,
+    assert_creatable_width,
 )
 from rugbrain.qdrant_store.embeddings import (
     DENSE_VECTOR_NAME,
@@ -104,7 +111,9 @@ async def get_qdrant_store() -> QdrantVectorStore:
 
 
 __all__ = [
+    "CANONICAL_CREATE_DIM",
     "CANONICAL_LANE_DIM",
+    "CREATE_IF_MISSING_DEFAULT",
     "DENSE_VECTOR_NAME",
     "EIGHT_B_SUFFIX",
     "FILTERABLE_MATCH_FIELDS",
@@ -116,6 +125,7 @@ __all__ = [
     "_RMI_RAG_OWNED_COLLECTIONS",
     "_RMI_RAG_QDRANT_WRITE_MODE",
     "QdrantVectorStore",
+    "RetiredWidthCreationRefused",
     "UnresolvedLane",
     "_embed_sparse",
     "_ensure_collection",
@@ -126,6 +136,7 @@ __all__ = [
     "_resolve_qdrant_url",
     "_store",
     "apply_payload_filter",
+    "assert_creatable_width",
     "build_qdrant_filter",
     "build_search_filters",
     "declared_lane_dim",

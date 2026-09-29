@@ -55,7 +55,7 @@ class StoreSurface(Protocol):
         limit: int = 10,
         min_similarity: float = 0.6,
         filters: dict[str, Any] | None = None,
-        allow_create: bool = True,
+        allow_create: bool = False,
     ) -> list[dict[str, Any]]: ...
 
     async def _hybrid_search_rrf(self, req: HybridRrfQuery) -> list[dict[str, Any]] | None: ...

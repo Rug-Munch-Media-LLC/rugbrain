@@ -18,10 +18,16 @@ from __future__ import annotations
 from typing import Final
 
 from rugbrain.qdrant_store.collection_lifecycle import (
+    CREATE_IF_MISSING_DEFAULT,
     _ensure_collection,
     _existing_collections,
 )
 from rugbrain.qdrant_store.collection_schema import dense_vector_dimensions
+from rugbrain.qdrant_store.create_policy import (
+    CANONICAL_CREATE_DIM,
+    RetiredWidthCreationRefused,
+    assert_creatable_width,
+)
 from rugbrain.qdrant_store.namespace import (
     _INTERIM_SUFFIX,
     UNIFIED_COLLECTION,
@@ -39,14 +45,18 @@ from rugbrain.qdrant_store.ownership import gate_collection_name
 _map_collection = map_collection
 
 __all__: Final = [
+    "CANONICAL_CREATE_DIM",
+    "CREATE_IF_MISSING_DEFAULT",
     "UNIFIED_COLLECTION",
     "UNIFIED_READS",
     "_INTERIM_SUFFIX",
     "_RMI_RAG_OWNED_COLLECTIONS",
     "_RMI_RAG_QDRANT_WRITE_MODE",
+    "RetiredWidthCreationRefused",
     "_ensure_collection",
     "_existing_collections",
     "_map_collection",
+    "assert_creatable_width",
     "dense_vector_dimensions",
     "gate_collection_name",
     "unified_route",

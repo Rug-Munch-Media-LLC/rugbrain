@@ -22,7 +22,7 @@ class HybridSearchMixin(_types.StoreSurface):
         vector_weight: float = 0.7,
         min_similarity: float = 0.6,
         filters: dict[str, Any] | None = None,
-        allow_create: bool = True,
+        allow_create: bool = False,
     ) -> list[dict[str, Any]]:
         """Dense + BM25 sparse hybrid search with Reciprocal Rank Fusion.
 
@@ -33,8 +33,11 @@ class HybridSearchMixin(_types.StoreSurface):
         keyword re-ranking so pre-migration collections keep working.
         ``filters`` uses the same structured shape as ``search``
         (``{"match": {...}, "range": [...]}``) and is applied to both the RRF
-        request and the dense fallback. Set ``allow_create=False`` for
-        fail-closed reads against pre-provisioned shadow collections.
+        request and the dense fallback. Reads FAIL CLOSED by default for the
+        same reason as :meth:`SearchMixin.search`: an unknown collection name
+        must return empty, never be created. Pass ``allow_create=True``
+        explicitly to opt into deliberate provisioning; the width is still
+        checked against the registry's canonical lane.
         """
         import rugbrain.qdrant_store as _pkg
 

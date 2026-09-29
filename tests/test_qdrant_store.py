@@ -339,8 +339,14 @@ async def test_insert_fails_on_http_error() -> None:
 
 @pytest.mark.asyncio
 async def test_insert_creates_collection_if_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """insert() should create the collection if it doesn't exist."""
-    from rugbrain.qdrant_store import QdrantVectorStore
+    """insert() creates a CANONICAL-width collection when it does not exist.
+
+    Was written at 2560, which silently encoded the retired-generation create
+    this guard now refuses. Creation at the registry's canonical width is the
+    behaviour under test; the retired width has its own refusal tests in
+    ``test_create_policy_fails_closed.py``.
+    """
+    from rugbrain.qdrant_store import CANONICAL_CREATE_DIM, QdrantVectorStore
 
     monkeypatch.setattr("rugbrain.qdrant_store._RMI_RAG_QDRANT_WRITE_MODE", "writable")
 
@@ -354,7 +360,7 @@ async def test_insert_creates_collection_if_missing(monkeypatch: pytest.MonkeyPa
         ok = await store.insert(
             doc_id="new_doc",
             collection="new_coll",
-            embedding=[0.1] * 2560,
+            embedding=[0.1] * CANONICAL_CREATE_DIM,
         )
     assert ok is True
     assert create_route.called

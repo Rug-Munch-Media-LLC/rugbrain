@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from rugbrain.qdrant_store import _types
+from rugbrain.qdrant_store import create_policy as _create_policy
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,22 @@ class WriteMixin(_types.StoreSurface):
         collection = write_lane_for_dim(collection, len(embedding))
 
         client = await self._get_client()
-        if not await _pkg._ensure_collection(collection, len(embedding), client):
+        # CREATION IS AN EXPLICIT, NAMED ACT HERE. The old call omitted
+        # ``create_if_missing`` and inherited a ``True`` default, so a typo'd
+        # collection name was silently CREATED at the vector's width and the
+        # write SUCCEEDED — forking a fresh empty corpus. The write path
+        # genuinely needs to be able to provision a canonical collection (app
+        # bootstrap / first ingest of a declared target), so it names the
+        # opt-in explicitly; the width check then still refuses any
+        # non-canonical (retired) width, raising rather than forking.
+        try:
+            ok = await _pkg._ensure_collection(
+                collection, len(embedding), client, create_if_missing=True
+            )
+        except _create_policy.RetiredWidthCreationRefused as exc:
+            logger.error("qdrant_insert_blocked collection=%s reason=%s", collection, exc)
+            return False
+        if not ok:
             logger.error(
                 "qdrant_insert_blocked collection=%s requested_dim=%d reason=incompatible_schema",
                 collection,

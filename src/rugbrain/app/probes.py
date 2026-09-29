@@ -114,7 +114,23 @@ async def ensure_canonical_schema(base_url: str) -> bool:
         schema_ok = True
         async with httpx.AsyncClient(base_url=base_url, timeout=5) as client:
             for collection in CANONICAL_COLLECTIONS:
-                ok = await _ensure_collection(collection, COLLECTION_DIM, client)
+                # Named, explicit creation opt-in: bootstrap genuinely
+                # provisions these, but must say so now that the default
+                # fails closed. The width is checked against the registry's
+                # canonical lane, so this can never create a retired-width
+                # fork.
+                try:
+                    ok = await _ensure_collection(
+                        collection, COLLECTION_DIM, client, create_if_missing=True
+                    )
+                except Exception as exc:  # create policy refusal
+                    logger.error(
+                        "qdrant_canonical_collection_refused collection=%s dim=%d err=%s",
+                        collection,
+                        COLLECTION_DIM,
+                        exc,
+                    )
+                    return False
                 logger.info(
                     "qdrant_canonical_collection collection=%s dim=%d ok=%s",
                     collection,
