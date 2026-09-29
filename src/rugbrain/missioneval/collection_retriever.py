@@ -90,20 +90,6 @@ async def _embed_for(target: str, text: str) -> list[float]:
     )
 
 
-async def _embed_one(text: str) -> list[float]:
-    """Embed a single query on the corpus lane.
-
-    Async on purpose: this is called from inside the eval runner's event loop,
-    where a blocking ``asyncio.run`` wrapper raises "must not be called from a
-    running loop". It also embeds the whole case list in one request, so the
-    25-case eval is 1 HTTP round-trip rather than 25.
-    """
-    from rugbrain.rug_events.embedding import apply_lane_env, embed_batch
-
-    apply_lane_env()
-    vectors = await embed_batch([text])
-    return vectors[0]
-
 
 def _scroll(text: str, collection: str, vector: list[float], top_k: int, url: str) -> list[dict]:
     """Qdrant vector search; returns ``[{id, text}]`` in rank order.
