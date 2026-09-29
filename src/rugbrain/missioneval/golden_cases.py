@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from rugbrain.missioneval.golden_cases_market import MARKET_CASES
 from rugbrain.missioneval.golden_cases_scam import SCAM_CASES
+from rugbrain.missioneval.golden_cases_wallet import RESEARCH_CASES, SANCTION_CASES
+from rugbrain.missioneval.golden_cases_wallet_address import WALLET_CASES
 from rugbrain.missioneval.goldens import MissionCase
 
 # fmt: off
@@ -129,6 +131,15 @@ SKILL_CASES: list[MissionCase] = [
 #: The core (non-exploit, non-TA) mission cases, in their original order.
 #: ``goldens.all_cases()`` concatenates this with the exploit and TA sets, so
 #: the assembled list and every per-class floor are unchanged by the split.
-CASES: list[MissionCase] = [*RUG_CASES, *SCAM_CASES, *NEWS_CASES, *MARKET_CASES, *SKILL_CASES]
+CASES: list[MissionCase] = [
+    *RUG_CASES,
+    *SCAM_CASES,
+    *NEWS_CASES,
+    *MARKET_CASES,
+    *SKILL_CASES,
+    *WALLET_CASES,
+    *SANCTION_CASES,
+    *RESEARCH_CASES,
+]
 
 __all__ = ["CASES", "NEWS_CASES", "RUG_CASES", "SKILL_CASES"]
