@@ -30,6 +30,25 @@ services:
       - "127.0.0.1:8010:8010"
     env_file:
       - .env.gateway
+    # MANDATORY. The shared Dockerfile ends in
+    #   CMD ["uvicorn", "rugbrain.main:app", ... --port 8012]
+    # so without this the gateway boots the ENTIRE ingest stack (redis
+    # subscriber, podcast/newsletter/yt ingest) instead of itself. It still
+    # bound :8010 and answered /health, so the canary passed and the real
+    # cutover did not — a canary is only as good as the thing it mirrors.
+    command:
+      - python
+      - -m
+      - uvicorn
+      - scripts.dual_tier.model_gateway:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8010"
+      - --workers
+      - "2"
+      - --log-level
+      - warning
     # Same ceiling the systemd unit carried (MemoryMax=1G, CPUQuota=200%).
     deploy:
       resources:

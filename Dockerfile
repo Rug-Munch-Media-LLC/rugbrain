@@ -9,7 +9,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # ── System deps ─────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential=12.12 \
-    curl=8.14.1-2+deb13u4 \
+      curl=8.14.1-2+deb13u5 \
     ca-certificates=20250419 \
     rclone=1.60.1+dfsg-4 \
     && rm -rf /var/lib/apt/lists/*
