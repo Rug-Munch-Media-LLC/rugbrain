@@ -16,6 +16,11 @@ Backend:
     ``rerank_method="none"``. Search never breaks because the reranker is
     unavailable.
 
+This module owns the two mutable ledgers (the endpoint strain ledger and the
+health cache) because tests mutate them by name on this module; they cannot
+be re-exported by value. The instruction library and the score-scattering
+helpers live in sibling modules.
+
 Environment variables:
   - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://127.0.0.1:8003)
   - ``RERANKER_TIMEOUT`` — per-request timeout in seconds (default: 30)
@@ -34,9 +39,24 @@ from typing import Any, cast
 import httpx
 
 from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
-from rugbrain.token_budget import clip, record
+from rugbrain.search.rerank_instructions import apply_instruction, detect_vertical
+from rugbrain.search.rerank_scores import (
+    RERANK_TEXT_LIMIT,
+    TOKEN_BUDGET_CAP,
+    chunk_text,
+    original_score,
+    scatter,
+    valid_docs,
+)
 
 logger = logging.getLogger(__name__)
+
+# Private aliases kept for the tests (and any legacy caller) that reach for
+# these by name on this module. Mutable state is NOT re-exported this way —
+# the strain ledger and health cache below are the single copy.
+_RERANK_TEXT_LIMIT = RERANK_TEXT_LIMIT
+_TOKEN_BUDGET_CAP = TOKEN_BUDGET_CAP
+_chunk_text = chunk_text
 
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
@@ -51,9 +71,42 @@ DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 # for a full pool vs 30s+ local on 2000-char docs).
 HOSTED_TIMEOUT_S: float = float(os.getenv("RERANKER_HOSTED_TIMEOUT", "6.0"))
 HOSTED_CANDIDATE_CAP: int = int(os.getenv("RERANKER_HOSTED_CAP", "40"))
+# The deep tier used to score EVERY fused candidate. A code-intent query fans
+# out over 8 collections x limit=10 -> 80 candidates -> measured 17,488
+# tokens to the cross-encoder for one query (35,976 at limit=20), while the
+# live tier capped at 40 the whole time. This bounds the deep tier the same way.
+DEEP_CANDIDATE_CAP: int = int(os.getenv("RERANKER_DEEP_CANDIDATE_CAP", "40"))
+# Sigmoid P(relevant) below this is confidently-irrelevant noise (Qwen3
+# rerank scores are 0-1). Applied only when enough strong candidates remain.
+_RERANK_NOISE_FLOOR = 0.10
+
+__all__ = [
+    "DEEP_CANDIDATE_CAP",
+    "RERANKER_ENABLED",
+    "RERANKER_TIMEOUT",
+    "RERANKER_URL",
+    "_RERANK_TEXT_LIMIT",
+    "_TOKEN_BUDGET_CAP",
+    "Reranker",
+    "_chunk_text",
+    "apply_instruction",
+    "detect_vertical",
+    "get_reranker",
+    "original_score",
+    "rerank_chunks",
+]
+
+# ── Endpoint strain ledger (mutable module state — stays here) ──────────
+# A failing endpoint is skipped for _STRAIN_WINDOW_S after _STRAIN_THRESHOLD
+# recent failures, so a down server costs one probe per window per URL
+# instead of one per query.
 _STRAIN_WINDOW_S: float = 120.0
 _STRAIN_THRESHOLD: int = 3
 _strain_failures: dict[str, list[float]] = defaultdict(list)
+
+# Cache health so we don't hammer a down server.
+_health: dict[str, Any] = {"ok": False, "last_check": 0.0}
+_lock = asyncio.Lock()
 
 
 def _is_strained(url: str) -> bool:
@@ -75,169 +128,14 @@ def _clear_strain(url: str | None = None) -> None:
         _strain_failures.pop(url, None)
 
 
-# Max content chars fed to the cross-encoder per chunk (truncation guard).
-# Server ctx raised 4096 -> 8192 (2026-08-22); query+doc must fit the budget,
-# so ~6000 chars of doc text is safe for typical queries.
-_RERANK_TEXT_LIMIT = 6000
-
-# ── Token budget (measured 2026-09-28) ─────────────────────────────────
-# The 6000-char cap above is 2142 tokens (measured corpus ratio 0.357
-# tok/char), which is 2.8x more cross-encoder context than a rerank decision
-# needs. Measured on the content path: the top-12 news_v2 chunks place 69.8%
-# of their tokens in the first 400 chars, and 768 tok covers p99 of every
-# collection measured (known_scams p99=744). See ``rugbrain.token_budget``.
-_TOKEN_BUDGET_CAP = int(os.getenv("RUGBRAIN_TOKEN_RERANK", "768"))
-
-# The deep tier used to score EVERY fused candidate. A code-intent query fans
-# out over 8 collections x limit=10 -> 80 candidates -> measured 17,488
-# tokens to the cross-encoder for one query (35,976 at limit=20), while the
-# live tier capped at 40 the whole time. This bounds the deep tier the same way.
-DEEP_CANDIDATE_CAP: int = int(os.getenv("RERANKER_DEEP_CANDIDATE_CAP", "40"))
-
-# ── Vertical instruction library ─────────────────────────────────────────────
-# Qwen3-Reranker is instruction-aware (official docs: +1-5% retrieval; FollowIR
-# 14.84 = best-in-class instruction following). Our llama.cpp build IGNORES the
-# /rerank 'instruct' field (hardcoded generic web-search instruct), so task
-# framing is embedded into the query text instead — validated live 2026-08-22:
-# a Tornado-Cash-funding evidence doc went 0.001 -> 0.99 on a rug-pull query.
-# Disable with RERANK_INSTRUCTIONS=off.
-_INSTRUCTION_LIBRARY: dict[str, str] = {
-    "forensics": (
-        "Crypto forensics task: rank documents by their evidentiary value for "
-        "assessing rug-pull and scam risk, including funding sources, wallet "
-        "concentration, mint authority, liquidity lock status, and honeypot signals."
-    ),
-    "contract": (
-        "Smart-contract security review task: rank documents by relevance to "
-        "contract analysis, prioritizing exploit patterns, privileged functions, "
-        "audit findings, and vulnerability disclosures."
-    ),
-    "tracing": (
-        "Fund-tracing task: rank documents by relevance to tracing fund flows, "
-        "wallet attribution, mixer usage, bridge hops, and entity resolution."
-    ),
-    "code": (
-        "Blockchain code intelligence task: rank documents by relevance to the "
-        "development question, prioritizing Solidity/Solana security semantics "
-        "and concrete vulnerable patterns or fixes."
-    ),
-}
-
-_VERTICAL_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        "forensics",
-        (
-            "rug",
-            "rugpull",
-            "rug pull",
-            "scam",
-            "honeypot",
-            "deployer",
-            "mint authority",
-            "liquidity lock",
-            "slippage",
-            "pump and dump",
-            "fraud",
-            "steal",
-            "drain",
-        ),
-    ),
-    (
-        "tracing",
-        (
-            "trace",
-            "fund flow",
-            "mixer",
-            "tornado",
-            "attribution",
-            "launder",
-            "bridge hop",
-            "cluster",
-            "entity resolution",
-            "source of funds",
-        ),
-    ),
-    (
-        "contract",
-        (
-            "contract",
-            "solidity",
-            "solana program",
-            "audit",
-            "reentrancy",
-            "overflow",
-            "access control",
-            "proxy",
-            "upgradeable",
-            "token standard",
-        ),
-    ),
-    (
-        "code",
-        (
-            "code",
-            "function",
-            "snippet",
-            "implement",
-            "example",
-            "anchor",
-            "web3.py",
-            "ethers",
-            "sdk",
-            "how do i",
-            "how to",
-        ),
-    ),
-)
-
-_RERANK_INSTRUCTIONS_ENABLED = os.getenv("RERANK_INSTRUCTIONS", "true").lower() != "off"
-
-# Sigmoid P(relevant) below this is confidently-irrelevant noise (Qwen3
-# rerank scores are 0-1). Applied only when enough strong candidates remain.
-_RERANK_NOISE_FLOOR = 0.10
-
-
-def detect_vertical(query: str) -> str | None:
-    """Classify a query into a platform vertical for instruction selection.
-
-    Order matters: forensics > tracing > contract > code. Returns None when
-    no vertical matches (generic/news queries keep the model's default
-    web-search instruction, which is optimal for plain relevance).
-    """
-    q = query.lower()
-    for vertical, patterns in _VERTICAL_PATTERNS:
-        if any(p in q for p in patterns):
-            return vertical
-    return None
-
-
-def apply_instruction(query: str) -> str:
-    """Embed the vertical instruction into the query text (query-slot trick).
-
-    Returns the query unchanged when instructions are disabled or no vertical
-    matches. The constant per-vertical prefix is also prompt-prefix-cache
-    friendly on the llama.cpp side.
-    """
-    if not _RERANK_INSTRUCTIONS_ENABLED:
-        return query
-    vertical = detect_vertical(query)
-    if vertical is None:
-        return query
-    return f"[TASK] {_INSTRUCTION_LIBRARY[vertical]} [QUERY] {query}"
-
-
-# Cache health so we don't hammer a down server.
-_health: dict[str, Any] = {"ok": False, "last_check": 0.0}
-_lock = asyncio.Lock()
-
-
-def _original_score(doc: dict[str, Any]) -> float:
-    """Best available retrieval score for a chunk (for candidate selection)."""
-    for key in ("score", "rrf_score", "similarity", "bm25_score", "text_score"):
-        val = doc.get(key)
-        if isinstance(val, (int, float)):
-            return float(val)
-    return 0.0
+async def _fast_health() -> bool:
+    """Fast cached health check — avoids hammering a down server."""
+    async with _lock:
+        if _health["ok"] and (time.time() - _health["last_check"]) < 30:
+            return True
+        if not _health["ok"] and (time.time() - _health["last_check"]) < 60:
+            return False
+    return True  # Allow the actual request to probe
 
 
 class Reranker:
@@ -274,32 +172,6 @@ async def get_reranker() -> Reranker:
     return Reranker()
 
 
-def _chunk_text(doc: dict[str, Any]) -> str:
-    """Extract searchable text from a chunk dict, clamped to the rerank budget.
-
-    The char cap stays as a cheap pre-filter (it avoids handing a 200k-char
-    blob to the tokenizer); the token cap is what actually bounds what the
-    cross-encoder sees.
-    """
-    for key in ("content", "text", "chunk_text", "title", "summary"):
-        val = doc.get(key)
-        if isinstance(val, str) and val.strip():
-            clipped = clip(val[:_RERANK_TEXT_LIMIT], _TOKEN_BUDGET_CAP)
-            record("rerank_doc", clipped)
-            return clipped
-    return ""
-
-
-async def _fast_health() -> bool:
-    """Fast cached health check — avoids hammering a down server."""
-    async with _lock:
-        if _health["ok"] and (time.time() - _health["last_check"]) < 30:
-            return True
-        if not _health["ok"] and (time.time() - _health["last_check"]) < 60:
-            return False
-    return True  # Allow the actual request to probe
-
-
 async def _post_rerank(
     url: str,
     query: str,
@@ -334,6 +206,23 @@ async def _post_rerank(
         return None
 
 
+async def _hosted_scores(
+    query: str,
+    valid: list[tuple[int, str]],
+    total: int,
+) -> tuple[list[float], str] | None:
+    """Hosted DeepInfra rung, candidate-capped. None when unavailable."""
+    if not hosted_enabled():
+        return None
+    capped = valid[:HOSTED_CANDIDATE_CAP]
+    results = await hosted_rerank(
+        query, [t for _, t in capped], top_n=len(capped), timeout=HOSTED_TIMEOUT_S
+    )
+    if results is None:
+        return None
+    return scatter(results, capped, total), "deepinfra:qwen3-reranker-4b"
+
+
 async def _score_candidates(
     query: str,
     candidates: list[dict[str, Any]],
@@ -348,47 +237,25 @@ async def _score_candidates(
     if not RERANKER_ENABLED or not candidates:
         return [], "none"
 
-    docs = [_chunk_text(d) for d in candidates]
-    valid = [(i, t) for i, t in enumerate(docs) if t]
+    valid = valid_docs(candidates)
     if not valid:
         return [], "none"
 
     if tier == "live":
-        capped = valid[:LIVE_CANDIDATE_CAP]
         # 0th rung: hosted DeepInfra (same 4B family, ~0.5-2s per pool; the
         # retired 0.6B speed tier's replacement as the interactive lane).
-        # Local rungs below remain the fallback ladder.
-        if hosted_enabled():
-            hosted_capped = valid[:HOSTED_CANDIDATE_CAP]
-            hosted_results = await hosted_rerank(
-                query,
-                [t for _, t in hosted_capped],
-                top_n=len(hosted_capped),
-                timeout=HOSTED_TIMEOUT_S,
-            )
-            if hosted_results is not None:
-                scores_hosted: list[float] = [0.0] * len(candidates)
-                for r in hosted_results:
-                    pos = r.get("index")
-                    if isinstance(pos, int) and 0 <= pos < len(hosted_capped):
-                        scores_hosted[hosted_capped[pos][0]] = float(r.get("relevance_score", 0.0))
-                return scores_hosted, "deepinfra:qwen3-reranker-4b"
+        hosted = await _hosted_scores(query, valid, len(candidates))
+        if hosted is not None:
+            return hosted
         # 1st rung (the only local lane): the 4B, candidate-capped. The
         # 0.6B speed tier that used to sit here is retired (endpoint gone).
-        capped = capped[:DEEP_FALLBACK_CAP]
+        capped = valid[:LIVE_CANDIDATE_CAP][:DEEP_FALLBACK_CAP]
         results = await _post_rerank(
             RERANKER_URL, query, [t for _, t in capped], RERANKER_TIMEOUT, "4B"
         )
-        served = "qwen3-reranker-4b"
         if results is None:
             return [], "none"
-        scores: list[float] = [0.0] * len(candidates)
-        for r in results:
-            pos = r.get("index")
-            if isinstance(pos, int) and 0 <= pos < len(capped):
-                orig_idx = capped[pos][0]
-                scores[orig_idx] = float(r.get("relevance_score", 0.0))
-        return scores, served
+        return scatter(results, capped, len(candidates)), "qwen3-reranker-4b"
 
     # ── deep tier (default): local 4B first (free), hosted fallback ──
     # Bounded: the deep tier used to score every fused candidate uncapped,
@@ -403,33 +270,15 @@ async def _score_candidates(
             async with _lock:
                 _health["ok"] = True
                 _health["last_check"] = time.time()
-            scores_deep: list[float] = [0.0] * len(candidates)
-            for r in results:
-                pos = r.get("index")
-                if isinstance(pos, int) and 0 <= pos < len(deep_valid):
-                    orig_idx = deep_valid[pos][0]
-                    scores_deep[orig_idx] = float(r.get("relevance_score", 0.0))
-            return scores_deep, "qwen3-reranker-4b"
+            return scatter(results, deep_valid, len(candidates)), "qwen3-reranker-4b"
         async with _lock:
             _health["ok"] = False
             _health["last_check"] = time.time()
 
     # Local unavailable / known-down: hosted keeps deep-tier rerank alive.
-    if hosted_enabled():
-        hosted_capped = valid[:HOSTED_CANDIDATE_CAP]
-        hosted_results = await hosted_rerank(
-            query,
-            [t for _, t in hosted_capped],
-            top_n=len(hosted_capped),
-            timeout=HOSTED_TIMEOUT_S,
-        )
-        if hosted_results is not None:
-            scores_fb: list[float] = [0.0] * len(candidates)
-            for r in hosted_results:
-                pos = r.get("index")
-                if isinstance(pos, int) and 0 <= pos < len(hosted_capped):
-                    scores_fb[hosted_capped[pos][0]] = float(r.get("relevance_score", 0.0))
-            return scores_fb, "deepinfra:qwen3-reranker-4b"
+    hosted = await _hosted_scores(query, valid, len(candidates))
+    if hosted is not None:
+        return hosted
     return [], "none"
 
 
@@ -440,71 +289,17 @@ async def rerank_chunks(
     keep: int = 5,
     tier: str = "deep",
 ) -> list[dict[str, Any]]:
-    """Re-rank *chunks* against *query* with the Qwen3 cross-encoder, keep the best.
+    """Re-rank `chunks` against `query`, keeping the best `keep`.
 
-    Parameters
-    ----------
-    query:
-        The user query string.
-    chunks:
-        Candidate chunk dicts (each with ``id``/``doc_id`` and ``content`` or
-        ``text``; retrieval scores under ``score``/``rrf_score``/``similarity``).
-    top_n:
-        Number of top candidates (by original retrieval score) to re-rank.
-        ``<= 0`` means "score all chunks". Default 20.
-    keep:
-        Number of best re-ranked chunks to return. ``<= 0`` means "keep all
-        scored". Default 5. Clamped to ``top_n``.
-
-    Returns
-    -------
-    list[dict]
-        Chunks sorted by cross-encoder relevance descending, augmented with
-        ``rerank_score``, ``rerank_method``, ``reranked`` and
-        ``rerank_duration_ms``. When the reranker server is unavailable,
-        returns the top ``keep`` chunks by their original retrieval score
-        with ``rerank_method="none"`` — search behavior is preserved, never
-        broken.
+    A thin delegate. The pipeline lives in `rerank_pipeline`; the scorer is
+    passed IN rather than imported, so `monkeypatch.setattr(rerank,
+    "_post_rerank", ...)` and `rerank.DEEP_CANDIDATE_CAP = 5` still take effect
+    through this module's namespace. Importing the scorer here instead would
+    have frozen a copy at import time — the same "resolved once, then silently
+    stale" class of bug this refactor is trying to remove.
     """
-    if not chunks:
-        return []
+    from rugbrain.search.rerank_pipeline import rerank_chunks as _pipeline
 
-    top_n = len(chunks) if top_n <= 0 else min(top_n, len(chunks))
-    keep = top_n if keep <= 0 else min(keep, top_n)
-
-    # Candidate selection is by the original retrieval score: cross-encoding
-    # is expensive, so only the best top_n candidates are re-scored.
-    candidates = sorted(chunks, key=_original_score, reverse=True)[:top_n]
-
-    t0 = time.perf_counter()
-    scores, method = await _score_candidates(query, candidates, tier=tier)
-    duration_ms = (time.perf_counter() - t0) * 1000
-
-    # ── graceful no-op: reranker unavailable ──
-    if not scores or method == "none":
-        ordered = sorted(candidates, key=_original_score, reverse=True)[:keep]
-        for doc in ordered:
-            doc["rerank_method"] = "none"
-            doc["reranked"] = False
-        return ordered
-
-    scored = sorted(zip(candidates, scores, strict=True), key=lambda x: x[1], reverse=True)
-
-    # ── noise floor: drop sub-0.1 docs when we have enough signal ──
-    # Qwen3 rerank scores are sigmoid P(relevant); <0.1 is confidently
-    # irrelevant. Only filter when enough above-floor candidates remain to
-    # honor `keep`, so callers always get a full result set when possible.
-    strong = [(d, s) for d, s in scored if s >= _RERANK_NOISE_FLOOR]
-    if len(strong) >= keep:
-        scored = strong
-
-    results: list[dict[str, Any]] = []
-    for doc, cross in scored[:keep]:
-        entry = dict(doc)
-        entry["rerank_score"] = round(float(cross), 6)
-        entry["rerank_method"] = method
-        entry["reranked"] = True
-        entry["rerank_vertical"] = detect_vertical(query)
-        entry["rerank_duration_ms"] = round(duration_ms, 1)
-        results.append(entry)
-    return results
+    return await _pipeline(
+        query, chunks, _score_candidates, top_n=top_n, keep=keep, tier=tier
+    )

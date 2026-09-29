@@ -112,14 +112,16 @@ def test_openrouter_embed_rotates_accounts(monkeypatch):
 
     async def one_call():
         transport = httpx.MockTransport(handler)
-        orig = emb.httpx.AsyncClient
+        from rugbrain.embeddings_pkg import legacy_lanes
+
+        orig = legacy_lanes.httpx.AsyncClient
 
         class C(orig):
             def __init__(self, *a, **k):
                 k.pop("transport", None)
                 super().__init__(*a, transport=transport, **k)
 
-        monkeypatch.setattr(emb.httpx, "AsyncClient", C)
+        monkeypatch.setattr(legacy_lanes.httpx, "AsyncClient", C)
         return await emb._openrouter_embed("x", dim=2048)
 
     outs = [asyncio.run(one_call()) for _ in range(4)]
@@ -145,14 +147,16 @@ def test_openrouter_embed_429_fails_over_to_second_key(monkeypatch):
 
     async def once():
         transport = httpx.MockTransport(handler)
-        orig = emb.httpx.AsyncClient
+        from rugbrain.embeddings_pkg import legacy_lanes
+
+        orig = legacy_lanes.httpx.AsyncClient
 
         class C(orig):
             def __init__(self, *a, **k):
                 k.pop("transport", None)
                 super().__init__(*a, transport=transport, **k)
 
-        monkeypatch.setattr(emb.httpx, "AsyncClient", C)
+        monkeypatch.setattr(legacy_lanes.httpx, "AsyncClient", C)
         emb._OR_KEY_CURSOR = __import__("itertools").count()  # deterministic start
         return await emb._openrouter_embed("x", dim=2048)
 
