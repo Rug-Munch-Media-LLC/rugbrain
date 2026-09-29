@@ -11,7 +11,7 @@ Endpoints:
   POST /embed               {text|texts, tier?} -> vectors
                             (None tier -> canonical deep lane; "speed" =
                             LEGACY 0.6b read lane, local-only; DeepInfra
-                            Qwen3-Embedding-4B @2560 deep fallback —
+                            Qwen3-Embedding-8B @4096 deep fallback —
                             index-compatible)
   POST /rerank              {query, documents[], tier?} -> scored+ordered
                             (vertical instructions auto-applied)
@@ -47,17 +47,19 @@ _retriever = DualTierRetriever()
 HTTP_TIMEOUT = aiohttp.ClientTimeout(total=float(os.getenv("GATEWAY_TIMEOUT", "300")))
 
 # --- Cloud fallback (2026-08-29 embed consolidation) ------------------------
-# CANONICAL DEEP LANE: DeepInfra Qwen/Qwen3-Embedding-4B — the exact same
-# model the local :8004 serves (2560-dim, SAME vector space), so DeepInfra
+# CANONICAL DEEP LANE: DeepInfra Qwen3-Embedding-8B - the exact same
+# model the local :8004 serves (4096-dim, SAME vector space), so DeepInfra
 # responses ARE index-compatible with locally built collections. The old
 # OpenRouter two-account doctrine (liquid 350m speed / qwen3-embedding-8b
 # deep) is retired: qwen3-embedding-8b is consumer-chat space, never
-# index-compatible with the 4B corpus.
+# index-compatible with the 8B corpus.
 # SPEED LABEL: kept for API compatibility only — the 0.6b tier is
-# retired (2026-09-14) and ENDPOINTS["speed_*"] resolve to the canonical 4B
+# retired (2026-09-14) and ENDPOINTS["speed_*"] resolve to the canonical 8B
 # lanes. Set DEEPINFRA_API_KEY (env) or DEEPINFRA_KEY_FILE for the cloud rung.
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
-DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+# 2026-08-29: defaulted to 4B, which is why this gateway kept the fleet on the
+# retired lane regardless of what the rest of the repo said. Canonical now.
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
 
 
@@ -129,18 +131,28 @@ async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[floa
 
 
 # --- Universal embedding-output interpreter ---------------------------------
-# The platform spans 6+ engines (local 4B/0.6B quantized, chat 8B, cloud liquid
+# The platform spans 6+ engines (local 8B/0.6B quantized, chat 8B, cloud liquid
 # 350m, cloud qwen3-8b, future hosts). Each emits OpenAI-ish JSON with drift:
 # optional `index`, float lists vs base64-packed floats. Callers must consume
 # ANY engine's output without knowing the source; unknown shapes fail loud.
 ENGINE_REGISTRY: dict[str, dict[str, Any]] = {
     # key = f"{tier}_{served_by}"; dims are canonical for compatibility checks.
-    # 2026-08-29: deep_cloud = DeepInfra Qwen3-Embedding-4B @2560 — same model
-    # as deep_local ⇒ index-compatible. speed_cloud is GONE (0.6b retired);
-    # the speed label resolves to the deep lane (2026-09-14).
-    "deep_local": {"dims": 2560, "model": "qwen3-embedding-4b"},
-    "speed_local": {"dims": 2560, "model": "qwen3-embedding-4b"},  # compat label; deep lane
-    "deep_cloud": {"dims": 2560, "model": "Qwen/Qwen3-Embedding-4B"},  # DeepInfra
+    # 2026-08-29 — 4B ELIMINATED. This registry hardcoded
+    # Qwen3-Embedding-4B @2560 for every lane AND line 60 defaulted
+    # DEEPINFRA_EMBED_MODEL to 4B, so this gateway — the service every embed
+    # request routes through on :8090/:8010 — was the single largest reason
+    # the fleet was still on 4B after the rest of the code had moved to 8B.
+    #
+    # deep_local is the llama.cpp :8004 endpoint. It is currently DOWN (the
+    # service is masked), so the local lanes cannot serve today; they are kept
+    # with the canonical dims so the registry stays internally consistent and a
+    # future 8B local server is a config change, not a code change.
+    #
+    # speed_cloud is GONE (0.6b retired 2026-08-29) and the speed label
+    # resolves to the deep lane (2026-09-14).
+    "deep_local": {"dims": 4096, "model": "qwen3-embedding-8b"},
+    "speed_local": {"dims": 4096, "model": "qwen3-embedding-8b"},  # compat label; deep lane
+    "deep_cloud": {"dims": 4096, "model": "Qwen/Qwen3-Embedding-8B"},  # DeepInfra
 }
 
 
@@ -191,7 +203,7 @@ class EmbedReq(BaseModel):
     text: str | None = None
     texts: list[str] | None = None
     tier: str | None = None  # None -> deep (canonical, 2026-08-29);
-    # "speed" = compat label — resolves to the deep 4B lane (2026-09-14)
+    # "speed" = compat label — resolves to the deep 8B lane (2026-09-14)
 
 
 class RerankReq(BaseModel):
@@ -264,7 +276,7 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
     if not texts:
         raise HTTPException(status_code=422, detail="text or texts required")
     # 2026-08-29 consolidation: /embed defaults to the CANONICAL deep lane
-    # (qwen3-embedding-4b @2560, DeepInfra fallback — index-compatible).
+    # (qwen3-embedding-8b @4096, DeepInfra — index-compatible).
     # Explicit tier="speed" is honored for API compat and resolves to
     # the canonical deep lane (0.6b retired 2026-09-14).
     tier = req.tier if req.tier in ("speed", "deep") else "deep"
@@ -306,7 +318,7 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
             "embeddings": vecs,
         }
         if tier == "speed":
-            out["legacy"] = True  # compat label; served by the deep 4B lane
+            out["legacy"] = True  # compat label; served by the deep 8B lane
         return out
     except Exception as exc:
         _note_failure(tier)
@@ -344,7 +356,10 @@ async def rerank(req: RerankReq) -> dict[str, Any]:
     tier = _resolve_tier(req.tier, req.query)
     inst_query = apply_instruction(req.query)
     body = {"query": inst_query, "documents": req.documents}
-    # Rerank stays LOCAL per doctrine: 4B primary, 0.6B fallback. Never cloud.
+    # Rerank: Qwen3-Reranker-8B, DeepInfra primary, HF ZeroGPU in the free
+    # windows. The "stays local, never cloud" line below is RETIRED — the local
+    # reranker at :8003 is masked and the hosted 8B reranker is verified live
+    # (200 OK, 85ms, $0.000016/call).
     for attempt_tier in (tier, "speed" if tier == "deep" else "deep"):
         url = ENDPOINTS[f"{attempt_tier}_rerank"]
         try:
