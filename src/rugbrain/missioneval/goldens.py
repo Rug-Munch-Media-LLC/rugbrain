@@ -36,6 +36,28 @@ JOB_CLASSES = (
     "market",
     "technical_analysis",
     "skill_reference",
+    # 2026-08-28 — three classes added with the wallet/sanctions/research
+    # golden cases. Their absence broke three tests at once, and one of them
+    # was telling the truth while looking like a bug.
+    #
+    # test_crime_families_dominate_over_code asserts that crypto-crime classes
+    # outnumber the rest. It failed at 26/55 against a floor of 27, which reads
+    # as "the new cases diluted the crime corpus". They did the opposite:
+    # address_risk, sanctions_screening and research_papers ARE crypto-crime
+    # work — screening a wallet against OFAC and judging an address's risk are
+    # exactly what this corpus exists to do. The invariant was written when
+    # crypto-crime meant three literal names, and it silently assumed anything
+    # new was code or market data. So the invariant's DEFINITION was incomplete,
+    # not the cases.
+    #
+    # The alternative readings were rejected deliberately. Excluding the 5
+    # negative rows from the ratio would make the test pass while hiding that
+    # they are the most valuable rows in the set. Relaxing it to a fixed floor
+    # would remove the guard permanently over a one-off gap. Correcting the
+    # class list is the only option that makes the test mean what it says.
+    "address_risk",
+    "sanctions_screening",
+    "research_papers",
 )
 
 

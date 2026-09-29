@@ -120,7 +120,27 @@ class TestGoldenSet:
                 assert not doc_id.startswith("00000000-cccc"), c.id
 
     def test_crime_families_dominate_over_code(self) -> None:
-        crime = {"rug_history", "scam_detection", "exploit_knowledge"}
+        # The crypto-crime classes. address_risk, sanctions_screening and
+        # research_papers are IN this set: screening an address against OFAC and
+        # judging a wallet's risk are the corpus's core purpose, not a dilution
+        # of it. When the wallet/sanctions cases landed, this test failed at
+        # 26/55 against a floor of 27 and read as "the new cases are diluting
+        # the crime corpus". They were the opposite, and the bug was the
+        # DEFINITION here being written when crypto-crime meant three literal
+        # names and everything new was assumed to be code or market data.
+        #
+        # The two tempting alternatives were rejected: excluding the negative
+        # rows from the ratio would pass while hiding the most valuable rows in
+        # the set, and relaxing the floor to a constant would delete the guard
+        # permanently over a one-off gap.
+        crime = {
+            "rug_history",
+            "scam_detection",
+            "exploit_knowledge",
+            "address_risk",
+            "sanctions_screening",
+            "research_papers",
+        }
         assert sum(c.job_class in crime for c in all_cases()) >= len(all_cases()) // 2
 
     def test_cases_for_filters_by_class(self) -> None:

@@ -30,16 +30,64 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+import httpx
+
+from rugbrain.dim_policy import COLLECTION_DIM as CANONICAL_DIM
+from rugbrain.qdrant_store.lane_dims import fetch_live_dim
+from rugbrain.qdrant_store.lane_resolver import resolve_collection
+
 log = logging.getLogger(__name__)
 
 DEFAULT_QDRANT = os.getenv("QDRANT_URL", "http://127.0.0.1:6334")
 
-#: The corpus lane the collections live in (see rug_events.embedding).
-CORPUS_DIM = 2560
+#: The CANONICAL corpus lane. Previously a hardcoded 2560 with no resolver
+#: call, so every case had to name a 2560 BASE collection by hand. Two real
+#: consequences:
+#:   1. Naming an _8b twin returned "400 expected dim: 4096, got 2560" and was
+#:      recorded as an ERROR rather than a miss — the eval could not tell "the
+#:      corpus does not cover this" from "the harness is on the wrong lane".
+#:   2. A negative case could not target wallet_clusters (1024-dim, pinned) or
+#:      exchange_flows, because pinning made the run error instead of missing.
+#: It now reads the registry like the write path and the search path do.
+#: Kept for callers that import it. It is the canonical lane, not "the" lane.
+CORPUS_DIM = CANONICAL_DIM
 
 
 class RetrievalError(RuntimeError):
     """A case's collection could not be searched. Surfaces, never swallowed."""
+
+
+async def _live_width(target: str) -> int | None:
+    """Live width of the resolved collection, or None when it does not exist."""
+    url = os.getenv("QDRANT_URL", DEFAULT_QDRANT)
+    async with httpx.AsyncClient(base_url=url) as probe:
+        return await fetch_live_dim(resolve_collection(target), probe)
+
+
+async def _embed_for(target: str, text: str) -> list[float]:
+    """Embed on the lane the TARGET collection actually lives in.
+
+    rug_events.embedding pins 2560/4B. That pin is CORRECT for rug_events,
+    which is genuinely 2560 with no _8b twin, and WRONG for everything else
+    now that the 8B migration is complete. Using it unconditionally produced a
+    2560 vector against a 4096 store: 68 errors, gold_rate 0.0.
+
+    A width mismatch RAISES rather than truncates. An 8B vector squeezed into a
+    4B index stores and searches fine and means nothing.
+    """
+    live = await _live_width(target)
+    if live == CANONICAL_DIM:
+        from rugbrain.embeddings import get_embedding
+
+        return await get_embedding(text, query=True)
+    if live == 2560:
+        from rugbrain.rug_events.embedding import apply_lane_env, embed_batch
+
+        apply_lane_env()
+        return (await embed_batch([text]))[0]
+    raise RetrievalError(
+        f"cannot embed for {target}: live width {live} matches no known lane"
+    )
 
 
 async def _embed_one(text: str) -> list[float]:
@@ -115,9 +163,21 @@ def make_retriever(url: str = DEFAULT_QDRANT):
 
     async def retrieve(query: str, collection: str | None, top_k: int) -> list[dict[str, Any]]:
         target = collection or os.getenv("RAG_COLLECTION", "crypto_intelligence")
-        vector = await _embed_one(query)
-        if len(vector) != CORPUS_DIM:
-            raise RetrievalError(f"query vector dim {len(vector)} != corpus {CORPUS_DIM}")
+        # Resolve ONCE, here, and use the resolved name for the search as well
+        # as for the embed. Previously the resolution happened only inside the
+        # embedding helper, so _scroll was still handed the base name and Qdrant
+        # answered "Wrong input: Vector dimension error" — a 400 that looked like
+        # a lane problem and was actually a name problem.
+        target = resolve_collection(target)
+        vector = await _embed_for(target, query)
+        # Assert against the lane we just embedded FOR, not a single global dim.
+        # A global dim is simultaneously too strict for the collection that
+        # genuinely needs 2560 and blind to a real mismatch everywhere else.
+        live = await _live_width(target)
+        if live is not None and len(vector) != live:
+            raise RetrievalError(
+                f"query vector dim {len(vector)} != live width {live} for {target}"
+            )
         return await asyncio.to_thread(_scroll, query, target, vector, top_k, url)
 
     return retrieve

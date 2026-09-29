@@ -9,7 +9,9 @@ observed live in Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-4B).
 from __future__ import annotations
 
 from rugbrain.missioneval.golden_cases_market import MARKET_CASES
+from rugbrain.missioneval.golden_cases_scam_neg import NEGATIVE_CASES
 from rugbrain.missioneval.golden_cases_scam import SCAM_CASES
+from rugbrain.missioneval.golden_cases_scam_ext import XEXT_SCAM_CASES
 from rugbrain.missioneval.golden_cases_wallet import RESEARCH_CASES, SANCTION_CASES
 from rugbrain.missioneval.golden_cases_wallet_address import WALLET_CASES
 from rugbrain.missioneval.goldens import MissionCase
@@ -140,6 +142,13 @@ CASES: list[MissionCase] = [
     *WALLET_CASES,
     *SANCTION_CASES,
     *RESEARCH_CASES,
+    *XEXT_SCAM_CASES,
+    # Negative cases are registered so they are COUNTED, not so they score. The
+    # judge has three grades and none of them is "correctly absent", so a
+    # negative scored today is indistinguishable from a miss. They are in the
+    # set because the corpus needs to know what it cannot answer, and because the
+    # missing grade is a real gap someone must close before they mean anything.
+    *NEGATIVE_CASES,
 ]
 
 __all__ = ["CASES", "NEWS_CASES", "RUG_CASES", "SKILL_CASES"]
