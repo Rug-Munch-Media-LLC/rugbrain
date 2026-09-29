@@ -1,25 +1,12 @@
 """Decoupled Qwen3 Reranker 4B client — the single ranking entry point.
 
-Self-hosts a llama.cpp --rerank server on Talos port 8003.
-Degrades gracefully when server is down.
+Self-hosts a llama.cpp --rerank server on Talos port 8003. Degrades gracefully
+when the server is down. Every caller funnels through :func:`rerank`, so the
+per-document token ceiling is applied exactly once, here.
 
-Usage:
-    from rugbrain.reranker import rerank, get_reranker_health
-
-    # Rank documents by relevance to query
-    results = await rerank(
-        query="BTC whale moving to exchange",
-        documents=["text1", "text2", "text3"],
-        top_k=3
-    )
-
-    # Check health
-    health = await get_reranker_health()
-
-Siblings (one job each):
-  * ``rugbrain.rerank_health`` — health cache + probe + background loop
-  * ``rugbrain.rerank_instructions`` — per-task instruction templates
-  * ``rugbrain.rerank_compat`` — ``Reranker`` class + ``rerank_tiered``
+Siblings, one job each: ``rerank_health`` (health cache + probe + loop),
+``rerank_instructions`` (per-task templates), ``rerank_compat`` (the
+backward-compatible ``Reranker`` class and ``rerank_tiered``).
 """
 
 from __future__ import annotations
@@ -39,7 +26,7 @@ from rugbrain.rerank_compat import (
     get_reranker,
     rerank_tiered,
 )
-from rugbrain.rerank_health import _fast_health
+from rugbrain.rerank_health import _fast_health, get_reranker_health, reranker_health_loop
 from rugbrain.rerank_health import _mark as _mark_health
 from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
 from rugbrain.rerank_instructions import (
@@ -190,17 +177,3 @@ async def rerank_batch(
             return await rerank(query, docs, top_k=top_k)
 
     return await asyncio.gather(*[_one(q, d) for q, d in queries_and_docs])
-
-
-async def get_reranker_health() -> dict[str, Any]:
-    """Check if the reranker server is healthy (re-export of the probe)."""
-    from rugbrain.rerank_health import get_reranker_health as _probe
-
-    return await _probe()
-
-
-async def reranker_health_loop() -> None:
-    """Background health check loop (re-export of the loop)."""
-    from rugbrain.rerank_health import reranker_health_loop as _loop
-
-    await _loop()
