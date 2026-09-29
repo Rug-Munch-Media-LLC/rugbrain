@@ -1,0 +1,48 @@
+# rugbrain-dim-drift.timer — dimension-drift gate, hourly
+# Source: /srv/work/repos/rugbrain/systemd/rugbrain-dim-drift.timer
+# Deploy: /etc/systemd/system/rugbrain-dim-drift.timer
+#
+# PROPOSAL ONLY — not installed by Lane C.
+#
+# WHY A TIMER AND NOT CI. Fleet CI in this organisation has historically had
+# zero successful runs, so a CI job would be a control that never executes.
+# A systemd timer on the host that owns the corpus is the control that will
+# actually run, and it runs whether or not anyone remembers to push.
+#
+# WHY HOURLY, NOT DAILY. The failure this catches is silent and cumulative:
+# a source default reappears at commit time, and a collection is recreated at
+# the wrong width by a seed/migration script. Both surface within the hour in
+# practice, and an hour is cheap — the run is a few hundred GETs plus a
+# 724-file AST walk, ~5s, MemoryMax=512M.
+#
+# WHY NOT ONCOMMAND. A timer that only fires when someone remembers is the
+# same failure as CI. OnCalendar is unconditional.
+#
+# WHY Persistent=true. A host that reboots (or was down overnight) re-runs the
+# check on next boot rather than skipping until the next slot.
+#
+# Deploy:
+#   cp systemd/rugbrain-dim-drift.timer /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rugbrain-dim-drift.timer
+#
+# Verify it is actually firing:
+#   systemctl list-timers rugbrain-dim-drift.timer
+#   journalctl -u rugbrain-dim-drift.service -n 50
+#   cat /run/rugbrain-dim-drift.json
+#
+# To alert on drift, pair with OnFailure= (not wired here — the operator
+# decides the destination; the gate's own exit code is the signal).
+
+[Unit]
+Description=Hourly RugBrain dimension-drift gate (4096 lane)
+Documentation=file:///srv/work/repos/rugbrain/docs/DIM-DRIFT-GATE.md
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

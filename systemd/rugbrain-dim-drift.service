@@ -1,0 +1,52 @@
+# rugbrain-dim-drift.service — dimension-drift gate (live + static)
+# Source: /srv/work/repos/rugbrain/systemd/rugbrain-dim-drift.service
+# Deploy: /etc/systemd/system/rugbrain-dim-drift.service
+#
+# PROPOSAL ONLY — not installed by Lane C. See docs/DIM-DRIFT-GATE.md.
+#
+# Runs the gate that fails when the retired 4B/2560 generation reappears:
+#   exit 0  both halves clean
+#   exit 1  drift (a non-4096 collection, or an executable 4B default)
+#   exit 2  Qdrant unreachable — UNKNOWN, deliberately distinct from clean
+#
+# READ-ONLY. Qdrant :6334 is production; scripts/check_dim_drift.py issues
+# GET and contains no write, create or delete path. The unit adds
+# ReadWritePaths=none for the repo so a future edit that adds a verb fails
+# here rather than in production.
+#
+# Deploy:
+#   cp systemd/rugbrain-dim-drift.service /etc/systemd/system/
+#   cp systemd/rugbrain-dim-drift.timer   /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now rugbrain-dim-drift.timer
+
+[Unit]
+Description=RugBrain dimension-drift gate (4096 lane vs retired 2560/1024)
+Documentation=file:///srv/work/repos/rugbrain/docs/DIM-DRIFT-GATE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/bin/bash -c '/usr/bin/python3 /srv/work/repos/rugbrain/scripts/check_dim_drift.py --json --live > /run/rugbrain-dim-drift.json 2>/dev/null; LIVE=$?; /usr/bin/python3 /srv/work/repos/rugbrain/scripts/check_dim_drift.py --json --static > /run/rugbrain-dim-drift-static.json 2>/dev/null; STATIC=$?; cat /run/rugbrain-dim-drift.json; exit $(( LIVE > STATIC ? LIVE : STATIC ))'
+TimeoutStartSec=300
+
+# MemoryMax only — never MemoryHigh. A runaway dies alone in its own cgroup
+# and the interactive session is untouched. Hard ceiling is far above the
+# real ~40MB because a 724-file AST walk plus 96 HTTP probes is the high end.
+MemoryMax=512M
+# Deliberately no MemoryHigh: a throttle here would just make the gate slow
+# and unpredictable instead of bounded.
+
+# The gate must be able to READ the repo (it AST-walks src/ and scripts/)
+# and nothing else. ReadWritePaths is intentionally absent.
+ProtectSystem=full
+ReadWritePaths=/run
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
