@@ -24,9 +24,8 @@ from rugbrain.routes.search_pkg._shared import (
 
 logger = logging.getLogger(__name__)
 
-router: APIRouter = APIRouter(tags=["rag-optimization"])
+router: APIRouter = APIRouter()
 
-@router.post("/search/multi")
 
 @router.post("/search/multi")
 async def search_multi(
@@ -88,13 +87,20 @@ async def search_multi(
             detail={"error": "embedding_unavailable", "message": str(e)[:200]},
         ) from e
 
-    # Search each collection in parallel
+    # Search each collection in parallel. The names the caller sent are
+    # resolved to the lane the serving lane actually populates, exactly as
+    # ``/search`` and the write path do (be0da01) — querying a base name here
+    # was the same incompatible-schema defect one route over. The RESPONSE
+    # still reports the caller's names, and the priority boost below still
+    # keys off them, so the envelope is unchanged.
+    from rugbrain.search.lane_targets import resolve_search_collection
+
     store = QdrantVectorStore()
     tasks = [
         store.hybrid_search(
             query_text=q,
             query_embedding=embedding,
-            collection=col,
+            collection=resolve_search_collection(col),
             limit=per_col,
             min_similarity=0.4,
         )

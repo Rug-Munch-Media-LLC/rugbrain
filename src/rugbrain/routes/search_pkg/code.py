@@ -14,11 +14,7 @@ from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 
-router: APIRouter = APIRouter(tags=["rag-optimization"])
-
-@router.get("/search/crypto-code")
-
-# ── Crypto Code Mode (ContextCrypto collections) ──────────────────────
+router: APIRouter = APIRouter()
 
 
 @router.get("/search/crypto-code")

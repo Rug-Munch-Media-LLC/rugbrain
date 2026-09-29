@@ -272,7 +272,9 @@ def test_synthesize_answer_node() -> None:
     assert result["citations"][0]["id"] == "1"
 
 
-def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch: pytest.MonkeyPatch) -> Any:
+def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     """Cross-encoder reorder + rating boost: verified doc outranks rumor.
 
     Mirrors the production pipeline: rerank (Qwen3 cross-encoder) produces
@@ -283,9 +285,7 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch: pyt
     from rugbrain.ratings import _primary_score, apply_rating_boosts
 
     # Raw cross-encoder: rumor doc scores slightly higher (0.65 > 0.60)
-    async def fake_rerank(
-        query: Any, documents: Any, top_k: int = 10, raw: bool = False
-    ) -> Any:
+    async def fake_rerank(query: Any, documents: Any, top_k: int = 10, raw: bool = False) -> Any:
         return [
             {"index": 1, "relevance_score": 0.65},
             {"index": 0, "relevance_score": 0.60},
@@ -311,13 +311,13 @@ def test_reranker_applies_rating_boosts_on_top_of_cross_encoder(monkeypatch: pyt
     assert results[0]["rating_multiplier"] > 1.0
 
 
-def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch: pytest.MonkeyPatch) -> Any:
+def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
     """Without rating boosts, pure cross-encoder ordering is preserved."""
     import rugbrain.reranker as rr_mod
 
-    async def fake_rerank(
-        query: Any, documents: Any, top_k: int = 10, raw: bool = False
-    ) -> Any:
+    async def fake_rerank(query: Any, documents: Any, top_k: int = 10, raw: bool = False) -> Any:
         return [
             {"index": 1, "relevance_score": 0.65},
             {"index": 0, "relevance_score": 0.60},
@@ -341,15 +341,20 @@ def test_reranker_skip_ratings_flag_keeps_cross_encoder_order(monkeypatch: pytes
 
 
 def test_search_endpoint_has_rating_filter_params() -> None:
-    """GET /api/v1/search accepts the new rating filter query params."""
-    import inspect
+    """GET /api/v1/search accepts the new rating filter query params.
 
-    from rugbrain.endpoints import search_threat_intel
+    The params are declared once on ``SearchParams`` and injected into the
+    handler via ``Depends`` (the handler signature stays a two-line pipeline),
+    so this asserts on the declaration, not on the handler's signature. The
+    OpenAPI document is the end-to-end check that they are still exposed on
+    the endpoint.
+    """
+    from rugbrain.routes.search_pkg.params import SearchParams
 
-    sig = inspect.signature(search_threat_intel)
-    assert "factuality_filter" in sig.parameters
-    assert "min_source_tier" in sig.parameters
-    assert "require_corroboration" in sig.parameters
+    fields = SearchParams.__dataclass_fields__
+    assert "factuality_filter" in fields
+    assert "min_source_tier" in fields
+    assert "require_corroboration" in fields
 
 
 def test_three_pillar_search_has_rating_boost_param() -> None:
