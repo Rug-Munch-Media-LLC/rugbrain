@@ -1,31 +1,60 @@
-"""RAG Embedder — Qwen3-Embedding-4B (DeepInfra hosted primary / llama.cpp local).
+"""RAG Embedder — Qwen3-Embedding-8B (DeepInfra hosted primary / llama.cpp local).
 
-Qwen3-Embedding-4B (2560d) is the primary embedding model. Provider is chosen
-via ``EMBED_PROVIDER``: ``deepinfra`` (hosted DeepInfra, massive-scale) or
-``local`` (llama.cpp OpenAI-compatible ``/embeddings``, ``QWEN_EMBED_URL``).
-All Qdrant collections are 2560d Cosine.
+Provider is chosen via ``EMBED_PROVIDER``: ``deepinfra`` (hosted DeepInfra,
+massive-scale) or ``local`` (llama.cpp OpenAI-compatible ``/embeddings``,
+``QWEN_EMBED_URL``). Both serve the SAME 8B model, so they share one vector
+space.
+
+THE CANONICAL LANE IS READ, NOT HARDCODED (2026-09-29)
+    The retired 4B/2560 generation is eliminated. The model name and the dim
+    both come from :mod:`rugbrain.dim_policy` — the registry that already
+    declares ``qwen3-embedding-8b`` as canonical and keeps 4B only as a
+    read-only entry — instead of being written out as literals here.
+
+    The literals were a real defect, not a style preference. This module is a
+    LIVE path (``query_embedder.embed_query`` -> ``search/filters.py`` ->
+    every search request), so its ``"qwen3-embedding-4b"`` default was the
+    model a client would actually send whenever the env did not override it.
+    With the 42 retired collections deleted, that default can only produce a
+    vector no surviving collection accepts.
+
+    ``envsitter``-style env overrides still win, exactly as before: an operator
+    pointing ``RAG_EMBED_MODEL`` at a different model gets that model's
+    native dim from the same registry, not a stale hardcoded number.
 """
 
 from __future__ import annotations
 
 import os
 from enum import Enum
-from typing import Any
+
+from rugbrain.dim_policy import default_dim_for_model
+
+#: Canonical model id. Read from the registry, so the retired 4B generation
+#: cannot be reintroduced here as a literal default.
+CANONICAL_MODEL: str = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
+
+#: Model id for the llama.cpp backend (env override wins).
+QWEN_EMBED_MODEL_NAME: str = CANONICAL_MODEL
 
 
 class EmbedderBackend(Enum):
-    """Available embedding backends."""
+    """Available embedding backends.
 
-    Qwen3_M3 = "qwen3-embedding-4b"  # 2560d, canonical (local + DeepInfra)
+    The single member is the canonical 8B lane. It is not named ``Qwen3_M3``:
+    that name was a leftover from the 3B era and misdescribed the 4B model it
+    had been bound to, which misled readers of the factory below.
+    """
+
+    Qwen3_8B = "qwen3-embedding-8b"
 
 
 # ── Per-backend configuration ──────────────────────────────────────────
+# Dim comes from the registry (``default_dim_for_model``), not a literal, so
+# changing the canonical model in one place cannot leave 2560 behind here.
 _BACKEND_DIMS: dict[EmbedderBackend, int] = {
-    EmbedderBackend.Qwen3_M3: 2560,
+    EmbedderBackend.Qwen3_8B: default_dim_for_model(CANONICAL_MODEL),
 }
-
-# Qwen3-Embedding-4B model id for the llama.cpp backend.
-QWEN_EMBED_MODEL_NAME: str = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
 
 
 def backend_dim(backend: EmbedderBackend) -> int:
@@ -50,7 +79,7 @@ class DualDimEmbedder:
         """Embed a batch of texts. Returns one vector per text.
 
         Uses the llama.cpp /embeddings endpoint (OpenAI-compatible) with
-        the configured model (qwen3-embedding-4b).
+        the configured model (``QWEN_EMBED_MODEL_NAME``, canonical 8B lane).
         """
         import httpx
 
@@ -87,17 +116,20 @@ class DualDimEmbedder:
 
 # ── Factory ────────────────────────────────────────────────────────────
 class DeepInfraEmbedder:
-    """Hosted DeepInfra Qwen3-Embedding-4B adapter (DualDimEmbedder interface).
+    """Hosted DeepInfra Qwen3-Embedding-8B adapter (DualDimEmbedder interface).
 
     Used when ``EMBED_PROVIDER=deepinfra`` (or auto with ``DEEPINFRA_API_KEY``
-    set). Same model as the local llama.cpp lane ⇒ same 2560-dim vector space.
+    set). Same model as the local llama.cpp lane ⇒ same 4096-dim vector space.
     """
 
     def __init__(self) -> None:
         from rugbrain.qwen_embedders import Qwen3Embedder
 
         self._impl = Qwen3Embedder(provider="deepinfra")
-        self.dim = self._impl.DIMS
+        # Call-time dim, not the class attribute frozen at import: the lane
+        # switch happens after this module is first imported, and a frozen
+        # value validates against the PREVIOUS model.
+        self.dim = self._impl.dims
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         return await self._impl.embed(texts)
@@ -107,10 +139,10 @@ class DeepInfraEmbedder:
 
 
 def get_embedder() -> DualDimEmbedder | DeepInfraEmbedder:
-    """Return the canonical embedder (qwen3-embedding-4b, 2560d).
+    """Return the canonical embedder (qwen3-embedding-8b, 4096d).
 
     Provider selected by ``EMBED_PROVIDER``:
-      * ``deepinfra`` — hosted DeepInfra Qwen/Qwen3-Embedding-4B (massive-scale
+      * ``deepinfra`` — hosted DeepInfra Qwen/Qwen3-Embedding-8B (massive-scale
         lane; requires DEEPINFRA_API_KEY).
       * ``local``     — llama.cpp (:8004, ``QWEN_EMBED_URL``) fallback.
       * unset         — auto: DeepInfra when ``DEEPINFRA_API_KEY`` is present,
@@ -127,56 +159,10 @@ def get_embedder() -> DualDimEmbedder | DeepInfraEmbedder:
         return DeepInfraEmbedder()
     if provider == "local":
         return DualDimEmbedder(
-            EmbedderBackend.Qwen3_M3,
+            EmbedderBackend.Qwen3_8B,
             int_url=os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
         )
     raise RuntimeError(f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|local)")
-
-
-# ── Migration helpers ──────────────────────────────────────────────────
-async def reindex_collection(
-    name: str,
-    source: DualDimEmbedder,
-    target: DualDimEmbedder,
-    fetch_docs: Any,
-    write_collection: Any,
-    verify_queries: list[str] | None = None,
-) -> bool:
-    """Re-embed one collection from source backend to target backend.
-
-    Args:
-        name: collection name
-        source: existing backend (e.g. qwen3-embedding-4b)
-        target: new backend (e.g. qwen3-embedding:4b)
-        fetch_docs: async () -> list[(id, text)] callable
-        write_collection: async (name, vectors) -> None callable
-        verify_queries: optional list of known queries to verify retrieval
-
-    Returns True if migration succeeded (or verification skipped).
-    """
-    if source.dim == target.dim:
-        # Same dim - no migration needed.
-        return True
-
-    docs = await fetch_docs()
-    if not docs:
-        return True
-
-    texts = [text for _, text in docs]
-    new_vectors = await target.embed(texts)
-
-    new_name = f"{name}_v2"
-    await write_collection(new_name, list(zip((id_ for id_, _ in docs), new_vectors, strict=False)))
-
-    # Atomic swap - implementation-specific. Caller handles.
-    # For FAISS: rename .index files. For Qdrant: rename collections.
-
-    if verify_queries:
-        # Verify retrieval on known queries before swapping production traffic.
-        # Implementation-specific; placeholder for now.
-        pass
-
-    return True
 
 
 # ── CLI ────────────────────────────────────────────────────────────────
@@ -184,7 +170,7 @@ def _main() -> None:
     """CLI: list available backends and their dims."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="RAG dual-dim embedder")
+    parser = argparse.ArgumentParser(description="RAG canonical-lane embedder")
     parser.add_argument("--list-backends", action="store_true", help="List available backends")
     args = parser.parse_args()
 

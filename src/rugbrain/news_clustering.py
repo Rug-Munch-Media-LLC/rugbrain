@@ -41,17 +41,19 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from rugbrain.dim_policy import COLLECTION_DIM
+
 logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
 #: Default cosine threshold for grouping article titles into one story.
-#: Tuned for Qwen3-Embedding-4B 2560-dim title embeddings (same-story titles typically
-#: land 0.78+; distinct stories usually < 0.70).
+#: Same-story titles land 0.78+, distinct stories < 0.70. A cosine ratio does
+#: not depend on width, so the 2560->4096 lane switch left the value valid.
 CLUSTER_THRESHOLD = float(os.getenv("NEWS_CLUSTER_THRESHOLD", "0.72"))
-
-#: Embedding model dimension (Qwen3-Embedding-4B). Aligned with rugbrain.embeddings.
-EMBED_DIM = 2560
+#: Embedding dim, from the canonical lane policy (not hardcoded 2560, the
+#: retired 4B generation) so it cannot drift from the emitted vectors.
+EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", str(COLLECTION_DIM)))
 
 #: Max sources kept in a single story (guard against runaway clusters).
 MAX_STORY_SOURCES = int(os.getenv("NEWS_MAX_STORY_SOURCES", "25"))

@@ -37,10 +37,23 @@ from rugbrain.qwen_embedders import (
 
 
 def test_deep_tier_identity():
-    """4B on :8004 at native 2560 — the ONLY tier allowed to write corpus vectors."""
-    assert Qwen3Embedder.MODEL == "qwen3-embedding-4b"
+    """8B on :8004 at native 4096 — the ONLY tier allowed to write corpus vectors.
+
+    The 4B/2560 generation is eliminated (operator decision 2026-09-29). This
+    contract previously asserted 4B/2560, which pinned the retired lane as the
+    embedder's identity: any code that restored it passed.
+    """
+    assert Qwen3Embedder.MODEL == "qwen3-embedding-8b"
     assert ":8004" in Qwen3Embedder.EMBED_URL
-    assert Qwen3Embedder.DIMS == 2560
+    assert Qwen3Embedder.DIMS == 4096
+
+
+def test_deep_tier_never_defaults_to_retired_4b():
+    """No tier identity in the embedder facade may name the retired generation."""
+    from rugbrain.embedder_providers.qwen3 import DEEPINFRA_EMBED_MODEL
+
+    for name in (Qwen3Embedder.MODEL, DEEPINFRA_EMBED_MODEL):
+        assert "4b" not in name.lower(), f"retired 4B model default reachable: {name}"
 
 
 def test_speed_tier_is_retired():

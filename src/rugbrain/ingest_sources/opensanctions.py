@@ -1,22 +1,18 @@
 """OpenSanctions bulk — sanctions/watchlist database (regulation_enforcement).
 
 Source: https://data.opensanctions.org/datasets/latest/default/ — the
-deduplicated OpenSanctions dataset (1.18M persons, 288K orgs, ~13.9K crypto
-addresses from OFAC/UK/EU/Israel). Crypto-relevant entities are
-FollowTheMoney ``CryptoWallet`` records inside ``entities.ftm.json``.
+deduplicated OpenSanctions dataset. Crypto-relevant entities are FollowTheMoney
+``CryptoWallet`` records inside ``entities.ftm.json``, which is multi-GB and
+**line-delimited JSON** (one entity per line, verified live). This source
+streams it, keeps only ``CryptoWallet`` entities bounded by
+``limit``/``DEFAULT_CAP``, and emits one ``IngestDoc`` each into
+``regulation_enforcement`` (doc_type ``sanction_entity``). Fail-open;
+``doc_id`` is ``opensanctions:<entity_id>`` (stable, so re-ingestion is
+idempotent).
 
-``entities.ftm.json`` is huge (multi-GB) and **line-delimited JSON** — one
-entity object per line (verified live). This source streams the file and
-keeps only ``CryptoWallet`` entities, bounded by ``limit``/``DEFAULT_CAP``,
-so a full download never happens. Each wallet becomes one ``IngestDoc`` into
-``regulation_enforcement`` (doc_type ``sanction_entity``).
-
-Design rules (consistent with ``base.py``):
-
-  * Fail-open: any fetch/parse failure logs a warning and returns ``[]``.
-  * Deterministic ``doc_id`` (``opensanctions:<entity_id>``) — FollowTheMoney
-    entity IDs are stable across exports → idempotent re-ingestion.
-  * Credentials: none (non-commercial bulk license).
+This lane stores the ADDRESS ONLY. The owner's name is joined one entity away
+via ``properties.holder`` — see ``opensanctions_holders``, which resolves it
+into the separate ``sanction_identities`` collection.
 """
 
 from __future__ import annotations
@@ -68,6 +64,27 @@ def _ftm_first(properties: dict[str, Any], key: str) -> str:
     return str(vals or "").strip()
 
 
+def ftm_props(entity: dict[str, Any]) -> dict[str, Any]:
+    """FTM properties as a dict (never None). Shared with ``opensanctions_holders``."""
+    raw = entity.get("properties")
+    return raw if isinstance(raw, dict) else {}
+
+
+def ftm_clean(values: Any, cap: int) -> list[str]:
+    """Dedupe FTM string-lists, drop blanks, cap length. Shared with the holders lane."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in values if isinstance(values, list) else []:
+        val = str(raw or "").strip()
+        if not val or val in seen:
+            continue
+        seen.add(val)
+        out.append(val)
+        if len(out) >= cap:
+            break
+    return out
+
+
 def wallet_entity_to_doc(entity: dict[str, Any]) -> IngestDoc | None:
     """Normalize one FollowTheMoney CryptoWallet entity into an IngestDoc.
 
@@ -86,11 +103,9 @@ def wallet_entity_to_doc(entity: dict[str, Any]) -> IngestDoc | None:
     datasets = [str(d) for d in raw_datasets if str(d)] if isinstance(raw_datasets, list) else []
     target = bool(entity.get("target"))
 
-    # NO DERIVATIVES (CC BY-NC-ND): the record is stored VERBATIM. The previous
-    # version built a templated sentence ("OpenSanctions crypto wallet: ...,
-    # Source datasets: ...") which is an adapted work and therefore a licence
-    # breach. Structured fields carry the same facts for matching without
-    # rewriting the source text.
+    # NO DERIVATIVES (CC BY-NC-ND): the record is stored VERBATIM. A templated
+    # sentence would be an adapted work and therefore a licence breach, so
+    # structured fields carry the same facts without rewriting the source text.
     content = str(entity.get("caption") or entity.get("name") or "").strip()
     if not content:
         content = address or entity_id
@@ -179,5 +194,7 @@ __all__ = [
     "ENTITIES_URL",
     "OpenSanctionsSource",
     "_iter_lines",
+    "ftm_clean",
+    "ftm_props",
     "wallet_entity_to_doc",
 ]

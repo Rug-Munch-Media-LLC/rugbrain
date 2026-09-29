@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import httpx
 
@@ -40,7 +41,8 @@ def collection_info(c: httpx.Client, name: str) -> dict[str, Any] | None:
     if r.status_code == 404:
         return None
     r.raise_for_status()
-    return r.json()["result"]
+    info: dict[str, Any] = r.json()["result"]
+    return info
 
 
 def vector_shape(info: dict[str, Any]) -> tuple[int, str | None]:
@@ -68,6 +70,32 @@ def vector_shape(info: dict[str, Any]) -> tuple[int, str | None]:
 
 def has_sparse(info: dict[str, Any]) -> bool:
     return bool(info["config"]["params"].get("sparse_vectors"))
+
+
+def create_twin(
+    c: httpx.Client, name: str, *, size: int, vector_name: str | None = None
+) -> dict[str, Any]:
+    """Create an empty 4096 twin that mirrors the base's vector SHAPE.
+
+    The shape is not cosmetic. Qdrant serialises the unnamed default as
+    ``{"": {...}}``, so a twin created without ``vector_name`` is unnamed and
+    an upsert addressed to a name is rejected; created WITH a name when the
+    base has none, every point written lands on a field the collection lacks
+    and the twin stays empty. Hence the name is a REQUIRED argument, derived
+    from the base by the caller, not defaulted here.
+
+    This is the only write in the module that is not an upsert. It is reached
+    solely from ``plan(execute=True)`` for a target marked ``create_twin``, and
+    it creates an empty collection — it cannot destroy or alter an existing
+    one, because Qdrant rejects a create on a name that already exists.
+    """
+    vectors: dict[str, Any] = {(vector_name or ""): {"size": size, "distance": "Cosine"}}
+    return result(
+        c,
+        "PUT",
+        f"/collections/{name}",
+        json={"vectors": vectors},
+    )
 
 
 def scroll(

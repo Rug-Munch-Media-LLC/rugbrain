@@ -7,10 +7,12 @@ properties tested:
     why codebase_reference_v2 costs 4,644 and not 2,131,274;
   * a re-run embeds nothing, because the write path reuses the base's id;
   * a collection whose dim is not the planned dim is REFUSED, not adapted to;
-  * a missing twin is REFUSED (creating it is a different job, with a
-    different approval);
+  * a missing twin is REFUSED unless the target is flagged create_twin, and
+    even then a dry run only REPORTS it — only --execute may create one;
+  * scan_intel and agent_vectors are absent from the plan entirely, because
+    their payloads hold no text and are moving to ClickHouse instead;
   * the unnamed-vs-named vector distinction is real and is read from Qdrant
-    rather than assumed.
+    rather than assumed — including when a twin is created.
 
 Production :6334 is never contacted; see ``fake_qdrant`` for why that matters.
 """
@@ -24,9 +26,13 @@ _PKG = Path(__file__).resolve().parents[2] / "scripts"
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from eliminate_4b import qdrant_io as qio  # noqa: E402
-from eliminate_4b.plan import TARGETS, Target, plan  # noqa: E402
-from tests.eliminate_4b.fake_qdrant import FakeQdrant, col, docs, pid  # noqa: E402
+from eliminate_4b import qdrant_io as qio
+from eliminate_4b.plan import plan
+from eliminate_4b.targets import EXCLUDED, EXCLUDED_BASES, TARGETS, Target
+
+from tests.eliminate_4b.fake_qdrant import FakeQdrant, col, docs, pid
+
+# ── refusals: stop, never guess ────────────────────────────────────────
 
 
 # ── the diff is on point id, and only missing ids are embedded ──────────
@@ -97,11 +103,36 @@ def test_sparse_capability_detected_where_absent() -> None:
     assert qio.has_sparse(FakeQdrant({"x": col(4096, [])}).info("x")) is False
 
 
-# ── the plan table carries no stale counts ─────────────────────────────
-def test_all_targets_are_planned_as_2560() -> None:
-    assert len(TARGETS) == 12
+# ── the plan table: 10 embeddable, 2 excluded ──────────────────────────
+def test_targets_are_the_ten_reembeddable_collections() -> None:
+    names = {t.base for t in TARGETS}
+    assert names == {
+        "codebase_reference_v2",
+        "rug_events",
+        "education",
+        "security_feeds",
+        "threat_intel_v2",
+        "security_alerts",
+        "research_v2",
+        "security_patterns_test",
+        "public_crypto_patterns",
+        "scanned_tokens",
+    }
     assert all(t.planned_base_dim == 2560 for t in TARGETS)
-    assert "scan_intel" in {t.base for t in TARGETS}
+
+
+def test_the_two_textless_collections_are_excluded() -> None:
+    """scan_intel and agent_vectors are NOT in TARGETS — see the docstring."""
+    assert {"scan_intel", "agent_vectors"} == EXCLUDED_BASES
+    assert not (EXCLUDED_BASES & {t.base for t in TARGETS})
+    assert all("no text field" in why for _, why in EXCLUDED)
+
+
+def test_the_three_no_twin_collections_are_create_targets() -> None:
+    """Their 2560 base is the only copy in Qdrant; the twin must be built."""
+    create = {t.base for t in TARGETS if t.create_twin}
+    assert create == {"rug_events", "public_crypto_patterns", "scanned_tokens"}
+    assert all(t.planned_base_dim == 2560 for t in TARGETS if t.create_twin)
 
 
 def test_plan_stores_no_point_counts() -> None:
@@ -113,3 +144,49 @@ def test_plan_stores_no_point_counts() -> None:
 def test_upsert_reuses_the_base_point_id() -> None:
     """Idempotence rests on this: the written id IS the base id."""
     assert str(pid(1)) == "00000001-0000-4000-8000-000000000000"
+
+
+# ── twin creation: dry run never creates, --execute does ───────────────
+def test_dry_run_reports_a_missing_twin_without_creating_it() -> None:
+    fq = FakeQdrant({"b": col(2560, docs(3))})
+    rep = plan(fq.client(), Target("b", 2560, create_twin=True))
+    assert rep.status == "CREATE-ON-EXECUTE"
+    assert rep.to_embed == 3, "the whole base is missing from a twin that does not exist"
+    assert rep.expected_after == 3
+    assert "b_8b" not in fq.cols, "a dry run must not touch Qdrant"
+
+
+def test_execute_creates_the_twin_and_sizes_the_diff() -> None:
+    fq = FakeQdrant({"b": col(2560, docs(3))})
+    rep = plan(fq.client(), Target("b", 2560, create_twin=True), execute=True)
+    assert rep.status == "OK" and rep.created_twin is True
+    assert rep.to_embed == 3 and rep.twin_before == 0
+    assert qio.vector_shape(fq.info("b_8b")) == (4096, None)
+
+
+def test_created_twin_inherits_the_bases_named_vector() -> None:
+    """A named base must not get an unnamed twin, or every upsert is rejected."""
+    fq = FakeQdrant({"b": col(2560, [], vname="dense"), "b_8b": col(4096, [], vname="dense")})
+    fq.cols.pop("b_8b")
+    rep = plan(fq.client(), Target("b", 2560, create_twin=True), execute=True)
+    assert rep.created_twin is True
+    assert qio.vector_shape(fq.info("b_8b")) == (4096, "dense")
+
+
+def test_a_non_create_target_with_no_twin_is_still_refused() -> None:
+    """Only the three flagged collections may have a twin conjured."""
+    fq = FakeQdrant({"education": col(2560, docs(1))})
+    rep = plan(fq.client(), Target("education", 2560), execute=True)
+    assert rep.status == "REFUSED" and "not a create target" in " ".join(rep.failed)
+    assert "education_8b" not in fq.cols
+
+
+# ── the plan/targets split must not change the contract ────────────────
+def test_twin_name_is_one_definition_used_by_plan() -> None:
+    """Single source of truth: the suffix is not written twice."""
+    from eliminate_4b import plan as plan_mod
+    from eliminate_4b import targets as targets_mod
+
+    assert plan_mod.twin_name is targets_mod.twin_name
+    assert plan_mod.CANONICAL_DIM is targets_mod.CANONICAL_DIM == 4096
+    assert plan_mod.twin_name("education") == "education_8b"

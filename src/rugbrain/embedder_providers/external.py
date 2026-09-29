@@ -1,11 +1,15 @@
 """External embedding providers — OpenRouter (Nemotron) and HuggingFace.
 
-These are the rungs BELOW the canonical Qwen3-Embedding-4B lane: cloud
+These are the rungs BELOW the canonical Qwen3-Embedding-8B lane: cloud
 fallbacks with a different vector dim, used only when the canonical lane is
 unavailable. The 2026-08-25 default for the OpenRouter primary was a
 placeholder slug ("openrouter/your-model-here"), which made the cloud rung
 fire at a nonexistent model whenever ``RAG_PRIMARY_EMBED_MODEL`` was unset;
 the verified-live free slug is the default now.
+
+The OpenRouter rate-limit FALLBACK defaults to the canonical model rather than
+the retired 4B one: falling back across vector spaces silently produces
+vectors that store and search but are not comparable with the corpus.
 """
 
 from __future__ import annotations
@@ -24,11 +28,11 @@ OR_PRIMARY_EMBED = os.getenv(
     "RAG_PRIMARY_EMBED_MODEL",
     os.getenv("RAG_OPENROUTER_EMBED_MODEL", "nvidia/nemotron-3-embed-1b:free"),
 )
-OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "qwen3-embedding-4b")
+OR_FALLBACK_EMBED = os.getenv("RAG_LOCAL_EMBED_MODEL", "qwen3-embedding-8b")
 
 
 class OpenRouterEmbedder:
-    """OpenRouter embedding API - NVIDIA Nemotron primary, qwen3-embedding-4b fallback."""
+    """OpenRouter embedding API - NVIDIA Nemotron primary, canonical fallback."""
 
     BASE = "https://openrouter.ai/api/v1/embeddings"
     MODEL = OR_PRIMARY_EMBED
@@ -73,7 +77,7 @@ class HuggingFaceEmbedder:
     """HuggingFace Inference API - free tier fallback."""
 
     BASE = "https://api-inference.huggingface.co/models"
-    MODEL = "qwen3-embedding-4b"
+    MODEL = "qwen3-embedding-8b"
     DIMS = int(os.getenv("HF_EMBED_DIMS", "1024"))
 
     def __init__(self, token: str | None = None):

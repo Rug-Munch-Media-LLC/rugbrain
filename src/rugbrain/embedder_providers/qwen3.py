@@ -1,7 +1,11 @@
-"""Qwen3-Embedding-4B provider — DeepInfra hosted primary, llama.cpp local fallback.
+"""Qwen3-Embedding-8B provider — DeepInfra hosted primary, llama.cpp local fallback.
 
-Both lanes serve the SAME Qwen3-Embedding-4B model, so their 2560-dim
-vectors are interchangeable per collection (``rugbrain.dim_policy.MODEL_DIMS``).
+Both lanes serve the SAME Qwen3-Embedding-8B model, so their 4096-dim vectors
+are interchangeable per collection (``rugbrain.dim_policy.MODEL_DIMS``). The
+model id and its dim are read from that registry rather than written as
+literals: the retired 4B/2560 generation must not be able to return as a
+default here (``deepinfra`` is the production lane — see the rollback drop-in
+on ``rugbrain-api.service``, which still pinned this to 4B).
 DeepInfra is the massive-scale lane: benchmarked 2026-08-29 at ~23 ms/doc
 vs ~1947 ms/doc for local llama.cpp. Key comes from env
 (``DEEPINFRA_API_KEY``, supplied via .env.rag / gopass) — never hardcoded.
@@ -45,7 +49,9 @@ def _deepinfra_key_from_file() -> str:
 # did not source the secrets file (2026-09-14: /run/secrets path was stale).
 DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY", "").strip() or _deepinfra_key_from_file()
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
-DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
+# Canonical lane. Env still wins, so an operator can retarget without a code
+# change — but the DEFAULT is the 8B model, not the retired 4B one.
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 
 
 def _embed_url() -> str:
@@ -62,11 +68,11 @@ def _embed_url() -> str:
 
 
 class Qwen3Embedder:
-    """Qwen3-Embedding-4B provider — DeepInfra hosted or local llama.cpp.
+    """Qwen3-Embedding-8B provider — DeepInfra hosted or local llama.cpp.
 
     Provider selection (``EMBED_PROVIDER`` env):
-      * ``deepinfra`` — hosted DeepInfra ``Qwen/Qwen3-Embedding-4B``
-        (2560-dim). The massive-scale lane (~80x faster than local llama.cpp).
+      * ``deepinfra`` — hosted DeepInfra ``Qwen/Qwen3-Embedding-8B``
+        (4096-dim). The massive-scale lane (~80x faster than local llama.cpp).
         Requires ``DEEPINFRA_API_KEY``; raises at construction if missing.
       * ``local``     — llama.cpp ``/embeddings`` (``QWEN_EMBED_URL``,
         default http://127.0.0.1:8004/v1). Canonical same-model fallback.
@@ -77,7 +83,7 @@ class Qwen3Embedder:
     """
 
     EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
-    MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+    MODEL = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
     DIMS = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(MODEL))
 
     def __init__(self, embed_url: str | None = None, provider: str | None = None):
@@ -103,10 +109,10 @@ class Qwen3Embedder:
         """Expected vector dim, resolved at CALL time.
 
         The class attribute ``DIMS`` is frozen at import from whatever model
-        was configured then. An operator switching the model afterwards (the
-        8B lane is 4096-dim, the corpus is 2560-dim) would otherwise be
-        validated against the previous model's dim, which either truncates
-        silently or rejects good vectors.
+        was configured then. An operator switching the model afterwards (or
+        the canonical lane being 4096 while an old env still says 2560) would
+        otherwise be validated against the previous model's dim, which either
+        truncates silently or rejects good vectors.
         """
         override = os.getenv("QWEN_EMBED_DIMS")
         if override:

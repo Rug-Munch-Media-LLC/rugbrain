@@ -25,10 +25,16 @@ if _DIMS_ENV:
             model, dim = entry.split(":", 1)
             DIMS[model.strip()] = int(dim.strip())
 if not DIMS:
-    # Sensible defaults showing the pattern
+    # Sensible defaults showing the pattern. The semantic dim is NOT a
+    # literal: it is the canonical lane's native dim read from the registry,
+    # so this table cannot reintroduce the retired 4B/2560 generation as a
+    # default a caller would resolve against.
+    from rugbrain.dim_policy import default_dim_for_model
+
+    _canonical = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
     DIMS = {
-        "qwen3-embedding-4b": 2560,
-        "fallback-model": 2560,
+        _canonical: default_dim_for_model(_canonical),
+        "fallback-model": default_dim_for_model(_canonical),
         "behavioral": 64,
         "code_hash": 128,
     }

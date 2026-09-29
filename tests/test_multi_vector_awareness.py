@@ -170,12 +170,20 @@ class TestLandscape:
 class TestDimDrivenResolution:
     @pytest.mark.asyncio
     async def test_unmapped_collection_resolves_by_actual_dim(self, me: MultiEmbedder):
-        """A 2560 collection under a nemotron default must resolve qwen4b."""
+        """A collection at the canonical dim resolves to the canonical lane.
+
+        The retired 2560 generation is eliminated, so there is no 2560 branch
+        to resolve to any more: the check is keyed on the registry's canonical
+        dim, which is what a B2-restored 4096 collection reports.
+        """
         me.default_backend = "nemotron"  # simulate live container default
-        me._dim_cache["wallet_v2"] = 2560
+        canonical = me.backends["deepinfra"].dim
+        me._dim_cache["wallet_v2"] = canonical
         be, dim = me.backend_for("wallet_v2")
-        assert be.name == "qwen4b"
-        assert dim == 2560
+        # A dim match is a hard requirement, so the ambient nemotron default
+        # (2048 native) must NOT be paired with a 4096 collection.
+        assert be.dim == canonical
+        assert dim == canonical
 
     @pytest.mark.asyncio
     async def test_2048_collection_resolves_nemotron(self, me: MultiEmbedder):

@@ -24,10 +24,13 @@ _PKG = Path(__file__).resolve().parents[2] / "scripts"
 if str(_PKG) not in sys.path:
     sys.path.insert(0, str(_PKG))
 
-from eliminate_4b import qdrant_io as qio  # noqa: E402
-from eliminate_4b.fill import fill  # noqa: E402
-from eliminate_4b.plan import CANONICAL_DIM, Target, plan  # noqa: E402
-from tests.eliminate_4b.fake_qdrant import FakeQdrant, col, docs, pid  # noqa: E402
+from eliminate_4b import qdrant_io as qio
+from eliminate_4b.embed import hash_of_text
+from eliminate_4b.fill import fill
+from eliminate_4b.plan import plan
+from eliminate_4b.targets import CANONICAL_DIM, Target
+
+from tests.eliminate_4b.fake_qdrant import FakeQdrant, col, docs, pid
 
 
 def _deepinfra() -> httpx.Client:
@@ -123,16 +126,36 @@ def test_dense_only_twin_gets_no_sparse() -> None:
     assert all("sparse" not in p["vector"] for p in written)
 
 
-def test_reconstructed_points_are_flagged() -> None:
-    """A textless payload must be auditable in the twin, not silent."""
-    base = [
-        {"id": pid(i), "payload": {"chain": "solana", "address": f"a{i}", "risk_level": "high"}}
-        for i in range(2)
-    ]
+def test_derived_points_are_flagged_as_derived() -> None:
+    """Text rebuilt from payload fields must be auditable in the twin."""
+    base = []
+    for i in range(2):
+        pl = {
+            "library_id": "internal/x",
+            "file_path": f"a/{i}.py",
+            "function_name": "go",
+            "title": "go()",
+            "description": "d",
+            "code_block": "cb",
+        }
+        pl["content_hash"] = hash_of_text(f"internal/x a/{i}.py:go\n\ngo()\n\nd\n\ncb")
+        base.append({"id": pid(i), "payload": pl})
     fq = FakeQdrant({"b": col(2560, base), "b_8b": col(4096, [])})
-    _run(fq, "b")
+    rep = _run(fq, "b")
     written = [p for _, pts in fq.upserts for p in pts]
-    assert all(p["payload"]["text_source"] == "reconstructed" for p in written)
+    assert rep.embedded == 2 and rep.unrecoverable == 0
+    assert all(p["payload"]["text_source"] == "derived_from_content_hash" for p in written)
+
+
+def test_unrecoverable_points_are_skipped_and_counted_not_filled() -> None:
+    """A scan_intel-shaped point is skipped, counted, and parity is FAILED."""
+    base = [{"id": pid(0), "payload": {"chain": "solana", "address": "abc", "risk_level": "high"}}]
+    fq = FakeQdrant({"b": col(2560, base), "b_8b": col(4096, [])})
+    rep = _run(fq, "b")
+    assert rep.embedded == 0 and rep.unrecoverable == 1
+    assert fq.upserts == [], "nothing embeddable means nothing written"
+    assert rep.parity is False and rep.status == "FAILED"
+    assert "no recoverable embed input" in " ".join(rep.failed)
 
 
 def test_natively_texted_points_are_not_flagged() -> None:

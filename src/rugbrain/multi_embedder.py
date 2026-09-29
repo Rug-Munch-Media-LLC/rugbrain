@@ -1,41 +1,40 @@
 """Multi-embedder federation — RAG reads (and writes) across ALL backends.
 
-Backends in the fleet (2026-08-29 embed consolidation directive):
-    deepinfra   DeepInfra Qwen/Qwen3-Embedding-4B (2560-dim) — CANONICAL
+Backends in the fleet:
+    deepinfra   DeepInfra Qwen/Qwen3-Embedding-8B (4096-dim) — CANONICAL
                 primary. Same model as local ⇒ same vector space.
-    qwen4b      local llama.cpp :8004  (canonical FALLBACK; server serves
-                native 2560 — dim comes from env/config)
+    qwen4b      local llama.cpp :8004 (canonical FALLBACK). The KEY is a
+                historical lane identifier kept for RAG_COLLECTION_BACKENDS
+                mappings; the model it serves is 8B.
     nemotron    OpenRouter nvidia/nemotron-3-embed-1b:free (2048-dim) —
-                LEGACY READS ONLY (interim migration `_i` collections).
-    or_qwen4b   OpenRouter qwen3-embedding-4b (2560) — legacy remote lane,
-                kept only for old RAG_COLLECTION_BACKENDS mappings.
+                LEGACY READS ONLY (interim `_i` collections).
+    or_qwen4b   OpenRouter lane kept only for old RAG_COLLECTION_BACKENDS
+                mappings naming or_qwen4b.
 
 CANONICAL EMBEDDER (one, for all new writes):
-    qwen3-embedding-4b @ 2560-dim, DeepInfra primary + local :8004 fallback
+    qwen3-embedding-8b @ 4096-dim, DeepInfra primary + local :8004 fallback
     (EMBED_CHAINS["qwen4b"]). Both lanes are the SAME model, so the vector
-    space is identical regardless of which lane serves the request.
+    space is identical regardless of which lane serves the request. The
+    retired 4B/2560 generation is eliminated: no backend defaults to it.
 
 Why federation survives: vectors from different models are NOT comparable
-and cannot mix inside one collection (TOP-100 #25). But the CORPUS
-legitimately spans multiple collections built by different backends over
-time (canonical v2 2560, interim _i 2048, legacy 1024). A reader that only
-speaks ONE backend is blind to the rest — so legacy backends stay
-registered for READS while every WRITE goes through the canonical chain.
+and cannot mix inside one collection. But the CORPUS legitimately spans
+multiple collections built by different backends over time (canonical 4096,
+interim _i 2048, legacy 1024), so legacy backends stay registered for READS
+while every WRITE goes through the canonical chain.
 
 Federated search:
     1. Registry maps each collection -> (backend, dim) via
-       RAG_COLLECTION_BACKENDS env ("coll=backend:dim,...") with sane
-       defaults derived from the collection name.
+       RAG_COLLECTION_BACKENDS env ("coll=backend:dim,...").
     2. A fan-out query embeds the query text ONCE PER DISTINCT BACKEND,
-       searches its collections, then merges results (cosine scores are
-       comparable enough across models for rank-fusion purposes; final
-       ordering uses RRF-style reciprocal ranking to avoid raw-score bias).
+       searches its collections, then merges results (final ordering uses
+       RRF-style reciprocal ranking to avoid raw-score bias).
     3. Every hit is tagged with its backend so downstream consumers know
        provenance.
 
 Ingest side: callers pick a backend explicitly (or default); the store's
 per-collection ensure/create handles whatever dim results. New collections
-MUST be created at 2560 (canonical) — see docs/EMBED-CONSOLIDATION.md.
+MUST be created at the canonical dim (see ``rugbrain.dim_policy``).
 """
 
 from __future__ import annotations
@@ -102,36 +101,36 @@ def _load_api_key(env_var: str = "DEEPINFRA_API_KEY") -> str:
 
 
 def _default_backends() -> dict[str, Backend]:
-    # Registry-aware: native dim of the configured model beats stale hardcoded
-    # 1024 (qwen3-embedding-4b serves native 2560 on :8004 since 2026-08-24).
+    # The retired 4B/2560 generation is eliminated: no lane here may default
+    # to it. Dim comes from the registry, not a literal, so the lane switch
+    # moves it in one place. QWEN_EMBED_DIMS stays an explicit override; the
+    # legacy global RAG_EMBED_DIM (2048, nemotron era) lied about this lane and
+    # no longer participates.
     from rugbrain.dim_policy import default_dim_for_model
 
-    _model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-    # Registry FIRST: the model's native dim is physical truth. The legacy
-    # global RAG_EMBED_DIM (2048 from the nemotron era) lied about qwen4b and
-    # caused 56 landscape mismatches — it no longer participates here.
-    # QWEN_EMBED_DIMS remains as an explicit, deliberate override.
-    q4_dim = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(_model))
+    _model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
+    lane_dim = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(_model))
     return {
-        # CANONICAL PRIMARY (2026-08-29): DeepInfra hosts the exact same
-        # qwen3-embedding-4b the local :8004 serves — 2560-dim, same vector
-        # space, always warm, no local CPU contention. Fast fallback story:
-        # DeepInfra first, local :8004 second (EMBED_CHAINS below).
+        # CANONICAL PRIMARY: DeepInfra hosts the same qwen3-embedding-8b the
+        # local :8004 serves — 4096-dim, one vector space, always warm.
         "deepinfra": Backend(
             "deepinfra",
             "deepinfra",
             os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings"),
-            q4_dim,
-            model=os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
+            lane_dim,
+            model=os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"),
             api_key_env="DEEPINFRA_API_KEY",
         ),
-        # CANONICAL FALLBACK lane for the 2560 space.
+        # CANONICAL FALLBACK. The KEY stays "qwen4b": it is the lane identifier
+        # RAG_COLLECTION_BACKENDS mappings and the test contract name, and
+        # renaming a registry key would break those without eliminating
+        # anything. The MODEL it serves is the canonical 8B lane.
         "qwen4b": Backend(
             "qwen4b",
             "llamacpp",
             os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
-            q4_dim,
-            model=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"),
+            lane_dim,
+            model=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"),
         ),
         # LEGACY READS ONLY — interim 2048 `_i` shadow collections.
         "nemotron": Backend(
@@ -142,15 +141,15 @@ def _default_backends() -> dict[str, Backend]:
             model=os.getenv("RAG_OPENROUTER_FREE_MODEL", "nvidia/nemotron-3-embed-1b:free"),
             api_key_env="OPENROUTER_API_KEY",
         ),
-        # LEGACY remote lane for the qwen4b space (kept ONLY so old
-        # RAG_COLLECTION_BACKENDS entries naming or_qwen4b still resolve).
-        # The canonical remote lane is now deepinfra.
+        # LEGACY remote lane (kept ONLY so old RAG_COLLECTION_BACKENDS entries
+        # naming or_qwen4b still resolve), serving the canonical model so a
+        # legacy mapping cannot reintroduce a 4B vector.
         "or_qwen4b": Backend(
             "or_qwen4b",
             "openrouter",
             os.getenv("OR_QWEN_EMBED_URL", "https://openrouter.ai/api/v1/embeddings"),
-            q4_dim,
-            model=os.getenv("OR_QWEN_EMBED_MODEL", "qwen/qwen3-embedding-4b"),
+            lane_dim,
+            model=os.getenv("OR_QWEN_EMBED_MODEL", "qwen/qwen3-embedding-8b"),
             api_key_env="OPENROUTER_API_KEY",
         ),
     }
@@ -251,9 +250,25 @@ class MultiEmbedder:
         return dim
 
     def _backend_for_dim(self, dim: int | None) -> tuple[Backend, int]:
-        """Pick the backend whose native space matches an ACTUAL dim."""
-        if dim == 2560:
-            be = self.backends["qwen4b"]
+        """Pick the backend whose native space matches an ACTUAL dim.
+
+        The canonical lane's dim is read from the backend registry, not
+        written as a literal. The old ``if dim == 2560`` branch was an
+        executable 4B path: after the retired collections were deleted, a 2560
+        collection could only arrive here via a B2 restore, and the branch
+        returned the 4096 lane while REPORTING 4096 — a silent width lie.
+
+        The returned ``dim`` is always the chosen BACKEND's native width, so
+        it can never claim a width that backend cannot produce. A dim match is
+        therefore a hard requirement: a 4096 collection is never paired with
+        the ambient 2048 nemotron default.
+        """
+        canonical = self.backends["deepinfra"].dim
+        if dim == canonical:
+            for be in self.backends.values():
+                if be.dim == canonical:
+                    return be, be.dim
+            be = self.backends[self.default_backend]
             return be, be.dim
         if dim == 2048:
             be = self.backends["nemotron"]

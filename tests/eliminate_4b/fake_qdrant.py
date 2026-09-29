@@ -55,6 +55,16 @@ class _Transport(httpx.BaseTransport):
         if not path.startswith("/collections/"):
             return httpx.Response(404)
         name, _, tail = path[len("/collections/") :].partition("/")
+        if request.method == "PUT" and tail == "":
+            # Create. Qdrant refuses to overwrite an existing collection, and
+            # so must the fake — otherwise a bug that recreates a live twin
+            # would pass here and fail in production.
+            if name in self.fq.cols:
+                return httpx.Response(409, json={"status": {"error": "collection already exists"}})
+            body = json.loads(request.content or b"{}")
+            spec_name, spec = next(iter(body["vectors"].items()))
+            self.fq.cols[name] = col(spec["size"], [], vname=(spec_name or None))
+            return httpx.Response(200, json={"result": True})
         info = self.fq.info(name)
         if info is None:
             return httpx.Response(404, json={"status": {"error": "not found"}})
@@ -73,11 +83,11 @@ class _Transport(httpx.BaseTransport):
             )
         if tail == "points":
             self.fq.upserts.append((name, body["points"]))
-            col = self.fq.cols[name]
-            by_id = {str(p["id"]): p for p in col["points"]}
+            target = self.fq.cols[name]
+            by_id = {str(p["id"]): p for p in target["points"]}
             for p in body["points"]:
                 by_id[str(p["id"])] = p
-            col["points"] = list(by_id.values())
+            target["points"] = list(by_id.values())
             return httpx.Response(200, json={"result": {"status": "completed"}})
         return httpx.Response(404)
 

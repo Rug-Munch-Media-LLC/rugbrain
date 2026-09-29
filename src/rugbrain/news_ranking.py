@@ -41,6 +41,7 @@ from typing import Any
 
 import httpx
 
+from rugbrain.dim_policy import COLLECTION_DIM
 from rugbrain.news_clustering import Story, StorySource, cosine_similarity
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 NEWS_V2_COLLECTION = os.getenv("NEWS_V2_COLLECTION", "news_v2")
-EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "2560"))  # qwen3-embedding-4b native (was stale 1024)
+EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", str(COLLECTION_DIM)))  # canonical lane
 
 #: Composite score weights (must sum to 1.0).
 RANK_WEIGHTS: dict[str, float] = {
