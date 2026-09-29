@@ -1,13 +1,6 @@
-"""The ContextCrypto retriever: dense search + keyword re-rank + RRF fusion.
+"""Crypto-code retrieval: dense + keyword + reciprocal-rank fusion.
 
-One job: execute a hybrid search over the read-only ContextCrypto collections
-and return attributed, fused, top-k results. Classification lives in
-:mod:`classify`, attribution in :mod:`attribution`, and the public entry points
-in ``rugbrain.crypto_code_retrieval``.
-
-This talks to Qdrant REST directly, NOT through ``QdrantVectorStore``: the
-store's result mapping drops the ContextCrypto payload fields
-(``code_block``, ``library_id``, ...) that attribution needs.
+The class only. Criteria live in `criteria`; result shaping in `attribution`.
 """
 
 from __future__ import annotations
@@ -17,10 +10,13 @@ from typing import Any
 
 import httpx
 
-from rugbrain.crypto_code_pkg.attribution import format_hit, keyword_score
+from rugbrain.crypto_code_pkg.attribution import format_hit
+from rugbrain.crypto_code_pkg.criteria import (
+    _rank_points,
+    _resolve_base_url,
+    build_qdrant_filter,
+)
 from rugbrain.rrf_fusion import _rrf_fuse
-
-logger = logging.getLogger(__name__)
 
 CODEBASE_REFERENCE_COLLECTION = "codebase_reference"
 SECURITY_PATTERNS_COLLECTION = "security_patterns"
@@ -29,39 +25,10 @@ CONTEXTCRYPTO_COLLECTIONS: tuple[str, ...] = (
     SECURITY_PATTERNS_COLLECTION,
 )
 
-#: RRF smoothing constant, and its inline twin used when scoring a raw point.
+#: Reciprocal-rank-fusion smoothing constant.
 _RRF_K = 60
 
-#: Structured facets a caller may filter on; each is a payload field.
-FILTER_FIELDS = ("verdict", "library_id", "category", "severity", "ecosystem")
-
-
-async def _resolve_base_url() -> str:
-    """Async resolve the Qdrant base URL via the shared fallback chain."""
-    from rugbrain.qdrant_store import _resolve_qdrant_url
-
-    return await _resolve_qdrant_url()
-
-
-def build_qdrant_filter(**facets: str | None) -> dict[str, Any] | None:
-    """Build a match-any Qdrant filter from the non-empty *facets*."""
-    match_fields = {f: v for f, v in facets.items() if v}
-    return {"match": match_fields} if match_fields else None
-
-
-def _rank_points(query: str, points: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Score points by keyword overlap, best first."""
-    return sorted(
-        (
-            {
-                "id": p.get("id"),
-                "keyword_score": keyword_score(query, p.get("payload") or {}),
-            }
-            for p in points
-        ),
-        key=lambda x: x["keyword_score"],
-        reverse=True,
-    )
+logger = logging.getLogger(__name__)
 
 
 class CryptoCodeRetriever:

@@ -9,9 +9,9 @@ observed live in Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-4B).
 from __future__ import annotations
 
 from rugbrain.missioneval.golden_cases_market import MARKET_CASES
-from rugbrain.missioneval.golden_cases_scam_neg import NEGATIVE_CASES
 from rugbrain.missioneval.golden_cases_scam import SCAM_CASES
 from rugbrain.missioneval.golden_cases_scam_ext import XEXT_SCAM_CASES
+from rugbrain.missioneval.golden_cases_scam_neg import NEGATIVE_CASES
 from rugbrain.missioneval.golden_cases_wallet import RESEARCH_CASES, SANCTION_CASES
 from rugbrain.missioneval.golden_cases_wallet_address import WALLET_CASES
 from rugbrain.missioneval.goldens import MissionCase

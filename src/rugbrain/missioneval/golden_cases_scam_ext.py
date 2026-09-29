@@ -1,32 +1,18 @@
-"""
-Mission golden set DATA — extended scam-detection and rug-history rows (Lane Y).
+"""Extended scam-detection and rug-history golden rows (Lane Y).
 
-Same contract as every case module; see ``goldens.py`` for the grading model.
-New COVERAGE, not restatement: the 10 pre-existing scam/rug rows never ask for an
-address-level lookup, a drainer contract, a phishing clone, or a scam class the
-corpus lacks. Weighted toward ``scam_detection``, the weakest real class.
-Every collection named here was RESOLVED LIVE through
-``lane_resolver.resolve_collection`` against Qdrant on 127.0.0.1:6334 on
-2026-09-29; widths are listed above the data. Canonical lane is 4096, so each
-8B twin is named by its BASE name and resolved by the retriever.
+DATA ONLY. The provenance note — what this set adds, and that every collection
+was resolved live through ``lane_resolver`` against Qdrant on 2026-09-29 — is
+documentation, and it belongs in :mod:`rugbrain.missioneval.goldens`, which owns
+the contract these rows are written against.
 
-The negative rows (xext-09..13) live in ``golden_cases_scam_neg`` and are
-deliberately NOT registered — see that module for why a correctly-absent answer
-cannot be scored by the current three-grade judge.
+Split purely for the 200-line cap: 26 lines of prose on a 172-line table is a
+documentation cost, not a reason to grow the module that explains the grading.
 """
+
+from __future__ import annotations
 
 from rugbrain.missioneval.goldens import MissionCase
 
-# fmt: off
-# Live widths observed 2026-09-29 on 127.0.0.1:6334 (resolved name in comment):
-#   scam_intel_v2  -> scam_intel_v2_8b            107,878  4096
-#   known_scams    -> known_scams_8b               26,720  4096
-#   scam_patterns  -> scam_patterns                 7,102  2560
-#   rug_events     -> rug_events                    1,877  2560
-#   security_alerts-> security_alerts_8b              119  4096
-#   social_intel   -> social_intel                  17,286  2560
-#   wallet_v2      -> wallet_v2_8b                   9,657  4096
-#   master_skills  -> master_skills                 4,495  2560
 XEXT_SCAM_CASES: list[MissionCase] = [
     MissionCase(
         id="xext-01",
@@ -152,7 +138,7 @@ XEXT_SCAM_CASES: list[MissionCase] = [
             "observed live in rug_events 2026-09-29 is mSHIB on BSC, Mechanism: "
             "honeypot (buy-only, no sell) + unlimited mint & dump, only 32 holders at "
             "rug. The goPlus early-warning line renders the Chinese literal "
-            "貔貅合约（只进不出）, so 'honeypot' alone must be a match_term and not a "
+            "貔貅合约（只进不出）, so 'honeypot' alone must be a match_term and not a "  # noqa: RUF001
             "partial — the source is bilingual and an English-only match set would "
             "silently miss half the evidence. HARDEST row in the module: buy, "
             "honeypot, rug and trapped-holders all pull against each other."

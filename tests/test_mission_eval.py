@@ -28,8 +28,16 @@ from rugbrain.missioneval.golden_cases import CASES
 from rugbrain.missioneval.golden_cases_exploit import EXPLOIT_CASES
 from rugbrain.missioneval.golden_cases_ta import TA_CASES
 from rugbrain.missioneval.goldens import JOB_CLASSES, MissionCase, all_cases, cases_for
-from rugbrain.missioneval.judge import GOLD, MISS, PARTIAL, grade_hits
-from rugbrain.missioneval.runner import MissionReport, run_mission_eval
+from rugbrain.missioneval.judge import (
+    ABSENT,
+    GOLD,
+    MIN_RETRIEVED_FOR_ABSENCE,
+    MISS,
+    PARTIAL,
+    grade_absence,
+    grade_hits,
+)
+from rugbrain.missioneval.runner import MissionReport, is_negative, run_mission_eval
 
 # ── fixtures ─────────────────────────────────────────────────────────
 
@@ -320,3 +328,154 @@ class TestMissionCaseModel:
 @pytest.mark.parametrize("job_class", list(JOB_CLASSES))
 def test_every_class_has_at_least_one_case(job_class: str) -> None:
     assert cases_for(job_class)
+
+
+# ── the fourth grade: correctly-absent negatives ──────────────────────
+#
+# A negative case is one whose correct answer is "this corpus does not cover
+# it". Before the fourth grade the judge had gold/partial/miss only, so a
+# correct refusal and a retrieval failure were the same row. These tests pin
+# both halves of that fix: the absence must be CREDITED, and it must not be
+# creditable by a retriever that is simply broken.
+
+
+def _negative() -> MissionCase:
+    case = next(c for c in all_cases() if c.id == "xext-10")
+    assert is_negative(case), "xext-10 is documented as NEGATIVE"
+    return case
+
+
+def _healthy_docs(n: int = 8) -> list[dict[str, Any]]:
+    """Well-behaved neighbours: the retriever searched and found related rows."""
+    return [
+        {"id": f"d{i}", "content": "known_scams listing, static domain record"} for i in range(n)
+    ]
+
+
+class TestAbsenceGrade:
+    def test_healthy_search_with_no_match_is_absent(self) -> None:
+        case = _negative()
+        grade = grade_absence(_healthy_docs(), case.relevant_doc_ids, case.match_terms)
+        assert grade.grade == ABSENT
+        assert grade.is_pass and not grade.is_gold
+
+    def test_empty_result_is_NOT_absent(self) -> None:
+        # THE load-bearing test. A dead embed lane, a wrong collection, or a
+        # retriever that raises-then-returns-empty all produce zero gold-term
+        # matches, exactly like a genuinely absent corpus. Without the
+        # retrieved-count floor this row is a free pass for a broken system.
+        case = _negative()
+        grade = grade_absence([], case.relevant_doc_ids, case.match_terms)
+        assert grade.grade == MISS
+        assert "UNPROVEN" in grade.why
+
+    def test_short_result_page_is_NOT_absent(self) -> None:
+        case = _negative()
+        grade = grade_absence(
+            _healthy_docs(MIN_RETRIEVED_FOR_ABSENCE - 1), case.relevant_doc_ids, case.match_terms
+        )
+        assert grade.grade == MISS
+
+    def test_exactly_at_the_floor_is_absent(self) -> None:
+        case = _negative()
+        grade = grade_absence(
+            _healthy_docs(MIN_RETRIEVED_FOR_ABSENCE), case.relevant_doc_ids, case.match_terms
+        )
+        assert grade.grade == ABSENT
+
+    def test_false_positive_is_not_laundered_into_absent(self) -> None:
+        # A real hit on the absent vocabulary is the loud failure this row
+        # exists to catch. It must be graded as the hit it is.
+        case = _negative()
+        docs = _healthy_docs() + [{"id": "leak", "content": "registry shows status: offline"}]
+        grade = grade_absence(docs, case.relevant_doc_ids, case.match_terms)
+        assert grade.grade != ABSENT
+        assert grade.is_hit
+
+    def test_false_positive_below_the_gold_cap_is_still_a_false_positive(self) -> None:
+        # Regression. grade_absence used to reuse the positive path's
+        # rank-capped grades, so a genuine match on the absent vocabulary at
+        # rank 9 was scored `absent` — the exact laundering this rule exists to
+        # prevent. On a negative the whole result page is in scope: rank 6 is as
+        # much a false positive as rank 1.
+        case = _negative()
+        docs = _healthy_docs(8) + [{"id": "leak", "content": "sinkholed last week"}]
+        grade = grade_absence(docs, case.relevant_doc_ids, case.match_terms)
+        assert grade.grade == GOLD
+        assert "false positive" in grade.why
+
+    def test_absence_never_carries_a_rank(self) -> None:
+        case = _negative()
+        grade = grade_absence(_healthy_docs(), case.relevant_doc_ids, case.match_terms)
+        assert grade.rank == 0, "mrr is gold-only; absence must not invent a rank"
+
+    def test_floor_is_not_zero(self) -> None:
+        # Guards the fix being reverted by someone who reads the floor as
+        # arbitrary. Zero is the rule that made this grade worthless.
+        assert MIN_RETRIEVED_FOR_ABSENCE > 0
+
+
+class TestNegativesInTheRunner:
+    async def test_negative_graded_absent_counts_as_a_pass(self) -> None:
+        case = _negative()
+        retriever = _retriever({"xext-10": _healthy_docs()})
+        report = await run_mission_eval(retriever, [case])
+        assert report.per_case[0].grade == ABSENT
+        assert report.per_case[0].is_pass
+        assert report.gold_rate == 0.0, "absence is not a gold hit"
+        assert report.pass_rate == 1.0
+        assert report.neg_score == 1.0
+        assert report.neg_total == 1
+
+    async def test_broken_retriever_cannot_pass_a_negative(self) -> None:
+        case = _negative()
+        retriever = _retriever({"xext-10": []})
+        report = await run_mission_eval(retriever, [case])
+        assert report.per_case[0].grade == MISS
+        assert report.neg_score == 0.0
+        assert report.pass_rate == 0.0
+
+    async def test_negatives_are_counted_in_the_headline_denominator(self) -> None:
+        # The anti-cheat. If negatives were excluded from the ratio, this run
+        # would show total=1 (the positive) with gold_rate 1.0. They are not:
+        # a negative is a scored row like any other.
+        neg = _negative()
+        pos = next(c for c in all_cases() if c.id == "scam-01")
+        retriever = _retriever(
+            {
+                "xext-10": _healthy_docs(),
+                "scam-01": [{"id": pos.relevant_doc_ids[0], "content": "x"}],
+            }
+        )
+        report = await run_mission_eval(retriever, [neg, pos])
+        assert report.total == 2
+        assert report.neg_total == 1
+        assert report.gold_rate == 0.5, "1 gold of 2 scored rows — negatives are in the ratio"
+        assert report.neg_score == 1.0, "and the negative score is reported separately"
+
+    async def test_headline_and_negative_score_are_both_published(self) -> None:
+        # Neither number is allowed to hide the other.
+        neg = _negative()
+        report = await run_mission_eval(_retriever({"xext-10": _healthy_docs()}), [neg])
+        payload = report.to_dict()
+        for key in ("gold_rate", "pass_rate", "neg_score", "neg_total", "neg_gold"):
+            assert key in payload, key
+
+    async def test_mrr_stays_gold_only(self) -> None:
+        neg = _negative()
+        report = await run_mission_eval(_retriever({"xext-10": _healthy_docs()}), [neg])
+        assert report.mrr == 0.0, "no gold means no reciprocal rank, absence does not invent one"
+
+    def test_every_negative_row_is_flagged(self) -> None:
+        # The marker the runner reads. If a data lane re-words a provenance
+        # note and drops the word NEGATIVE without setting the flag, that row
+        # silently reverts to being scored as a retrieval failure — so the
+        # count of flagged negatives is asserted, not assumed.
+        negatives = [c for c in all_cases() if is_negative(c)]
+        assert len(negatives) >= 5
+        assert all(c.provenance_note.strip() for c in negatives)
+
+    def test_a_positive_case_is_not_flagged(self) -> None:
+        for c in all_cases():
+            if c.relevant_doc_ids:
+                assert not is_negative(c), f"{c.id} has gold ids and cannot be a negative"

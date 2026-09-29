@@ -78,6 +78,17 @@ class MissionCase(BaseModel):
     partial_terms: list[str] = Field(default_factory=list)
     provenance: str = "verified"
     provenance_note: str = ""
+    # TRUE for a NEGATIVE case: the correct answer is "this corpus does not
+    # cover it". Graded with the fourth grade (``judge.ABSENT``) instead of
+    # being scored as a retrieval failure. See ``judge.grade_absence`` for the
+    # absence rule and why "no gold term matched" is not sufficient on its own.
+    #
+    # This is the explicit flag, and it is the PREFERRED way to mark a negative.
+    # ``runner.is_negative`` falls back to scanning ``provenance_note`` for the
+    # word NEGATIVE so that rows authored by the data lanes (which are owned by
+    # other agents and cannot be edited from here) are still graded correctly
+    # today. New rows should set this field directly rather than rely on prose.
+    expected_absent: bool = False
 
 
 def all_cases() -> list[MissionCase]:
@@ -95,3 +106,19 @@ def cases_for(job_class: str | None = None) -> list[MissionCase]:
 
 
 __all__ = ["JOB_CLASSES", "MissionCase", "all_cases", "cases_for"]
+
+# ---------------------------------------------------------------------------
+# Provenance of the extended scam/rug golden rows (Lane Y)
+#
+# ``golden_cases_scam_ext`` is DATA ONLY; the reasoning for what it adds lives
+# here, with the contract those rows are written against. It adds NEW coverage
+# rather than restating: the pre-existing scam/rug rows never ask for an
+# address-level lookup, a drainer contract, a phishing clone, or a scam class
+# the corpus lacks. It is weighted toward ``scam_detection``, the weakest real
+# class.
+#
+# Every collection named in that module was RESOLVED LIVE through
+# ``lane_resolver.resolve_collection`` against Qdrant on 127.0.0.1:6334 on
+# 2026-09-29, and the widths are recorded beside the data. The canonical lane is
+# 4096, so each 8B twin is named by its BASE name and resolved by the retriever
+# rather than hardcoded.

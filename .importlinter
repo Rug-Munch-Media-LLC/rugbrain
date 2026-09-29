@@ -51,14 +51,8 @@ ignore_imports =
     rugbrain.routes.rag_tools -> httpx
     rugbrain.routes.rag_tools -> rugbrain.compat
     rugbrain.routes.rag_tools -> rugbrain.multimodal
-    rugbrain.routes.search -> rugbrain.embeddings
-    rugbrain.routes.search -> rugbrain.pre_generation_reflection
-    rugbrain.routes.search -> rugbrain.reranker
-    rugbrain.routes.search -> rugbrain.search_service
     rugbrain.routes.analyze -> rugbrain.sentiment_engine
     rugbrain.routes.rag_tools -> rugbrain.streaming
-    rugbrain.routes.search -> rugbrain.endpoints
-    rugbrain.routes.search -> rugbrain.qdrant_store
     rugbrain.routes.intel -> rugbrain.journalism
     rugbrain.routes.intel -> rugbrain.qdrant_store
     rugbrain.routes.analyze -> rugbrain.qdrant_store
@@ -93,7 +87,6 @@ ignore_imports =
     # entry here no longer matches an import, so this list cannot rot back into
     # a false green — which is exactly how the rule named
     # `crypto_code_retrieval` while matching nothing for a fortnight.
-    rugbrain.routes.search -> rugbrain.chain_data_service
     rugbrain.routes.search_pkg._shared -> rugbrain.endpoints
     rugbrain.routes.search_pkg.code -> rugbrain.public_crypto_code
     rugbrain.routes.search_pkg.multi -> rugbrain.canary_routing
@@ -104,10 +97,8 @@ ignore_imports =
     rugbrain.routes.search_pkg.threat -> rugbrain.endpoints
     rugbrain.routes.search_pkg.threat -> rugbrain.reranker
     rugbrain.routes.search_postprocess -> rugbrain.pre_generation_reflection
-    rugbrain.routes.search -> rugbrain.public_crypto_code
     rugbrain.routes.search_chain_data -> rugbrain.chain_data_service
     rugbrain.routes.search_pkg.threat -> rugbrain.canary_routing
-    rugbrain.routes.search -> rugbrain.canary_routing
 
     # be0da01 routed the SEARCH path through the lane resolver, as the write
     # path already was. `lane_targets` is a resolution concern, not a storage
