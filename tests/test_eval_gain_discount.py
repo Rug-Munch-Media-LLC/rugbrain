@@ -36,12 +36,12 @@ class TestDcgAtK:
         assert dcg_at_k([], 3) == 0.0
 
     def test_single_gain_at_rank_one(self) -> None:
-        # log2(1 + 2) = log2(3) is NOT 1; the discount is real, not identity.
-        assert dcg_at_k([1.0], 1) == pytest.approx(1.0 / math.log2(3))
+        # log2(1 + 2) = log2(2) = 1, so rank 1 is undiscounted.
+        assert dcg_at_k([1.0], 1) == pytest.approx(1.0)
 
     def test_graded_gains_accumulate_with_discount(self) -> None:
         got = dcg_at_k([1.0, 0.5], 2)
-        want = 1.0 / math.log2(3) + 0.5 / math.log2(4)
+        want = 1.0 / math.log2(2) + 0.5 / math.log2(3)
         assert got == pytest.approx(want)
 
     def test_k_truncates_the_window(self) -> None:
@@ -58,7 +58,7 @@ class TestIdcgBinary:
     def test_matches_hand_computed_ideal(self) -> None:
         # 2 relevant in a k=4 window: ranks 1 and 2 carry the gain.
         got = idcg_binary(2, 4)
-        want = 1.0 / math.log2(3) + 1.0 / math.log2(4)
+        want = 1.0 / math.log2(2) + 1.0 / math.log2(3)
         assert got == pytest.approx(want)
 
     def test_capped_at_the_cutoff(self) -> None:

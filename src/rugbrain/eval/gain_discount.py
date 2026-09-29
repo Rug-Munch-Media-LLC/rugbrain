@@ -3,8 +3,9 @@
 One job: the arithmetic shared by every metric in this package — turn a
 sequence of per-rank relevance gains into a DCG, and turn an ideal gain
 profile into an IDCG. Both use the 1-indexed logarithmic position discount
-``log2(i + 2)`` (rank 1 -> log2(3)? no: rank 1 -> 1/1.0), which is the
-convention the deleted legacy ``eval_ragas`` implementation used.
+``log2(i + 2)``, so rank 1 is undiscounted (``1 / log2(2) == 1.0``) and each
+later rank is worth less. That is the convention the deleted legacy
+``eval_ragas`` implementation used.
 
 Pure-Python (``math.log2`` only) so the eval harness stays dependency-light
 and runs in CI. No I/O, no globals, no imports from the rest of ``rugbrain``.
