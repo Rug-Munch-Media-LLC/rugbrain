@@ -37,18 +37,27 @@ def _hit(id_: str, score: float, title: str) -> dict[str, Any]:
 
 @pytest.fixture
 def mock_rag(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int]]:
-    """Patch embeddings + store; record (collection, limit) calls."""
+    """Patch embeddings + store; record (collection, limit) calls.
+
+    The route lane-resolves the collection before querying (commit be0da01), so
+    the fake store keys off the RESOLVED name — comparing against the static
+    base name here is the exact bug pattern the resolver exists to stop.
+    """
     calls: list[tuple[str, int]] = []
 
     async def fake_emb(_q: str) -> list[float]:
         return [0.1] * 8
+
+    from rugbrain.search.lane_targets import resolve_search_collection
+
+    threat_collection = resolve_search_collection("threat_intel_v2")
 
     class FakeStore:
         async def hybrid_search(
             self, *, collection: str, limit: int, **_: Any
         ) -> list[dict[str, Any]]:
             calls.append((collection, limit))
-            if collection == "threat_intel_v2":
+            if collection == threat_collection:
                 return [_hit("t1", 0.9, "Flash loan attack"), _hit("t2", 0.7, "Reentrancy")]
             return [_hit("s1", 0.8, "Phishing kit")]
 
@@ -58,6 +67,26 @@ def mock_rag(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int]]:
     monkeypatch.setattr(emb_mod, "get_query_embedding", fake_emb, raising=False)
     monkeypatch.setattr(qd_mod, "QdrantVectorStore", lambda: FakeStore(), raising=False)
     return calls
+
+
+@pytest.mark.asyncio
+async def test_search_lane_resolves_before_querying(client: AsyncClient, mock_rag) -> None:
+    """The SEARCH path must name the lane the serving lane actually populates.
+
+    be0da01 routed the write path through the resolver; the read path agreed to
+    follow. This pins that the /search route still passes the RESOLVED name to
+    ``hybrid_search`` — a silent revert here would re-open
+    ``qdrant_hybrid_search_blocked ... incompatible_schema`` and degrade to an
+    empty result set that reads as "no threats found".
+    """
+    from rugbrain.search.lane_targets import resolve_search_collection
+
+    resp = await client.get("/search", params={"q": "flash loan", "limit": 5})
+    assert resp.status_code == 200
+    queried = mock_rag[0][0]
+    assert queried == resolve_search_collection("threat_intel_v2")
+    # The response still reports the collection the caller asked for.
+    assert resp.json()["collection"] == "threat_intel_v2"
 
 
 # ── GET /search ──────────────────────────────────────────────────────
@@ -74,7 +103,9 @@ async def test_search_returns_hits_with_filters_passthrough(client: AsyncClient,
     assert data["total"] == len(data["results"]) == 2
     assert data["collection"] == "threat_intel_v2"
     assert data["query"] == "flash loan"
-    assert mock_rag[0][0] == "threat_intel_v2"
+    from rugbrain.search.lane_targets import resolve_search_collection
+
+    assert mock_rag[0][0] == resolve_search_collection("threat_intel_v2")
 
 
 @pytest.mark.asyncio
@@ -163,7 +194,15 @@ async def test_multi_search_fuses_across_collections(client: AsyncClient, mock_r
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert {c for c, _ in mock_rag} == {"threat_intel_v2", "scam_patterns"}
+    from rugbrain.search.lane_targets import resolve_search_collection
+
+    # Resolved-to-resolved: the store is queried with lane names, the response
+    # reports the caller's names.
+    assert {c for c, _ in mock_rag} == {
+        resolve_search_collection("threat_intel_v2"),
+        resolve_search_collection("scam_patterns"),
+    }
+    assert data["collections"] == ["threat_intel_v2", "scam_patterns"]
     assert data["total"] >= 2  # fused from both collections
 
 

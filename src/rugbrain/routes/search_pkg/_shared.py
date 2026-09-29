@@ -16,7 +16,6 @@ from rugbrain import endpoints as _ep
 from rugbrain.knowledge_boundary import (
     CollectionNotPublic,
     require_public_collection,
-    sanitize_public_result,
 )
 
 logger = logging.getLogger(__name__)

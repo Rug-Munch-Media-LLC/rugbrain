@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
+from rugbrain.knowledge_boundary import sanitize_public_result
 from rugbrain.routes.search_pkg._shared import enforce_rate_limit
 
 logger = logging.getLogger(__name__)
