@@ -14,10 +14,8 @@ carries both.
 
 from __future__ import annotations
 
-from typing import Any
-
 import logging
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ async def fetch_live_dim(
     config declares several different dimensions returns None — there is no
     single honest answer and the caller must not be handed one.
     """
-    from rugbrain.qdrant_store.collections import dense_vector_dimensions
+    from rugbrain.qdrant_store.collection_schema import dense_vector_dimensions
 
     try:
         response = await client.get(

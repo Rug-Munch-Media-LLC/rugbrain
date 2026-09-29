@@ -16,15 +16,6 @@ THE BUG THIS FIXES (production, 2026-09-28)
     25+ scanner-poller writes dropped per 10 minutes. The write was not slow or
     flaky; it was refused and the refusal was a bare ``return False``.
 
-WHY THE DECLARED TABLE WAS NOT ENOUGH
-    ``lane_table.CANONICAL_LANE_DIM`` is derived from ``dim_policy.COLLECTION_DIM``,
-    which reads the SAME ``RAG_EMBED_DIM`` env var the embedder reads. So when
-    the operator env pins 2560, the declaration silently becomes 2560 too and
-    ``declared_lane_dim("threat_intel_v2_8b")`` answers 2560 for a collection
-    that is physically 4096. The table was verified against live Qdrant once and
-    then believed forever. A declaration that moves with the same env var as the
-    vector it is supposed to be checked against is not a declaration.
-
 THE RULE
     The dim of the vector being written is a FACT, observed at the call site.
     A lane is eligible only if its DECLARED dim equals that fact. If exactly one
@@ -42,6 +33,9 @@ WHY NOT "JUST USE THE BASE COLLECTION"
     :func:`resolve_collection` refuses to route a canonical-lane base back to
     itself. :func:`write_lane_for_dim` is the declared-table-aware counterpart:
     it looks for an ELIGIBLE LANE (base or twin) and only prefers the twin.
+
+    The measured widths themselves live in ``lane_widths`` — this module decides,
+    that module states the facts.
 """
 
 from __future__ import annotations
@@ -53,48 +47,9 @@ from rugbrain.qdrant_store.lane_resolver import (
     EIGHT_B_SUFFIX,
     strip_twin_suffix,
 )
-from rugbrain.qdrant_store.lane_table import (
-    DECLARED_TWINS,
-    PINNED_DIMS,
-    PRESERVED_LANE_DIM,
-)
+from rugbrain.qdrant_store.lane_widths import declared_width
 
 logger = logging.getLogger(__name__)
-
-#: The canonical lane dim is PINNED here, deliberately not read from
-#: ``lane_table.CANONICAL_LANE_DIM``.
-#:
-#: ``CANONICAL_LANE_DIM`` is ``dim_policy.COLLECTION_DIM``, which reads
-#: ``RAG_EMBED_DIM`` -- the same env var the embedder reads. On the live service
-#: that var is 2560, so importing it here would re-import the exact defect: the
-#: declaration would follow the vector instead of checking it, and a 2560 vector
-#: would be declared to fit a 4096 collection. Every ``_8b`` twin was verified
-#: against live Qdrant at 4096 (96 collections, 33 twins, 2026-09-28); that
-#: measured fact is the whole basis for routing, so it is written down here as a
-#: constant rather than derived from configuration.
-TWIN_LANE_DIM: Final[int] = 4096
-
-#: Owned names that are ALREADY canonical at :data:`TWIN_LANE_DIM` and never had
-#: a 2560 base to retire, so they have no twin and no entry in ``PINNED_DIMS``.
-#: They are legitimate 4096 write targets and must not be reported as
-#: unclassified. Declared here rather than in ``lane_table`` because the table
-#: treats them as "nothing to do" (their whole point is that they need no
-#: rewrite) while a WRITE path still has to know their width.
-#: Verified live 2026-09-28 alongside the twin list.
-CANONICAL_BASES: Final[frozenset[str]] = frozenset(
-    {
-        "bridge_architecture",
-        "crime_reports",
-        "l2_risk",
-        "market_data",
-        "newsletters",
-        "podcast_episodes",
-        "privacy_protocol",
-        "scam_signatures",
-        "standards",
-        "zk_circuits",
-    }
-)
 
 
 class WriteLaneDimMismatch(ValueError):
@@ -109,28 +64,6 @@ class WriteLaneDimMismatch(ValueError):
         self.requested = requested
         self.candidates = candidates
         super().__init__(message)
-
-
-def _declared_dim(name: str) -> int | None:
-    """Declared dim for *name*, base or twin, or None when unclassified.
-
-    Three disjoint groups, and conflating any two of them is the bug:
-
-    * a ``*_8b`` twin           -> :data:`TWIN_LANE_DIM` (4096, measured live)
-    * a base of a declared twin -> :data:`PRESERVED_LANE_DIM` (the retired gen)
-    * a name in ``PINNED_DIMS`` -> its own pinned dim (1024 / 2048 / 2560)
-    * a name in ``CANONICAL_BASES`` -> :data:`TWIN_LANE_DIM` (no twin, no rewrite)
-
-    A twin is NOT "whatever ``CANONICAL_LANE_DIM`` currently says"; see the
-    constant's docstring.
-    """
-    if name.endswith(EIGHT_B_SUFFIX) and (strip_twin_suffix(name) or "") in DECLARED_TWINS:
-        return TWIN_LANE_DIM
-    if name in CANONICAL_BASES:
-        return TWIN_LANE_DIM
-    if name in DECLARED_TWINS:
-        return PRESERVED_LANE_DIM
-    return PINNED_DIMS.get(name)
 
 
 def write_lane_for_dim(
@@ -163,11 +96,11 @@ def write_lane_for_dim(
     base = strip_twin_suffix(collection) or collection
     twin = f"{base}{EIGHT_B_SUFFIX}"
 
-    if collection.endswith(EIGHT_B_SUFFIX) and _declared_dim(collection) == vector_dim:
+    if collection.endswith(EIGHT_B_SUFFIX) and declared_width(collection) == vector_dim:
         return collection
 
     for candidate in (twin, base):
-        if _declared_dim(candidate) == vector_dim:
+        if declared_width(candidate) == vector_dim:
             logger.info(
                 "qdrant_write_lane_resolve collection=%s resolved=%s dim=%d "
                 "reason=vector_dim_match",
@@ -182,7 +115,7 @@ def write_lane_for_dim(
     # check in store_write rather than raising: the guard exists to stop a
     # KNOWN lane from receiving the wrong-width vector, not to invent policy for
     # collections it has never heard of.
-    if _declared_dim(twin) is None and _declared_dim(base) is None:
+    if declared_width(twin) is None and declared_width(base) is None:
         logger.debug(
             "qdrant_write_lane_unknown collection=%s dim=%d action=defer_to_schema_check",
             collection,
@@ -192,7 +125,7 @@ def write_lane_for_dim(
 
     raise WriteLaneDimMismatch(
         f"write_lane_dim_mismatch collection={collection} requested_dim={vector_dim} "
-        f"candidates={[(c, _declared_dim(c)) for c in (twin, base) if _declared_dim(c)]} "
+        f"candidates={[(c, declared_width(c)) for c in (twin, base) if declared_width(c)]} "
         "— no declared lane accepts this vector. Either point RAG_EMBED_DIM/"
         "RAG_EMBED_MODEL at the 8B lane (4096) or re-enable the retired base "
         "collection as a write target. Never truncate and never drop the write.",

@@ -11,8 +11,8 @@ import logging
 from typing import Any
 
 from rugbrain.qdrant_store import _types
-from rugbrain.qdrant_store.collections import _map_collection
 from rugbrain.qdrant_store.filters import apply_payload_filter, normalize_filters
+from rugbrain.qdrant_store.namespace import map_collection as _map_collection
 
 logger = logging.getLogger(__name__)
 
