@@ -12,10 +12,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import subprocess
 from typing import Any
 
 import httpx
+
+from rugbrain.sources.pry_keys import container_owner_key
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ PRY_URL = os.getenv("PRY_URL", "http://127.0.0.1:8005").rstrip("/")
 #: failure costs 45s of wall clock on its own, so the client timeout must exceed
 #: that or every hard-blocked site looks like a client error.
 SCRAPE_TIMEOUT = float(os.getenv("PRY_SCRAPE_TIMEOUT", "90"))
+
+#: Seconds sent as Pry's own `timeout`; must exceed the CHAIN, not the client.
+SCRAPE_REQUEST_TIMEOUT = int(os.getenv("PRY_REQUEST_TIMEOUT", "120"))
 
 #: Politeness. This host is scraping third-party sites; one caller at a time at
 #: a fixed interval is the point, not a throughput knob.
@@ -44,41 +48,12 @@ class PryError(RuntimeError):
     """A scrape failed. ``stage`` says which layer, so the caller can act."""
 
 
-def _key_from_container() -> str | None:
-    """Read PRY_API_KEY from the running container.
-
-    The key is in the container's environment, not in a tracked file, so a
-    fresh checkout has no other way to obtain it. Returns None rather than
-    raising so the caller gets one actionable message.
-    """
-    try:
-        out = subprocess.run(  # noqa: S603 - fixed argv, no shell, no user input
-            # Absolute path: S607 is right that a bare "docker" resolves against
-            # PATH, so a shim earlier in PATH would run with these privileges.
-            #
-            # Literal argv, no shell, nothing from a request or config file.
-            # S603 is right in general; the alternative is not running docker.
-            [DOCKER, "inspect", "pry", "--format", "{{range .Config.Env}}{{println .}}{{end}}"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        log.debug("pry_container_inspect_failed", extra={"error": str(exc)})
-        return None
-    for line in out.stdout.splitlines():
-        if line.startswith("PRY_API_KEY="):
-            return line.split("=", 1)[1].strip() or None
-    return None
-
-
 def owner_key() -> str:
     """The owner key, from env or the container. Raises PryError if absent."""
     global _resolved_key
     if _resolved_key:
         return _resolved_key
-    key = os.getenv("PRY_API_KEY", "").strip() or _key_from_container()
+    key = os.getenv("PRY_API_KEY", "").strip() or container_owner_key()
     if not key:
         raise PryError(
             "no PRY_API_KEY: set it in the environment, or start the `pry` "
@@ -94,6 +69,12 @@ async def scrape(
     *,
     format: str = "markdown",
     wait_for: int = 3000,
+    # Named request_timeout, not timeout: a bare `timeout` on an async function
+    # reads as the httpx timeout and is not — this is Pry's own field, and
+    # conflating the two is how a 120s Pry budget silently becomes a 120s
+    # socket wait (ASYNC109 flags exactly this).
+
+    request_timeout: int | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> str:
     """Scrape one URL and return its text.
@@ -110,7 +91,16 @@ async def scrape(
       empty         Pry succeeded but the page rendered no text
     """
     headers = {"Authorization": f"Bearer {owner_key()}", "Content-Type": "application/json"}
-    payload = {"url": url, "format": format, "wait_for": wait_for}
+    # Pry's own `timeout` defaults to 30s and its chain is up to ten tiers at
+    # 45s each, so the request dies mid-chain and blames whichever tier was in
+    # flight. That is why Immunefi read as BLOCKED: at 100s the same request
+    # returns 3,784 chars of real bounty data in 41s. See docs/sources/PRY.md.
+    payload = {
+        "url": url,
+        "format": format,
+        "wait_for": wait_for,
+        "timeout": request_timeout if request_timeout is not None else SCRAPE_REQUEST_TIMEOUT,
+    }
     own = client is None
     http = client or httpx.AsyncClient(timeout=SCRAPE_TIMEOUT)
     try:
@@ -194,6 +184,7 @@ async def scrape_many(
 __all__ = [
     "PRY_URL",
     "PryError",
+    "container_owner_key",
     "owner_key",
     "scrape",
     "scrape_many",
