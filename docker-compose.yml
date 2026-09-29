@@ -10,6 +10,35 @@ networks:
 
 services:
   # ── API server (always-on) ──────────────────────────────────────
+  model-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rugbrain-model-gateway
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - app.rugmunch.io/name=rugbrain-model-gateway
+      - app.rugmunch.io/role=gateway
+      - app.rugmunch.io/description=Qwen3 lineup access (retrieve/ask/embed/rerank)
+    # loopback only. Consumers on rmi_network reach it as
+    # http://rugbrain-model-gateway:8010 rather than a hardcoded bridge IP.
+    ports:
+      - "127.0.0.1:8010:8010"
+    env_file:
+      - .env.gateway
+    # Same ceiling the systemd unit carried (MemoryMax=1G, CPUQuota=200%).
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "2"
+    networks:
+      - rmi_network
+
   rag-api:
     build:
       context: .
