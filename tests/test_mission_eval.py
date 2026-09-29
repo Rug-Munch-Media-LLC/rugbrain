@@ -475,6 +475,22 @@ class TestNegativesInTheRunner:
         assert len(negatives) >= 5
         assert all(c.provenance_note.strip() for c in negatives)
 
+    async def test_absence_does_not_inflate_hit_rate(self) -> None:
+        # Regression. `hit_rate` had a 0.78 CI floor before the fourth grade.
+        # Computing it as `grade != MISS` silently folded `absent` into a gated
+        # ratchet with no retrieval improvement — the exact cheat this lane was
+        # told not to commit. Absence is counted by pass_rate and neg_score.
+        neg = _negative()
+        report = await run_mission_eval(_retriever({"xext-10": _healthy_docs()}), [neg])
+        assert report.per_case[0].grade == ABSENT
+        assert report.hit_rate == 0.0, "absent is not a retrieval hit"
+        assert report.pass_rate == 1.0
+
+    async def test_hit_rate_excludes_absence_at_scale(self) -> None:
+        neg = _negative()
+        report = await run_mission_eval(_retriever({"xext-10": _healthy_docs()}), [neg])
+        assert report.hit_rate != report.pass_rate, "the two must diverge, or one is lying"
+
     def test_a_positive_case_is_not_flagged(self) -> None:
         for c in all_cases():
             if c.relevant_doc_ids:

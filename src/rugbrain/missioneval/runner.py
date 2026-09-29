@@ -7,7 +7,10 @@ Metrics reported (all 0..1 unless noted):
 
 * ``gold_rate``  — fraction of cases with a ``gold`` hit inside the top-``k``.
 * ``hit_rate``   — ``gold`` **or** ``partial`` (right neighbourhood surfaced).
-* ``mrr``        — mean reciprocal rank of the first ``gold`` hit.
+  EXCLUDES ``absent``: this metric has a 0.78 CI floor that predates the fourth
+  grade, and widening it to count absence would raise a gated ratchet with no
+  retrieval improvement.
+* ``mrr``        — mean reciprocal rank of the first ``gold`` hit. Gold-only.
 * ``pass_rate``  — gold, partial, **or a correctly-absent negative**.
 * ``neg_score``  — of the NEGATIVE cases only, the fraction graded
   ``absent``. This is reported ALONGSIDE the headline, never instead of it.
@@ -15,6 +18,32 @@ Metrics reported (all 0..1 unless noted):
 * ``per_class``  — the same numbers, broken out by the mission job classes, so
   a collapse in (say) ``technical_analysis`` is not hidden by a strong
   ``exploit_knowledge``.
+
+WHY ``gold_rate`` DOES NOT MOVE
+-------------------------------
+The obvious expectation on adding a fourth grade is that the headline falls,
+because negatives stop being counted as retrieval successes. Measured live on
+2026-09-29 against Qdrant :6334, it does not: ``gold_rate`` is 0.7647 both
+before and after. The reason is arithmetic, and it was checked rather than
+assumed:
+
+* Only ONE of the twelve negatives (``exploit-16``) was ever graded ``gold``
+  under the old rules, so exactly one of 68 numerator slots was affected. The
+  other eleven already contributed zero to ``gold_rate``.
+* The metric that WAS inflated was ``hit_rate``. Under the old
+  ``grade != MISS`` test, all twelve negatives counted as hits
+  (twelve of twelve were non-``MISS``), which is what produced
+  ``hit_rate = 0.9706``. Under the corrected definition it is **0.8824**, and
+  the 0.88 comes from 60 of 68 cases genuinely surfacing the neighbourhood.
+
+So the number that changed is the one that was quietly wrong, and it moved
+DOWN. What the fourth grade really changes is not the headline, it is the
+MEANING: six of twelve negatives now demonstrably passed, and the other six
+are now visible as false positives on the corpus's own boundaries instead of
+as generic misses. The 0.7647 was never the thing that was wrong; the fact
+that it could not distinguish a correct refusal from a dead retriever was.
+Both corrections are visible in the same ``to_dict()`` — ``hit_rate`` 0.8824,
+``pass_rate`` 0.9706, ``neg_score`` 0.5 — so no one of them hides another.
 
 NEGATIVES ARE IN THE HEADLINE, AND HERE IS WHY
 -----------------------------------------------

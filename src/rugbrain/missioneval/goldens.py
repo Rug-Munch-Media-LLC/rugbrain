@@ -19,8 +19,13 @@ This package measures crime competence with **graded** labels:
    ``scam_detection``, ``exploit_knowledge``, ``news``, ``market``,
    ``technical_analysis``, ``skill_reference``.
 
-A row whose gold doc is absent from the corpus scores ``miss`` and drags the
-number down. That is the honest signal we want — not a green tick.
+A NEGATIVE row is one whose correct answer is "this corpus does not cover it".
+Those carry ``expected_absent=True`` (or the ``NEGATIVE`` marker in their
+provenance note) and are graded with the fourth grade, ``judge.ABSENT``, not as
+a retrieval failure — see ``judge.grade_absence`` for the absence rule. A
+POSITIVE row whose gold doc is genuinely missing from the corpus still scores
+``miss`` and drags the number down. That is the honest signal we want — not a
+green tick.
 """
 
 from __future__ import annotations
