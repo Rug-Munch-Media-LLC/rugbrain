@@ -124,7 +124,11 @@ def test_gateway_lane_refuses_cloud_vectors(monkeypatch) -> None:
         async def post(self, *a, **kw):
             return FakeResp()
 
-    monkeypatch.setattr(emb.httpx, "AsyncClient", FakeClient)
+    # The gateway lane owns its HTTP client now (embeddings_pkg.legacy_lanes);
+    # patch the client where the code that opens it lives.
+    from rugbrain.embeddings_pkg import legacy_lanes
+
+    monkeypatch.setattr(legacy_lanes.httpx, "AsyncClient", FakeClient)
     out = asyncio.run(emb._gateway_embed("test", dim=2560))
     assert out is None, "cloud vector must be refused for index use"
 
@@ -156,7 +160,11 @@ def test_gateway_lane_accepts_local_vectors(monkeypatch) -> None:
         async def post(self, *a, **kw):
             return FakeResp()
 
-    monkeypatch.setattr(emb.httpx, "AsyncClient", FakeClient)
+    # The gateway lane owns its HTTP client now (embeddings_pkg.legacy_lanes);
+    # patch the client where the code that opens it lives.
+    from rugbrain.embeddings_pkg import legacy_lanes
+
+    monkeypatch.setattr(legacy_lanes.httpx, "AsyncClient", FakeClient)
     out = asyncio.run(emb._gateway_embed("test", dim=2560))
     assert out is not None and len(out) == 2560
     assert math.isclose(sum(x * x for x in out), 1.0, rel_tol=1e-4)
