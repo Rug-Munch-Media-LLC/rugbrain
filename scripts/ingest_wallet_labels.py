@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest Etherscan combined wallet labels into the RugBrain ``wallet_v2`` collection.
+"""Ingest Etherscan combined wallet labels into ``wallet_v2_8b`` (Qwen3-Embedding-8B, 4096-d).
 
 Source: ``rmi-backend/data/etherscan_combined_labels.csv`` — the curated
 Etherscan label dataset (address, chain, source, name, label_type,
@@ -27,7 +27,8 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at DEEPINFRA_EMBED_URL with Qwen/Qwen3-Embedding-8B (SiliconFlow as backup).
+    The local :8004 lane serves qwen3-embedding-4b and CANNOT produce 4096-dim.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ if sys_path_scripts not in sys.path:
 
 from ingest_common import content_hash, embed_many  # noqa: E402
 
-COLLECTION = "wallet_v2"
+COLLECTION = "wallet_v2_8b"
 SOURCE = "etherscan_combined_labels"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
