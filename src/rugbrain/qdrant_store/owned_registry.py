@@ -45,6 +45,13 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "research_v2",
         "wallet_v2",
         "scanner_v2",
+        # Live scanner output. Was absent: the twin did not exist, so the write
+        # path had nothing to resolve to and every scan landed on the retired
+        # 2560 base while scan_intel_8b stayed at 0 (measured 2026-09-30, 97
+        # collections). The corpus is owned either way — the base has held
+        # 60,483 points of it — so the gate must admit it now that the twin
+        # exists, or resolve_collection would return a name the gate refuses.
+        "scan_intel",
         "security_feeds",
         "security_alerts",
         "regulation_enforcement",

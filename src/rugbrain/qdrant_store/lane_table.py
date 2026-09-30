@@ -57,10 +57,22 @@ def _declared_twins() -> frozenset[str]:
       mean a declared write source silently missed the canonical lane.
 
     Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
-    ``master_skills``, ``protocol_design``, ``scan_intel``, ``exploits``,
-    ``social_intel``, ``codebase_reference_v2``, ``security_patterns_test``) are
-    deliberately absent: routing a rugbrain source at them would widen write
-    ownership past the gate's boundary.
+    ``master_skills``, ``protocol_design``, ``exploits``, ``social_intel``,
+    ``codebase_reference_v2``, ``security_patterns_test``) are deliberately
+    absent: routing a rugbrain source at them would widen write ownership past
+    the gate's boundary.
+
+    ``scan_intel`` WAS in that not-owned list, and that omission was the live
+    P0. Measured 2026-09-30 against live Qdrant (97 collections): the 2560 base
+    held 60,483 points and had been GROWING, while ``scan_intel_8b`` held 0.
+    Every new scan therefore landed on the retired lane and the canonical lane
+    returned nothing. The cause was not the resolver — ``resolve_collection``
+    consults THIS table, so a name absent from it passes through to the 4B base
+    by construction. The absence was a stale ownership boundary written when the
+    twin was empty; once the twin is populated the name is genuinely owned, and
+    leaving it out is what keeps the write path on the dead generation. The fix
+    belongs in the declaration, not in a second env override that the next
+    env_file precedence race would win over.
     """
     return frozenset(
         {
@@ -78,6 +90,7 @@ def _declared_twins() -> frozenset[str]:
             "rag_documents",
             "regulation_enforcement",
             "research_v2",
+            "scan_intel",
             "scam_intel_v2",
             "security_alerts",
             "security_feeds",

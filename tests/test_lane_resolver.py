@@ -87,10 +87,23 @@ class TestRule:
 
     def test_non_owned_twin_is_never_a_rewrite_target(self):
         """Twins outside the owned set stay out: routing at them would widen
-        the write gate's boundary (agent_vectors, master_skills, cross_chain...)."""
-        for name in ("agent_vectors", "master_skills", "cross_chain", "scan_intel"):
+        the write gate's boundary (agent_vectors, master_skills, cross_chain...).
+
+        ``scan_intel`` was in this list and was the live P0 — its 2560 base was
+        still GROWING while the twin held 0, so every new scan missed the
+        canonical lane. It is now owned (see ``lane_table._declared_twins``),
+        and the twin-suffix ones below remain deliberately unrouted.
+        """
+        for name in ("agent_vectors", "master_skills", "cross_chain", "exploits"):
             assert name not in lr._DECLARED_TWINS
             assert lr.resolve_collection(name) == name
+
+    def test_scan_intel_resolves_to_its_twin(self):
+        """The regression that matters: a new scan must land on the 8B lane."""
+        assert "scan_intel" in lr._DECLARED_TWINS
+        assert lr.resolve_collection("scan_intel") == "scan_intel_8b"
+        assert lr.resolve_collection("scan_intel_8b") == "scan_intel_8b"
+        assert lr.declared_lane_dim("scan_intel") == 4096
 
 
 class TestIdempotence:
