@@ -81,7 +81,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from rugbrain.dim_policy import MODEL_DIMS
+from rugbrain.dim_policy import MODEL_DIMS, RETIRED_MODELS
 from rugbrain.qdrant_store.collection_schema import dense_vector_dimensions
 from rugbrain.qdrant_store.lane_resolver import CANONICAL_LANE_DIM, RETIRED_LANE_DIM
 from rugbrain.qdrant_store.lane_table import PINNED_DIMS, PRESERVED_LANE_DIM
@@ -216,13 +216,17 @@ def retired_dims() -> frozenset[int]:
 
 
 def retired_models() -> Mapping[str, int]:
-    """Model names whose native width is a retired width, per the registry.
+    """Retired embedding models and the width each one produced.
 
     A retired model name in a *default* position is the DeepInfra trap: the
     provider answers 200 and the vectors are the wrong width.
+
+    Reads RETIRED_MODELS, not MODEL_DIMS. The 4B was moved out of MODEL_DIMS on
+    2026-09-30 so callers could not resolve its dimension and recreate the
+    retired lane; deriving the retired set from MODEL_DIMS then returned {} and
+    this detector would have gone blind to exactly the case it exists to catch.
     """
-    dead = retired_dims()
-    return {name: dim for name, dim in MODEL_DIMS.items() if dim in dead}
+    return {name: dim for name, (dim, _replacement) in RETIRED_MODELS.items()}
 
 
 # ── Result types ───────────────────────────────────────────────────────────

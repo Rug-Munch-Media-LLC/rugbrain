@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from rugbrain.dim_policy import COLLECTION_DIM, is_valid_for_collection, normalize_dims
+from rugbrain.dim_policy import (
+    COLLECTION_DIM,
+    is_valid_for_collection,
+    normalize_dims,
+)
 
 
 def test_collection_dim_is_canonical_qwen8b():
@@ -23,16 +27,19 @@ def test_exact_passthrough_renormalized():
     assert normalize_dims(v) == v
 
 
-def test_oversized_truncated_and_renormalized():
-    out = normalize_dims([2.0] * (COLLECTION_DIM * 2))
-    assert len(out) == COLLECTION_DIM
-    assert sum(x * x for x in out) == pytest.approx(1.0, abs=1e-6)
+def test_oversized_refuses_rather_than_truncating():
+    """A 4096 vector must not be silently cut to 2560.
+
+    Downscaling was what made writing 8B vectors into the retired lane look
+    like a supported operation. It now raises, naming both sides.
+    """
+    with pytest.raises(ValueError, match="refusing to truncate"):
+        normalize_dims([0.25] * 4096, 2560)
 
 
 def test_zero_vector_returns_zeros():
-    out = normalize_dims([0.0] * (COLLECTION_DIM + 1024))
-    assert len(out) == COLLECTION_DIM
-    assert all(x == 0.0 for x in out)
+    """An exact-size zero vector is returned unchanged rather than normalised."""
+    assert normalize_dims([0.0] * COLLECTION_DIM) == [0.0] * COLLECTION_DIM
 
 
 def test_undersized_rejected():
@@ -40,9 +47,12 @@ def test_undersized_rejected():
         normalize_dims([0.1] * 384)
 
 
-def test_custom_target():
-    out = normalize_dims([3.0] * 512, target=256)
-    assert len(out) == 256
+def test_custom_target_must_match_exactly():
+    """An explicit target only works when it equals the vector length."""
+    assert normalize_dims([3.0, 4.0], 2) == [0.6, 0.8]
+    with pytest.raises(ValueError, match="refusing to truncate"):
+        normalize_dims([0.25] * 512, 256)
+
 
 
 def test_validity_check():
