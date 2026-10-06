@@ -90,6 +90,7 @@ def _declared_twins() -> frozenset[str]:
             "rag_documents",
             "regulation_enforcement",
             "research_v2",
+            "scam_patterns",
             "scan_intel",
             "scam_intel_v2",
             "security_alerts",
