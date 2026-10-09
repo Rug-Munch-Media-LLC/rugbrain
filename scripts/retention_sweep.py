@@ -55,6 +55,22 @@ RETENTION: dict[str, int | None] = {
 SOURCE_TTL: dict[str, int] = {"social": 30, "news": 90}
 
 
+def _resolve_collection(name: str) -> str:
+    """Prefer the live _8b twin (2026-10-08 migration); fall back to the legacy name."""
+    if name.endswith("_8b"):
+        return name
+    try:
+        _get(f"/collections/{name}_8b")
+        return f"{name}_8b"
+    except Exception:  # noqa: BLE001 — a missing twin is the expected fallback path
+        return name
+
+
+def _get(path: str, timeout: int = 60) -> dict:
+    with urllib.request.urlopen(f"{QDRANT}{path}", timeout=timeout) as resp:  # noqa: S310 — Qdrant http://
+        return json.load(resp)
+
+
 def _post(path: str, body: dict, timeout: int = 300) -> dict:
     req = urllib.request.Request(  # noqa: S310 — Qdrant http://, audited 2026-09-20
         f"{QDRANT}{path}", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
@@ -129,7 +145,12 @@ def main() -> int:
         if days is None:
             continue
         per_source = SOURCE_TTL if collection == "rag_documents" else None
-        scanned, expired = sweep(collection, days, args.apply, per_source)
+        live = _resolve_collection(collection)
+        try:
+            scanned, expired = sweep(live, days, args.apply, per_source)
+        except urllib.error.HTTPError as exc:
+            print(f"  {collection:22} ttl={days:>3}d  SKIPPED ({exc})")
+            continue
         total_expired += expired
         state = "deleted" if args.apply else "expired"
         print(f"  {collection:22} ttl={days:>3}d  scanned={scanned:>7,}  {state}={expired:>6,}")

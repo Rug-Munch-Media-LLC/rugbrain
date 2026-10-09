@@ -37,6 +37,17 @@ BATCH = 200
 
 #: source collection → default content_type for the unified payload.
 
+def _resolve_collection(name: str) -> str:
+    """Prefer the live _8b twin (2026-10-08 migration); fall back to the legacy name."""
+    if name.endswith("_8b"):
+        return name
+    try:
+        _get(f"/collections/{name}_8b")
+        return f"{name}_8b"
+    except Exception:  # noqa: BLE001 — a missing twin is the expected fallback path
+        return name
+
+
 def _get(path: str, timeout: int = 60) -> dict:
     with urllib.request.urlopen(f"{QDRANT}{path}", timeout=timeout) as resp:  # noqa: S310 — Qdrant http://
         return json.load(resp)
@@ -106,7 +117,7 @@ async def migrate(source: str, content_type: str, apply: bool, limit: int, incre
             out.append(
                 {
                     "id": _point_id(did),
-                    "vector": {"dense": dense},  # sparse added below for NEW points only
+                    "vector": dense,  # rag_documents uses one UNNAMED 4096-d vector (no sparse)
                     "payload": {
                         "doc_id": did,
                         "source": str(payload.get("source") or source)[:200],
@@ -129,10 +140,7 @@ async def migrate(source: str, content_type: str, apply: bool, limit: int, incre
             existing = _existing_ids([p["id"] for p in out]) if incremental else set()
             fresh = [p for p in out if p["id"] not in existing]
             stats["skipped_existing"] += len(out) - len(fresh)
-            for point in fresh:
-                sparse = await _sparse_for(point["payload"]["content"])
-                if sparse is not None:
-                    point["vector"]["sparse"] = sparse
+            # NOTE: rag_documents has no sparse vector (single unnamed dense) — do not attach one.
             if fresh:
                 _post(f"/collections/{TARGET}/points?wait=true", {"points": fresh}, method="PUT")
             stats["upserted"] += len(fresh)
@@ -156,11 +164,12 @@ def main() -> int:
     args = ap.parse_args()
 
     ct = args.content_type or CONTENT_TYPE_BY_SOURCE.get(args.source, "general")
-    total = _get(f"/collections/{args.source}")["result"]["points_count"]
+    source = _resolve_collection(args.source)
+    total = _get(f"/collections/{source}")["result"]["points_count"]
     print(
-        f"{args.source} ({total:,} points) -> {TARGET} as content_type={ct} ({'APPLY' if args.apply else 'dry run'})"
+        f"{source} ({total:,} points) -> {TARGET} as content_type={ct} ({'APPLY' if args.apply else 'dry run'})"
     )
-    stats = asyncio.run(migrate(args.source, ct, args.apply, args.limit, incremental=not args.full))
+    stats = asyncio.run(migrate(source, ct, args.apply, args.limit, incremental=not args.full))
     print(f"  done: {stats}")
     if not args.apply:
         print("  (dry run — pass --apply to write)")
