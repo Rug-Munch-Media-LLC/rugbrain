@@ -39,6 +39,24 @@ _PUBLIC = frozenset(
         "threat_intel_v2",
         "wallet_profiles",
         "wallet_v2",
+        # 2026-10-11: the _8b collections are the ones actually fed and served
+        # (4096-dim, remote-8B embedder). The un-suffixed names above are the
+        # pre-migration labels; leaving the boundary table on them alone made
+        # every public search 403 "collection_not_available" against real data.
+        # Both spellings stay allowed so a caller using either resolves.
+        "codebase_reference_v2_8b",
+        "cross_chain_8b",
+        "crypto_vulnerabilities_8b",
+        "defi_exploits_8b",
+        "exploits_8b",
+        "news_v2_8b",
+        "protocol_design_8b",
+        "regulation_enforcement_8b",
+        "scam_intel_v2_8b",
+        "scam_patterns_8b",
+        "security_patterns_8b",
+        "threat_intel_v2_8b",
+        "wallet_v2_8b",
     }
 )
 
