@@ -1,0 +1,14 @@
+{
+  "status": "ok",
+  "total": 31,
+  "errors": 0,
+  "metrics": {
+    "recall@5": 0.7419,
+    "recall@10": 0.7742,
+    "ndcg@5": 0.64,
+    "ndcg@10": 0.6502,
+    "mrr": 0.6099,
+    "p50_latency_ms": 685.0,
+    "p95_latency_ms": 2381.1
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-11T21:32:56.144938+00:00",
+  "golden_set": "/srv/work/worktrees/test-commander/rugbrain/eval/golden/ingest_sources_golden.jsonl",
+  "total_queries": 28,
+  "successful_queries": 28,
+  "errors": 0,
+  "per_collection": {
+    "scam_intel_v2": {
+      "total_queries": 7,
+      "errors": 0,
+      "recall@5": 0.2857142857142857,
+      "ndcg@5": 0.2857142857142857,
+      "recall@10": 0.2857142857142857,
+      "ndcg@10": 0.2857142857142857,
+      "mrr@10": 0.2857142857142857,
+      "p50_latency_ms": 2890.8163040177897
+    },
+    "known_scams": {
+      "total_queries": 7,
+      "errors": 0,
+      "recall@5": 0.42857142857142855,
+      "ndcg@5": 0.42857142857142855,
+      "recall@10": 0.42857142857142855,
+      "ndcg@10": 0.42857142857142855,
+      "mrr@10": 0.42857142857142855,
+      "p50_latency_ms": 4517.853490076959
+    },
+    "threat_intel_v2": {
+      "total_queries": 7,
+      "errors": 0,
+      "recall@5": 0.7142857142857143,
+      "ndcg@5": 0.7142857142857143,
+      "recall@10": 0.7142857142857143,
+      "ndcg@10": 0.7142857142857143,
+      "mrr@10": 0.7142857142857143,
+      "p50_latency_ms": 5219.97489198111
+    },
+    "news_v2": {
+      "total_queries": 7,
+      "errors": 0,
+      "recall@5": 0.5714285714285714,
+      "ndcg@5": 0.3435193382915059,
+      "recall@10": 0.5714285714285714,
+      "ndcg@10": 0.3435193382915059,
+      "mrr@10": 0.2714285714285714,
+      "p50_latency_ms": 5843.834561062977
+    }
+  },
+  "overall": {
+    "recall@5": 0.5,
+    "recall@10": 0.5,
+    "mrr@10": 0.425,
+    "ndcg@5": 0.4430226917157336,
+    "ndcg@10": 0.4430226917157336,
+    "p50_latency_ms": 4606.210706057027
+  }
+}
