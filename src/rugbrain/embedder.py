@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("EMBED_MODEL_ID", "Qwen/Qwen3-Embedding-8B")
 TIMEOUT = float(os.getenv("EMBED_HOSTED_TIMEOUT", "30.0"))
-DEFAULT_ORDER = ("deepinfra", "siliconflow", "openrouter")
+DEFAULT_ORDER = ("deepinfra", "siliconflow", "openrouter", "openrouter2")
 
 #: provider -> (base url, model id, credential env var, credential file)
 _PROVIDERS: dict[str, tuple[str, str, str, str]] = {
@@ -51,6 +51,12 @@ _PROVIDERS: dict[str, tuple[str, str, str, str]] = {
         "qwen/qwen3-embedding-8b",
         "OPENROUTER_API_KEY",
         "/srv/secrets/openrouter_account1_api_key",
+    ),
+    "openrouter2": (
+        "https://openrouter.ai/api/v1/embeddings",
+        "qwen/qwen3-embedding-8b",
+        "OPENROUTER_BACKUP_API_KEY",
+        "/srv/secrets/openrouter_account2_api_key",
     ),
 }
 

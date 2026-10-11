@@ -7,12 +7,13 @@ Automated content-distribution core (2026-08-24 directive):
         → GOOD WRITING pass (analysis + recap + link; strict no-slop prompt
           over the local llama.cpp chat model, template fallback that is
           still clean prose)
+        → FACT-CHECK GATE (editorial standards #21, #12, #15)
         → structured drafts consumed by the bot publisher, which posts to
           Telegram and mirrors @cryptorugmuncher posts to feed.rugmunch.io
 
 Channel routing rules:
     main    (@cryptorugmuncher)  top 1–3 stories of the cycle, full analysis,
-                                 mirrored to the feed blog
+                                  mirrored to the feed blog
     alerts  (@rmialerts)         critical/high severity only
     news    (@rmicryptonews)     solid news-value items, tighter format
     scans   (@rmiscans)          real scanner output with reasoning + ref links
@@ -35,6 +36,7 @@ from typing import Any
 import httpx
 
 from rugbrain import content_candidates
+from rugbrain.factcheck import FactCheckResult, fact_check_gate
 from rugbrain.formatting.headline import style_for_site, style_headline
 
 logger = logging.getLogger("rugbrain.content")
@@ -128,7 +130,12 @@ def _template_post(story: dict[str, Any]) -> str:
 async def _compose(story: dict[str, Any]) -> tuple[str, str]:
     """Write one post. Returns ``(text, writer)`` where writer is "llm" or
     "template" (2026-08-25 WO-3: the bot's quality gate drops template
-    output — a dead writer must degrade to silence, never to slop)."""
+    output — a dead writer must degrade to silence, never to slop).
+
+    Then runs the fact-check gate (editorial standards #21, #12, #15).
+    If the gate fails, unverifiable claims are stripped. If all claims
+    fail, the draft is rejected (returns empty text, "rejected").
+    """
     notes = (
         f"Story notes:\n{story.get('content', '')[:3000]}\n\n"
         f"Severity: {story.get('severity', 'medium')}\n"
@@ -138,6 +145,46 @@ async def _compose(story: dict[str, Any]) -> tuple[str, str]:
     if written:
         return written, "llm"
     return _template_post(story), "template"
+
+
+async def _compose_with_factcheck(story: dict[str, Any]) -> tuple[str, str]:
+    """Compose and run fact-check gate. Returns (text, writer)."""
+    text, writer = await _compose(story)
+
+    # Run fact-check gate (editorial standards #21, #12, #15)
+    fc_result: FactCheckResult = await fact_check_gate(text, story)
+
+    if fc_result.verdict == "PASS" and fc_result.claims:
+        # Gate passed — return composed text with fact-check metadata
+        logger.info(
+            "factcheck_pass channel_story=%s claims_verified=%d stripped=%d",
+            story.get("source", "unknown"),
+            len(fc_result.claims),
+            len(fc_result.stripped_claims),
+        )
+        # Optionally append fact-check summary for transparency
+        if fc_result.stripped_claims:
+            strip_note = (
+                "\n\n[Fact-check: "
+                f"{len(fc_result.stripped_claims)} claim(s) stripped — "
+                "insufficient independent sources]"
+            )
+            text += strip_note
+        return text, writer
+
+    if fc_result.verdict == "FAIL":
+        # All claims failed verification — reject the draft
+        logger.warning(
+            "factcheck_reject channel_story=%s unverifiable=%d missing=%s",
+            story.get("source", "unknown"),
+            len(fc_result.unverifiable_claims),
+            fc_result.missing,
+        )
+        return "", "rejected"
+
+    # No claims extracted = pass through
+    logger.debug("factcheck_no_claims channel_story=%s", story.get("source", "unknown"))
+    return text, writer
 
 
 def _story_age_hours(story: dict[str, Any]) -> float | None:
