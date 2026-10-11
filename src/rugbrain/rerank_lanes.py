@@ -13,9 +13,10 @@ request. The caller keeps the same contract it had: llama.cpp-shaped
 ``[{"index": int, "relevance_score": float}]`` sorted descending, or ``None``
 when every rung is unavailable.
 
-Order is ``RERANK_PROVIDER_ORDER`` (comma separated). DeepInfra is last while
-it is out of credit; it rejoins the head of the chain by itself once topped up,
-with no code change.
+Order is ``RERANK_PROVIDER_ORDER`` (comma separated). Operator decision
+2026-10-11: DeepInfra is PRIMARY (verified live: embed + rerank both answer),
+SiliconFlow is the first backup, OpenRouter the last. A rung with no
+credential simply no-ops and the chain falls through to the next one.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 MODEL = os.getenv("RERANK_MODEL_ID", "Qwen/Qwen3-Reranker-8B")
 TIMEOUT = float(os.getenv("RERANK_HOSTED_TIMEOUT", "30.0"))
 DOC_CHARS = int(os.getenv("RERANK_HOSTED_DOC_CHARS", "2000"))
-DEFAULT_ORDER = ("siliconflow", "openrouter", "deepinfra")
+DEFAULT_ORDER = ("deepinfra", "siliconflow", "openrouter")
 
 #: provider -> (base url, model id, credential env var, credential file)
 _PROVIDERS: dict[str, tuple[str, str, str, str]] = {
