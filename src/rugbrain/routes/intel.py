@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +19,10 @@ from rugbrain.endpoints import _is_token_address
 logger = logging.getLogger(__name__)
 
 router: APIRouter = APIRouter(tags=["rag-optimization"])
+
+#: 0x-prefixed EVM, base58 Solana/pump, or a bare chain-prefixed id. The scan
+#: corpus is multi-chain, so a single EVM regex would reject most of it.
+_ADDRESS_SHAPE = re.compile(r"^(?:0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})$")
 
 
 @router.get("/rag/journalism/research")
@@ -447,3 +452,38 @@ async def market_context_token_endpoint(
             "generated_at": datetime.now(UTC).isoformat(),
             "error": str(exc)[:200],
         }
+
+
+@router.get("/intel/address-risk")
+async def address_risk(
+    address: str = Query(..., description="Bare address or chain_address"),
+    request: Request = None,  # type: ignore[assignment]  # noqa: B008 — FastAPI injects it
+) -> dict[str, Any]:
+    """Risk record for a scanned address, from the ClickHouse label bridge.
+
+    ``scan_intel`` payloads are structured fields with no prose, so they are
+    looked up by address rather than searched semantically — a vector index is
+    the wrong home for them at any dimension. This is the resolver that bridge
+    needed; the module existed but no route ever called it (2026-10-11).
+
+    Returns the risk row with its flags and provenance, or ``found: false`` so
+    a caller can tell "unscanned" from "scan failed".
+    """
+    from rugbrain import clickhouse_labels as labels
+
+    # The scan corpus is multi-chain, so the guard is a base58/0x shape check
+    # rather than the EVM-only helper the other routes use.
+    bare = address.split("_", 1)[1] if "_" in address and address.count("_") == 1 else address
+    if not _ADDRESS_SHAPE.fullmatch(bare.strip()):
+        raise HTTPException(status_code=400, detail="not a token address")
+    try:
+        row = labels.resolve_address(bare)
+    except Exception as exc:  # noqa: BLE001 — a lookup miss must not 500 the API
+        logger.warning("intel_address_risk_failed: %s", str(exc)[:120])
+        raise HTTPException(status_code=503, detail="label bridge unavailable") from exc
+
+    if row is None:
+        return {"found": False, "address": bare, "source": "clickhouse:rag_scan_labels"}
+    from dataclasses import asdict
+
+    return {"found": True, **asdict(row), "source": "clickhouse:rag_scan_labels"}
