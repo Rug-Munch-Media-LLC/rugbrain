@@ -281,7 +281,7 @@ def ensure_collection(
     existing = [c.name for c in client.get_collections().collections]
     if name in existing:
         return
-    size = vector_size or 2560  # canonical qwen3-embedding-4b dim (manifest may lack it)
+    size = vector_size or 2560  # canonical qwen3-embedding-8b dim (manifest may lack it)
     client.create_collection(
         collection_name=name,
         vectors_config=VectorParams(size=size, distance=_parse_distance(distance)),

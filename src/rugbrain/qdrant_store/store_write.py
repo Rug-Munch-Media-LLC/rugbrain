@@ -34,7 +34,7 @@ class WriteMixin(_types.StoreSurface):
 
         Used by the shared ingest path (``ingest_common.store_documents``) to
         skip re-embedding content that is already stored — every pipeline that
-        feeds the embedder goes through this check before calling Qwen3-4B, so
+        feeds the embedder goes through this check before calling Qwen3-8B, so
         re-running a crawl/cron does NOT re-embed the same chunks. Fail-open:
         any error (Qdrant down, malformed id) returns False so the caller
         proceeds to embed rather than dropping fresh content.

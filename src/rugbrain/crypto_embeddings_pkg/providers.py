@@ -61,7 +61,7 @@ class ProviderMixin:
     async def _semantic_embed(self, texts: list[str], head: str = "semantic") -> list[list[float]]:
         """
         Semantic embedding pipeline with tiered fallback:
-        PRIMARY:   Primary embedder (Qwen3-Embedding-4B (llama.cpp))
+        PRIMARY:   Primary embedder (Qwen3-Embedding-8B (llama.cpp))
         FALLBACK:  OpenRouter or API-based embedder
         FALLBACK:  OpenRouter/HF embedder (external fallback)
         FALLBACK:  HuggingFace embedder

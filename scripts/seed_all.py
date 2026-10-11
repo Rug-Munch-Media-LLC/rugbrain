@@ -39,7 +39,7 @@ logger = logging.getLogger("seed_all")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://rmi-backend:8000")
 EMBEDDING_DIM = 2560
 
@@ -48,7 +48,7 @@ EMBEDDING_DIM = 2560
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Get embedding from qwen3-embedding-4b via /embeddings.
+    """Get embedding from qwen3-embedding-8b via /embeddings.
 
     Uses the OpenAI-compatible ``/embeddings`` endpoint with ``input``
     as a list (faster, supports batching).

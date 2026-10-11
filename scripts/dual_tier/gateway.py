@@ -1,10 +1,10 @@
 """Dual-tier RAG gateway — word-count routed retrieval for consumer chat.
 
 Routing (per production design, ports adapted to Talos reality):
-  < 45 words  -> SPEED tier : Qwen3-Embedding-0.6B (:8007) recall 80
+  < 45 words  -> SPEED tier : qwen3-embedding-8b (:8007) recall 80
                               -> Qwen3-Reranker-0.6B (:8008) -> top 5
-  >= 45 words -> DEEP tier  : Qwen3-Embedding-4B   (:8004) recall 30
-                              -> Qwen3-Reranker-4B   (:8003) -> top 5
+  >= 45 words -> DEEP tier  : Qwen3-Embedding-8B   (:8004) recall 30
+                              -> Qwen3-Reranker-8B   (:8003) -> top 5
 
 Generation: qwen3-8b-instruct via llama.cpp :8009 (llama-chat.service).
 

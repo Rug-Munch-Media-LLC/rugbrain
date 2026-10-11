@@ -21,7 +21,7 @@ let a production write through unnoticed.)
 ``rug_events``; it exists so the write path can be verified end to end before
 committing to a production write.
 
-The embed lane is pinned to the corpus's 2560-dim Qwen3-Embedding-4B before the
+The embed lane is pinned to the corpus's 2560-dim Qwen3-Embedding-8B before the
 first request (``rug_events.embedding``); run with the env sourced, e.g.
 ``set -a; . /srv/secrets/rugbrain.env; set +a``, or the key is absent and every
 call fails.
@@ -49,8 +49,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 # cannot drift apart silently.
 for _key, _value in (
     ("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1"),
-    ("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
-    ("RAG_EMBED_MODEL", "qwen3-embedding-4b"),
+    ("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"),
+    ("RAG_EMBED_MODEL", "qwen3-embedding-8b"),
     ("QWEN_EMBED_DIMS", "2560"),
 ):
     os.environ[_key] = _value

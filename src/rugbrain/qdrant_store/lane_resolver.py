@@ -75,7 +75,7 @@ logger = logging.getLogger(__name__)
 #: Suffix of a migrated twin. Shared with ``canary_routing.CANARY_SUFFIX``.
 EIGHT_B_SUFFIX: Final = "_8b"
 
-#: Retired 2560 generation (qwen3-embedding-4b). Read-only, never a write target.
+#: Retired 2560 generation (pre-8B era). Read-only, never a write target.
 RETIRED_LANE_DIM: Final = 2560
 
 #: Escape hatch. Off by default; set ``RAG_LANE_RESOLVER=off`` to restore the

@@ -138,7 +138,7 @@ async def _cloud_embed(tier: str, texts: list[str]) -> tuple[int, list[list[floa
 ENGINE_REGISTRY: dict[str, dict[str, Any]] = {
     # key = f"{tier}_{served_by}"; dims are canonical for compatibility checks.
     # 2026-08-29 — 4B ELIMINATED. This registry hardcoded
-    # Qwen3-Embedding-4B @2560 for every lane AND line 60 defaulted
+    # Qwen3-Embedding-8B @2560 for every lane AND line 60 defaulted
     # DEEPINFRA_EMBED_MODEL to 4B, so this gateway — the service every embed
     # request routes through on :8090/:8010 — was the single largest reason
     # the fleet was still on 4B after the rest of the code had moved to 8B.
@@ -330,7 +330,7 @@ async def embed(req: EmbedReq) -> dict[str, Any]:
                 "served_by": "cloud",
                 "cloud_model": model_id,
                 "degraded": True,
-                # DeepInfra serves the SAME qwen3-embedding-4b as the local
+                # DeepInfra serves the SAME qwen3-embedding-8b as the local
                 # deep lane — index-compatible (unlike the retired OpenRouter
                 # qwen3-8b lane).
                 "index_compatible": True,

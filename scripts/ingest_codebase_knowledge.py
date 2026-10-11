@@ -3,7 +3,7 @@
 
 Part 1 of the contract-knowledge expansion. Clones public reference
 codebases and ingests their source (split by contract/function, embedded with
-qwen3-embedding-4b via ) into the RAG so RugBrain can answer "what does a secure
+qwen3-embedding-8b via ) into the RAG so RugBrain can answer "what does a secure
 ERC20 / Uniswap pool / SPL program look like?".
 
 Protocols (see ``codebase_protocols_data.py``):
@@ -18,7 +18,7 @@ For each file we:
   1. Extract Solidity/Rust source.
   2. Split by logical unit (contract/function via the AST chunker for
      Solidity; ``pub fn``/``pub struct`` boundaries for Rust).
-  3. Embed each chunk (2560-dim qwen3-embedding-4b, batched).
+  3. Embed each chunk (2560-dim qwen3-embedding-8b, batched).
   4. Upsert into the target collection with protocol/version/vulnerability
      history metadata.
 
@@ -32,7 +32,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - git, solc (optional — falls back to regex chunking)
 """
 

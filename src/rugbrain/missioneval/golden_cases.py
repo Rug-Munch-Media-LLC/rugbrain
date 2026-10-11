@@ -3,7 +3,7 @@ Mission golden set DATA — rug / scam / news / market / skill rows.
 
 Split out only to respect the 200-line rule. Same contract; see ``goldens.py``
 for the rationale and the grading model. Every ``relevant_doc_ids`` entry was
-observed live in Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-4B).
+observed live in Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-8B).
 """
 
 from __future__ import annotations

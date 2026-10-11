@@ -9,7 +9,7 @@ ownership centralization, and hidden fee structures.
 The script ships with a curated dataset (``RUGDOC_KNOWLEDGE`` below) so it
 works fully offline, and can additionally fetch RugDoc's public token
 audit pages when the site is reachable. Each entry is embedded (2560-dim
-qwen3-embedding-4b) and upserted into ``known_scams`` with canonical metadata
+qwen3-embedding-8b) and upserted into ``known_scams`` with canonical metadata
 (category, severity, ecosystem, source, source_url).
 
 Usage:
@@ -19,7 +19,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

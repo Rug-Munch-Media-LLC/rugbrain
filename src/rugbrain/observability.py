@@ -86,7 +86,7 @@ async def _save_local_metrics() -> None:
 
 
 def trace_embedding(
-    duration_ms: float, dims: int = 1024, model: str = "qwen3-embedding-4b"
+    duration_ms: float, dims: int = 1024, model: str = "qwen3-embedding-8b"
 ) -> None:
     """Record an embedding operation."""
     _metrics.embedding_calls += 1
@@ -123,7 +123,7 @@ def trace_retrieval(
 
 
 def trace_reranker(
-    duration_ms: float, doc_count: int, top_k: int, model: str = "qwen3-reranker-4b"
+    duration_ms: float, doc_count: int, top_k: int, model: str = "qwen3-reranker-8b"
 ) -> None:
     """Record a reranking operation."""
     if LANGFUSE_AVAILABLE:
@@ -158,7 +158,7 @@ def trace_error(error_type: str, detail: str = "") -> None:
 
 @asynccontextmanager
 async def timed_embedding(
-    dims: int = 1024, model: str = "qwen3-embedding-4b"
+    dims: int = 1024, model: str = "qwen3-embedding-8b"
 ) -> AsyncIterator[None]:
     """Context manager for timing embedding operations."""
     t0 = time.time()

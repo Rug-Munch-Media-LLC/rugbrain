@@ -25,7 +25,7 @@ Collection routing follows docs/DATA-PLACEMENT.md + COLLECTION_REGISTRY.md:
 
 The records are normalized into the canonical incident shape (title,
 root-cause description, protocol, loss, date, vulnerability class, source
-URL), chunked, embedded with qwen3-embedding-4b (2560-dim via ), and upserted
+URL), chunked, embedded with qwen3-embedding-8b (2560-dim via ), and upserted
 into their collection.
 
 Idempotent: point IDs are deterministic (source:stable-key:content-hash →
@@ -40,7 +40,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - httpx; optional GITHUB_TOKEN to lift GitHub API rate limits
 """
 

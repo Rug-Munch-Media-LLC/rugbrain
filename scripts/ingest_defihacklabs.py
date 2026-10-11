@@ -10,7 +10,7 @@ that reproduces a real DeFi exploit. For every ``.sol`` file we:
      the incident metadata in ``past/*/README.md``), vulnerability description
      (leading comments), and the raw code snippet.
   2. Chunk large files into 500-char windows with 50-char overlap.
-  3. Embed each chunk with qwen3-embedding-4b (2560-dim, /embeddings).
+  3. Embed each chunk with qwen3-embedding-8b (2560-dim, /embeddings).
   4. Upsert into the ``threat_intel_v2`` collection with metadata:
      category, severity, ecosystem=EVM, source=defihacklabs, source_url.
 
@@ -24,7 +24,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b loaded
   - git, httpx, numpy
 """
 

@@ -4,7 +4,7 @@ Technical-analysis golden cases — the mandate class that measured 0.000.
 Why this is a SEPARATE module: ``golden_cases.py`` is at the 200-line cap and
 this class is the one that needed real measurement work. Every row here was
 observed live on 2026-09-28 against Qdrant ``master_skills`` (dim 2560,
-Qwen3-Embedding-4B) and every ``relevant_doc_ids`` entry was fetched by point
+Qwen3-Embedding-8B) and every ``relevant_doc_ids`` entry was fetched by point
 id and its text read before being written here. No id in this file is guessed.
 
 The class used to be a single ``ta-01`` row pointed at ``live_threats`` asking

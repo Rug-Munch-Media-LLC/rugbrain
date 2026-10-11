@@ -63,10 +63,10 @@ doc: the vector hybrid is what runs.
 ### 2.1 Hybrid vector + sparse (RAG collections)
 
 RugBrain's `search/engine.py` runs a **three-pillar hybrid**: dense
-(Qwen3-Embedding-4B 2560-dim via llama.cpp), sparse (in-memory Okapi BM25 over
+(Qwen3-Embedding-8B 2560-dim via llama.cpp), sparse (in-memory Okapi BM25 over
 `rugbrain.splade_bm25.BM25Index`), and entity lanes, fused with
 **reciprocal rank fusion (RRF)** then **MMR dedup**. Optional
-post-fusion: rerank (self-hosted Qwen3-Reranker-4B, ≤ 25 candidates), HyDE /
+post-fusion: rerank (self-hosted Qwen3-Reranker-8B, ≤ 25 candidates), HyDE /
 multi-query expansion, Redis query cache. Per-collection payload filters
 (chain, category, severity, verdict, address) narrow before scoring.
 

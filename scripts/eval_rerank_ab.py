@@ -1,7 +1,7 @@
 """eval_rerank_ab.py — does the reranker actually help? A/B on the golden set.
 
 The smoke eval measures the raw dense retrieval path; the production search
-also runs Qwen3-Reranker-4B over the candidates (local :8003, DeepInfra
+also runs Qwen3-Reranker-8B over the candidates (local :8003, DeepInfra
 hosted fallback). Without an A/B we cannot tell whether the rerank lane earns
 its latency.
 

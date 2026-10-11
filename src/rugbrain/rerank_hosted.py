@@ -1,13 +1,13 @@
 """Hosted DeepInfra rerank rung — the live lane for interactive rerank.
 
-DeepInfra hosts the SAME ``Qwen/Qwen3-Reranker-4B`` family as the local
+DeepInfra hosts the SAME ``Qwen/Qwen3-Reranker-8B`` family as the local
 llama.cpp server (:8003) and answers a full 20-40 doc pool in ~0.5-2s —
 where the CPU server needs 30s+ on 2000-char pools.  Policy (2026-09-14,
 fleet doctrine — see also contextcrypto rerank.py):
 
   * interactive/live rerank  -> hosted first, local fallback;
   * batch/deep/big-corpus    -> local first (free), hosted fallback;
-  * the local 4B remains the fallback everywhere and the primary lane for
+  * the local 8B remains the fallback everywhere and the primary lane for
     news ranking, deep/big-corpus analysis, alerts and KOL reranks.
 
 Set ``RERANK_HOSTED=0`` to disable the hosted rung entirely (local-only).
@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 
 RERANK_HOSTED_URL = os.getenv(
     "RERANK_HOSTED_URL",
-    "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-4B",
+    "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B",
 )
-RERANK_HOSTED_MODEL = os.getenv("RERANK_HOSTED_MODEL", "Qwen/Qwen3-Reranker-4B")
+RERANK_HOSTED_MODEL = os.getenv("RERANK_HOSTED_MODEL", "Qwen/Qwen3-Reranker-8B")
 RERANK_HOSTED_TIMEOUT = float(os.getenv("RERANK_HOSTED_TIMEOUT", "6.0"))
 RERANK_HOSTED_CAP = int(os.getenv("RERANK_HOSTED_CAP", "40"))
 _HOSTED_DOC_CHARS = int(os.getenv("RERANK_HOSTED_DOC_CHARS", "2000"))

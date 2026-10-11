@@ -14,9 +14,9 @@ here got 2560 and were refused by the store's dimension guard:
 The guard was right. This default was wrong.
 
 Retired generations, kept for reading, never written to by the canonical lane:
-  2560 = qwen3-embedding-4b  (retained base collections, no-overwrite rule)
+  2560 = the retired pre-8B generation  (retained base collections, no-overwrite rule)
   2048 = nemotron era
-  1024 = qwen3-embedding-0.6b (retired 2026-09-14)
+  1024 = the retired 0.6B generation (retired 2026-09-14)
 The Qwen3 models
 support Matryoshka Representation Learning: the first N dims of a larger
 embedding remain a valid smaller space after renormalization.
@@ -63,7 +63,7 @@ MODEL_DIMS: Final[dict[str, int]] = {
 # 2026-09-30: the 4B lane is RETIRED and must not be recreated.
 #
 # It used to sit in MODEL_DIMS as 2560 "still readable", which was the hole:
-# default_dim_for_model("qwen3-embedding-4b") returned 2560, so any code path
+# default_dim_for_model("qwen3-embedding-8b") returned 2560, so any code path
 # resolving its dimension from the model name — crypto_embeddings_pkg/config.py,
 # alerts/config.py — silently targeted the retired lane instead of failing. It
 # also made normalize_dims 4096 -> 2560 look legitimate rather than like the

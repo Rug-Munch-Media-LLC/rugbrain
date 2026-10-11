@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Re-embed Qdrant collections via DeepInfra Qwen3-Embedding-4B -> rmi-qdrant-v2 (:6334).
+"""Re-embed Qdrant collections via DeepInfra Qwen3-Embedding-8B -> rmi-qdrant-v2 (:6334).
 
 PURPOSE
 -------
 rmi-qdrant-v2 collections were wiped (a prior agent recreated them empty at
 2560-dim Cosine). This script re-seeds them from the source corpus and embeds
-with DeepInfra's Qwen/Qwen3-Embedding-4B — the SAME model (native 2560-dim)
+with DeepInfra's Qwen/Qwen3-Embedding-8B — the SAME model (native 2560-dim)
 as the local llama.cpp 4B, so the vectors are directly compatible with the
-existing collection config (matching dim_policy.MODEL_DIMS["qwen3-embedding-4b"]).
+existing collection config (matching dim_policy.MODEL_DIMS["qwen3-embedding-8b"]).
 
 WHY DeepInfra over local llama.cpp (:8004)
 ------------------------------------------
@@ -80,8 +80,8 @@ def _deepinfra_key() -> str:
 
 DEEPINFRA_API_KEY = _deepinfra_key()
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
-DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B")
-EMBED_DIM = int(os.getenv("EMBED_DIM", "2560"))  # Qwen3-Embedding-4B native (matches Qdrant)
+DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
+EMBED_DIM = int(os.getenv("EMBED_DIM", "2560"))  # Qwen3-Embedding-8B native (matches Qdrant)
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 DATA_DIR = Path(os.getenv("SEED_DATA_DIR", "/tmp/rag_seed"))
@@ -425,7 +425,7 @@ def estimate(n_points: int) -> None:
 
 # ── main ────────────────────────────────────────────────────────────────
 async def main() -> int:
-    ap = argparse.ArgumentParser(description="Re-embed Qdrant via DeepInfra Qwen3-Embedding-4B")
+    ap = argparse.ArgumentParser(description="Re-embed Qdrant via DeepInfra Qwen3-Embedding-8B")
     ap.add_argument("--manifest", help="JSONL corpus manifest")
     ap.add_argument("--source", choices=["seed-dumps"], help="pull from /tmp/rag_seed dumps")
     ap.add_argument("--collection", default="", help="restrict to one collection")

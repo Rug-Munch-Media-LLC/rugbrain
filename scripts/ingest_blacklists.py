@@ -11,7 +11,7 @@ entities:
   * PhishFort phishfort-lists       — counter-phishing domain lists
   * Phishing.Database               — generic phishing domains (capped)
 
-Each entity is embedded (2560-dim qwen3-embedding-4b) and upserted into ``scam_intel_v2``
+Each entity is embedded (2560-dim qwen3-embedding-8b) and upserted into ``scam_intel_v2``
 (the live curated scam-intelligence collection) with canonical metadata
 (entity_type, entity, labels, source, source_url), so the bot's scam/entity
 data reflects real-time blacklists. We deliberately do NOT write to
@@ -26,7 +26,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 
 Env knobs (no hardcoded credentials):
   - BLACKLIST_SOURCES       comma-separated feed keys to enable (default all)

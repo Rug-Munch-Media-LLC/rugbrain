@@ -1,6 +1,6 @@
 """Default-off, per-collection 8B canary routing.
 
-The canonical RugBrain path remains Qwen3-Embedding-4B at 2560 dimensions.
+The canonical RugBrain path remains Qwen3-Embedding-8B at 2560 dimensions.
 This module only enables an explicitly configured, read-only canary for
 collections that have a complete 4096-dimensional target. It does not change
 ingestion, global collection configuration, or the separate 8B migration.

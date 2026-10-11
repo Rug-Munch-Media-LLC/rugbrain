@@ -59,7 +59,7 @@ async def _apply_news_reranker(
     limit: int,
     use_reranker: bool,
 ) -> tuple[list[dict[str, Any]], bool, str | None]:
-    """News-lane cross-encoder reranking (Qwen3-Reranker-4B), graceful no-op."""
+    """News-lane cross-encoder reranking (Qwen3-Reranker-8B), graceful no-op."""
     reranker_applied = False
     reranker_method: str | None = None
     if use_reranker and fused:
@@ -67,7 +67,7 @@ async def _apply_news_reranker(
             r["similarity"] = r.get("rrf_score", 0.0)
         pre_rerank = len(fused)
 
-        # Self-hosted Qwen3-Reranker-4B (llama.cpp:8003) — true cross-encoder.
+        # Self-hosted Qwen3-Reranker-8B (llama.cpp:8003) — true cross-encoder.
         # Graceful no-op: falls back to raw retrieval order when the server
         # is unreachable (rerank_method="none", reranked=false).
         try:
@@ -82,9 +82,9 @@ async def _apply_news_reranker(
             if reranked and reranked[0].get("rerank_method", "none") != "none":
                 fused = reranked
                 reranker_applied = True
-                reranker_method = reranked[0].get("rerank_method", "qwen3-reranker-4b")
+                reranker_method = reranked[0].get("rerank_method", "qwen3-reranker-8b")
                 logger.info(
-                    "Cross-encoder (Qwen3-Reranker-4B) reranked: %d → %d results",
+                    "Cross-encoder (Qwen3-Reranker-8B) reranked: %d → %d results",
                     pre_rerank,
                     len(fused),
                 )

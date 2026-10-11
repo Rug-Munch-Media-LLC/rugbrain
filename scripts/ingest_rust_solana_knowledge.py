@@ -13,7 +13,7 @@ with documentation cloned from:
 
 Every point is tagged with coding metadata (ecosystem=solana,
 language=rust, knowledge_type, topic, source_url) and embedded with 2560-dim
-qwen3-embedding-4b. Deterministic point IDs → idempotent re-runs.
+qwen3-embedding-8b. Deterministic point IDs → idempotent re-runs.
 
 Usage:
     python scripts/ingest_rust_solana_knowledge.py --dry-run
@@ -22,7 +22,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

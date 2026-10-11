@@ -5,7 +5,7 @@ Split out of :mod:`rugbrain.token_budget` so that module stays a budget
 is, exactly, and how many characters to slice when the exact answer is
 unavailable.
 
-Qwen3-Embedding-4B and Qwen3-Reranker-4B share one tokenizer, so a count from
+Qwen3-Embedding-8B and Qwen3-Reranker-8B share one tokenizer, so a count from
 this module is valid for every consumer in RugBrain — embedding input,
 cross-encoder input, MCP result payloads, briefing prompts. There is no
 second definition anywhere in the codebase.
@@ -42,7 +42,7 @@ DENSITY_MAX: Final[float] = 0.8
 #: different revision without touching code.
 TOKENIZER_PATH_ENV = "RUGBRAIN_TOKENIZER"
 DEFAULT_TOKENIZER_PATH = (
-    "/root/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-4B/"
+    "/root/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-8B/"
     "snapshots/5cf2132abc99cad020ac570b19d031efec650f2b/tokenizer.json"
 )
 

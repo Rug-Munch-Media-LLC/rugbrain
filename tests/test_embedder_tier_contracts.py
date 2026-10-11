@@ -6,11 +6,11 @@ The box runs FOUR local models with strict job assignments:
     - qwen3-embedding-4B      :8004  native 2560-dim   (ALL stored vectors)
     - qwen3-reranker-4B       :8003  cross-encoder rerank
   SPEED tier (snappy answer pulls, near-dup, clustering, cache keys)
-    - qwen3-embedding-0.6B    :8007  1024-dim          (BOTH sides internal only)
+    - qwen3-embedding-8b    :8007  1024-dim          (BOTH sides internal only)
     - qwen3-reranker-0.6B     :8008  consumer rerank lane
 
 Cloud fallback ladder (embeddings, 2026-08-29 consolidation): DeepInfra
-(same qwen3-embedding-4b model ⇒ 2560-d index-compatible) → local :8004 →
+(same qwen3-embedding-8b model ⇒ 2560-d index-compatible) → local :8004 →
 fail LOUD (T04: no hash fallback). Gateway / OpenRouter / NIM are legacy
 lanes, explicit RAG_EMBED_BACKEND overrides only.
 Rerank ladder: fast (:8008) → deep (:8003) → original order (fail-open).
@@ -112,11 +112,14 @@ def test_near_dup_no_longer_pins_the_retired_tier():
 
 
 def test_rerank_lane_urls():
-    """fast lane = 0.6B :8008, deep lane/fallback = 4B :8003."""
+    """2026-10-11: no local llama.cpp rerank lane exists; hosted 8B chain only."""
     from rugbrain.search import rerank as rr
+    from rugbrain import rerank_lanes as rl
 
     assert not hasattr(rr, "RERANKER_URL_LIVE")
-    assert ":8003" in rr.RERANKER_URL
+    assert ":8003" not in rr.RERANKER_URL and ":8008" not in rr.RERANKER_URL
+    assert rl.MODEL == "Qwen/Qwen3-Reranker-8B"
+    assert set(rl.DEFAULT_ORDER) == {"siliconflow", "openrouter", "deepinfra"}
 
 
 def test_federated_route_documents_lanes():
@@ -130,40 +133,44 @@ def test_federated_route_documents_lanes():
 
 @pytest.mark.asyncio
 async def test_rerank_deep_tier_used_for_big_corpus(monkeypatch):
-    """deep lane calls the 4B endpoint, never the consumer one."""
+    """deep lane resolves through the HOSTED 8B chain (operator directive 2026-10-11)."""
     from rugbrain.search import rerank as rr
 
-    calls: list[str] = []
+    async def fake_hosted(query, valid, total):
+        return [0.9] * total, "qwen3-reranker-8b"
 
-    async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109
-        calls.append(url)
-        return [{"index": i, "relevance_score": 0.9} for i in range(len(docs))]
-
-    monkeypatch.setattr(rr, "_post_rerank", fake_post)
+    monkeypatch.setattr(rr, "_hosted_scores", fake_hosted)
     docs = [{"content": f"d{i}", "text": f"d{i}"} for i in range(5)]
-    await rr._score_candidates("q", docs, tier="deep")
-    assert calls and all(":8003" in u for u in calls), calls
+    scores, method = await rr._score_candidates("q", docs, tier="deep")
+    assert method == "qwen3-reranker-8b"
+    assert any(s > 0 for s in scores)
 
 
-@pytest.mark.asyncio
 async def test_rerank_live_lane_ladder_fast_then_deep(monkeypatch):
-    """live lane: 0.6B first; when it strains, ladder into the 4B — in order."""
+    """live lane: same hosted 8B chain; no dead local rungs remain."""
     from rugbrain.search import rerank as rr
 
-    calls: list[str] = []
+    async def fake_hosted(query, valid, total):
+        return [0.9] * total, "qwen3-reranker-8b"
 
-    async def fake_post(url, query, docs, timeout, label):  # noqa: ASYNC109
-        calls.append(url)
-        if ":8008" in url:
-            return None  # fast server strained
-        return [{"index": i, "relevance_score": 0.9} for i in range(len(docs))]
+    async def forbidden_local(*a, **k):  # noqa: ASYNC109
+        raise AssertionError("the local :8003 rung must not be called")
 
-    monkeypatch.setattr(rr, "_post_rerank", fake_post)
+    monkeypatch.setattr(rr, "_hosted_scores", fake_hosted)
+    monkeypatch.setattr(rr, "_post_rerank", forbidden_local)
     docs = [{"content": f"d{i}", "text": f"d{i}"} for i in range(5)]
     scores, method = await rr._score_candidates("q", docs, tier="live")
-    assert calls and all(":8003" in u for u in calls), calls
-    assert method == "qwen3-reranker-4b"
+    assert method == "qwen3-reranker-8b"
     assert any(s > 0 for s in scores)
+
+
+def test_no_local_rerank_rung_in_source():
+    """The dead local :8003 rung is gone from _score_candidates entirely."""
+    src = (
+        Path(__file__).resolve().parents[1] / "src/rugbrain/search/rerank.py"
+    ).read_text()
+    assert "_post_rerank(\n            RERANKER_URL" not in src
+    assert "8B ONLY" in src
 
 
 # ── Embed fallback ladder ORDER (auto mode) ─────────────────────────────────
@@ -303,7 +310,7 @@ async def test_live_four_local_models_alive_and_wired():
     await probe(
         "deep-embed :8004",
         "http://127.0.0.1:8004/v1/embeddings",
-        {"model": "qwen3-embedding-4b", "input": ["tier smoke"]},
+        {"model": "qwen3-embedding-8b", "input": ["tier smoke"]},
         lambda d: (lambda n: n == 2560 or failures.append(f"deep-embed dim {n} != 2560"))(
             len(d["data"][0]["embedding"])
         ),

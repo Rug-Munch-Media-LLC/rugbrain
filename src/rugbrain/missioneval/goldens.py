@@ -13,7 +13,7 @@ This package measures crime competence with **graded** labels:
    ``partial_terms`` for right-family credit. Surfacing "some reentrancy PoC"
    is not the same as surfacing the exact incident, and the score says so.
 2. **Corpus-verified.** Every ``relevant_doc_ids`` entry was observed live in
-   Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-4B) — see each row's
+   Qdrant on 2026-09-28 (dim 2560, Qwen3-Embedding-8B) — see each row's
    ``provenance_note``. No row claims a gold doc we have not seen.
 3. **Mission-shaped.** Seven job classes matching the mandate: ``rug_history``,
    ``scam_detection``, ``exploit_knowledge``, ``news``, ``market``,

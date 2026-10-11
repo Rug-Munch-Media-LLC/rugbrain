@@ -41,7 +41,7 @@ visible until they are deleted. **The check has not been weakened to go green.**
 generation across 34 files. The most important single finding:
 
 ```
-scripts/embed_lane.py:48   # Canonical dim — qwen3-embedding-4b native, same local and hosted.
+scripts/embed_lane.py:48   # Canonical dim — qwen3-embedding-8b native, same local and hosted.
 scripts/embed_lane.py:49   EMBED_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "2560")
 ```
 
@@ -93,7 +93,7 @@ A stale comment breaks nothing at runtime, so it does not fail the gate. But a
 **docstring that asserts something untrue is contract**, and it misleads the
 next reader into reinstating exactly the default this gate forbids. 115 prose
 claims are currently reported, including `embed_lane.py:48` ("Canonical dim —
-qwen3-embedding-4b native") sitting directly above the bug.
+qwen3-embedding-8b native") sitting directly above the bug.
 
 ## The Qdrant shape that caused the earlier false alarm
 

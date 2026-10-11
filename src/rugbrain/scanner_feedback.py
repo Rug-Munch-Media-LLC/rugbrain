@@ -9,7 +9,7 @@ discovering similar tokens. Provides a bidirectional feedback channel:
       → POST /api/v1/feedback/scam-confirmed    (mark confirmed scam)
       ← GET  /api/v1/similar/{address}           (vector similarity search)
 
-All embeddings use the existing Qwen3-Embedding-4B pipeline via
+All embeddings use the existing Qwen3-Embedding-8B pipeline via
 ``rugbrain.embeddings.get_embedding()`` so the feedback collection shares
 the same 1024-dim vector space as the main threat_intel_v2 collection.
 """

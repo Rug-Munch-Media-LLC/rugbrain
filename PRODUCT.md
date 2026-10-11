@@ -14,8 +14,8 @@ RMI needs long-term, queryable memory of threats, scams, labels, and forensic in
 
 ## Scope
 - Qdrant collection definitions and configs
-- Embedding model config: **ONE stack** — `Qwen/Qwen3-Embedding-4B` (2560d,
-  DeepInfra + local llama.cpp `:8004`) and `Qwen/Qwen3-Reranker-4B` (`:8003` +
+- Embedding model config: **ONE stack** — `Qwen/Qwen3-Embedding-8B` (2560d,
+  DeepInfra + local llama.cpp `:8004`) and `Qwen/Qwen3-Reranker-8B` (`:8003` +
   DeepInfra). No BGE/OpenAI/Cohere embedding configs.
 - Ingestion scripts from Ponder, Pry, and APIs
 - RAG query helpers

@@ -36,7 +36,7 @@ if [ ! -x "$PYTHON" ]; then
   PYTHON=python3
 fi
 
-# Bulk lane: DeepInfra Qwen3-Embedding-4B (same 2560-dim space as the local
+# Bulk lane: DeepInfra Qwen3-Embedding-8B (same 2560-dim space as the local
 # server; ~80x faster). Keeps heavy ingestion off the CPU-capped local
 # llama.cpp process — see rugbrain/scripts/embed_lane.py.
 export EMBED_PROVIDER="${EMBED_PROVIDER:-deepinfra}"

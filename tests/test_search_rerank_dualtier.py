@@ -1,9 +1,9 @@
-"""RugBrain rerank lane contracts (hosted live lane -> local 4B).
+"""RugBrain rerank lane contracts (hosted live lane -> local 8B).
 
 Offline: _post_rerank stubbed. Contracts:
 
-* live tier caps candidates and serves from the local 4B; hosted tried first
-* hosted unavailable -> local 4B serves (capped); 0.6B tier retired 2026-09-14
+* live tier caps candidates and serves from the local 8B; hosted tried first
+* hosted unavailable -> local 8B serves (capped); 0.6B tier retired 2026-09-14
 * all lanes down -> ([], "none") fail-open
 * strain breaker skips a failing endpoint entirely after threshold
 * deep tier (default) unchanged single-shot behavior
@@ -40,7 +40,7 @@ async def test_live_tier_serves_from_the_local_4b(monkeypatch):
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
     docs = [{"content": f"d{i}"} for i in range(100)]
     scores, method = await rr._score_candidates("rug", docs, tier="live")
-    assert method == "qwen3-reranker-4b"
+    assert method == "qwen3-reranker-8b"
     assert calls[0][0] == rr.RERANKER_URL
     assert calls[0][1] == min(rr.LIVE_CANDIDATE_CAP, rr.DEEP_FALLBACK_CAP)
     assert len(scores) == len(docs)  # full score vector preserved
@@ -48,7 +48,7 @@ async def test_live_tier_serves_from_the_local_4b(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_live_ladder_hosted_then_local(monkeypatch):
-    """Hosted rung tried first (the 0.6B replacement); local 4B serves on failure."""
+    """Hosted rung tried first (the 0.6B replacement); local 8B serves on failure."""
     monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
 
     async def fake_hosted(query, docs, top_n=0, **kw):
@@ -64,7 +64,7 @@ async def test_live_ladder_hosted_then_local(monkeypatch):
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
     docs = [{"content": f"doc{i}"} for i in range(60)]
     scores, method = await rr._score_candidates("q", docs, tier="live")
-    assert method == "qwen3-reranker-4b"
+    assert method == "qwen3-reranker-8b"
     assert calls[0][0] == rr.RERANKER_URL
     assert calls[0][1] == min(rr.LIVE_CANDIDATE_CAP, rr.DEEP_FALLBACK_CAP)
     assert any(s > 0 for s in scores)
@@ -90,7 +90,7 @@ async def test_deep_default_single_shot(monkeypatch):
 
     monkeypatch.setattr(rr, "_post_rerank", fake_post)
     out = await rr._score_candidates("q", [{"content": "a"}], tier="deep")
-    assert out[1] == "qwen3-reranker-4b"
+    assert out[1] == "qwen3-reranker-8b"
     assert calls == [rr.RERANKER_URL]
 
 

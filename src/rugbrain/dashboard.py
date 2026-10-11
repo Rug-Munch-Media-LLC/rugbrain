@@ -51,7 +51,7 @@ async def _analyze(text: str) -> list[dict[str, Any]]:
 
 
 st.title("🧠 rugbrain Intelligence Dashboard")
-st.markdown("Crypto Intelligence RAG — Qdrant · Qwen3-4B · Presidio PII · Multi-hop")
+st.markdown("Crypto Intelligence RAG — Qdrant · Qwen3-8B · Presidio PII · Multi-hop")
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [

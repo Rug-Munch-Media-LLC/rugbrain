@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent, READ-ONLY verifier for the Qwen3-4B/2560 elimination.
+"""Independent, READ-ONLY verifier for the Qwen3-8B/2560 elimination.
 
 This script deliberately imports NOTHING from the rugbrain package: no lane
 resolver, no dim policy, no ingest code, no qdrant_client models. It derives

@@ -107,7 +107,7 @@ async def test_scores_mapped_back_to_original_indices(monkeypatch):
     )
     monkeypatch.setattr(rr.httpx, "AsyncClient", lambda **k: FakeClient(resp))
     scores, method = await rr._score_candidates("rug", candidates)
-    assert method == "qwen3-reranker-4b"
+    assert method == "qwen3-reranker-8b"
     assert len(scores) == 3
     assert scores[0] == pytest.approx(0.9)  # original index 0
     assert scores[1] == 0.0  # empty doc keeps neutral slot

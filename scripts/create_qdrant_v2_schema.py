@@ -1,8 +1,8 @@
 """Create the Qwen3 (2560-dim) collection schema on rmi-qdrant-v2 (:6334).
 
 Mirrors the legacy rmi-qdrant (:6333) collection list — same names, same
-payload settings — but with dense vectors at 2560 dims (Qwen3-Embedding-4B)
-instead of 1024 (qwen3-4b, now 2560 Qwen3-4B). Sparse bm25 vectors and HNSW settings are carried
+payload settings — but with dense vectors at 2560 dims (Qwen3-Embedding-8B)
+instead of 1024 (pre-2560 era, now 4096 Qwen3-8B). Sparse bm25 vectors and HNSW settings are carried
 over from the legacy config where present.
 
 Usage:

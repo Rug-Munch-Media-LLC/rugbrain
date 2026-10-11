@@ -5,7 +5,7 @@ Embedding provider classes — facade over :mod:`rugbrain.embedder_providers`.
 One job per module; this file only re-exports so every existing caller
 (``from rugbrain.qwen_embedders import Qwen3Embedder``) keeps working:
 
-* :mod:`~rugbrain.embedder_providers.qwen3` — Qwen3-Embedding-4B, the
+* :mod:`~rugbrain.embedder_providers.qwen3` — Qwen3-Embedding-8B, the
   canonical corpus lane (DeepInfra hosted primary, llama.cpp local fallback).
 * :mod:`~rugbrain.embedder_providers.external` — OpenRouter + HuggingFace
   fallbacks (different dim; never used to write corpus vectors).

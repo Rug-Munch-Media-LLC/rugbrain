@@ -25,7 +25,7 @@ Queries the ``threat_intel_v2`` collection (populated in real-time by the
 scanner subscriber) for tokens that match the query by semantic similarity.
 
 When ``rerank=true``, the top-20 candidates from vector search are scored
-by the self-hosted Qwen3-Reranker-4B cross-encoder and re-sorted before truncating
+by the self-hosted Qwen3-Reranker-8B cross-encoder and re-sorted before truncating
 to ``limit``. If the reranker backend is unavailable, results fall back
 to the original vector ranking (search never breaks).
 
@@ -61,7 +61,7 @@ class SearchParams:
     rerank: bool = Query(
         default=False,
         description=(
-            "Rerank top-20 candidates with the self-hosted Qwen3-Reranker-4B cross-encoder"
+            "Rerank top-20 candidates with the self-hosted Qwen3-Reranker-8B cross-encoder"
         ),
     )
     filter_severity: str | None = Query(

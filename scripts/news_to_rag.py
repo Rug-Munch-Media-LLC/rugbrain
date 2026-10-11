@@ -3,7 +3,7 @@
 
 Reads `news_items` from Postgres (populated by rmi-backend RSS ingest),
 chunks each article into 500-char sliding windows with 50-char overlap,
-embeds every chunk with Qwen3-4B (2560-dim) via llama.cpp `/embeddings`,
+embeds every chunk with Qwen3-8B (2560-dim) via llama.cpp `/embeddings`,
 and upserts the vectors into the Qdrant `news` collection with payload
 metadata: title, source, url, published_at, category, sentiment.
 
@@ -37,7 +37,7 @@ Env (defaults target the docker-compose service names):
   POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
   QDRANT_URL   (default http://127.0.0.1:6334, falls back to 127.0.0.1)
   EMBEDDER_URL (default http://127.0.0.1:8004/v1, falls back to 127.0.0.1)
-  RAG_EMBED_MODEL (default qwen3-embedding-4b)
+  RAG_EMBED_MODEL (default qwen3-embedding-8b)
 """
 
 from __future__ import annotations
@@ -218,7 +218,7 @@ async def _embed_batch(
 ) -> list[list[float]] | None:
     """Embed a list of texts on the bulk lane. Returns None on failure.
 
-    DeepInfra-first (same Qwen3-Embedding-4B as the local server, ~80x
+    DeepInfra-first (same Qwen3-Embedding-8B as the local server, ~80x
     faster); the passed ``base``/``model`` apply on the local lane. See
     scripts/embed_lane.py for the provider policy.
     """
@@ -634,7 +634,7 @@ def main() -> None:
         default=int(os.getenv("NEWS_TO_RAG_MAX_CHUNKS", "4096")),
         help="max chunks per run (default 4096; 0 = unlimited)",
     )
-    parser.add_argument("--model", default=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b"))
+    parser.add_argument("--model", default=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"))
     parser.add_argument(
         "--oldest-first",
         action="store_true",

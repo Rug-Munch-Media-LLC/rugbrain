@@ -88,7 +88,7 @@ def _env_bool(name: str, default: bool) -> bool:
 
 # Reranking is ON by default on the main search entry points: the top
 # ``rerank_top_k`` fused candidates are re-scored with the self-hosted Qwen3 cross-encoder
-# (Qwen3-Reranker-4B) before truncation. The search-lane reranker degrades
+# (Qwen3-Reranker-8B) before truncation. The search-lane reranker degrades
 # gracefully — when no model backend is installed, or scoring takes longer
 # than ``rerank_timeout``, results fall back to their original retrieval
 # order with ``rerank_method="none"`` / ``reranked=false`` — a request never

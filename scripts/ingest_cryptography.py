@@ -16,7 +16,7 @@ collection from ``cryptography_knowledge_data.py``, covering:
   * Post-quantum                — lattice-based (Kyber/Dilithium),
                                    hash-based (XMSS/LMS/SPHINCS+), Shor
 
-Each entry is embedded (2560-dim qwen3-embedding-4b) and upserted with canonical
+Each entry is embedded (2560-dim qwen3-embedding-8b) and upserted with canonical
 metadata (category, knowledge_type, source, references). Point IDs are
 deterministic UUIDv5 from content hashes → idempotent re-runs.
 
@@ -27,7 +27,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

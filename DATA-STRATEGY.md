@@ -2,12 +2,12 @@
 
 > ⚠️ **STACK CORRECTION (2026-09-20):** the embedding stack described below as
 > "BGE-M3 via Ollama" is **obsolete**. The live stack — identical to
-> rmi-codebase-mcp — is **`Qwen/Qwen3-Embedding-4B` (2560d)**: DeepInfra
+> rmi-codebase-mcp — is **`Qwen/Qwen3-Embedding-8B` (2560d)**: DeepInfra
 > (canonical primary) + local llama.cpp `:8004` (same model, index-compatible
-> fallback). Reranking is **live** (`Qwen/Qwen3-Reranker-4B`, local `:8003` +
+> fallback). Reranking is **live** (`Qwen/Qwen3-Reranker-8B`, local `:8003` +
 > DeepInfra hosted); the 0.6B rerank tier retired 2026-09-14. Ollama is not in
 > the embed/rerank path. Wherever this doc says "BGE-M3" or "Ollama
-> `/api/embed`", read Qwen3-Embedding-4B via llama.cpp/DeepInfra.
+> `/api/embed`", read Qwen3-Embedding-8B via llama.cpp/DeepInfra.
 
 
 **Status:** implementation spec (v1) · **Owner:** crmuncher · **Date:** 2026-08-01 · **Repo:** `RugMunchMedia/rugbrain`
@@ -42,7 +42,7 @@
                                            ▼
                     ┌─────────────────────────────────────────────┐
                     │  Qdrant (rmi-qdrant:6333) · Redis (indicator │
-                    │  sets + doc cache) · Qwen3-Embedding-4B 2560d │
+                    │  sets + doc cache) · Qwen3-Embedding-8B 2560d │
                     └──────────────────────┬──────────────────────┘
                                            ▼
                     ┌─────────────────────────────────────────────┐
@@ -52,7 +52,7 @@
 ```
 
 **Non-negotiables** (inherited from ARCHITECTURE-V2.md, binding):
-1. ONE embedding stack: Qwen3-Embedding-4B (2560d) — llama.cpp `:8004` + DeepInfra (same model). No `sentence-transformers`/`torch` in any ingest path (the local model in `scripts/ingest_threats.py` is the anti-pattern; that script is superseded).
+1. ONE embedding stack: Qwen3-Embedding-8B (2560d) — llama.cpp `:8004` + DeepInfra (same model). No `sentence-transformers`/`torch` in any ingest path (the local model in `scripts/ingest_threats.py` is the anti-pattern; that script is superseded).
 2. ONE store: Qdrant. No ChromaDB, no numpy ANN, no Redis vectors.
 3. ONE search path: dense + keyword + RRF (`retrieval.py` per v2). The fake `splade_bm25.py` and fake `cross_encoder.py` must NOT be extended; they are slated for deletion by v2.
 4. Idempotent by construction: deterministic UUIDv5 doc IDs + `content_hash`; reruns insert nothing new.
@@ -68,9 +68,9 @@ The original brief targets ~130K documents. The single most important design dec
 | Layer | What | Size | Embedding needed? |
 |---|---|---|---|
 | **Indicators** | phishing domains, scam addresses (exact-match keys) | ~113K | **NO** — cosine similarity between two domains is noise. Keyword (sparse) vector only, ~1–5 non-zero terms each. |
-| **Knowledge** | SWC weaknesses, PoC writeups, hack reports, patterns | ~2K | **YES** — 2560d Qwen3-Embedding-4B dense + BM25 sparse |
+| **Knowledge** | SWC weaknesses, PoC writeups, hack reports, patterns | ~2K | **YES** — 2560d Qwen3-Embedding-8B dense + BM25 sparse |
 
-Embedding math (measured 2026-07-31 calibration, 4-CPU Ollama, qwen3-embedding-4b):
+Embedding math (measured 2026-07-31 calibration, 4-CPU Ollama, qwen3-embedding-8b):
 - Short text (≤600 chars): batch 20 → ~3.5s/doc
 - Long text: batch 8
 - **~2,000 knowledge docs ≈ 1–2 hours one-time.** Ongoing (weekly) adds are tens of docs.
@@ -134,7 +134,7 @@ This is what keeps "most knowledgeable in existence" and "doesn't bog down the s
 
 ### 4.2 Knowledge layer (`threat_intel`, `hacks`) — dense + sparse
 - Doc per weakness / PoC / hack report / pattern.
-- Vector: dense 2560d Qwen3-Embedding-4B (L2-normalized, llama.cpp `:8004` / DeepInfra, existing batch helper `_embed_batch`: 20 short / 8 long) **+** BM25 sparse.
+- Vector: dense 2560d Qwen3-Embedding-8B (L2-normalized, llama.cpp `:8004` / DeepInfra, existing batch helper `_embed_batch`: 20 short / 8 long) **+** BM25 sparse.
 - Chunking: reuse `_chunk_text` (2000 chars, 100 overlap) from `seed_qdrant_collections.py` for articles >2000 chars; Solidity PoCs use `src/rugbrain/solidity_chunker.py`. Chunks share `parent_doc_id` + `chunk_index` in payload.
 
 ---
@@ -195,7 +195,7 @@ System fields (all collections):
 | `content_hash` | string | yes | sha256 of normalized content → dedup key |
 | `schema_version` | int | yes | `1` for this strategy |
 | `ingested_at` | ISO-8601 | yes | |
-| `embedding_model` | string | yes | `qwen3-embedding-4b` |
+| `embedding_model` | string | yes | `qwen3-embedding-8b` |
 | `source` | string | yes | `rekt_news`, `defihacklabs`, `swc`, `slowmist`, `scamsniffer`, `metamask`, … |
 | `source_url` | string | no | |
 | `collection` | string | yes | existing convention |
@@ -271,14 +271,14 @@ Contract (implementer's choice of internals; must satisfy):
 - Never calls Ollama.
 
 ### 8.2 Retrieval path (per v2: dense + keyword + RRF)
-1. Dense: `dense` vector search on Qwen3-Embedding-4B query embedding, top-K (K=64).
+1. Dense: `dense` vector search on Qwen3-Embedding-8B query embedding, top-K (K=64).
 2. Sparse: `sparse` vector search (Qdrant native sparse index) with the same query, top-K.
 3. Fusion: Reciprocal Rank Fusion (k=60 — reuse logic from `rrf_fusion.py`, folded into `retrieval.py` per v2) → top-N.
 4. Filtering: payload filters from structured query (severity, attack_vector, amount_lost_usd range, date range, chain, ecosystem, protocol) applied as `must` clauses (existing `search/filters.py` pattern).
 5. Optional stage: LLM-based re-rank on top-5 for chat answers (already possible via API); no local cross-encoder.
 
 ### 8.3 Reranker (P2, optional, `[decision]`)
-The existing `cross_encoder.py` is a fake (bi-encoder cosine) and must NOT be used. **Status 2026-09-20: a real reranker is LIVE** — `Qwen/Qwen3-Reranker-4B` (Q8_0) self-hosted via llama.cpp `:8003` (`qwen-reranker.service`) plus the DeepInfra hosted lane (same model), wired through `reranker.py` + `rerank_hosted.py`. The 0.6B rerank tier retired 2026-09-14. RRF + payload filters remain the baseline; the reranker is the quality lane on top.
+The existing `cross_encoder.py` is a fake (bi-encoder cosine) and must NOT be used. **Status 2026-09-20: a real reranker is LIVE** — `Qwen/Qwen3-Reranker-8B` (Q8_0) self-hosted via llama.cpp `:8003` (`qwen-reranker.service`) plus the DeepInfra hosted lane (same model), wired through `reranker.py` + `rerank_hosted.py`. The 0.6B rerank tier retired 2026-09-14. RRF + payload filters remain the baseline; the reranker is the quality lane on top.
 
 ---
 
@@ -389,7 +389,7 @@ Total: ~8 steps, all S–M. No new services. No new MCPs.
 | Source fetch 404/timeout | Fail-soft: staged cache fallback; 0 docs from that source; exit 0 with warning |
 | Ollama down / embed timeout | Skip batch, log, exit non-zero but **no partial payload corruption** (batch-level skip, existing pattern); next run retries idempotently |
 | GitHub API rate limit | Never used for bulk: shallow `git clone`/`git pull` + `raw.githubusercontent.com` instead |
-| Ollama OOM | Batch sizes stay at 20 short / 8 long; single qwen3-embedding-4b model; never run local `sentence-transformers` |
+| Ollama OOM | Batch sizes stay at 20 short / 8 long; single qwen3-embedding-8b model; never run local `sentence-transformers` |
 | Timer overlap | `flock -n` everywhere |
 | Duplicate/updated content | `content_hash` + deterministic doc_id upsert (newest wins) |
 | Permanence key missing | Script refuses to run (fail-closed) and alerts; never writes plaintext snapshots by default (`--no-encrypt` exists for staging only) |

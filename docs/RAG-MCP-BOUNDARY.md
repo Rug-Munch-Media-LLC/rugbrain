@@ -15,9 +15,9 @@ options — so the merge/duplication question is decided on facts.
 | Layer | Reality (2026-09-20, verified against code + live Qdrant) |
 |---|---|
 | Vector store | **ONE** Qdrant instance (`rmi-qdrant-v2`; container :6333, host :6334). 41 collections. |
-| Embedder | **ONE** stack, both systems identical: **`Qwen/Qwen3-Embedding-4B` (2560d)** — DeepInfra (canonical primary) + local llama.cpp `:8004` (same model ⇒ index-compatible fallback). Locked doctrine 2026-08-29. |
+| Embedder | **ONE** stack, both systems identical: **`Qwen/Qwen3-Embedding-8B` (2560d)** — DeepInfra (canonical primary) + local llama.cpp `:8004` (same model ⇒ index-compatible fallback). Locked doctrine 2026-08-29. |
 | Vector space | **Identical** — every collection measured at 2560d (MCP *and* RAG), incl. named sparse vectors on `codebase_reference_v2` + `rag_documents`. |
-| Reranker | **`Qwen/Qwen3-Reranker-4B`** — local llama.cpp `:8003` + DeepInfra hosted (`/v1/inference/Qwen/Qwen3-Reranker-4B`), same family both lanes. 0.6B tier retired 2026-09-14. |
+| Reranker | **`Qwen/Qwen3-Reranker-8B`** — local llama.cpp `:8003` + DeepInfra hosted (`/v1/inference/Qwen/Qwen3-Reranker-8B`), same family both lanes. 0.6B tier retired 2026-09-14. |
 | Legacy lanes | gateway `:8010` / OpenRouter / NVIDIA NIM — explicit `RAG_EMBED_BACKEND` overrides only, not in the default path. |
 
 > **Doc-drift warning (fixed 2026-09-20):** `DATA-STRATEGY.md` described an

@@ -2,7 +2,7 @@
 
 Covers the 2026-08-29 embed consolidation:
 - embed() walks the EMBED_CHAINS provider chain — DeepInfra primary,
-  local :8004 fallback for the canonical qwen4b space — and does NOT
+  local :8004 fallback for the canonical qwen8b space — and does NOT
   fall back across model families
 - RAG_QUERY_REMOTE_FALLBACK=0 strips remote lanes to a fully-local chain
 - landscape() reads ACTUAL dims from qdrant, infers backends, flags
@@ -24,14 +24,14 @@ def me() -> MultiEmbedder:
 
 
 class TestEmbedChains:
-    def test_qwen4b_chain_is_deepinfra_then_local(self):
+    def test_qwen8b_chain_is_deepinfra_then_local(self):
         """Canonical 2560 space: DeepInfra primary, local :8004 fallback."""
-        chain = EMBED_CHAINS["qwen4b"]
-        assert chain == ("deepinfra", "qwen4b")
+        chain = EMBED_CHAINS["qwen8b"]
+        assert chain == ("deepinfra", "qwen8b")
 
     def test_deepinfra_alias_chain(self):
         """Backend-name lookups resolve to the same canonical chain."""
-        assert EMBED_CHAINS["deepinfra"] == ("deepinfra", "qwen4b")
+        assert EMBED_CHAINS["deepinfra"] == ("deepinfra", "qwen8b")
 
     def test_same_space_fallbacks_alias(self):
         """Deprecated pre-2026-08-29 name must keep pointing at EMBED_CHAINS."""
@@ -43,8 +43,8 @@ class TestEmbedChains:
         assert "qwen06b" not in EMBED_CHAINS
 
     def test_deepinfra_is_same_model_as_local(self, me: MultiEmbedder):
-        """The remote primary must serve the SAME model as local qwen4b."""
-        local = me.backends["qwen4b"]
+        """The remote primary must serve the SAME model as local qwen8b."""
+        local = me.backends["qwen8b"]
         remote = me.backends["deepinfra"]
         assert local.model.split("/")[-1].lower() == remote.model.split("/")[-1].lower()
         assert remote.dim == local.dim
@@ -60,9 +60,9 @@ class TestEmbedChains:
             return [0.1] * be.dim
 
         with patch.object(me, "_embed_once", side_effect=fake_once):
-            vec = await me.embed("query", "qwen4b")
-        assert calls == ["deepinfra", "qwen4b"]
-        assert len(vec) == me.backends["qwen4b"].dim
+            vec = await me.embed("query", "qwen8b")
+        assert calls == ["deepinfra", "qwen8b"]
+        assert len(vec) == me.backends["qwen8b"].dim
 
     @pytest.mark.asyncio
     async def test_embed_strips_remote_lanes_when_disabled(self, me: MultiEmbedder):
@@ -77,8 +77,8 @@ class TestEmbedChains:
             patch.dict("os.environ", {"RAG_QUERY_REMOTE_FALLBACK": "0"}),
             patch.object(me, "_embed_once", side_effect=fake_once),
         ):
-            await me.embed("query", "qwen4b")
-        assert calls == ["qwen4b"]
+            await me.embed("query", "qwen8b")
+        assert calls == ["qwen8b"]
 
     @pytest.mark.asyncio
     async def test_embed_disabled_fallback_raises(self, me: MultiEmbedder):
@@ -90,7 +90,7 @@ class TestEmbedChains:
             patch.object(me, "_embed_once", side_effect=fake_once),
             pytest.raises(RuntimeError, match="all embed backends failed"),
         ):
-            await me.embed("query", "qwen4b")
+            await me.embed("query", "qwen8b")
 
     @pytest.mark.asyncio
     async def test_embed_no_fallback_on_success(self, me: MultiEmbedder):
@@ -101,7 +101,7 @@ class TestEmbedChains:
             return [0.2] * be.dim
 
         with patch.object(me, "_embed_once", side_effect=fake_once):
-            await me.embed("query", "qwen4b")
+            await me.embed("query", "qwen8b")
         assert calls == ["deepinfra"]
 
 
@@ -147,7 +147,7 @@ class TestLandscape:
         w = out["instances"]["http://qdrant-test:6333"]["wallet_v2"]
         n = out["instances"]["http://qdrant-test:6333"]["news_v2_i"]
         assert w["dim"] == 2560
-        assert w["inferred_backend"] == "qwen4b"
+        assert w["inferred_backend"] == "qwen8b"
         assert n["dim"] == 2048
         assert n["inferred_backend"] == "nemotron"
         # Dim-driven resolution (2026-08-25): landscape seeds the actual dim
@@ -215,7 +215,7 @@ class TestDimDrivenResolution:
         assert me._dim_cache["wallet_v2"] == 2560
         assert me._dim_cache["unknown_coll"] is None
         be, _ = me.backend_for("wallet_v2")
-        assert be.name == "qwen4b"
+        assert be.name == "qwen8b"
 
     def test_qdrant_urls_accept_host_and_container_rest_ports(self):
         """REST probe list: container :6333 + host :6334 both allowed

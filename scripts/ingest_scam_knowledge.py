@@ -40,7 +40,7 @@ Usage:
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
   - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with the embed
-    model from RAG_EMBED_MODEL (default qwen3-embedding-4b, 2560-dim)
+    model from RAG_EMBED_MODEL (default qwen3-embedding-8b, 2560-dim)
   - git, httpx, numpy, yaml (PyYAML)
 """
 
@@ -80,8 +80,8 @@ logger = logging.getLogger("ingest_scam_knowledge")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
-# Canonical corpus dim: qwen3-embedding-4b is 2560-dim natively, both
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
+# Canonical corpus dim: qwen3-embedding-8b is 2560-dim natively, both
 # locally (:8004) and on DeepInfra. The old 1024 default rejected every
 # vector and looped forever on embed_missing (fixed 2026-09-14).
 EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "2560")

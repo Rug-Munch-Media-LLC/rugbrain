@@ -3,7 +3,7 @@
 Kept as a script-shaped module (not a class) so it can be called from the
 build pipeline, the tests, and a one-off operator run identically.
 
-The dim-2560 default matches the rest of the corpus (Qwen3-Embedding-4B, dim
+The dim-2560 default matches the rest of the corpus (Qwen3-Embedding-8B, dim
 2560 per ``missioneval.golden_cases`` provenance notes); it is a parameter so a
 smoke test on a scratch collection need not embed anything real.
 """

@@ -112,17 +112,17 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - HF_HOME=/opt/hf-cache
-      - QWEN_EMBED_URL=http://172.18.0.1:8004/v1
+      # local 4B llama.cpp lane RETIRED 2026-10-11 — DeepInfra 8B canonical only
       # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
       - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
-      # Embedding provider (qwen3-embedding-4b, 2560d): EMBED_PROVIDER=local
-      # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-4B,
+      # Embedding provider (qwen3-embedding-8b, 2560d): EMBED_PROVIDER=local
+      # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-8B,
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
       - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
-      - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-4B}
-      - RERANKER_URL=http://172.22.0.1:8003
+      - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-8B}
+      # local :8003 rerank lane RETIRED 2026-10-11 — hosted Qwen3-Reranker-8B only
       - RERANKER_TIMEOUT=30
       - PRESIDIO_URL=http://presidio:8090
       # DuckDB query endpoint (/api/v1/rag/query) — B2 permanence snapshots.
@@ -179,7 +179,7 @@ services:
       - OTEL_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://rmi-otel-collector:4317
       - HF_HOME=/opt/hf-cache
-      - QWEN_EMBED_URL=http://172.18.0.1:8004/v1
+      # local 4B llama.cpp lane RETIRED 2026-10-11 — DeepInfra 8B canonical only
       # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
       - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
       # Embedding provider — see rag-api service for semantics.
@@ -187,7 +187,7 @@ services:
       # ~80x faster) so heavy ingestion never saturates the local server.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-deepinfra}
       - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
-      - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-4B}
+      - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-8B}
     volumes:
       - /path/to/hf-cache:/opt/hf-cache:ro
     command: python scripts/ingest_threats.py

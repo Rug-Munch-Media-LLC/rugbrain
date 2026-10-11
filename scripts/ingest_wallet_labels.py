@@ -17,7 +17,7 @@ Strategy:
     per-type cap so common entities are recognizable without flooding.
   * Deterministic UUIDv5 IDs from content → idempotent re-runs.
 
-Collection ``wallet_v2`` uses named dense (2560-dim qwen3-embedding-4b) + ``bm25``
+Collection ``wallet_v2`` uses named dense (2560-dim qwen3-embedding-8b) + ``bm25``
 sparse vectors; ``QdrantVectorStore.insert`` handles both automatically.
 
 Usage:
@@ -28,7 +28,7 @@ Usage:
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
   - at DEEPINFRA_EMBED_URL with Qwen/Qwen3-Embedding-8B (SiliconFlow as backup).
-    The local :8004 lane serves qwen3-embedding-4b and CANNOT produce 4096-dim.
+    The local :8004 lane serves qwen3-embedding-8b and CANNOT produce 4096-dim.
 """
 
 from __future__ import annotations

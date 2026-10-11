@@ -3,7 +3,7 @@
 Seed all empty Qdrant collections with real free data.
 ========================================================
 
-Collections seeded (all 2560-dim Cosine, qwen3-embedding-4b embedder):
+Collections seeded (all 2560-dim Cosine, qwen3-embedding-8b embedder):
   - scam_intel:       ScamSniffer + Etherscan phish CSVs + curated patterns (100+)
   - scanner:          Postgres new_pairs + scan_results + scan_reports
   - news:             Postgres news_items (1,000 most recent) (500+)
@@ -24,7 +24,7 @@ Data inputs (all FREE):
      etherscan_combined_labels.csv
   5. arXiv API (export.arxiv.org) — free, no key
 
-Embedding: qwen3-embedding-4b via ``/embeddings`` (2560-dim), L2-normalized,
+Embedding: qwen3-embedding-8b via ``/embeddings`` (2560-dim), L2-normalized,
 batched (20 short / 8 long) to maximize CPU throughput. Point IDs are
 deterministic UUIDv5 (``uuid.NAMESPACE_DNS``) so reruns are idempotent and
 partial progress is preserved (existing IDs are skipped).
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - redis-py, httpx, numpy, qdrant-client
   - Staged Postgres dumps in DATA_DIR (default /tmp/rag_seed)
 """
@@ -61,7 +61,7 @@ logger = logging.getLogger("seed_qdrant")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 # Staged data lives under a user-configurable directory (default /tmp); the
 # directory is outside the repo and never contains credentials.
 DATA_DIR = os.getenv("SEED_DATA_DIR", "/tmp/rag_seed")  # noqa: S108  # nosec B108

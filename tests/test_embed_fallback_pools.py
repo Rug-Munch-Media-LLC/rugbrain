@@ -26,8 +26,8 @@ from rugbrain.dim_policy import (
 def test_registry_native_dims_match_verified_reality():
     # Values verified live 2026-08-25 against :8004/DeepInfra; the 0.6B
     # speed tier was retired 2026-09-14.
-    assert native_dims("qwen3-embedding-4b") == 2560
-    assert native_dims("qwen3-embedding-0.6b") is None  # retired 2026-09-14
+    assert native_dims("qwen3-embedding-8b") == 2560
+    assert native_dims("qwen3-embedding-8b") is None  # retired 2026-09-14
     assert native_dims("nvidia/nemotron-3-embed-1b") == 2048
     assert native_dims("nvidia/llama-nemotron-embed-vl-1b-v2") == 2048
 
@@ -35,11 +35,11 @@ def test_registry_native_dims_match_verified_reality():
 def test_registry_unknown_model_returns_none_and_fallback():
     assert native_dims("totally-unknown-model") is None
     assert default_dim_for_model("totally-unknown-model", fallback=999) == 999
-    assert default_dim_for_model("qwen3-embedding-4b") == 2560
+    assert default_dim_for_model("qwen3-embedding-8b") == 2560
 
 
 def test_registry_lookup_is_whitespace_case_tolerant():
-    assert native_dims("  Qwen3-Embedding-4B ") == 2560
+    assert native_dims("  Qwen3-Embedding-8B ") == 2560
 
 
 # ── normalize_dims contract ──────────────────────────────────────────────

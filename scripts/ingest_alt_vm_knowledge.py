@@ -12,7 +12,7 @@ with documentation cloned from:
 
 Every point is tagged with coding metadata (ecosystem=move|cairo,
 language=move|cairo, knowledge_type, topic, source_url) and embedded with
-2560-dim qwen3-embedding-4b. Deterministic point IDs → idempotent re-runs.
+2560-dim qwen3-embedding-8b. Deterministic point IDs → idempotent re-runs.
 
 Usage:
     python scripts/ingest_alt_vm_knowledge.py --dry-run
@@ -21,7 +21,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

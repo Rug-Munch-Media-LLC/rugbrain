@@ -1,7 +1,7 @@
 """Threat intelligence ingestion pipeline.
 
 Pulls from GoPlus, PhishTank, Chainabuse, and community submissions.
-Embeds with Qwen3-4B (2560d) and stores in Qdrant rag_threats collection.
+Embeds with Qwen3-8B (2560d) and stores in Qdrant rag_threats collection.
 """
 
 import asyncio
@@ -13,7 +13,7 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from sentence_transformers import SentenceTransformer
 
 COLLECTION = "rag_threats"
-MODEL_NAME = "qwen3-embedding-4b"
+MODEL_NAME = "qwen3-embedding-8b"
 VECTOR_SIZE = 1024
 
 

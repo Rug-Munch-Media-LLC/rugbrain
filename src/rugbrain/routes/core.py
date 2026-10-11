@@ -47,7 +47,7 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
     from rugbrain.multi_embedder import _load_api_key
 
     int_url = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
-    model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+    model = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
     attempts: list[tuple[str, str, str, str]] = []  # (name, url, model, bearer)
     di_key = _load_api_key("DEEPINFRA_API_KEY")
     if di_key:
@@ -57,7 +57,7 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
                 _embeddings_endpoint(
                     os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1")
                 ),
-                os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-4B"),
+                os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"),
                 di_key,
             )
         )

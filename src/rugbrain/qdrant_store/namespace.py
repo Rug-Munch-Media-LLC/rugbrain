@@ -17,7 +17,7 @@ from rugbrain.qdrant_store.lane_resolver import resolve_collection
 # ── Interim collection namespace (2026-08-24 migration window) ─────────────
 # During the v1→v2 re-embedding migration the active embedder may produce a
 # different dimension than the canonical collections (free NVIDIA nemotron
-# 2048-dim vs qwen3-embedding-4b 2560-dim). Vectors from different models
+# 2048-dim vs qwen3-embedding-8b 2560-dim). Vectors from different models
 # must NEVER mix (see _resize / TOP-100 #25), so while
 # RAG_INTERIM_COLLECTION_SUFFIX is set, ALL reads and writes route to a
 # suffixed shadow namespace auto-created at the live embedder's native dim.

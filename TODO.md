@@ -3,8 +3,8 @@
 
 ## ✅ COMPLETED (2026-08-19/20)
 
-- [x] **Reranker deployed**: Qwen3-Reranker-4B Q6_K live on :8003 (llama.cpp). 8B models deleted (39GB freed). Verified: rerank score 0.9978 vs 1.1e-04.
-- [x] **Embedder deployed**: Qwen3-Embedding-4B Q8_0 live on :8004 (llama.cpp). 2560-dim, normalized. Verified: cos(relevant)=0.708 vs cos(irrelevant)=0.023.
+- [x] **Reranker deployed**: Qwen3-Reranker-8B Q6_K live on :8003 (llama.cpp). 8B models deleted (39GB freed). Verified: rerank score 0.9978 vs 1.1e-04.
+- [x] **Embedder deployed**: Qwen3-Embedding-8B Q8_0 live on :8004 (llama.cpp). 2560-dim, normalized. Verified: cos(relevant)=0.708 vs cos(irrelevant)=0.023.
 - [x] **Qdrant v2 stood up**: `rmi-qdrant-v2` on :6334, 46 collections at 2560-dim (named `dense`, Cosine).
 - [x] **llama.cpp Qwen3 embedder/BGE-M3 fully removed**: No process, container, or port :8001 exists. Legacy 1024-dim collections retained read-only on :6333.
 - [x] **rugbrain-api container rebuilt** from fbb8d78 with `RERANKER_URL=http://172.22.0.1:8003`, `QWEN_EMBED_URL=http://172.22.0.1:8004/v1`. Healthy.
@@ -14,18 +14,18 @@
 
 ## 🔴 BLOCKING (from 2026-08-20 audit)
 
-- [ ] **CRITICAL: Add instruction prefix to embedder client** — `src/rugbrain/embeddings.py` `_int_embed()` does NOT prepend `"Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: {query}"` to queries. Qwen3-Embedding-4B loses 1-5% retrieval quality without it. **Must fix BEFORE re-embedding.**
+- [ ] **CRITICAL: Add instruction prefix to embedder client** — `src/rugbrain/embeddings.py` `_int_embed()` does NOT prepend `"Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: {query}"` to queries. Qwen3-Embedding-8B loses 1-5% retrieval quality without it. **Must fix BEFORE re-embedding.**
 - [ ] **CRITICAL: Complete Qdrant v2 re-embedding** — Only `news_v2` (352 pts) has data; 45 other v2 collections at 0 points. Run `scripts/migrate_embeddings_v2.py` overnight for all 183,940 legacy points. Checkpoint per collection.
 - [ ] **CRITICAL: Fix news cron Redis auth** — `rmi-news-ingest.sh` step 2 fails: "HELLO must be called with the client already authenticated". Script sources `REDIS_PASSWORD` but `app/core/redis.py` reads `REDIS_URL`. Export `REDIS_URL=redis://:${REDIS_PASSWORD}@127.0.0.1:6379/0` in cron env.
 - [ ] **CRITICAL: Wire scanner ingestion pipeline** — `scanner_subscriber` and `scanner_poller` both `running: true` but `ingested_count: 0`; Redis queues `rmi:rag:ingest` / `rmi:rag:findings_queue` empty. Live ingestion not wired.
 - [ ] **CRITICAL: Update outdated ingestion scripts** — `scripts/ingest_threats.py` uses `sentence_transformers` (1024-dim), connects to old Qdrant :6333, collection `rag_threats`. Many scripts in `scripts/` same. Rewrite to use `rugbrain.embeddings.get_embedding` (Qwen3 2560-dim) and Qdrant v2.
-- [ ] **CRITICAL: Fix event-loop wedge on cold embed** — qwen3-embedding-4b unloads after keep_alive expiry; first embed reloads ~38-45s and sync `httpx.Client(timeout=120)` inside async blocks event loop. Fixes: keep model resident, move embed off event loop (async httpx / `to_thread`), add request-level timeout.
+- [ ] **CRITICAL: Fix event-loop wedge on cold embed** — qwen3-embedding-8b unloads after keep_alive expiry; first embed reloads ~38-45s and sync `httpx.Client(timeout=120)` inside async blocks event loop. Fixes: keep model resident, move embed off event loop (async httpx / `to_thread`), add request-level timeout.
 
 ## 🟠 HIGH
 
 - [ ] **Fix rugbrain test_qdrant_store failure** — Assertion expects `doc_001` as point ID but store uses UUID v5.
 - [ ] **Fix SDK tests** — `ModuleNotFoundError: No module named 'rugmunch'` (package is `rugmunch_sdk`, tests stale).
-- [ ] **Align rmi-codebase-mcp embeddings** — Currently hardcoded to nomic-embed-text (768-dim). Migrate to qwen3-embedding-4b (2560-dim) or pull nomic.
+- [ ] **Align rmi-codebase-mcp embeddings** — Currently hardcoded to nomic-embed-text (768-dim). Migrate to qwen3-embedding-8b (2560-dim) or pull nomic.
 - [ ] **Fix rmi-backend manual `test_rag.py` absent from container** — File exists in repo but not in `/app/tests/manual/`.
 - [ ] **Fix `rag-monitor` script SyntaxError** — Unquoted redis-cli output injected into Python code.
 - [ ] **Delete remaining §3.1 modules in rugbrain** — `search/` package, `search_service.py`, `splade_bm25.py`, `cross_encoder.py`, `embeddings.py`, `crypto_embeddings.py`, `bge_embedders.py`, `rag_ingestion.py`, `query_rewriter.py`, `permanence.py`, `sparse_search.py`, `analytics_storage.py`, `app_chunking.py`, `bundle_cluster.py`, `cross_chain.py`, `embedding_finetune.py`, `feature_extractors.py`, `feedback.py`, `github_feeder.py`, `historical.py`, `incremental_indexer.py`, `multimodal.py`, `parent_retriever.py`, `realtime_alerts.py`, `seed_scams.py`, `solidity_chunker.py`, `streaming.py`, `firehose/`.

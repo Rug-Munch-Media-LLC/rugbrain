@@ -20,7 +20,7 @@ For each entry we:
      CWE references.
   2. Map the SWC ID to a canonical ``attack_vector`` and default ``severity``
      (see ``rugbrain.crypto_schema.SWC_VECTORS`` / ``SWC_SEVERITY``).
-  3. Build a structured weakness document and embed with qwen3-embedding-4b (2560-dim,
+  3. Build a structured weakness document and embed with qwen3-embedding-8b (2560-dim,
      /embeddings).
   4. Upsert into ``crypto_vulnerabilities`` with ``source=swc_registry`` and canonical
      metadata (attack_vector, severity, chain=ethereum, protocol=SWC ID,
@@ -36,7 +36,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b loaded
   - httpx
 """
 

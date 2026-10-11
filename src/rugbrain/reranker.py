@@ -1,4 +1,4 @@
-"""Decoupled Qwen3 Reranker 4B client — the single ranking entry point.
+"""Decoupled Qwen3 Reranker 8B client — the single ranking entry point.
 
 Self-hosts a llama.cpp --rerank server on Talos port 8003. Degrades gracefully
 when the server is down. Every caller funnels through :func:`rerank`, so the
@@ -110,8 +110,8 @@ async def rerank(
     if not RERANKER_ENABLED or not documents:
         return []
 
-    # Live lane: hosted DeepInfra first (same 4B family; ~0.5-2s per pool —
-    # the retired 0.6B speed tier's replacement, 2026-09-14).  The local 4B
+    # Live lane: hosted DeepInfra first (same 8B family; ~0.5-2s per pool —
+    # the retired 0.6B speed tier's replacement, 2026-09-14).  The local 8B
     # below remains the fallback and stays primary for batch/deep callers.
     hosted_results = await _hosted_rung(query, documents, 0 if raw else top_k)
     if hosted_results is not None:

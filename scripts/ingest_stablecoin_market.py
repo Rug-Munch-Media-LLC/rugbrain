@@ -8,7 +8,7 @@ This gives the bot's market context a canonical "how big is the stablecoin
 ecosystem / where is liquidity" signal that complements the existing news +
 threat-intel RAG collections.
 
-Each stablecoin is embedded (2560-dim qwen3-embedding-4b via ) and upserted
+Each stablecoin is embedded (2560-dim qwen3-embedding-8b via ) and upserted
 into ``stablecoin_market`` (bare 2560-dim Cosine — created on first run).
 A single aggregate document ("stablecoin ecosystem summary") is also stored
 with the total market cap and top assets so generic market queries hit a
@@ -28,7 +28,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - httpx
 """
 

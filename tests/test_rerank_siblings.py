@@ -83,11 +83,11 @@ class TestHealthProbe:
         monkeypatch.setattr(
             rerank_health.httpx,
             "AsyncClient",
-            lambda **k: FakeClient(FakeResp(200, {"model": "qwen3-4b"}), seen),
+            lambda **k: FakeClient(FakeResp(200, {"model": "qwen3-8b"}), seen),
         )
         out = await rerank_health.get_reranker_health()
         assert out["ok"] is True
-        assert out["model"] == "qwen3-4b"
+        assert out["model"] == "qwen3-8b"
         assert rerank_health.cache()["ok"] is True
         assert seen[0][1].endswith("/health")
 

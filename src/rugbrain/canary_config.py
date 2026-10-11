@@ -4,7 +4,7 @@ This module owns ONE job: deciding whether a collection may be served by the
 8B canary lane, and under what name. It never embeds, never talks to a
 provider, and never sanitises a hit.
 
-The canonical RugBrain path remains Qwen3-Embedding-4B at 2560 dimensions.
+The canonical RugBrain path remains Qwen3-Embedding-8B at 2560 dimensions.
 The canary is default-off and read-only; enabling it with an incomplete,
 internal or unknown collection is a configuration error — never a silent
 fallback to a different vector space.

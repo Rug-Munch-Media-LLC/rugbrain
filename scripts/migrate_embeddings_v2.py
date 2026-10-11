@@ -1,7 +1,7 @@
 """Re-embed legacy 1024-dim Qdrant collections into rmi-qdrant-v2 at 2560-dim.
 
 Reads points (payload only) from legacy rmi-qdrant (:6333), re-embeds the
-stored text with Qwen3-Embedding-4B (llama.cpp :8004), recomputes BM25
+stored text with Qwen3-Embedding-8B (llama.cpp :8004), recomputes BM25
 sparse vectors where the target collection supports them, and upserts into
 rmi-qdrant-v2 (:6334) keeping the same point UUIDs and payloads.
 

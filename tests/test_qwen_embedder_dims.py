@@ -1,7 +1,7 @@
 """Qwen3Embedder dim-handling contracts (registry-aware, post 2026-08-25).
 
-The embedder's native dim comes from ``dim_policy.MODEL_DIMS`` (qwen3-
-embedding-4b serves 2560 on :8004). The embedder must:
+The embedder's native dim comes from ``dim_policy.MODEL_DIMS``
+(qwen3-embedding-8b serves 4096, DeepInfra canonical). The embedder must:
 * default DIMS to the registry value for the configured model
 * accept exact-dim vectors
 * MRL-TRUNCATE + RENORMALIZE larger vectors (never reject)
@@ -20,8 +20,8 @@ from rugbrain.qwen_embedders import Qwen3Embedder
 def test_dims_default_matches_collections():
     """DIMS must track the dim registry for the configured model."""
     assert default_dim_for_model(Qwen3Embedder.MODEL) == Qwen3Embedder.DIMS
-    # and the registry currently pins qwen3-embedding-4b at native 2560
-    assert Qwen3Embedder.DIMS == 2560
+    # and the registry pins qwen3-embedding-8b at native 4096
+    assert Qwen3Embedder.DIMS == 4096
 
 
 def _client_returning(vec: list[float]) -> type:
@@ -53,14 +53,12 @@ async def test_exact_dim_accepted(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_oversized_vector_mrl_truncated_and_renormalized(monkeypatch):
-    """Larger-than-DIMS output is MRL-truncated to DIMS + renormalized."""
+async def test_oversized_vector_rejected_not_truncated(monkeypatch):
+    """2026-09-30 doctrine: downscaling is REFUSED, not MRL-truncated."""
     e = Qwen3Embedder()
     monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([2.0] * (e.DIMS + 1536))())
-    out = await e.embed(["hello"])
-    assert len(out[0]) == e.DIMS
-    norm = sum(x * x for x in out[0]) ** 0.5
-    assert abs(norm - 1.0) < 1e-3
+    with pytest.raises((ValueError, RuntimeError), match="truncate|dim mismatch"):
+        await e.embed(["hello"])
 
 
 @pytest.mark.asyncio

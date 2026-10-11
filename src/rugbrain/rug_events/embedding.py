@@ -8,7 +8,7 @@ difference between minutes and seconds.
 Lane correctness matters more than speed here, so it is asserted rather than
 assumed. The corpus (``defi_exploits``, ``exploits``, ``scam_intel_v2``, every
 collection this projection is read from and graded against) is **2560-dim**
-Qwen3-Embedding-4B. Two environment hazards silently break that:
+Qwen3-Embedding-8B. Two environment hazards silently break that:
 
   * ``DEEPINFRA_EMBED_URL`` shipped pointing at the full ``.../v1/embeddings``
     path while ``Qwen3Embedder`` appends ``/embeddings`` itself — every call
@@ -34,14 +34,14 @@ log = logging.getLogger(__name__)
 CORPUS_DIM = 2560
 
 #: The model the 2560-dim corpus was built with.
-CORPUS_MODEL = "Qwen/Qwen3-Embedding-4B"
+CORPUS_MODEL = "Qwen/Qwen3-Embedding-8B"
 
 #: Environment forced onto the corpus lane, overriding whatever the shell has.
 #: Only set when the current value is missing or belongs to another lane.
 LANE_ENV: dict[str, str] = {
     "DEEPINFRA_EMBED_URL": "https://api.deepinfra.com/v1",
     "DEEPINFRA_EMBED_MODEL": CORPUS_MODEL,
-    "RAG_EMBED_MODEL": "qwen3-embedding-4b",
+    "RAG_EMBED_MODEL": "qwen3-embedding-8b",
     "QWEN_EMBED_DIMS": str(CORPUS_DIM),
 }
 

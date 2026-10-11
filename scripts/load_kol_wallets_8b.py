@@ -3,7 +3,7 @@
 
 WHY THIS EXISTS SEPARATELY FROM ingest_wallet_labels.py
 ------------------------------------------------------
-That script targets ``wallet_v2``, which is the RETIRED 2560-dim qwen3-embedding-4b
+That script targets ``wallet_v2``, which is the RETIRED 2560-dim qwen3-embedding-8b
 lane. Both collections exist and currently hold the same point count, so a load
 into the wrong one does not error — it quietly builds a second copy of the entity
 corpus in a lane nothing queries. On an intel platform that is the worst

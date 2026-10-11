@@ -145,7 +145,7 @@ async def test_rerank_story_sources_qwen3(monkeypatch: pytest.MonkeyPatch) -> An
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
     story = _story()
     ordered, method = await nk.rerank_story_sources(story)
-    assert method == "qwen3-reranker-4b"
+    assert method == "qwen3-reranker-8b"
     assert [s.article_id for s in ordered] == ["s3", "s1", "s2"]
     assert captured["json"]["query"] == story.title
     assert "documents" in captured["json"]

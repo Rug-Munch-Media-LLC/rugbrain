@@ -21,7 +21,7 @@
 #
 # Requires (host):
 #   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-#   - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-4b
+#   - at INFINITY_URL (default http://172.22.0.1:8004/v1) with qwen3-embedding-8b
 #   - RMI Codebase MCP server dir at RMI_MCP_DIR (default /path/to/rmi-codebase-mcp)
 #   - RMI_MCP_PYTHON with fastmcp+chromadb (default x402 venv)
 

@@ -1,7 +1,7 @@
 # Current task evidence
 
 ## Scope
-RugBrain public crypto-intelligence audience boundary, canonical 2560-dimensional Qwen3-Embedding-4B path, and default-off public 8B canary selector. The separate 8B re-embedding services and global 8B switch were not modified or restarted.
+RugBrain public crypto-intelligence audience boundary, canonical 2560-dimensional Qwen3-Embedding-8B path, and default-off public 8B canary selector. The separate 8B re-embedding services and global 8B switch were not modified or restarted.
 
 ## Commands and results
 - `heavy-run .venv/bin/pytest -q tests/test_qdrant_store.py tests/test_qdrant_store_write_gate.py tests/test_content_engine.py tests/test_routes_core.py tests/test_subscriber.py tests/test_main_health.py` — 44 passed.

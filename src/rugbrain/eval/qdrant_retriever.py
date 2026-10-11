@@ -43,7 +43,7 @@ LANE RESOLUTION IS NOT OPTIONAL HERE
     So the rule is the one ``24915db`` established: resolve the name ONCE, read
     the LIVE width of what it resolved to, and embed on that lane.
       * 4096 -> ``embeddings.get_embedding`` (Qwen3-Embedding-8B, canonical)
-      * 2560 -> ``query_embedder.embed_query`` (Qwen3-Embedding-4B, :8004)
+      * 2560 -> ``query_embedder.embed_query`` (Qwen3-Embedding-8B, :8004)
 
     The 2560 leg is DELIBERATE, not a leftover pin: ``coding_knowledge`` and
     ``solana_patterns`` are pinned to the retired generation with no ``_8b``

@@ -14,7 +14,7 @@ Part of the content-seeding expansion. Routes curated docs from
   - ``audit_findings``   — (reserved for audit case-study docs)
 
 Each doc is chunked, embedded with the shared path (2560-dim
-qwen3-embedding-4b) and upserted with canonical payload metadata (topic,
+qwen3-embedding-8b) and upserted with canonical payload metadata (topic,
 knowledge_type, collection). Point IDs are deterministic
 (source + rel_key + content hash) so re-runs overwrite the same points
 instead of duplicating them.
@@ -25,7 +25,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

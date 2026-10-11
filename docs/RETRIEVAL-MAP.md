@@ -14,7 +14,7 @@ twins) — not declared, not aspirational. Re-measure with the one-liner in
 |---|---|---|
 | Canonical lane | **4096** (Qwen3-Embedding-8B) | `qdrant_store/lane_table.py` → `CANONICAL_LANE_DIM` |
 | Canonical width, MEASURED | **4096** | `qdrant_store/lane_widths.py` → `TWIN_LANE_DIM` |
-| Preserved/retired lane | **2560** (Qwen3-Embedding-4B, `:8004`) | `lane_table.PRESERVED_LANE_DIM` |
+| Preserved/retired lane | **2560** (Qwen3-Embedding-8B, `:8004`) | `lane_table.PRESERVED_LANE_DIM` |
 | 1024 collections | 6 of them, pinned | `lane_table.PINNED_DIMS` |
 | **The choke point** | `resolve_collection(base) -> base_8b` | `qdrant_store/lane_resolver.py` |
 

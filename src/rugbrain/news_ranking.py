@@ -4,7 +4,7 @@ News story ranking — rerank sources within a story and rank the feed.
 Part 2 of the Ground News / CryptoPanic-beating news aggregation system.
 
 For every story cluster, articles are reranked against the story title
-using the self-hosted Qwen3-Reranker-4B (llama.cpp port 8003); the best
+using the self-hosted Qwen3-Reranker-8B (llama.cpp port 8003); the best
 article becomes the story's primary source. Stories themselves are scored
 on five weighted axes and the resulting scores are persisted to the Qdrant
 ``news_v2`` collection:
@@ -18,7 +18,7 @@ on five weighted axes and the resulting scores are persisted to the Qdrant
 Qdrant persistence
 ------------------
 Stories are stored as points in the ``news_v2`` collection (named dense
-vector ``Qwen3-Embedding-4B`` 2560-dim, consistent with the existing collection). Each
+vector ``Qwen3-Embedding-8B`` 2560-dim, consistent with the existing collection). Each
 point payload carries the full story JSON, plus ``type="news_story"`` and
 ``topics``/``composite_score``/``source_count``/``updated_at`` fields so
 the feed API can filter and sort without loading every payload.
@@ -74,7 +74,7 @@ async def rerank_story_sources(
 ) -> tuple[list[StorySource], str]:
     """Rerank the story's source articles against its title.
 
-    Calls the self-hosted Qwen3-Reranker-4B ``POST /rerank`` with
+    Calls the self-hosted Qwen3-Reranker-8B ``POST /rerank`` with
     ``query=story.title`` and ``documents=article_summaries``. The top
     document becomes the story's primary source. When the reranker is
     unreachable the sources are returned sorted by credibility (best-effort)
@@ -109,7 +109,7 @@ async def rerank_story_sources(
             src.rerank_score = scored.get(idx, 0.0)
             ranked.append(src)
         ordered = sorted(ranked, key=lambda s: s.rerank_score, reverse=True)
-        return ordered, "qwen3-reranker-4b"
+        return ordered, "qwen3-reranker-8b"
     except Exception as exc:
         logger.debug("news_ranking: Qwen3 /rerank failed (%s) — credibility fallback", exc)
         for src in story.sources:
@@ -274,7 +274,7 @@ async def _ensure_news_v2_collection(client: httpx.AsyncClient) -> bool:
 
 
 async def _embed_title(title: str) -> list[float]:
-    """Embed a story title via llama.cpp Qwen3-Embedding-4B (zero-vector fallback)."""
+    """Embed a story title via llama.cpp Qwen3-Embedding-8B (zero-vector fallback)."""
     try:
         from rugbrain.embeddings import get_embedding
 
@@ -287,7 +287,7 @@ async def _embed_title(title: str) -> list[float]:
 async def store_story(story: Story) -> bool:
     """Upsert a story point into the Qdrant ``news_v2`` collection.
 
-    The vector is the story-title embedding (Qwen3-Embedding-4B) so story similarity
+    The vector is the story-title embedding (Qwen3-Embedding-8B) so story similarity
     search can match new articles to existing stories in real time.
     """
     try:

@@ -27,14 +27,14 @@ GET /api/v1/search?q=<query>&limit=10&collection=threat_intel
 ```
 
 Semantic search across ingested scanner findings. Returns similar results
-by vector similarity (Qwen3-Embedding-4B via llama.cpp, 2560 dimensions).
+by vector similarity (Qwen3-Embedding-8B via llama.cpp, 2560 dimensions).
 
 **Parameters:**
 - `q` (required) — search query, e.g., token address or scam description
 - `limit` (optional, default 10, max 100) — max results
 - `collection` (optional, default `threat_intel_v2`) — Qdrant collection
 - `rerank` (optional, boolean) — `true` re-scores the top candidates with
-  Qwen3-Reranker-4B (local `:8003`, DeepInfra hosted fallback). Lane names
+  Qwen3-Reranker-8B (local `:8003`, DeepInfra hosted fallback). Lane names
   (`fast`/`deep`/`off`) belong to `/api/v1/search/federated`, not here.
 
 **Example:**

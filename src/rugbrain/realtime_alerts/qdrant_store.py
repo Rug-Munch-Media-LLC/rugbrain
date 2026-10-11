@@ -23,7 +23,7 @@ log = logging.getLogger("rugbrain.realtime_alerts")
 
 
 async def _embed_critical(text: str) -> list[float] | None:
-    """Embed through Qwen3-4B (L2-normalized). None on failure."""
+    """Embed through Qwen3-8B (L2-normalized). None on failure."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(

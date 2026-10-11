@@ -2,7 +2,7 @@
 
 2026-09-28 (operator decision): the canonical lane is 8B @ 4096-dim, and
 that is the CODE DEFAULT, not only the env default. The 4B/2560 generation is
-retired. This docstring previously claimed "Qwen3-Embedding-4B (2560d) -
+retired. This docstring previously claimed "Qwen3-Embedding-8B (2560d) -
 CANONICAL primary", a false statement that survived the migration and misled
 every later reader.
 

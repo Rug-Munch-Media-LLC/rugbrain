@@ -12,7 +12,7 @@ There is now ONE embedder seam (:func:`rugbrain.search.tiers.embed_query`)
 and it delegates to ``get_query_embedding``; nothing here talks HTTP to an
 embedder. The tier labels are kept for API compatibility: the 0.6B "speed"
 tier was retired (2026-08-29) and its endpoints removed (2026-09-14), so both
-labels resolve to the same canonical qwen3-embedding-4b lane.
+labels resolve to the same canonical qwen3-embedding-8b lane.
 
 Failures are EXPLICIT, never silent:
 

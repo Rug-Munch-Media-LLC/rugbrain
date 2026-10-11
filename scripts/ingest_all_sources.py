@@ -11,7 +11,7 @@ Flow per source:
   1. src.fetch() → list[IngestDoc] (fail-open per source)
   2. route to src.default_collection (fallback: metadata["collection"] or rag_docs)
   3. skip docs already embedded (Qdrant has_point on deterministic doc_id)
-  4. chunk (ingest_common.chunk_text) → embed (DeepInfra qwen3-4b first,
+  4. chunk (ingest_common.chunk_text) → embed (DeepInfra qwen3-8b first,
      local llama.cpp fallback) → QdrantVectorStore.insert (idempotent UUIDv5)
 
 Usage:

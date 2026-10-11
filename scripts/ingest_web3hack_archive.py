@@ -9,7 +9,7 @@ Sources (two complementary archives):
   2. hubingliang/Web3HackTimeline — ``src/data.json``: 966 dated Web3
      security events with content, themeTags, types, techTags, blockchainTags.
 
-Each event is embedded (2560-dim qwen3-embedding-4b via ) and upserted into
+Each event is embedded (2560-dim qwen3-embedding-8b via ) and upserted into
 ``defi_exploits`` with canonical metadata (protocol, date, amount_lost_usd,
 attack_vector, chain, source, source_url). Point IDs are deterministic
 UUIDv5 from content hashes → idempotent re-runs.
@@ -21,7 +21,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - git, httpx
 """
 

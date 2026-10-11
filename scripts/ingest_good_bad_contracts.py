@@ -13,7 +13,7 @@ Part 3 of the contract-knowledge expansion. Ingests:
     Solana Token-2022 backdoors) and a condensed 'rug-pull indicator' doc
     into ``contract_security``.
 
-Each snippet is embedded (2560-dim qwen3-embedding-4b) and upserted with canonical
+Each snippet is embedded (2560-dim qwen3-embedding-8b) and upserted with canonical
 metadata (verdict, ecosystem, red_flags/best_practices, source). Point IDs
 are deterministic UUIDv5 from content hashes → idempotent re-runs.
 
@@ -23,7 +23,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

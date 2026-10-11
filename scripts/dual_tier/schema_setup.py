@@ -3,11 +3,11 @@
 """Dual-tier Qdrant schema — crypto_intelligence collection.
 
 Creates the unified collection with two named vectors:
-  - qwen_vector   (2560-dim, Qwen3-Embedding-4B  — deep tier, :8004)
-  - speed_vector  (1024-dim, Qwen3-Embedding-0.6B — consumer chat tier, :8007)
+  - qwen_vector   (2560-dim, Qwen3-Embedding-8B  — deep tier, :8004)
+  - speed_vector  (1024-dim, qwen3-embedding-8b — consumer chat tier, :8007)
 
 NOTE: the original design doc specified qwen_vector size=3584 — that is
-incorrect per the official Qwen3 model card (Qwen3-Embedding-4B = 2560 dims).
+incorrect per the official Qwen3 model card (Qwen3-Embedding-8B = 2560 dims).
 This script uses verified dimensions from live endpoints.
 
 Run once:  python -m scripts.dual_tier.schema_setup

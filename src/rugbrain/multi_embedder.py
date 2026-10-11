@@ -3,17 +3,17 @@
 Backends in the fleet:
     deepinfra   DeepInfra Qwen/Qwen3-Embedding-8B (4096-dim) — CANONICAL
                 primary. Same model as local ⇒ same vector space.
-    qwen4b      local llama.cpp :8004 (canonical FALLBACK). The KEY is a
+    qwen8b      local llama.cpp :8004 (canonical FALLBACK). The KEY is a
                 historical lane identifier kept for RAG_COLLECTION_BACKENDS
                 mappings; the model it serves is 8B.
     nemotron    OpenRouter nvidia/nemotron-3-embed-1b:free (2048-dim) —
                 LEGACY READS ONLY (interim `_i` collections).
-    or_qwen4b   OpenRouter lane kept only for old RAG_COLLECTION_BACKENDS
-                mappings naming or_qwen4b.
+    or_qwen8b   OpenRouter lane kept only for old RAG_COLLECTION_BACKENDS
+                mappings naming or_qwen8b.
 
 CANONICAL EMBEDDER (one, for all new writes):
     qwen3-embedding-8b @ 4096-dim, DeepInfra primary + local :8004 fallback
-    (EMBED_CHAINS["qwen4b"]). Both lanes are the SAME model, so the vector
+    (EMBED_CHAINS["qwen8b"]). Both lanes are the SAME model, so the vector
     space is identical regardless of which lane serves the request. The
     retired 4B/2560 generation is eliminated: no backend defaults to it.
 
@@ -121,12 +121,12 @@ def _default_backends() -> dict[str, Backend]:
             model=os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"),
             api_key_env="DEEPINFRA_API_KEY",
         ),
-        # CANONICAL FALLBACK. The KEY stays "qwen4b": it is the lane identifier
+        # CANONICAL FALLBACK. The KEY stays "qwen8b": it is the lane identifier
         # RAG_COLLECTION_BACKENDS mappings and the test contract name, and
         # renaming a registry key would break those without eliminating
         # anything. The MODEL it serves is the canonical 8B lane.
-        "qwen4b": Backend(
-            "qwen4b",
+        "qwen8b": Backend(
+            "qwen8b",
             "llamacpp",
             os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1"),
             lane_dim,
@@ -142,10 +142,10 @@ def _default_backends() -> dict[str, Backend]:
             api_key_env="OPENROUTER_API_KEY",
         ),
         # LEGACY remote lane (kept ONLY so old RAG_COLLECTION_BACKENDS entries
-        # naming or_qwen4b still resolve), serving the canonical model so a
+        # naming or_qwen8b still resolve), serving the canonical model so a
         # legacy mapping cannot reintroduce a 4B vector.
-        "or_qwen4b": Backend(
-            "or_qwen4b",
+        "or_qwen8b": Backend(
+            "or_qwen8b",
             "openrouter",
             os.getenv("OR_QWEN_EMBED_URL", "https://openrouter.ai/api/v1/embeddings"),
             lane_dim,
@@ -160,14 +160,14 @@ def _default_backends() -> dict[str, Backend]:
 # comparable with the target collection (no cross-family fallback, ever).
 # Canonical (2026-08-29): DeepInfra primary, local :8004 fallback.
 EMBED_CHAINS: dict[str, tuple[str, ...]] = {
-    "qwen4b": ("deepinfra", "qwen4b"),
-    "deepinfra": ("deepinfra", "qwen4b"),
-    "or_qwen4b": ("or_qwen4b", "qwen4b"),
+    "qwen8b": ("deepinfra", "qwen8b"),
+    "deepinfra": ("deepinfra", "qwen8b"),
+    "or_qwen8b": ("or_qwen8b", "qwen8b"),
 }
 
 # Backends that hit a remote HTTP API (used by RAG_QUERY_REMOTE_FALLBACK=0
 # to strip remote lanes and force a fully-local chain).
-_REMOTE_BACKENDS = frozenset({"deepinfra", "or_qwen4b", "nemotron"})
+_REMOTE_BACKENDS = frozenset({"deepinfra", "or_qwen8b", "nemotron"})
 
 # Deprecated alias (pre-2026-08-29 name). Kept so any external importer or
 # ops script referencing it doesn't break; new code uses EMBED_CHAINS.
@@ -175,7 +175,7 @@ SAME_SPACE_FALLBACKS = EMBED_CHAINS
 
 
 def _parse_collection_map() -> dict[str, tuple[str, int]]:
-    """RAG_COLLECTION_BACKENDS='news_v2=qwen4b:1024,news_v2_i=nemotron:2048,...'"""
+    """RAG_COLLECTION_BACKENDS='news_v2=qwen8b:1024,news_v2_i=nemotron:2048,...'"""
     out: dict[str, tuple[str, int]] = {}
     raw = os.getenv("RAG_COLLECTION_BACKENDS", "")
     for part in raw.split(","):
@@ -198,7 +198,7 @@ class MultiEmbedder:
         self.backends = _default_backends()
         self.collection_map = _parse_collection_map()
         # sensible defaults when a collection isn't mapped
-        self.default_backend = os.getenv("RAG_DEFAULT_BACKEND", "qwen4b")
+        self.default_backend = os.getenv("RAG_DEFAULT_BACKEND", "qwen8b")
         # Actual-dim awareness: lazily fetched from Qdrant per unknown
         # collection, cached for the process lifetime. This is what makes
         # the reader recognize ANY vector space, not just mapped ones.
@@ -309,7 +309,7 @@ class MultiEmbedder:
         ``target_dim`` pins the output to an exact collection dim (MRL
         truncate-down, e.g. 1024 legacy collections on the native-2560
         model). Set RAG_QUERY_REMOTE_FALLBACK=0 to strip remote lanes and
-        force a fully-local chain (local :8004 only for the qwen4b space).
+        force a fully-local chain (local :8004 only for the qwen8b space).
         """
         if os.getenv("RAG_QUERY_REMOTE_FALLBACK", "1") == "0":
             chain = tuple(
@@ -397,7 +397,7 @@ class MultiEmbedder:
 
         def _infer(dim: int | None) -> str:
             if dim == 2560:
-                return "qwen4b"
+                return "qwen8b"
             if dim == 2048:
                 return "nemotron"
             if dim == 1024:
@@ -490,7 +490,7 @@ class MultiEmbedder:
         await self.resolve_collections(collections)
 
         # Group by (backend, TARGET DIM) — one backend can legitimately serve
-        # multiple spaces (qwen4b native 2560 AND MRL-truncated 1024 legacy);
+        # multiple spaces (qwen8b native 2560 AND MRL-truncated 1024 legacy);
         # each distinct dim gets its own query vector.
         groups: dict[tuple[str, int], list[str]] = defaultdict(list)
         for coll in collections:
@@ -570,7 +570,7 @@ class MultiEmbedder:
 
         # Tier-aware rerank of the merged cross-space results. Rerankers are
         # TEXT-based — space-agnostic — so one pass covers every backend.
-        # Since 2026-09-14 both 'fast' and 'deep' serve the 4B family
+        # Since 2026-09-14 both 'fast' and 'deep' serve the 8B family
         # (hosted live lane / local :8003); 'off' skips. Fail-open: RRF
         # order survives any reranker outage.
         if rerank_tier in ("fast", "deep") and merged:

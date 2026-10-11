@@ -150,7 +150,7 @@ async def _embed_by_collection(
         return EmbeddingResult(
             vector=vec,
             dims=len(vec),
-            model="qwen3-embedding-4b",
+            model="qwen3-embedding-8b",
             head="contract_audit",
         )
     else:

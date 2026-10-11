@@ -2,15 +2,15 @@
 RAG Search — cross-encoder reranking (search lane).
 
 Cross-encoder rerank step for retrieval: after candidate chunks are
-retrieved, score each (query, chunk) pair with the self-hosted Qwen3
-Reranker 4B (llama.cpp, port 8003) and keep only the most relevant chunks
-before truncation.
+retrieved, score each (query, chunk) pair with the hosted Qwen3-Reranker-8B
+chain (siliconflow → openrouter → deepinfra, via ``rerank_lanes``) and keep
+only the most relevant chunks before truncation. The local llama.cpp rerank
+lanes were retired 2026-10-11 — there is no local fallback anymore.
 
 Backend:
-  * Qwen3-Reranker-4B Q6_K served by llama.cpp ``--rerank`` on Talos
-    (http://127.0.0.1:8003 from inside the container, 127.0.0.1:8003 on
-    the host). HTTP-only — no torch, no sentence-transformers, no local
-    model weights in the container.
+  * Qwen/Qwen3-Reranker-8B hosted by siliconflow.com, openrouter and
+    DeepInfra — same model, three quotas (see ``rerank_lanes``). HTTP-only
+    — no torch, no sentence-transformers, no local model weights.
   * Graceful no-op — if the reranker server is unreachable, documents are
     returned ordered by their original retrieval score, tagged
     ``rerank_method="none"``. Search never breaks because the reranker is
@@ -22,8 +22,8 @@ be re-exported by value. The instruction library and the score-scattering
 helpers live in sibling modules.
 
 Environment variables:
-  - ``RERANKER_URL`` — Qwen3 reranker base URL (default: http://127.0.0.1:8003)
-  - ``RERANKER_TIMEOUT`` — per-request timeout in seconds (default: 30)
+  - ``RERANK_MODEL_ID`` — hosted rerank model (default: Qwen/Qwen3-Reranker-8B)
+  - ``RERANK_PROVIDER_ORDER`` — hosted rung order (siliconflow,openrouter,deepinfra)
   - ``RERANKER_ENABLED`` — set "false" to disable reranking entirely
 """
 
@@ -58,12 +58,13 @@ _RERANK_TEXT_LIMIT = RERANK_TEXT_LIMIT
 _TOKEN_BUDGET_CAP = TOKEN_BUDGET_CAP
 _chunk_text = chunk_text
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003").rstrip("/")
+# retired 2026-10-11: the local :8003 llama.cpp rung is gone (8B-only directive)
+RERANKER_URL = os.getenv("RERANKER_URL", "").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
-# Live-lane candidate cap + the local 4B fallback cap. The 0.6B speed
+# Live-lane candidate cap + the local 8B fallback cap. The 0.6B speed
 # tier these used to bound was retired 2026-08-29; its endpoint was removed
-# 2026-09-14 (all rerank traffic is the 4B family now).
+# 2026-09-14 (all rerank traffic is the 8B family now).
 LIVE_CANDIDATE_CAP: int = int(os.getenv("RERANKER_LIVE_CANDIDATE_CAP", "40"))
 DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 # Hosted (DeepInfra) live rung — replacement for the retired 0.6B speed tier
@@ -141,7 +142,7 @@ async def _fast_health() -> bool:
 class Reranker:
     """Backward-compatible search-lane reranker facade.
 
-    Wraps the self-hosted Qwen3-Reranker-4B HTTP endpoint. Kept for
+    Wraps the self-hosted Qwen3-Reranker-8B HTTP endpoint. Kept for
     callers that import ``get_reranker`` from ``rugbrain.search.rerank``;
     new code should call :func:`rerank_chunks` directly.
     """
@@ -220,7 +221,7 @@ async def _hosted_scores(
     )
     if results is None:
         return None
-    return scatter(results, capped, total), "deepinfra:qwen3-reranker-4b"
+    return scatter(results, capped, total), "deepinfra:qwen3-reranker-8b"
 
 
 async def _score_candidates(
@@ -230,9 +231,8 @@ async def _score_candidates(
 ) -> tuple[list[float], str]:
     """Score candidate chunks against query via the Qwen3 reranker tiers.
 
-    tier="live": hosted lane first, then the local 4B (candidate-capped);
-    tier="deep" (default): local 4B first, hosted fallback. Returns
-    (scores, method).
+    Both tiers use the same hosted 8B chain (the local 4B/0.6B ladders were
+    removed 2026-10-11). Returns (scores, method).
     """
     if not RERANKER_ENABLED or not candidates:
         return [], "none"
@@ -241,41 +241,11 @@ async def _score_candidates(
     if not valid:
         return [], "none"
 
-    if tier == "live":
-        # 0th rung: hosted DeepInfra (same 4B family, ~0.5-2s per pool; the
-        # retired 0.6B speed tier's replacement as the interactive lane).
-        hosted = await _hosted_scores(query, valid, len(candidates))
-        if hosted is not None:
-            return hosted
-        # 1st rung (the only local lane): the 4B, candidate-capped. The
-        # 0.6B speed tier that used to sit here is retired (endpoint gone).
-        capped = valid[:LIVE_CANDIDATE_CAP][:DEEP_FALLBACK_CAP]
-        results = await _post_rerank(
-            RERANKER_URL, query, [t for _, t in capped], RERANKER_TIMEOUT, "4B"
-        )
-        if results is None:
-            return [], "none"
-        return scatter(results, capped, len(candidates)), "qwen3-reranker-4b"
-
-    # ── deep tier (default): local 4B first (free), hosted fallback ──
-    # Bounded: the deep tier used to score every fused candidate uncapped,
-    # while the live tier was capped at 40. A code-intent query produced 80
-    # candidates (17,488 measured tokens); this makes the two rungs agree.
-    deep_valid = valid[:DEEP_CANDIDATE_CAP]
-    if await _fast_health():
-        results = await _post_rerank(
-            RERANKER_URL, query, [t for _, t in deep_valid], RERANKER_TIMEOUT, "4B"
-        )
-        if results is not None:
-            async with _lock:
-                _health["ok"] = True
-                _health["last_check"] = time.time()
-            return scatter(results, deep_valid, len(candidates)), "qwen3-reranker-4b"
-        async with _lock:
-            _health["ok"] = False
-            _health["last_check"] = time.time()
-
-    # Local unavailable / known-down: hosted keeps deep-tier rerank alive.
+    # 2026-10-11 (operator directive): 8B ONLY. The local llama.cpp :8003 lane
+    # (the retired 4B/0.6B ladders) is TORCHED — both tiers now resolve through
+    # the hosted multi-provider chain (rerank_lanes: siliconflow → openrouter →
+    # deepinfra, all Qwen3-Reranker-8B). A dead provider costs a hop, not the
+    # request; when every rung is down, rerank no-ops (search never breaks).
     hosted = await _hosted_scores(query, valid, len(candidates))
     if hosted is not None:
         return hosted

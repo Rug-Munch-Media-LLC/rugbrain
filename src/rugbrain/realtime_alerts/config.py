@@ -42,7 +42,7 @@ CRITICAL_ALERTS_TABLE = os.getenv("CLICKHOUSE_CRITICAL_TABLE", "critical_alerts"
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 # Registry-aware default (native dim of the configured model); env still wins.
 EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS") or default_dim_for_model(QWEN_EMBED_MODEL_NAME))
 LIVE_THREATS_COLLECTION = os.getenv("LIVE_THREATS_COLLECTION", "live_threats")

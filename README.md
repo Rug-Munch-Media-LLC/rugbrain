@@ -17,7 +17,7 @@ serves them back through semantic, hybrid, and entity-aware search. Powers
 the scanner's **Known Scam Patterns** check, the bot's `/research` and
 `/investigate` commands, and the frontend's AI chat / wallet forensics.
 
-**Status:** LIVE / canonical. Embedding: Qwen3-Embedding-4B (2560-dim) —
+**Status:** LIVE / canonical. Embedding: Qwen3-Embedding-8B (2560-dim) —
 DeepInfra hosted (`EMBED_PROVIDER=deepinfra`, massive-scale lane) with local
 llama.cpp (`:8004`) as the same-model fallback (`EMBED_PROVIDER=local`). 40+
 Qdrant collections remain live (see
@@ -39,7 +39,7 @@ inventory; [TODO.md](TODO.md) for honest current gaps).
 (CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
 via Nitter RSS or SearXNG) and, for each new incident:
 
-1. embeds the incident description (Qwen3-Embedding-4B, 2560-dim — DeepInfra
+1. embeds the incident description (Qwen3-Embedding-8B, 2560-dim — DeepInfra
    hosted when `EMBED_PROVIDER=deepinfra`, else local llama.cpp)
 2. stores it in Qdrant `security_alerts`
 3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
@@ -73,7 +73,7 @@ protocol or a trending scam is immediately flagged.
 
 ## Architecture
 
-- **Embedding:** Qwen3-Embedding-4B (2560-dim) — DeepInfra hosted primary
+- **Embedding:** Qwen3-Embedding-8B (2560-dim) — DeepInfra hosted primary
   (`EMBED_PROVIDER=deepinfra`) with local llama.cpp `:8004` same-model
   fallback (`EMBED_PROVIDER=local`). No hash fallback — fails loud (HTTP 503).
 - **Vector store:** Qdrant (Cosine, 2560-dim), collections created on demand.
@@ -90,7 +90,7 @@ API reference, data flows, operations, roadmap).
 ## Scope
 
 - Qdrant collection definitions and payload schema
-- Embedding model configs (qwen3-embedding-4b primary) and chunking strategies
+- Embedding model configs (qwen3-embedding-8b primary) and chunking strategies
 - Ingestion scripts (threats, scams, news, wallet labels)
 - Three-pillar retrieval engine, RRF fusion, scam-check API
 - B2 permanence (backup/restore)
@@ -118,7 +118,7 @@ python -m rugbrain
 ```
 
 Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
-and llama.cpp Qwen3 embedder with `qwen3-embedding-4b` loaded (`QWEN_EMBED_URL`). See `.env.example`.
+and llama.cpp Qwen3 embedder with `qwen3-embedding-8b` loaded (`QWEN_EMBED_URL`). See `.env.example`.
 
 ## Adding a data source
 
@@ -133,7 +133,7 @@ Interactive: `http://localhost:8012/docs` once the server is up.
 Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
 
 > ⚠️ README-RAG-API.md is partially stale — it still documents
-> nomic-embed-text as primary; the canonical embedder is now qwen3-embedding-4b (2560-dim).
+> nomic-embed-text as primary; the canonical embedder is now qwen3-embedding-8b (2560-dim).
 
 ## Repo status
 

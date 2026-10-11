@@ -1,7 +1,7 @@
 """Multi-provider hosted rerank — one chain, three rungs, no single point of failure.
 
 2026-10-11: rerank was DeepInfra-only, so the credit exhaustion took rerank down
-with it. DeepInfra also served ``Qwen3-Reranker-4B`` while the rest of the
+with it. DeepInfra also served ``Qwen3-Reranker-8B`` while the rest of the
 system runs the 8B — a rerank/decode quality mismatch across lanes.
 
 All three providers serve **Qwen/Qwen3-Reranker-8B** (verified live

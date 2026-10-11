@@ -3,7 +3,7 @@
 
 Used by ``ingest_codebase_knowledge.py``, ``ingest_security_patterns.py`` and
 ``ingest_good_bad_contracts.py`` so every script uses the same batch
-embedding path (2560-dim qwen3-embedding-4b), deterministic UUIDv5 point IDs, and
+embedding path (2560-dim qwen3-embedding-8b), deterministic UUIDv5 point IDs, and
 canonical Qdrant payload shape.
 
 Scripts import this module directly:
@@ -30,7 +30,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-4b")
+QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 EMBEDDING_DIM = 2560
 
 # Long code texts embed slowly; batch 8 long texts (matches seed_qdrant).

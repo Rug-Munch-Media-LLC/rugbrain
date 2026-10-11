@@ -7,9 +7,9 @@
 
 | Service | Port | Model | Output Dims | Role |
 |---------|------|-------|-------------|------|
-| qwen-embedder | :8004 | qwen3-embedding-4b Q8_0 | **2560** | Corpus embeddings + search queries (local) |
-| qwen-reranker | :8003 | qwen3-reranker-4b Q8_0 | scores | Deep rerank (local) |
-| DeepInfra (hosted) | API | `Qwen/Qwen3-Embedding-4B` + `Qwen/Qwen3-Reranker-4B` | 2560 / scores | **Canonical primary lane** (same models as local) |
+| qwen-embedder | :8004 | qwen3-embedding-8b Q8_0 | **2560** | Corpus embeddings + search queries (local) |
+| qwen-reranker | :8003 | qwen3-reranker-8b Q8_0 | scores | Deep rerank (local) |
+| DeepInfra (hosted) | API | `Qwen/Qwen3-Embedding-8B` + `Qwen/Qwen3-Reranker-8B` | 2560 / scores | **Canonical primary lane** (same models as local) |
 | model gateway | :8010 | — | — | Strain breaker + cloud fallback lanes |
 | chat | :8009 | qwythos-9b | — | LLM generation only |
 
@@ -17,7 +17,7 @@
 > dims are **2560** (not 1024/MRL — every collection measures 2560d). The
 > 0.6B utility tiers (`llama-speed-embed` :8007, `qwen-reranker-fast` :8008)
 > are **retired** — both ports are dead. There is no BGE-M3 anywhere in the
-> stack: embed = `Qwen3-Embedding-4B`, rerank = `Qwen3-Reranker-4B`, local
+> stack: embed = `Qwen3-Embedding-8B`, rerank = `Qwen3-Reranker-8B`, local
 > llama.cpp + DeepInfra.
 
 **Bind reality (2026-09-20):** `:8003`/`:8004` listen on **127.0.0.1**
@@ -38,8 +38,8 @@ never assume a bind from this doc alone.
 
 | Product | Embed | Rerank | Chat |
 |---------|-------|--------|------|
-| **rmi-backend** | `Qwen3-Embedding-4B` (DeepInfra + local :8004) via rugbrain | via rugbrain | — |
-| **rugbrain** | `Qwen3-Embedding-4B` (DeepInfra canonical → local :8004) | `Qwen3-Reranker-4B` :8003 + DeepInfra hosted | `qwythos-9b` :8009 (`RAG_CHAT_MODEL`) |
+| **rmi-backend** | `Qwen3-Embedding-8B` (DeepInfra + local :8004) via rugbrain | via rugbrain | — |
+| **rugbrain** | `Qwen3-Embedding-8B` (DeepInfra canonical → local :8004) | `Qwen3-Reranker-8B` :8003 + DeepInfra hosted | `qwythos-9b` :8009 (`RAG_CHAT_MODEL`) |
 | **rugmunchbot** | :8004 via its router | — | **intent-routed**: `local/qwythos-9b` first (free, private) → cloud for quality-critical |
 | **lite-chain-indexer** | own pools | — | — |
 
@@ -47,7 +47,7 @@ never assume a bind from this doc alone.
 
 ### Embedding
 ```
-DeepInfra Qwen/Qwen3-Embedding-4B   (canonical primary, 2560d, keyed)
+DeepInfra Qwen/Qwen3-Embedding-8B   (canonical primary, 2560d, keyed)
   ↓ unreachable
 local llama.cpp :8004               (SAME model ⇒ index-compatible fallback)
   ↓ both down
@@ -56,9 +56,9 @@ FAIL LOUD  (RAGUnavailableError → HTTP 503; no hash, no 0.6B, no MRL)
 
 ### Reranking
 ```
-local :8003 Qwen3-Reranker-4B (Q8_0)
+local :8003 Qwen3-Reranker-8B (Q8_0)
   ↓ strained/unreachable
-DeepInfra Qwen/Qwen3-Reranker-4B (hosted, same model)
+DeepInfra Qwen/Qwen3-Reranker-8B (hosted, same model)
   ↓ both down
 FAIL-OPEN: pre-rerank order preserved (search never breaks)
 ```
@@ -102,7 +102,7 @@ cloud lanes via the consumer's router (bot: intent table in model_router.py)
 ```bash
 # All four servers serving correct models/dims:
 curl -s http://172.22.0.1:8004/v1/embeddings -H 'Content-Type: application/json' \
-  -d '{"input":["t"],"model":"qwen3-embedding-4b"}' | jq '.data[0].embedding | length'   # 1024
+  -d '{"input":["t"],"model":"qwen3-embedding-8b"}' | jq '.data[0].embedding | length'   # 1024
 curl -s -X POST http://172.22.0.1:8008/rerank -H 'Content-Type: application/json' \
   -d '{"query":"rug","documents":["a","b"]}' | jq '.results[0].relevance_score'
 

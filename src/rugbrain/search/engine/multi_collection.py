@@ -60,7 +60,7 @@ async def search_multi_collection(
     Search-quality parameters:
 
     * ``rerank`` — **default True**: the top ``rerank_top_k`` candidates are
-      re-ranked with a cross-encoder (Qwen3-Reranker-4B) and the best
+      re-ranked with a cross-encoder (Qwen3-Reranker-8B) and the best
       ``rerank_keep`` (defaults to *limit*) are kept before truncation.
       Degrades gracefully: when the model backend is unavailable (or scoring
       exceeds ``rerank_timeout``), results keep their original retrieval order

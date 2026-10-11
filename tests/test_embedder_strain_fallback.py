@@ -1,6 +1,6 @@
 """Embedder consolidation doctrine (2026-08-29, supersedes 2026-08-26 strain tests).
 
-* ONE canonical embedder: qwen3-embedding-4b @ 2560 — DeepInfra primary,
+* ONE canonical embedder: qwen3-embedding-8b @ 2560 — DeepInfra primary,
   local :8004 fallback (SAME model ⇒ same vector space, fallback is
   index-compatible).
 * Auto chain NEVER touches cross-model lanes (gateway :8010, OpenRouter,

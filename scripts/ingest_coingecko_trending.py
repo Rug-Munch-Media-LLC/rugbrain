@@ -13,7 +13,7 @@ ranked list of the trending coins, plus a per-coin point
 (market cap rank, score, sparkline window). Deterministic ids make re-runs
 idempotent — the daily snapshot is refreshed in place, never duplicated.
 
-Collection config: named dense (2560-d qwen3-embedding-4b) + BM25 sparse hybrid, so
+Collection config: named dense (2560-d qwen3-embedding-8b) + BM25 sparse hybrid, so
 hybrid (RRF) search works from day one (same shape as regulation_enforcement).
 
 The snapshot is deliberately *one point per day* (not per coin only) so the
@@ -27,7 +27,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
   - httpx
 """
 

@@ -12,7 +12,7 @@ and ``audit_findings`` Qdrant collections from:
   - AUDIT_FINDINGS     — real exploit/audit case studies (Euler, Mango,
     Wormhole, Nomad, ...) for ``audit_findings``.
 
-Each pattern is embedded (2560-dim qwen3-embedding-4b) and upserted with canonical
+Each pattern is embedded (2560-dim qwen3-embedding-8b) and upserted with canonical
 metadata (category, severity, ecosystem, swc, source). Point IDs are
 deterministic UUIDv5 from content hashes → idempotent re-runs.
 
@@ -23,7 +23,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b
 """
 
 from __future__ import annotations

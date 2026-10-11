@@ -14,7 +14,7 @@ Detection pipeline:
      severity, chain, amount_lost_usd, date, protocol, source_type).
   4. Dedupe with ``incident_key = sha256(protocol + date + amount)[:12]``
      against alert points already stored in ``news`` (category=alert).
-  5. Embed each new incident (qwen3-embedding-4b via ) and store it in ``news``
+  5. Embed each new incident (qwen3-embedding-8b via ) and store it in ``news``
      with ``metadata.category = alert`` and ``source_type = alert_digest``;
      embed failures are non-fatal — the digest is still printed.
 
@@ -25,7 +25,7 @@ Usage:
 
 Requires (host):
   - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
-  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-4b loaded
+  - at QWEN_EMBED_URL (default http://127.0.0.1:8004/v1) with qwen3-embedding-8b loaded
   - httpx
 """
 

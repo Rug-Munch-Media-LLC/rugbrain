@@ -116,49 +116,55 @@ def test_live_tier_prefers_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="live"))
-    assert method == "deepinfra:qwen3-reranker-4b"
+    assert method == "deepinfra:qwen3-reranker-8b"
     assert scores[1] == 0.9
     assert scores[0] == 0.2
     assert local_calls["n"] == 0
 
 
-def test_live_tier_falls_to_local_on_hosted_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_tier_noops_when_hosted_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """2026-10-11 operator decision: hosted 8B chain only. Local 8B rerank was
+    measured non-viable on the CPU box (29GB free @ load 9.7/16, 8B GGUF files
+    deleted, :8003/:8004 socat forwards to dead backends). When every hosted
+    rung is down, rerank no-ops — search never breaks."""
     _pin(monkeypatch)
 
     async def fake_hosted(query: str, docs: list[str], top_n: int = 0, **kw: Any):
         return None
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
-        if url == sr.RERANKER_URL:
-            return [{"index": 0, "relevance_score": 0.7}]
-        return None  # retired :8008 speed tier
+    local_calls = {"n": 0}
+
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109
+        local_calls["n"] += 1
+        return [{"index": 0, "relevance_score": 0.7}]
 
     monkeypatch.setattr(sr, "hosted_rerank", fake_hosted)
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="live"))
-    assert method == "qwen3-reranker-4b"
-    assert scores[0] == 0.7
+    assert scores == [] and method == "none"
+    assert local_calls["n"] == 0
 
 
-def test_deep_tier_local_first(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_deep_tier_hosted_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """deep tier resolves through the hosted 8B chain; the local rung is gone."""
     _pin(monkeypatch)
-    hosted_calls = {"n": 0}
+    local_calls = {"n": 0}
 
     async def fake_hosted(query: str, docs: list[str], top_n: int = 0, **kw: Any):
-        hosted_calls["n"] += 1
         return [{"index": 0, "relevance_score": 0.99}]
 
-    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109 — test double mirrors the client signature
+    async def fake_post(url: str, query: str, docs: list[str], timeout: float, label: str):  # noqa: ASYNC109
+        local_calls["n"] += 1
         return [{"index": 0, "relevance_score": 0.8}]
 
     monkeypatch.setattr(sr, "hosted_rerank", fake_hosted)
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="deep"))
-    assert method == "qwen3-reranker-4b"
-    assert scores[0] == 0.8
-    assert hosted_calls["n"] == 0
+    assert method.endswith("qwen3-reranker-8b"), method
+    assert scores[0] == 0.99
+    assert local_calls["n"] == 0
 
 
 def test_deep_tier_hosted_fallback_on_local_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -174,5 +180,5 @@ def test_deep_tier_hosted_fallback_on_local_failure(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="deep"))
-    assert method == "deepinfra:qwen3-reranker-4b"
+    assert method == "deepinfra:qwen3-reranker-8b"
     assert scores[1] == 0.95

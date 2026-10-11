@@ -16,7 +16,7 @@ safe rather than hardcoding a magic integer.
 
 Budgets
 -------
-``EMBEDDING``  2,048 tok — Qwen3-Embedding-4B's own context. Every provider
+``EMBEDDING``  2,048 tok — Qwen3-Embedding-8B's own context. Every provider
                lane in ``embeddings.py``/``qwen_embedders.py`` truncates to
                8,000 *chars* (2,800 tok) before sending; this makes the
                intended ceiling explicit and shared instead of five copies of

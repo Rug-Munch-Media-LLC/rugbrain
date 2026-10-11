@@ -2,7 +2,7 @@
 
 GET /api/v1/search/federated?q=...&collections=news_v2_i,threat_intel_v2_i
     Fans the query across every backend mapped to the requested collections
-    (qwen4b / nemotron-free / any OpenRouter embed model), merges
+    (qwen8b / nemotron-free / any OpenRouter embed model), merges
     with reciprocal-rank fusion, tags each hit with its backend provenance.
 """
 
@@ -29,7 +29,7 @@ async def federated_search(
     rerank: str = Query(
         default="fast",
         pattern="^(fast|deep|off)$",
-        description="rerank lane: both labels serve the 4B :8003 (0.6B retired 2026-09-14), off",
+        description="rerank lane: both labels serve the 8B :8003 (0.6B retired 2026-09-14), off",
     ),
 ) -> dict[str, Any]:
     from rugbrain.multi_embedder import get_multi_embedder
@@ -59,7 +59,7 @@ async def vector_landscape() -> dict[str, Any]:
     """Live map of EVERY vector space in the fleet.
 
     For each Qdrant instance: every collection's actual dim + point count,
-    the inferred producing backend (2560=qwen4b, 2048=nemotron,
+    the inferred producing backend (2560=qwen8b, 2048=nemotron,
     1024=legacy-trunc, retired), the configured resolution, and MISMATCH
     flags where searches would fail. The single answer to 'what vectors do
     we have and can we query them all?'

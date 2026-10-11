@@ -4,7 +4,7 @@
 One lane decision for every bulk ingester:
 
   * ``deepinfra`` (default when a key is configured) — hosted
-    ``Qwen/Qwen3-Embedding-4B`` — the SAME 2560-dim vector space as the
+    ``Qwen/Qwen3-Embedding-8B`` — the SAME 2560-dim vector space as the
     local llama.cpp lane, ~80x faster (~23 ms/doc vs ~1947 ms/doc local,
     benchmarked 2026-08-29).  Bulk ingestion is heavy by nature and must
     NOT saturate the CPU-capped local server (2026-09-14 runaway:
@@ -18,7 +18,7 @@ One lane decision for every bulk ingester:
 Selection (``EMBED_PROVIDER`` env): ``deepinfra`` | ``local`` | unset
 (``auto``: DeepInfra when a key is available, else local).
 
-Dim policy: canonical corpus dim is 2560 (qwen3-embedding-4b native,
+Dim policy: canonical corpus dim is 2560 (qwen3-embedding-8b native,
 identical locally and on DeepInfra).  Override with ``QWEN_EMBED_DIMS``
 or ``RAG_EMBED_DIM`` only if a collection is deliberately MRL-truncated.
 
@@ -45,7 +45,7 @@ QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
-# Canonical dim — qwen3-embedding-4b native, same local and hosted.
+# Canonical dim — qwen3-embedding-8b native, same local and hosted.
 EMBED_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "2560")
 
 _TIMEOUT = {

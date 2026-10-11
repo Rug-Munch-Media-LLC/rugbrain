@@ -1,4 +1,4 @@
-"""HTTP transport for the Qwen3-Embedding-4B lanes (DeepInfra + llama.cpp).
+"""HTTP transport for the Qwen3-Embedding-8B lanes (DeepInfra + llama.cpp).
 
 Split from the provider class so the wire shape and the dim rule are testable
 without constructing a provider. Every failure is re-raised as a named

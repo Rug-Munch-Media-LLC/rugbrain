@@ -12,7 +12,7 @@ WHAT (checkpointed state @2026-08-25):
     known_scams_i / scam_patterns_i / defi_exploits_i / others   0 pts → delete
 
 HOW: read each shadow point's ORIGINAL TEXT from payload, re-embed via the
-CURRENT backend (post-flip = local 4B @2560), upsert into the mainline
+CURRENT backend (post-flip = local 8B @2560), upsert into the mainline
 collection with the original id/payload, then delete the shadow collection.
 
 RUN: after the flip, one collection at a time:

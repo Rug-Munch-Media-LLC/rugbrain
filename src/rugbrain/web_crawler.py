@@ -8,7 +8,7 @@ degrades gracefully to plain HTTP fetching + lightweight HTML-to-text
 extraction, so the pipeline keeps working in minimal environments.
 
 Pipeline for every source: fetch → extract clean text → chunk → embed
-(Qwen3-Embedding-4B via ``Qwen3Embedder``) → upsert into Qdrant
+(Qwen3-Embedding-8B via ``Qwen3Embedder``) → upsert into Qdrant
 with deterministic IDs (idempotent).
 
 Politeness features:

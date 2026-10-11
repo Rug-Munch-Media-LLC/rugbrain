@@ -1,4 +1,4 @@
-"""Embedding lane — Qwen3-4B via llama.cpp, L2-normalized."""
+"""Embedding lane — Qwen3-8B via llama.cpp, L2-normalized."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ log = logging.getLogger("rugbrain.alerts")
 
 
 async def _embed(text: str) -> list[float] | None:
-    """Embed *text* through Qwen3-4B (llama.cpp) (L2-normalized). Returns None on failure."""
+    """Embed *text* through Qwen3-8B (llama.cpp) (L2-normalized). Returns None on failure."""
     try:
         async with httpx.AsyncClient(timeout=60.0) as c:
             r = await c.post(

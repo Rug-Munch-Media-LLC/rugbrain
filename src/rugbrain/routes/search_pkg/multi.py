@@ -39,7 +39,7 @@ async def search_multi(
     and ``scam_intel_v2`` by 20% (higher priority sources).
 
     When ``rerank=true``, the top-40 fused candidates are scored by the
-    self-hosted Qwen3-Reranker-4B cross-encoder before truncating to ``limit``.
+    self-hosted Qwen3-Reranker-8B cross-encoder before truncating to ``limit``.
 
     Example::
 

@@ -13,7 +13,7 @@ THE CANONICAL LANE IS READ, NOT HARDCODED (2026-09-29)
 
     The literals were a real defect, not a style preference. This module is a
     LIVE path (``query_embedder.embed_query`` -> ``search/filters.py`` ->
-    every search request), so its ``"qwen3-embedding-4b"`` default was the
+    every search request), so its ``"qwen3-embedding-8b"`` default was the
     model a client would actually send whenever the env did not override it.
     With the 42 retired collections deleted, that default can only produce a
     vector no surviving collection accepts.
