@@ -58,6 +58,7 @@ from rugbrain.embeddings_pkg.legacy_lanes import (
 from rugbrain.embeddings_pkg.local_lane import embed as int_embed
 from rugbrain.embeddings_pkg.local_lane import reachable as int_reachable
 from rugbrain.embeddings_pkg.normalize import resize as resize_fn
+from rugbrain.embeddings_pkg.siliconflow_lane import embed as siliconflow_embed
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ _deepinfra_embed = deepinfra_embed
 _gateway_embed = gateway_embed
 _openrouter_embed = openrouter_embed
 _nim_embed = nim_embed
+_siliconflow_embed = siliconflow_embed
 _int_reachable = int_reachable
 _deepinfra_ready = deepinfra_ready
 _or_key_pool = or_key_pool
@@ -88,10 +90,15 @@ _LANE_GLOBALS: dict[str, str] = {
     "gateway": "_gateway_embed",
     "openrouter": "_openrouter_embed",
     "nim": "_nim_embed",
+    "siliconflow": "_siliconflow_embed",
 }
 
 #: The `auto` chain, in order. DeepInfra first (hosted, warm, no CPU
 #: contention), local :8004 second (same model ⇒ same space).
+#: NOT in this chain: `siliconflow` (credential 401-dead as of 2026-10-02,
+#: gated off by SILICONFLOW_ENABLED=0). A gated-off rung returns None and
+#: falls through, so it is safe in `_OVERRIDE_CHAINS` but adding it here
+#: would only add a guaranteed-miss HTTP round trip to every request.
 AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
@@ -104,6 +111,15 @@ _OVERRIDE_CHAINS: dict[str, tuple[str, ...]] = {
     # so an exhausted OR pool is never allowed to be the end of the road.
     "openrouter": ("openrouter", "nim"),
     "nim": ("nim",),
+    # 2026-10-11: the credential was rotated and the lane is proven 4096-dim
+    # (cosine 0.9975 against the DeepInfra vectors it replaces, so the live
+    # collections stay queryable with no re-embed). The chain is all three
+    # hosted providers: DeepInfra is last while it is out of credit and
+    # rejoins the head by itself once topped up, with no code change.
+    "siliconflow": ("siliconflow", "openrouter", "deepinfra"),
+    # The full chain without pinning a primary, for operators who would rather
+    # take whatever answers first than hold a lane at the head.
+    "hosted": ("siliconflow", "openrouter", "deepinfra"),
 }
 
 
