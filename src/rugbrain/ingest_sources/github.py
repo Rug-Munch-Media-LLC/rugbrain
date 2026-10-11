@@ -3,7 +3,8 @@
 Provides the two calls every GitHub-backed source needs:
 
   * ``list_repo_files`` — one ``git/trees`` recursive call returns the full
-    file list of a repo (cheap, no per-directory pagination).
+    file list of a repo (cheap, no per-directory pagination).  Falls back to
+    ``git clone --filter=blob:none`` when the API is rate-limited.
   * ``fetch_raw``       — raw.githubusercontent.com content fetch.
 
 Plus ``pick_files`` for suffix/directory filtering.
@@ -35,6 +36,7 @@ from rugbrain.ingest_sources.fetch_state import (
     raw_not_found_reason,
     record_fetch_error,
 )
+from rugbrain.ingest_sources.github_git import list_repo_files_git
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +74,11 @@ async def list_repo_files(
                 classify_status(r.status_code, headers=r.headers, body=r.text),
                 f"list_repo_files repo={repo} ref={ref} status={r.status_code}",
             )
+            # Fallback: git clone (avoids GitHub API 60 req/h rate limit)
+            entries = await list_repo_files_git(repo, ref)
+            if entries:
+                log.info("list_repo_files_git_fallback_ok repo=%s entries=%d", repo, len(entries))
+                return entries
             return []
         entries = r.json().get("tree") or []
         return [
@@ -84,6 +91,11 @@ async def list_repo_files(
         record_fetch_error(
             classify_exception(e), f"list_repo_files repo={repo} ref={ref} err={str(e)[:160]}"
         )
+        # Fallback: git clone
+        entries = await list_repo_files_git(repo, ref)
+        if entries:
+            log.info("list_repo_files_git_fallback_ok repo=%s entries=%d", repo, len(entries))
+            return entries
         return []
 
 
@@ -174,6 +186,7 @@ __all__ = [
     "fetch_raw",
     "github_api_headers",
     "list_repo_files",
+    "list_repo_files_git",
     "max_size",
     "pick_files",
     "tree_has_blob",
