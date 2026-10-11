@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest Forta malicious smart contract dataset into ``scam_intel_v2``.
+"""Ingest Forta malicious smart contract dataset into ``scam_intel_v2_8b``.
 
 Source: forta-network/labelled-datasets GitHub repo
   - labels/1/malicious_smart_contracts.csv (Ethereum Mainnet, chainId 1)
@@ -9,8 +9,8 @@ CSV schema (per README):
   contract_address, contract_tag, contract_creator, contract_creation_tx,
   contract_creator_tag, source, notes, contract_creator_etherscan_label
 
-Each contract is embedded (1024-dim bge-m3 via Infinity) and upserted into
-``scam_intel_v2`` with canonical metadata (chain, attack_vector=contract_tag,
+Each contract is embedded (4096-dim Qwen3-Embedding-8B via DeepInfra) and upserted into
+``scam_intel_v2_8b`` with canonical metadata (chain, attack_vector=contract_tag,
 source, source_url, creator, creation_tx, notes).
 
 Idempotent: point IDs are deterministic UUIDv5 from ``forta:{chain}:{address}``.
@@ -21,8 +21,8 @@ Usage:
     python scripts/ingest_forta.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - DEEPINFRA_API_KEY for the 8B lane
   - httpx
 """
 
@@ -40,7 +40,8 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ingest_common import embed_many, content_hash
+from ingest_common import content_hash
+from rugbrain.embedder import get_embedder
 
 from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -52,10 +53,9 @@ FORTA_URLS = {
     "ethereum": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/1/malicious_smart_contracts.csv",
     "optimism": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/10/malicious_smart_contracts.csv",
 }
-COLLECTION = "scam_intel_v2"
+COLLECTION = "scam_intel_v2_8b"
 SOURCE = "forta"
 SOURCE_URL = "https://github.com/forta-network/labelled-datasets"
-EMBEDDING_DIM = 1024
 REQUEST_TIMEOUT = 60.0
 
 # Map Forta tags to canonical attack vectors
@@ -207,7 +207,8 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
             return stats
 
         texts = [d["text"] for d in docs]
-        vectors = await embed_many(client, texts)
+        embedder = get_embedder()
+        vectors = await embedder.embed(texts)
         for doc, vec in zip(docs, vectors, strict=False):
             if not vec:
                 stats["errors"] += 1
@@ -219,7 +220,7 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
             logger.info("dry_run would_upsert=%d into=%s", stats["embedded"], COLLECTION)
             return stats
 
-        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://localhost:6333"))
+        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         for doc in docs:
             vec = doc.get("vector")
             if not vec:
@@ -251,7 +252,7 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Forta malicious contracts → scam_intel_v2")
+    parser = argparse.ArgumentParser(description="Forta malicious contracts → scam_intel_v2_8b")
     parser.add_argument("--dry-run", action="store_true", help="fetch + embed but do not upsert")
     parser.add_argument("--limit", type=int, default=None, help="max contracts to ingest (cap)")
     args = parser.parse_args()

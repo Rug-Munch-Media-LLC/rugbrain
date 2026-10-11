@@ -6,10 +6,10 @@ Source: scamsniffer/scam-database GitHub repo (daily updated, 7-day delay)
   - blacklist/address.json    — malicious wallet addresses (ETH + others)
   - blacklist/combined.json   — mapping of domain → associated addresses
 
-Domains → ``threat_intel_v2`` (live phased-intel collection).
-Addresses → ``known_scams`` (documented scam registry).
+Domains → ``threat_intel_v2_8b`` (live phased-intel collection).
+Addresses → ``known_scams_8b`` (documented scam registry).
 
-Each entity is embedded (1024-dim bge-m3 via Infinity) and upserted with
+Each entity is embedded (4096-dim Qwen3-Embedding-8B via DeepInfra) and upserted with
 canonical metadata (entity_type, entity, source, source_url, domain_date_archive
 when available).
 
@@ -21,8 +21,8 @@ Usage:
     python scripts/ingest_scamsniffer.py
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - DEEPINFRA_API_KEY for the 8B lane
   - httpx
 """
 
@@ -39,7 +39,7 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ingest_common import embed_many
+from rugbrain.embedder import get_embedder
 
 from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -51,9 +51,8 @@ DOMAINS_URL = f"{BASE_URL}/domains.json"
 ADDRESS_URL = f"{BASE_URL}/address.json"
 SOURCE = "scamsniffer"
 SOURCE_URL = "https://github.com/scamsniffer/scam-database"
-DOMAIN_COLLECTION = "threat_intel_v2"
-ADDRESS_COLLECTION = "known_scams"
-EMBEDDING_DIM = 1024
+DOMAIN_COLLECTION = "threat_intel_v2_8b"
+ADDRESS_COLLECTION = "known_scams_8b"
 REQUEST_TIMEOUT = 60.0
 
 
@@ -79,14 +78,16 @@ def _domain_docs(domains: list[str], limit: int | None) -> list[dict[str, Any]]:
             "source_url": SOURCE_URL,
             "source_type": "scamsniffer_domain",
         }
-        docs.append({
-            "doc_id": doc_id,
-            "text": content,
-            "metadata": metadata,
-            "severity": "high",
-            "chain": "multi",
-            "collection": DOMAIN_COLLECTION,
-        })
+        docs.append(
+            {
+                "doc_id": doc_id,
+                "text": content,
+                "metadata": metadata,
+                "severity": "high",
+                "chain": "multi",
+                "collection": DOMAIN_COLLECTION,
+            }
+        )
     return docs
 
 
@@ -106,40 +107,57 @@ def _address_docs(addresses: list[str], limit: int | None) -> list[dict[str, Any
             "source_url": SOURCE_URL,
             "source_type": "scamsniffer_address",
         }
-        docs.append({
-            "doc_id": doc_id,
-            "text": content,
-            "metadata": metadata,
-            "severity": "high",
-            "chain": "multi",
-            "collection": ADDRESS_COLLECTION,
-        })
+        docs.append(
+            {
+                "doc_id": doc_id,
+                "text": content,
+                "metadata": metadata,
+                "severity": "high",
+                "chain": "multi",
+                "collection": ADDRESS_COLLECTION,
+            }
+        )
     return docs
 
 
-async def _upsert(client: httpx.AsyncClient, store: QdrantVectorStore, docs: list[dict[str, Any]]) -> dict[str, int]:
+async def _upsert(
+    client: httpx.AsyncClient, store: QdrantVectorStore, docs: list[dict[str, Any]]
+) -> dict[str, int]:
+    """Upsert docs in <=10k batches to bound memory and embedding payload size."""
     inserted = 0
     failed = 0
-    texts = [d["text"] for d in docs]
-    vectors = await embed_many(client, texts)
-    for doc, vec in zip(docs, vectors, strict=False):
-        if not vec:
-            failed += 1
-            continue
-        ok = await store.insert(
-            doc_id=doc["doc_id"],
-            collection=doc["collection"],
-            embedding=vec,
-            content=doc["text"],
-            metadata=doc["metadata"],
-            source=SOURCE,
-            severity=doc["severity"],
-            chain=doc["chain"],
-        )
-        if ok:
-            inserted += 1
-        else:
-            failed += 1
+    batch_size = 10000
+    embedder = get_embedder()
+    for i in range(0, len(docs), batch_size):
+        batch = docs[i : i + batch_size]
+        texts = [d["text"] for d in batch]
+        vectors = await embedder.embed(texts)
+        for doc, vec in zip(batch, vectors, strict=False):
+            if not vec:
+                failed += 1
+                continue
+            ok = await store.insert(
+                doc_id=doc["doc_id"],
+                collection=doc["collection"],
+                embedding=vec,
+                content=doc["text"],
+                metadata=doc["metadata"],
+                source=SOURCE,
+                severity=doc["severity"],
+                chain=doc["chain"],
+            )
+            if ok:
+                inserted += 1
+            else:
+                failed += 1
+        if (i + batch_size) % 10000 == 0 or i + batch_size >= len(docs):
+            logger.info(
+                "progress %d/%d docs upserted=%d failed=%d",
+                min(i + batch_size, len(docs)),
+                len(docs),
+                inserted,
+                failed,
+            )
     return {"inserted": inserted, "failed": failed}
 
 
@@ -181,7 +199,7 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
             )
             return stats
 
-        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://localhost:6333"))
+        store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
         if domain_docs:
             res = await _upsert(client, store, domain_docs)
             stats["domains_upserted"] = res["inserted"]
@@ -208,6 +226,7 @@ def main() -> None:
 
     stats = asyncio.run(run(args.dry_run, args.limit))
     import json
+
     print(json.dumps(stats, indent=2))
 
 

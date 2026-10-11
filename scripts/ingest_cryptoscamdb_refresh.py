@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Incremental refresh of CryptoScamDB blacklist into ``known_scams``.
+"""Incremental refresh of CryptoScamDB blacklist into ``known_scams_8b``.
 
 Wraps ``ingest_cryptoscamdb.py`` logic but adds a --since / --days filter
 on the ``detected_at`` field from YAML entries, so only recent scam
@@ -8,8 +8,8 @@ entries are (re)ingested.
 Source: CryptoScamDB (https://cryptoscamdb.org) — same as
 ``ingest_cryptoscamdb.py``.
 
-Each entry is embedded (1024-dim bge-m3 via Infinity) and upserted into
-``known_scams`` with canonical metadata (category, chain, severity, source,
+Each entry is embedded (4096-dim Qwen3-Embedding-8B via DeepInfra) and upserted into
+``known_scams_8b`` with canonical metadata (category, chain, severity, source,
 source_url, detected_at).
 
 Idempotent: point IDs are deterministic UUIDv5 from the content hash.
@@ -20,8 +20,8 @@ Usage:
     python scripts/ingest_cryptoscamdb_refresh.py  # full ingest (like original)
 
 Requires (host):
-  - Qdrant at QDRANT_URL (default http://localhost:6333)
-  - Infinity at INFINITY_URL (default http://localhost:8001) with BAAI/bge-m3
+  - Qdrant at QDRANT_URL (default http://127.0.0.1:6334)
+  - DEEPINFRA_API_KEY for the 8B lane
   - git, PyYAML (optional; falls back to a lightweight parser)
 """
 
@@ -49,7 +49,8 @@ from ingest_cryptoscamdb import (
 )  # noqa: F401
 
 from ingest_common import content_hash
-from ingest_common2 import build_doc, write_docs
+from ingest_common2 import build_doc
+from rugbrain.embedder import get_embedder
 from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -191,7 +192,7 @@ def _docs_since(
                     metadata=metadata,
                     severity=severity,
                     chain=chain or "multi",
-                    collection="known_scams",
+                    collection="known_scams_8b",
                 )
             )
             if limit and len(docs) >= limit:
@@ -203,7 +204,7 @@ async def run(
     dry_run: bool, limit: int | None, days: int | None, since: str | None
 ) -> dict[str, Any]:
     stats = {
-        "collection": "known_scams",
+        "collection": "known_scams_8b",
         "source": "cryptoscamdb",
         "fetched": 0,
         "embedded": 0,
@@ -234,16 +235,68 @@ async def run(
         return {"inserted": 0, "chunks": 0, "failed": 0}
 
     stored_stats = {"inserted": 0, "chunks": 0, "failed": 0}
-    store = QdrantVectorStore()
+    store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
-            stored_stats = await write_docs(
-                client,
-                store,
-                docs,
-                source="cryptoscamdb",
-                collection="known_scams",
-                dry_run=dry_run,
+            embedder = get_embedder()
+            for i, doc in enumerate(docs, start=1):
+                text = (doc.get("text") or "").strip()
+                if not text:
+                    continue
+                # Chunk text into fixed-width windows (same as ingest_common2)
+                windows = []
+                start = 0
+                while start < len(text):
+                    end = min(start + 2000, len(text))
+                    chunk = text[start:end]
+                    if chunk.strip():
+                        windows.append(chunk)
+                    if end == len(text):
+                        break
+                    start = max(end - 100, start + 1)
+
+                # Embed all windows
+                if windows:
+                    vectors = await embedder.embed(windows)
+                    for ci, (window, vector) in enumerate(zip(windows, vectors)):
+                        if not vector:
+                            stored_stats["failed"] += 1
+                            continue
+                        doc_id = f"{doc['rel_key']}:{content_hash(window)}:{ci}"
+                        metadata = dict(doc.get("metadata") or {})
+                        metadata["chunk_index"] = ci
+                        metadata["total_chunks"] = len(windows)
+                        ok = await store.insert(
+                            doc_id=doc_id,
+                            collection="known_scams_8b",
+                            embedding=vector,
+                            content=window,
+                            metadata=metadata,
+                            source="cryptoscamdb",
+                            severity=doc.get("severity", "medium"),
+                            chain=str(doc.get("chain", "") or ""),
+                        )
+                        if ok:
+                            stored_stats["inserted"] += 1
+                        else:
+                            stored_stats["failed"] += 1
+                        stored_stats["chunks"] += 1
+                if i % 25 == 0 or i == len(docs):
+                    logger.info(
+                        "progress %d/%d docs, %d chunks upserted (%d failed)",
+                        i,
+                        len(docs),
+                        stored_stats["inserted"],
+                        stored_stats["failed"],
+                    )
+            logger.info(
+                "done source=%s collection=%s docs=%d chunks=%d inserted=%d failed=%d",
+                "cryptoscamdb",
+                "known_scams_8b",
+                len(docs),
+                stored_stats["chunks"],
+                stored_stats["inserted"],
+                stored_stats["failed"],
             )
     finally:
         await store.close()
@@ -256,7 +309,7 @@ async def run(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Incremental refresh of CryptoScamDB blacklist into known_scams"
+        description="Incremental refresh of CryptoScamDB blacklist into known_scams_8b"
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview counts only")
     parser.add_argument("--limit", type=int, default=None, help="Max entries to ingest")
