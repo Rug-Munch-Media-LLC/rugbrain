@@ -38,7 +38,7 @@ from typing import Any, cast
 
 import httpx
 
-from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+from rugbrain.rerank_lanes import hosted_enabled, hosted_rerank  # multi-provider chain (2026-11)
 from rugbrain.search.rerank_instructions import apply_instruction, detect_vertical
 from rugbrain.search.rerank_scores import (
     RERANK_TEXT_LIMIT,

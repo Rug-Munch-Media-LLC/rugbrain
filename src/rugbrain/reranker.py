@@ -28,7 +28,7 @@ from rugbrain.rerank_compat import (
 )
 from rugbrain.rerank_health import _fast_health, get_reranker_health, reranker_health_loop
 from rugbrain.rerank_health import _mark as _mark_health
-from rugbrain.rerank_hosted import hosted_enabled, hosted_rerank
+from rugbrain.rerank_lanes import hosted_enabled, hosted_rerank  # multi-provider chain (2026-11)
 from rugbrain.rerank_instructions import (
     RERANK_INSTRUCTIONS,
     rerank_alerts,
