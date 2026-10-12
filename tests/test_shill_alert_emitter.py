@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 
 spec = importlib.util.spec_from_file_location(
     "alert_shill_campaigns", Path(__file__).resolve().parents[1] / "scripts/alert_shill_campaigns.py"
