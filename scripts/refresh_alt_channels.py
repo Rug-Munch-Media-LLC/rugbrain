@@ -20,8 +20,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from rugbrain.ingest_sources.alt_ingest_channels import PINNED_CHANNELS
-from rugbrain.ingest_sources.alt_ingest_vet import vet
 from rugbrain.ingest_sources.alt_ingest_client import build_alt_ingest_client
+from rugbrain.ingest_sources.alt_ingest_vet import vet
 
 OUT = Path(__file__).resolve().parents[1] / "data" / "alt_ingest_extra_channels.txt"
 
@@ -55,7 +55,7 @@ async def main() -> None:
         try:
             await client(JoinChannelRequest(handle))
             join_ok += 1
-        except Exception as exc:  # noqa: BLE001 — flood/private: report, continue
+        except Exception as exc:
             blocked.append(f"{handle}:{str(exc)[:60]}")
 
     extras = sorted(set(kept) - set(core))
