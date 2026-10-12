@@ -26,8 +26,9 @@ from rugbrain.dim_policy import (
 def test_registry_native_dims_match_verified_reality():
     # Values verified live 2026-08-25 against :8004/DeepInfra; the 0.6B
     # speed tier was retired 2026-09-14.
-    assert native_dims("qwen3-embedding-8b") == 2560
-    assert native_dims("qwen3-embedding-8b") is None  # retired 2026-09-14
+    # 2026-10-12 (doctrine update): canonical lane is 8B @ 4096; qwen3-embedding-8b
+    # native dim is 4096. The 4B/2560 generation is retired (returns None).
+    assert native_dims("qwen3-embedding-8b") == 4096
     assert native_dims("nvidia/nemotron-3-embed-1b") == 2048
     assert native_dims("nvidia/llama-nemotron-embed-vl-1b-v2") == 2048
 
@@ -35,14 +36,15 @@ def test_registry_native_dims_match_verified_reality():
 def test_registry_unknown_model_returns_none_and_fallback():
     assert native_dims("totally-unknown-model") is None
     assert default_dim_for_model("totally-unknown-model", fallback=999) == 999
-    assert default_dim_for_model("qwen3-embedding-8b") == 2560
+    # 2026-10-12: default_dim_for_model for canonical model returns 4096
+    assert default_dim_for_model("qwen3-embedding-8b") == 4096
 
 
 def test_registry_lookup_is_whitespace_case_tolerant():
-    assert native_dims("  Qwen3-Embedding-8B ") == 2560
+    assert native_dims("  Qwen3-Embedding-8B ") == 4096
 
 
-# ── normalize_dims contract ──────────────────────────────────────────────
+# ── normalize_dims contract (2026-09-30 doctrine: REFUSES to truncate) ─────
 
 
 def test_normalize_exact_size_is_l2_normalized_passthrough():
@@ -52,29 +54,45 @@ def test_normalize_exact_size_is_l2_normalized_passthrough():
     assert math.isclose(sum(x * x for x in out), 1.0)
 
 
-def test_normalize_oversize_truncates_then_renormalizes():
+def test_normalize_oversize_raises_refusing_to_truncate():
+    """2026-09-30 doctrine: normalize_dims REFUSES to truncate oversize vectors.
+    An oversize vector raises ValueError mentioning 'refusing to truncate'."""
     v = [1.0] * 8
-    out = normalize_dims(v, 4)
-    assert len(out) == 4
-    assert all(x == pytest.approx(0.5) for x in out)
-    assert math.isclose(sum(x * x for x in out), 1.0)
+    with pytest.raises(ValueError, match="refusing to truncate"):
+        normalize_dims(v, 4)
 
 
-def test_normalize_oversize_differs_from_plain_slice_when_unnormalized():
-    # Truncation alone loses norm; policy must renormalize.
+def test_normalize_oversize_raises_with_dim_info():
+    """Error message names both the source and target dims."""
     v = [2.0, 0.0, 2.0, 0.0]
-    out = normalize_dims(v, 2)
-    assert out == [1.0, 0.0]
+    with pytest.raises(ValueError, match="4-dim vector to 2"):
+        normalize_dims(v, 2)
 
 
-def test_normalize_zero_vector_returns_zeros_not_crash():
-    out = normalize_dims([0.0, 0.0, 0.0, 0.0], 2)
+def test_normalize_zero_vector_exact_size_returns_zeros():
+    """Exact-size zero vector is L2-normalized to zeros (no crash)."""
+    out = normalize_dims([0.0, 0.0], 2)
     assert out == [0.0, 0.0]
 
 
 def test_normalize_undersize_rejects_loud():
     with pytest.raises(ValueError, match="dim"):
         normalize_dims([1.0, 2.0], 4)
+
+
+# ── Guard: no 4B/2560 lane reachable ─────────────────────────────────────
+
+
+def test_retired_4b_model_returns_none():
+    """The 4B/2560 generation is retired — native_dims returns None."""
+    assert native_dims("qwen3-embedding-4b") is None
+
+
+def test_retired_4b_model_raises_on_use():
+    """Using the retired 4B model via assert_writable_model raises."""
+    from rugbrain.dim_policy import assert_writable_model
+    with pytest.raises(ValueError, match=r"retired.*use.*qwen3-embedding-8b"):
+        assert_writable_model("qwen3-embedding-4b")
 
 
 # ── OpenRouter key pool ──────────────────────────────────────────────────

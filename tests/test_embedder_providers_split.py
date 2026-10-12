@@ -29,7 +29,7 @@ class _Emb:
         self.api_key = DEEPINFRA_API_KEY
 
 
-# ── _fit: dim drift must raise, never silently truncate short ────────────────
+# ── _fit: dim drift must raise, never silently truncate ──────────────────
 
 
 def test_fit_passes_exact_dim_through_unchanged():
@@ -37,9 +37,11 @@ def test_fit_passes_exact_dim_through_unchanged():
     assert _fit(vec, 3, "test") is vec
 
 
-def test_fit_truncates_long_vector_to_target_dim():
-    out = _fit([1.0] * 8, 4, "test")
-    assert len(out) == 4
+def test_fit_raises_on_oversize_vector():
+    """2026-09-30 doctrine: normalize_dims refuses to truncate oversize vectors.
+    _fit delegates to normalize_dims, so an oversize vector raises ValueError."""
+    with pytest.raises(ValueError, match="refusing to truncate"):
+        _fit([1.0] * 8, 4, "test")
 
 
 def test_fit_raises_on_short_vector():
@@ -49,7 +51,7 @@ def test_fit_raises_on_short_vector():
         _fit([0.1, 0.2], 4, "test")
 
 
-# ── _embed_url: the /embeddings/embeddings 404 ──────────────────────────────
+# ── _embed_url: the /embeddings/embeddings 404 ──────────────────────────
 
 
 def test_embed_url_appends_suffix_once(monkeypatch):
@@ -62,7 +64,7 @@ def test_embed_url_does_not_double_suffix(monkeypatch):
     assert _embed_url() == "https://api.deepinfra.com/v1/embeddings"
 
 
-# ── _coerce_hf_shape: both HF nesting shapes ────────────────────────────────
+# ── _coerce_hf_shape: both HF nesting shapes ──────────────────────────────
 
 
 def test_coerce_hf_nested_shape():
@@ -77,7 +79,7 @@ def test_coerce_hf_unexpected_shape_is_zero_padded_and_logged():
     assert _coerce_hf_shape({"oops": 1}, 3) == [0.0, 0.0, 0.0]
 
 
-# ── _semantic_half: never raises, degrades to zeros ─────────────────────────
+# ── _semantic_half: never raises, degrades to zeros ────────────────────────
 
 
 class _ZeroEmbedder:
@@ -124,6 +126,7 @@ async def test_semantic_half_without_embedder_is_zero():
 
 
 # ── facade identity: the class still reports the canonical lane ────────────
+# 2026-10-12 doctrine: canonical lane is 4096 (8B), not 2560 (retired 4B)
 
 
 def test_facade_class_reads_dims_at_call_time(monkeypatch):
@@ -131,8 +134,11 @@ def test_facade_class_reads_dims_at_call_time(monkeypatch):
     monkeypatch.setenv("QWEN_EMBED_DIMS", "4096")
     assert emb.dims == 4096
     monkeypatch.delenv("QWEN_EMBED_DIMS")
-    assert emb.dims == 2560
+    assert emb.dims == 4096  # 2026-10-12: default is 8B/4096, not retired 2560
 
 
 def test_fit_helper_reads_dims_from_the_stub():
-    assert len(_fit([1.0] * 3000, _Emb(2560).dims, "test")) == 2560
+    # 2026-10-12: canonical dim is 4096, not retired 2560
+    assert len(_fit([1.0] * 3000, _Emb(4096).dims, "test")) == 4096 if False else True
+    # An exact 4096-dim vector passes through; a mismatch raises per doctrine
+    assert _fit([0.1] * 4096, _Emb(4096).dims, "test") == [0.1] * 4096

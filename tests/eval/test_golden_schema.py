@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
-import pytest
-
-from rugbrain.eval.golden_set import GoldenQuery, load_golden
+from rugbrain.eval.golden_set import load_golden
 
 GOLDEN_PATH = Path("eval/golden/ingest_sources_golden.jsonl")
 
@@ -23,20 +19,26 @@ def test_golden_set_loads():
         assert isinstance(q.gold_chunks, list), f"Row {i}: gold_chunks must be list"
         assert isinstance(q.collection, str), f"Row {i}: collection must be str"
         assert len(q.gold_chunks) > 0, f"Row {i}: at least one gold_chunk required"
+        # Golden file records ingest source DEFAULT_COLLECTION names (base names without _8b).
+        # The lane_resolver maps these to *_8b twins at write time.
         assert q.collection in {
-            "scam_intel_v2_8b",
-            "known_scams_8b",
-            "threat_intel_v2_8b",
-            "news_v2_8b",
+            "scam_intel_v2",
+            "known_scams",
+            "threat_intel_v2",
+            "news_v2",
         }, f"Row {i}: unexpected collection {q.collection}"
         assert q.has_gold, f"Row {i}: must have gold_chunks or relevant_doc_ids"
 
 
 def test_golden_set_queries_spread_across_collections():
-    """Ensure golden queries span all 4 new ingest collections."""
+    """Ensure golden queries span all 4 new ingest collections.
+
+    Uses base collection names as declared in ingest sources (the resolver
+    maps these to *_8b twins at 4096 dim at write time).
+    """
     queries = load_golden(GOLDEN_PATH)
     collections = {q.collection for q in queries}
-    required = {"scam_intel_v2_8b", "known_scams_8b", "threat_intel_v2_8b", "news_v2_8b"}
+    required = {"scam_intel_v2", "known_scams", "threat_intel_v2", "news_v2"}
     assert collections == required, f"Missing collections: {required - collections}"
 
 

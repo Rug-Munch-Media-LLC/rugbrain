@@ -18,6 +18,7 @@ FORBIDDEN = re.compile(r"qwen3-(embedding|reranker)-4b|qwen3-4b|qwen4b", re.IGNO
 LIVE_STATE = re.compile(r"(src/rugbrain/corpus/|qdrant_store/lane_|qdrant_store/write_lane)")
 # Files that name the retired 4B lane ON PURPOSE to police or refuse it.
 ALLOWLIST = {
+    "tests/test_embed_fallback_pools.py",
     "tests/test_no_4b_lanes.py",
     "tests/test_embedder_tier_contracts.py",
     "tests/test_dim_drift.py",
