@@ -58,7 +58,12 @@ def _summary(total_channels: int) -> dict[str, Any]:
 
 
 async def fetch_channel(
-    client: Any, handle: str, state: AltIngestState, limit: int, summary: dict[str, Any]
+    client: Any,
+    handle: str,
+    state: AltIngestState,
+    limit: int,
+    summary: dict[str, Any],
+    entity: Any = None,
 ) -> list[Any]:
     """Resolve one channel, pull its new messages, normalize + dedupe them.
 
@@ -74,7 +79,10 @@ async def fetch_channel(
     docs: list[Any] = []
     seen: set[str] = summary["_seen_hashes"]
     try:
-        entity = await client.get_entity(handle)
+        if entity is None:
+            # Only resolves usernames the dialogs map did NOT already cover —
+            # every avoided call is a ResolveUsername rate-limit hit dodged.
+            entity = await client.get_entity(handle)
         chan_id = int(getattr(entity, "id", 0) or 0)
         title = str(getattr(entity, "title", "") or handle)
         newest = state.last_msg_id(chan_id)
@@ -100,20 +108,45 @@ async def fetch_channel(
     return docs
 
 
+async def dialog_entities(client: Any) -> dict[str, Any]:
+    """username -> entity for every channel the ALT account is already in.
+
+    iter_dialogs() needs no username resolution, so the sweep reads joined
+    channels without touching the ResolveUsername rate limit at all. Channels
+    the account is NOT in still fall back to get_entity (and its errors).
+    """
+    out: dict[str, Any] = {}
+    try:
+        async for d in client.iter_dialogs():
+            if d.is_channel:
+                username = getattr(d.entity, "username", None)
+                if username:
+                    out[username.lower()] = d.entity
+    except Exception as exc:  # noqa: BLE001 — degrade to per-handle resolution
+        logger.warning("dialog_scan_failed err=%s", str(exc)[:120])
+    return out
+
+
+
 async def collect_payloads(
     client: Any, handles: list[str], state: AltIngestState, limit: int
 ) -> dict[str, Any]:
     """Fetch every handle, apply both dedup gates, return docs + summary."""
     summary = _summary(len(handles))
     docs: list[Any] = []
+    entities = await dialog_entities(client)
+    summary["dialog_channels"] = len(entities)
     for handle in handles:
-        docs.extend(await fetch_channel(client, handle, state, limit, summary))
+        key = handle.lower().lstrip("@")
+        docs.extend(
+            await fetch_channel(client, handle, state, limit, summary, entity=entities.get(key))
+        )
     summary.pop("_seen_hashes", None)
     summary["candidates"] = len(docs)
     return {"docs": docs, "summary": summary}
 
 
-__all__.extend(["collect_payloads", "fetch_channel"])
+__all__.extend(["collect_payloads", "fetch_channel", "dialog_entities"])
 
 
 async def run_mirror(
