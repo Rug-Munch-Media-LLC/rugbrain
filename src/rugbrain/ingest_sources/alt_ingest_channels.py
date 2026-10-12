@@ -21,7 +21,7 @@ from typing import Final
 
 #: Pinned copy of the bot's ``RMI_TG_NEWS_CHANNELS`` fallback list, in the bot's
 #: own order so a diff against the bot's config is line-for-line.
-ALT_INGEST_CHANNELS: Final[tuple[str, ...]] = (
+PINNED_CHANNELS: Final[tuple[str, ...]] = (
     # ── News outlets ─────────────────────────────────────────────────────
     "cointelegraph",
     "coindesk",
@@ -154,7 +154,7 @@ def resolve_channel_list(explicit: list[str] | None) -> list[str]:
     return list(ALT_INGEST_CHANNELS)
 
 
-__all__ = ["ALT_INGEST_CHANNELS", "resolve_channel_list"]
+__all__ = ["ALT_INGEST_CHANNELS", "PINNED_CHANNELS", "resolve_channel_list"]
 
 
 def _extra_channels() -> list[str]:
@@ -177,6 +177,7 @@ def _extra_channels() -> list[str]:
         return []
 
 
-ALT_INGEST_CHANNELS = tuple(ALT_INGEST_CHANNELS) + tuple(
-    c for c in _extra_channels() if c not in ALT_INGEST_CHANNELS
+#: the bot's pinned core (source of truth) + the alt account's vetted footprint
+ALT_INGEST_CHANNELS = tuple(PINNED_CHANNELS) + tuple(
+    c for c in _extra_channels() if c not in PINNED_CHANNELS
 )
