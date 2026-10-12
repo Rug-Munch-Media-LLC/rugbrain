@@ -26,6 +26,25 @@ COLLECTION = "scam_patterns_8b"
 QDRANT_URL = "http://127.0.0.1:6334"
 
 
+def _actor_of(msg) -> str:
+    """WHO is pushing: the posting account (@handle or display name)."""
+    sender = getattr(msg, "sender", None)
+    if sender is None:
+        return ""
+    return str(getattr(sender, "username", "") or getattr(sender, "first_name", "") or "")
+
+
+def _forward_of(msg) -> str:
+    """If the post is a repost, the channel it was copied from (the real source)."""
+    fwd = getattr(msg, "forward", None)
+    if fwd is None:
+        return ""
+    chan = getattr(fwd, "channel", None)
+    if chan is not None:
+        return str(getattr(chan, "username", "") or getattr(chan, "title", "") or "")
+    return str(getattr(getattr(fwd, "sender", None), "username", "") or "")
+
+
 def load_watchlist(path: Path) -> list[tuple[str, str, int]]:
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -71,6 +90,10 @@ async def main() -> None:
                         "channel": handle,
                         "channel_reason": reason,
                         "channel_subscribers": subs,
+                        "actor": _actor_of(msg),
+                        "forward_from": _forward_of(msg),
+                        "what": sig.promoted,
+                        "why": sig.why,
                         "msg_id": int(msg.id),
                         "date": str(msg.date),
                         "risk": sig.risk,

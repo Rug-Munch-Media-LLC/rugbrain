@@ -40,13 +40,43 @@ _TICKER_RE: Final = re.compile(r"\$([A-Z]{2,10})\b")
 
 @dataclass(frozen=True)
 class ShillSignal:
-    """One shill finding: which patterns hit, plus the scored risk."""
+    """One shill finding: WHO is pushing, WHAT is being pushed, WHY it is risky."""
 
     reasons: tuple[str, ...]
     addresses: tuple[str, ...] = ()
     tickers: tuple[str, ...] = ()
     risk: int = 0
     categories: tuple[str, ...] = field(default=())
+    actor: str = ""          # WHO — the poster pushing it
+    promoted: str = ""       # WHAT — the asset being pushed
+    why: str = ""            # WHY — plain-language risk
+
+
+def what_is_pushed(tickers: tuple[str, ...], addresses: tuple[str, ...]) -> str:
+    """WHAT is being shilled: the ticker if there is one, else the contract."""
+    if tickers:
+        return "$" + ",".join(f"${t}" for t in tickers[1:]) if len(tickers) > 1 else "$" + tickers[0]
+    if addresses:
+        return addresses[0]
+    return ""
+
+
+def why_risky(categories: tuple[str, ...], addresses: tuple[str, ...]) -> str:
+    """WHY this is a risk, in one plain sentence a non-expert can act on."""
+    parts: list[str] = []
+    if "guaranteed_returns" in categories:
+        parts.append("promises guaranteed or fixed returns, which no legitimate asset can")
+    if "contract_promo" in categories:
+        parts.append("ships a raw contract address for buyers to interact with")
+    if "presale_promo" in categories:
+        parts.append("pushes a presale/airdrop/whitelist entry that bypasses normal due diligence")
+    if "telegram_cta" in categories:
+        parts.append("routes readers into a private Telegram group for the actual pitch")
+    if "rug_or_drain" in categories:
+        parts.append("uses rug/honeypot/drainer language")
+    if addresses:
+        parts.append(f"{len(addresses)} contract address(es) posted in-body")
+    return "; ".join(parts) or "matches known shill phrasing"
 
 
 def analyze(text: str, *, min_risk: int = 2) -> ShillSignal | None:
@@ -100,6 +130,8 @@ def analyze(text: str, *, min_risk: int = 2) -> ShillSignal | None:
         tickers=tickers,
         risk=risk,
         categories=tuple(categories),
+        promoted=what_is_pushed(tickers, addresses),
+        why=why_risky(categories, addresses),
     )
 
 
