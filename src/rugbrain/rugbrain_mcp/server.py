@@ -332,6 +332,7 @@ def _extract_results(
     ]
 
 
+@mcp.tool()
 async def rugbrain_market_brief(
     query: str = Field(
         default="",
@@ -365,6 +366,7 @@ async def rugbrain_market_brief(
     )
 
 
+@mcp.tool()
 async def rugbrain_scam_radar(
     query: str = Field(
         description="Token, address, or topic (e.g. '0x123...', 'BONK', 'pump and dump').",
