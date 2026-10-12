@@ -111,15 +111,20 @@ _OVERRIDE_CHAINS: dict[str, tuple[str, ...]] = {
     # so an exhausted OR pool is never allowed to be the end of the road.
     "openrouter": ("openrouter", "nim"),
     "nim": ("nim",),
-    # 2026-10-11: the credential was rotated and the lane is proven 4096-dim
-    # (cosine 0.9975 against the DeepInfra vectors it replaces, so the live
-    # collections stay queryable with no re-embed). The chain is all three
-    # hosted providers: DeepInfra is last while it is out of credit and
-    # rejoins the head by itself once topped up, with no code change.
-    "siliconflow": ("siliconflow", "openrouter", "deepinfra"),
+    # 2026-10-12 (operator directive): DeepInfra PRIMARY, SiliconFlow backup,
+    # OpenRouter backup -- on BOTH the query and document lanes, matching
+    # ContextCrypto. This chain previously led with siliconflow on a stale
+    # "DeepInfra is out of credit" note. DeepInfra has been topped up and
+    # re-proved live (4096-dim embed + rerank), but queries kept embedding on
+    # SiliconFlow while the corpus was embedded on DeepInfra -- two providers,
+    # one model name, a different vector space. Any collection whose top
+    # similarity sat near the 0.4 threshold then silently returned zero hits
+    # (measured: social_intel 0.519 stored vs sub-threshold served).
+    # Chain order MUST match the lane the corpus was embedded with.
+    "siliconflow": ("deepinfra", "siliconflow", "openrouter"),
     # The full chain without pinning a primary, for operators who would rather
     # take whatever answers first than hold a lane at the head.
-    "hosted": ("siliconflow", "openrouter", "deepinfra"),
+    "hosted": ("deepinfra", "siliconflow", "openrouter"),
 }
 
 
