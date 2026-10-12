@@ -119,7 +119,7 @@ def test_rerank_lane_urls():
     assert not hasattr(rr, "RERANKER_URL_LIVE")
     assert ":8003" not in rr.RERANKER_URL and ":8008" not in rr.RERANKER_URL
     assert rl.MODEL == "Qwen/Qwen3-Reranker-8B"
-    assert set(rl.DEFAULT_ORDER) == {"siliconflow", "openrouter", "deepinfra"}
+    assert set(rl.DEFAULT_ORDER) == {"deepinfra", "siliconflow", "openrouter", "openrouter2"}
 
 
 def test_federated_route_documents_lanes():

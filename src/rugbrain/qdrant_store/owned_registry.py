@@ -94,6 +94,26 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "youtube_videos",
         "newsletters",
         "podcast_episodes",
+        # Social / market-sentiment corpora (operator 2026-12: social intel lives
+        # in RugBrain, not in the backend). These are written by RugBrain's own
+        # HF ingests (financial tweets + labelled sentiment) and read by the
+        # market-specialist MCP surface, so they belong to this repo.
+        "social_intel",
+        # Operator directive 2026-10-12 ("RugBrain is its own boss"): the
+        # remaining RugBrain-written corpora that were missing from this gate.
+        # scam_patterns alone blocked the shill-watchlist ingester; the rest are
+        # the market-data and intel targets this repo already writes.
+        "scam_patterns",
+        "exploits",
+        "cross_chain",
+        "protocol_design",
+        "exchange_flows",
+        "market_health",
+        "liquidation_events",
+        "hyperliquid",
+        "token_unlocks",
+        "scanned_tokens",
+
         # Ingest targets that are absent from Qdrant entirely, so their sources
         # failed a THIRD time even once the collections were created
         # (2026-09-28). Same class as the August finding above, same root

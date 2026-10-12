@@ -30,7 +30,7 @@ from rugbrain.qdrant_store import QdrantVectorStore
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_financial_tweets_crypto")
 
-COLLECTION = "news_v2"  # rugbrain-owned; the resolver maps base -> news_v2_8b
+COLLECTION = "social_intel"  # rugbrain-owned (operator: social intel lives here)
 SOURCE = "financial_tweets_crypto"
 SOURCE_URL = "https://huggingface.co/datasets/StephanAkkerman/financial-tweets-crypto"
 EMBED_DIM = 4096  # canonical qwen3-embedding-8b
