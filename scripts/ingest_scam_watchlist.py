@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as _dt
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from rugbrain.embedder import get_embedder
-from rugbrain.ingest_sources.alt_ingest_client import build_alt_ingest_client
 from rugbrain.ingest_sources.alt_ingest import dialog_entities
+from rugbrain.ingest_sources.alt_ingest_client import build_alt_ingest_client
 from rugbrain.ingest_sources.alt_ingest_shill import analyze
 
 WATCHLIST = Path(__file__).resolve().parents[1] / "data" / "alt_ingest_scam_watchlist.txt"
@@ -78,9 +79,10 @@ async def main() -> None:
                         "addresses": list(sig.addresses),
                         "tickers": list(sig.tickers),
                         "source": "alt_account_scam_watchlist",
+                        "ingested_at": _dt.datetime.now(_dt.UTC).isoformat(),
                     },
                 })
-        except Exception as exc:  # noqa: BLE001 — one bad channel must not stop the sweep
+        except Exception as exc:
             print(f"watch_channel_failed ch={handle} err={str(exc)[:80]}")
     await client.disconnect()
 
@@ -101,7 +103,7 @@ async def main() -> None:
                 vector=v,
                 payload=f,
             )
-            for f, v in zip(findings, vectors)
+            for f, v in zip(findings, vectors, strict=True)
         ]
         qc.upsert(collection_name=COLLECTION, points=points, wait=True)
         print(f"upserted={len(points)} into={COLLECTION}")
