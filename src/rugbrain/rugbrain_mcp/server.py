@@ -23,6 +23,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -32,11 +33,29 @@ from pydantic import BaseModel, Field
 
 # ── Config ────────────────────────────────────────────────────────────────
 BASE = os.getenv("RUGBRAIN_URL", "http://127.0.0.1:8012").rstrip("/")
-API_KEY = os.getenv("RMI_RAG_API_KEY", "")
 TIMEOUT = int(os.getenv("RUGBRAIN_TIMEOUT", "90"))
 
-if not API_KEY:
-    raise RuntimeError("RMI_RAG_API_KEY must be set in environment")
+
+def _api_key() -> str:
+    """Resolve the API key: env first, then the spooled secrets file.
+
+    The MCP server is launched as a bare stdio command, so nothing upstream
+    exports the key for us — refusing to start made the facade unreachable
+    even though the credential exists on disk. Never logged, never printed.
+    """
+    key = os.getenv("RMI_RAG_API_KEY", "")
+    if key:
+        return key
+    try:
+        for line in Path("/srv/secrets/rugbrain.env").read_text(encoding="utf-8").splitlines():
+            if line.startswith("RMI_RAG_API_KEY="):
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    raise RuntimeError("RMI_RAG_API_KEY not found in env or /srv/secrets/rugbrain.env")
+
+
+API_KEY = _api_key()
 
 # ── Logging ───────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
