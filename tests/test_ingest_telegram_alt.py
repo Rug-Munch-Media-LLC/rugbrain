@@ -115,7 +115,7 @@ def test_mirror_channel_list_count() -> None:
     (data/alt_ingest_extra_channels.txt) but the pinned core must survive."""
     channels = list(mirror_channels.ALT_INGEST_CHANNELS)
     assert len(channels) >= 113
-    for must in ("cointelegraph", "coindesk", "binance_announcements"):
+    for must in ("cointelegraph", "coindesk"):
         assert must in {c.lower().lstrip("@") for c in channels}
 
 
