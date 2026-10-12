@@ -1,0 +1,2 @@
+[mounts]
+	path = /srv/work/worktrees/data-pipeline/rugbrain/.local/share/gopass/stores/root
