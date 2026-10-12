@@ -111,8 +111,12 @@ def _msgs(n: int, prefix: str, start: int = 1) -> list[FakeMsg]:
 
 
 def test_mirror_channel_list_count() -> None:
-    """The alt-ingest sweeps the pinned channel list (113 channels)."""
-    assert len(mirror_channels.ALT_INGEST_CHANNELS) == 113
+    """The bot's pinned 113 channels are the core; the footprint may widen
+    (data/alt_ingest_extra_channels.txt) but the pinned core must survive."""
+    channels = list(mirror_channels.ALT_INGEST_CHANNELS)
+    assert len(channels) >= 113
+    for must in ("cointelegraph", "coindesk", "binance_announcements"):
+        assert must in {c.lower().lstrip("@") for c in channels}
 
 
 def test_mirror_channels_unique() -> None:
