@@ -141,7 +141,7 @@ async def main(
             metadata = {
                 "source": SOURCE,
                 "source_url": SOURCE_URL,
-                "description": content[:500],
+                "description": content[:2000],
                 "sentiment": sentiment,
                 "tickers": tickers,
                 "timestamp": timestamp[:50] if timestamp else '',
@@ -184,7 +184,7 @@ async def main(
                     doc_id=doc_id,
                     collection=COLLECTION,
                     embedding=vec,
-                    content=meta.get("text", ""),
+                    content=meta.get("description", ""),
                     metadata=meta,
                     source=SOURCE,
                     severity="medium",
