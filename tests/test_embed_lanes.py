@@ -159,7 +159,7 @@ def test_hosted_embed_respects_order(monkeypatch: pytest.MonkeyPatch) -> None:
     """The chain respects EMBED_PROVIDER_ORDER for the list of providers to try."""
     # We'll test the _order function directly
     monkeypatch.setenv("EMBED_PROVIDER_ORDER", "siliconflow,deepinfra")
-    assert embedder._order() == ("siliconflow", "deepinfra", "openrouter")
+    assert embedder._order() == ("siliconflow", "deepinfra", "openrouter", "openrouter2")
     # Default order
     monkeypatch.delenv("EMBED_PROVIDER_ORDER", raising=False)
     assert embedder._order() == embedder.DEFAULT_ORDER
