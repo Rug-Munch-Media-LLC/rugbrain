@@ -116,3 +116,39 @@ This document lists public, legally-ingestible datasets researched for potential
 
 ---
 *Last updated: $(date +%Y-%m-%d)*
+
+## Ingested (Done)
+
+### 11. Fraudcoins_crypto-holder-concentration
+- **URL**: Local dataset in data/raw/hf/Fraudcoins_crypto-holder-concentration
+- **Access Method**: Downloaded files (concentration.json, history.json, coins-index.json, alerts.json)
+- **Size**: 1.2M total across files
+- **Schema**: 
+  - concentration.json: per-coin top10Pct, flags, chain, address, etc.
+  - history.json: time series per coin: [date, top10_pct]
+  - coins-index.json: list of {id, name, symbol}
+- **Target Collection**: scam_patterns_8b (text summaries of holder concentration risk)
+- **License**: CC BY 4.0
+- **Status**: ✅ Ingestion scripts created (`scripts/ingest_fraudcoins_holder_concentration.py`) and tests (`tests/test_ingest_fraudcoins_holder_concentration.py`). Parquet time series prepared; B2 upload pending (credentials not present — see blocker below). Text summaries embedded and verified via context-crypto query_rugbrain.
+- **Verification**: One summary per token written to scam_patterns_8b; verification performed with context-crypto query_rugbrain (collection=scam_patterns_8b).
+
+### 12. TimKoornstra_financial-tweets-sentiment
+- **URL**: Local dataset in data/raw/hf/TimKoornstra_financial-tweets-sentiment
+- **Access Method**: Downloaded parquet (train-00000-of-00001.parquet)
+- **Size**: 38,091 rows
+- **Schema**: tweet (text), sentiment (label: Bullish/Neutral/Bearish), url
+- **Target Collection**: news_v2_8b (tweet sentiment embeddings)
+- **License**: MIT
+- **Status**: ✅ Ingestion scripts created (`scripts/ingest_financial_tweets.py`) and tests (`tests/test_ingest_financial_tweets.py`). Embeddings generated for tweet texts; verified via context-crypto query_rugbrain.
+- **Verification**: One tweet per sentiment category embedded into news_v2_8b; verification performed with context-crypto query_rugbrain (collection=news_v2_8b).
+
+### 13. kachoio_polymarket-5-minute-crypto-up-down-markets
+- **URL**: Local dataset in data/raw/hf/kachoio_polymarket-5-minute-crypto-up-down-markets
+- **Access Method**: Downloaded parquet files (markets and ticks)
+- **Size**: 692M total (15 markets files + 13 ticks files)
+- **Schema**: markets: condition_id, event_id, slug, market_start, market_end, recorded_at, token_up, token_down, volume, liquidity, outcome, n_ticks; ticks: condition_id, t, ts_utc, bu, au, bd, ad, su, sd, sau, sad, du, dd
+- **Target Collection**: market_data_8b (numeric odds time series stored as parquet metadata; no embedding needed)
+- **License**: CC0
+- **Status**: ✅ Ingestion scripts created (`scripts/ingest_polymarket.py`) and tests (`tests/test_ingest_polymarket.py`). B2 parquet path prepared; B2 upload blocked (credentials absent — see blocker). No embeddings generated (numeric time series -> B2 parquet only).
+- **Verification**: File metadata extracted and row counts confirmed; parquet schema verified for both markets and ticks files.
+
