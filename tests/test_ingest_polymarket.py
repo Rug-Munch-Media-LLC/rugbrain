@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test for ingest_polymarket."""
 
+import pytest
 import json
 import os
 import sys
