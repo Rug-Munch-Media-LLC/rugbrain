@@ -47,7 +47,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("ingest_all_sources")
 
 DEFAULT_COLLECTION = "rag_docs"
-EMBED_DIM = 2560
+# 4096 = Qwen3-Embedding-8B, the only lane (2026-10-12). This was still
+# 2560 (the retired 4B width), so every write failed with
+# embed_dim_mismatch got=4096 want=2560 while the embedder did the
+# right thing.
+EMBED_DIM = 4096
 
 
 def _route_collection(source_name: str, default_collection: str, metadata: dict[str, Any]) -> str:
@@ -75,7 +79,7 @@ async def _store_docs(
     # documents and accepting NONE is not a per-document problem, it is being
     # refused wholesale — overwhelmingly a dimension/schema mismatch where the
     # store's guard correctly fails closed:
-    #   qdrant_insert_blocked collection=privacy_protocol requested_dim=2560
+    #   qdrant_insert_blocked collection=privacy_protocol requested_dim=<wrong>
     #                                            configured_dims=[4096]
     # Counting that as N ordinary errors was correct but INVISIBLE: errors was a
     # number nobody keyed on, so the run exited 0 having written nothing.

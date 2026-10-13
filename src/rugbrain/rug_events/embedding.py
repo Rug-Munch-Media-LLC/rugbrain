@@ -31,7 +31,7 @@ import os
 log = logging.getLogger(__name__)
 
 #: The dim every collection this build reads from or grades against.
-CORPUS_DIM = 2560
+CORPUS_DIM = 4096
 
 #: The model the 2560-dim corpus was built with.
 CORPUS_MODEL = "Qwen/Qwen3-Embedding-8B"
