@@ -36,7 +36,11 @@ CANONICAL_LANE_DIM = 4096
 
 
 def _qdrant(url: str, path: str) -> dict:
-    with urllib.request.urlopen(f"{url}{path}", timeout=30) as fh:
+    # S310: the base URL is operator-supplied, not request input, but keep the
+    # scheme explicit so a typo cannot turn this into a local-file read.
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"qdrant url must be http(s): {url!r}")
+    with urllib.request.urlopen(f"{url}{path}", timeout=30) as fh:  # noqa: S310
         return json.load(fh)
 
 
