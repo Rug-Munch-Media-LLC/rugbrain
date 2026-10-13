@@ -7,20 +7,33 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# The MCP facade needs the [mcp] extra: pip install -e ".[mcp]"
+pytest.importorskip("fastmcp", reason="install the [mcp] extra")
+
 from rugbrain.rugbrain_mcp.server import (
     rugbrain_market_brief,
     rugbrain_scam_radar,
-    rugbrain_sentiment,
+    rugbrain_social_sentiment,
 )
 
 
 def _parse_tool_result(result):
-    """Extract JSON data from a ToolResult."""
-    # The ToolResult.content is a list of TextContent; we expect one item with JSON text.
+    """Extract a tool payload from a ToolResult.
+
+    Prefer ``structured_content`` — that is the contract FastMCP publishes to
+    callers (it is what becomes the tool's JSON output) — and fall back to
+    parsing the text block, which is what the older tools still emit.
+    """
+    structured = getattr(result, "structured_content", None)
+    if isinstance(structured, dict) and structured:
+        return structured
     if not result.content:
         return {}
     text = result.content[0].text
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"text": text}
 
 
 @pytest.mark.anyio
@@ -34,6 +47,7 @@ async def test_rugbrain_market_brief_stubbed():
             {
                 "content": "Bitcoin price surges",
                 "score": 0.95,
+                "_source_collections": ["news_v2"],
             },
             {
                 "content": "Ethereum gas fees drop",
@@ -86,6 +100,7 @@ async def test_rugbrain_sentiment_stubbed():
             {
                 "content": "Positive sentiment around BTC",
                 "score": 0.92,
+                "_source_collections": ["social_intel"],
             }
         ],
         "query": "BTC",
@@ -99,7 +114,7 @@ async def test_rugbrain_sentiment_stubbed():
             return_value=mock_response
         )
 
-        result = await rugbrain_sentiment(query="BTC", limit=1)
+        result = await rugbrain_social_sentiment(query="BTC", limit=1)
         assert not result.is_error
         data = _parse_tool_result(result)
         assert "results" in data
@@ -113,8 +128,14 @@ async def test_rugbrain_sentiment_stubbed():
         assert data["query"] == "BTC"
         assert data["limit"] == 1
 
-        # Expect 2 calls (social_intel and news_v2)
-        assert mock_client.return_value.__aenter__.return_value.post.call_count == 2
+        # ONE call to /api/v1/search/multi carrying both collections: the
+        # endpoint fans out internally and RRF-fuses the results. Two calls
+        # would forfeit the fusion and double the round trips.
+        post = mock_client.return_value.__aenter__.return_value.post
+        assert post.call_count == 1
+        sent = post.call_args.kwargs["json"]
+        assert sent["collections"] == ["social_intel", "news_v2"]
+        assert sent["rerank"] is True
 
 
 @pytest.mark.anyio

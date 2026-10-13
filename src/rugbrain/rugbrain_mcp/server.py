@@ -332,6 +332,65 @@ def _extract_results(
     ]
 
 
+def _source_of(item: dict[str, Any]) -> str:
+    """The collection an item came from.
+
+    The API tags fused hits with ``_source_collections`` (a list, because RRF
+    can fuse the same doc from several); the older shape used ``collection``.
+    """
+    sources = item.get("_source_collections")
+    if isinstance(sources, list) and sources:
+        return str(sources[0])
+    single = item.get("collection")
+    return str(single) if isinstance(single, str) else "?"
+
+
+@mcp.tool()
+async def rugbrain_social_sentiment(
+    query: str = Field(description="Topic, ticker or theme to read the social/narrative mood on."),
+    limit: int = Field(default=10, ge=1, le=100, description="Maximum items to return."),
+) -> ToolResult:
+    """Social + narrative read for a topic or ticker.
+
+    Social intel first (crypto tweets with sentiment labels), news second.
+    Distinct from ``rugbrain_sentiment``, which aggregates sentiment for a
+    TOKEN ADDRESS from on-chain/social/news sources.
+    """
+    resp = await _call_search_multi(
+        query=query,
+        collections=["social_intel", "news_v2"],
+        limit=limit,
+        rerank=True,
+    )
+    return ToolResult(
+        content=[
+            {
+                "type": "text",
+                "text": "\n".join(
+                    f"[{_source_of(item)}] "
+                    f"{item.get('content', '')[:300]}"
+                    for item in resp.get("results", [])
+                ),
+            }
+        ],
+        structured_content={
+            "query": query,
+            "limit": limit,
+            "results": [
+                {
+                    "content": item.get("content", ""),
+                    "score": float(item.get("score", 0.0)),
+                    # one cited source per item (singular): the answer shape
+                    # promises collection + score, so a plural key would be a
+                    # second, weaker contract.
+                    "collection": _source_of(item),
+                }
+                for item in resp.get("results", [])
+            ],
+        },
+    )
+
+
 @mcp.tool()
 async def rugbrain_market_brief(
     query: str = Field(

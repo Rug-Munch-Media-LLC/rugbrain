@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import ingest_polymarket as ing  # noqa: E402
+import ingest_polymarket as ing
 
 
 @pytest.fixture
