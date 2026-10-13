@@ -85,6 +85,8 @@ def _declared_twins() -> frozenset[str]:
             "hacks_v2",
             "known_scams",
             "live_threats",
+            "market_health",
+            "public_crypto_patterns",
             "news_articles",
             "news_v2",
             "rag_documents",
