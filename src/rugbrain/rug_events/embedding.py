@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 #: The dim every collection this build reads from or grades against.
 CORPUS_DIM = 4096
 
-#: The model the 2560-dim corpus was built with.
+#: The model the corpus was built with (4096-dim, the only lane).
 CORPUS_MODEL = "Qwen/Qwen3-Embedding-8B"
 
 #: Environment forced onto the corpus lane, overriding whatever the shell has.
@@ -51,7 +51,7 @@ class DimMismatch(RuntimeError):
 
 
 def apply_lane_env() -> list[str]:
-    """Pin the embed lane to the corpus's 2560-dim lane. Returns changed keys.
+    """Pin the embed lane to the corpus's 4096-dim lane. Returns changed keys.
 
     This must run BEFORE the first ``import rugbrain.*``: ``rugbrain/__init__``
     pulls in ``qwen_embedders``, which snapshots the URL and model at import

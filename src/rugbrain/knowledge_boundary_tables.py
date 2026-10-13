@@ -39,6 +39,8 @@ _PUBLIC = frozenset(
         "threat_intel_v2",
         "wallet_profiles",
         "wallet_v2",
+        "zk_circuits",
+        "scam_signatures",
         # 2026-10-11: the _8b collections are the ones actually fed and served
         # (4096-dim, remote-8B embedder). The un-suffixed names above are the
         # pre-migration labels; leaving the boundary table on them alone made

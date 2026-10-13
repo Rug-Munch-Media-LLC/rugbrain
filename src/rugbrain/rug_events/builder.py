@@ -3,8 +3,8 @@
 Kept as a script-shaped module (not a class) so it can be called from the
 build pipeline, the tests, and a one-off operator run identically.
 
-The dim-2560 default matches the rest of the corpus (Qwen3-Embedding-8B, dim
-2560 per ``missioneval.golden_cases`` provenance notes); it is a parameter so a
+The dim-4096 default matches the rest of the corpus (Qwen3-Embedding-8B,
+4096); it is a parameter so a
 smoke test on a scratch collection need not embed anything real.
 """
 
@@ -20,7 +20,11 @@ log = logging.getLogger(__name__)
 
 #: Cosine + the Qdrant sparse "learn" setup used by the migrated *_v2 RAG
 #: collections, so a future hybrid migration is a rename, not a rebuild.
-DENSE_VECTOR: dict[str, Any] = {"size": 2560, "distance": "Cosine"}
+# 4096 = Qwen3-Embedding-8B, the only lane. This was 2560 (the retired
+# width), and it is what the embed call compared against — every
+# programmatic ingest died with embed_dim_mismatch got=4096 want=2560
+# even though the embedder was correct.
+DENSE_VECTOR: dict[str, Any] = {"size": 4096, "distance": "Cosine"}
 
 
 def ensure_collection(base: str, name: str = COLLECTION, dry_run: bool = False) -> bool:
