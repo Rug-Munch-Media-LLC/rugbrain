@@ -26,7 +26,16 @@ logger = logging.getLogger("ingest_polymarket")
 
 SOURCE = "polymarket_5min_updown"
 SOURCE_URL = "https://huggingface.co/datasets/kachoio/polymarket-5-minute-crypto-up-down-markets"
-DATA_DIR = "/srv/work/worktrees/knowledge-curator/rugbrain/data/raw/hf/kachoio_polymarket-5-minute-crypto-up-down-markets"
+# Repo-relative by default; override with POLYMARKET_DATA_DIR. The previous
+# value was an absolute path INTO A LANE WORKTREE
+# (/srv/work/worktrees/knowledge-curator/rugbrain/...), which disappears the
+# moment the lane is released — the script then scanned a missing directory
+# and reported a bogus file count.
+DATA_DIR = os.getenv(
+    "POLYMARKET_DATA_DIR",
+    str(Path(__file__).resolve().parents[1] / "data" / "raw" / "hf"
+        / "kachoio_polymarket-5-minute-crypto-up-down-markets"),
+)
 
 
 

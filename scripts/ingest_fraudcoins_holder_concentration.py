@@ -100,8 +100,11 @@ async def main(
     }
 
     # Load concentration.json (snapshot)
-    concentration_path = "/srv/work/worktrees/knowledge-curator/rugbrain/data/raw/hf/Fraudcoins_crypto-holder-concentration/concentration.json"
-    history_path = "/srv/work/worktrees/knowledge-curator/rugbrain/data/raw/hf/Fraudcoins_crypto-holder-concentration/history.json"
+    # All three files resolve from DATA_DIR (repo-relative, FRAUDCOINS_DATA_DIR
+    # override). Two of these were absolute paths into a LANE WORKTREE, which
+    # vanish when the lane is released.
+    concentration_path = str(Path(DATA_DIR) / "concentration.json")
+    history_path = str(Path(DATA_DIR) / "history.json")
     coins_index_path = str(Path(DATA_DIR) / "coins-index.json")
 
     try:
