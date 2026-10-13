@@ -38,7 +38,12 @@ CONSOLIDATED_SOURCES: frozenset[str] = frozenset(
     {
         "news_v2",
         "news_articles",
-        "social_intel",
+        # social_intel is NOT consolidated: it is a NATIVE 4096 collection (the
+        # single-entry social/market corpus), created after the consolidation
+        # and written directly. Listing it here made RAG_UNIFIED_READS=1 reroute
+        # every read into rag_documents filtered on collection=="social_intel"
+        # — a partition that does not exist — so the API returned 0 hits while
+        # the collection itself held thousands of points (verified 2026-10-13).
         "known_scams",
         "scam_patterns",
         "scam_intel_v2",
