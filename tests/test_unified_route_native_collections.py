@@ -33,6 +33,7 @@ def test_native_collection_is_not_consolidated(collection: str) -> None:
 @pytest.mark.parametrize("collection", NATIVE_SINGLE_ENTRY)
 def test_native_route_returns_itself_without_a_filter(collection: str) -> None:
     target, condition = unified_route(collection)
+    assert target != "rag_documents"
     assert condition is None or "collection" not in str(condition)
 
 
@@ -40,5 +41,4 @@ def test_legacy_consolidated_collections_still_route_to_the_unified_corpus() -> 
     """The consolidation itself must keep working for the legacy corpora."""
     assert "news_v2" in CONSOLIDATED_SOURCES
     if UNIFIED_READS:
-        target, condition = unified_route("news_v2")
-        assert target == "rag_documents"
+        assert unified_route("news_v2")[0] == "rag_documents"
