@@ -128,7 +128,7 @@ def rugbrain_search(
             scam_patterns, news_v2, wallet_v2, contract_audits,
             crypto_vulnerabilities, regulation_enforcement, education.
         limit: Max results (1-100, default 10).
-        rerank: Re-rank top-20 with Qwen3-Reranker-4B (default true).
+        rerank: Re-rank top-20 with Qwen3-Reranker-8B (default true).
     """
     return _call(
         "/api/v1/search",
@@ -156,7 +156,7 @@ def rugbrain_search_multi(
         collections: Collections to search (default: ["threat_intel_v2"]).
         limit: Final fused results (1-100, default 10).
         limit_per_collection: Per-collection limit before fusion (1-100, default 20).
-        rerank: Re-rank top-40 fused candidates with Qwen3-Reranker-4B (default true).
+        rerank: Re-rank top-40 fused candidates with Qwen3-Reranker-8B (default true).
     """
     return _call(
         "/api/v1/search/multi",
