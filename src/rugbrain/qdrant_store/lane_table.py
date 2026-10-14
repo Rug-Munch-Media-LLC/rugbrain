@@ -58,7 +58,8 @@ def _declared_twins() -> frozenset[str]:
 
     Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
     ``master_skills``, ``protocol_design``, ``exploits``, ``social_intel``,
-    ``codebase_reference_v2``, ``security_patterns_test``) are deliberately
+    ``codebase_reference_v2``, ``security_patterns``, ``security_patterns_test``)
+    are deliberately
     absent: routing a rugbrain source at them would widen write ownership past
     the gate's boundary.
 
@@ -86,7 +87,6 @@ def _declared_twins() -> frozenset[str]:
             "known_scams",
             "live_threats",
             "market_health",
-            "public_crypto_patterns",
             "news_articles",
             "news_v2",
             "rag_documents",
@@ -97,7 +97,6 @@ def _declared_twins() -> frozenset[str]:
             "scam_intel_v2",
             "security_alerts",
             "security_feeds",
-            "security_patterns",
             "stablecoin_market",
             "threat_intel_v2",
             "wallet_profiles",

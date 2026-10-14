@@ -5,7 +5,7 @@ THE BUG THIS FIXES (production, 2026-09-28)
     unconditionally, because the ``_8b`` twins are the declared write target.
     The live ``threat_intel_v2_8b`` is 4096-wide. The running service, however,
     ships ``RAG_EMBED_DIM=2560`` / ``RAG_EMBED_MODEL=qwen3-embedding-4b`` /
-    ``DEEPINFRA_EMBED_MODEL=Qwen/Qwen3-Embedding-4B``, so ``get_embedding()``
+    ``DEEPINFRA_EMBED_MODEL=Qwen/Qwen3-Embedding-8B`` (4096), so ``get_embedding()``
     returns 2560. Result, every few seconds:
 
         qdrant_collection_incompatible collection=threat_intel_v2_8b

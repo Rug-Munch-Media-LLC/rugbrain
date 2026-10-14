@@ -16,7 +16,7 @@
     "mrr": 0.8667,
     "per_class_technical_analysis": {"n": 8, "gold_rate": 1.0, "hit_rate": 1.0},
     "retriever": "rugbrain.eval.harness.direct_qdrant_retriever against Qdrant http://127.0.0.1:6334, no rerank, no dual-tier",
-    "embedding_lane": "DeepInfra Qwen/Qwen3-Embedding-4B, dim 2560, matching the master_skills collection dim",
+    "embedding_lane": "Qwen/Qwen3-Embedding-8B, dim 4096, matching the master_skills_8b collection dim",
     "method": "All 8 technical_analysis cases graded gold at rank 1 by EXACT Qdrant point id (not by term match), so the score is not an artifact of loose substring matching.",
     "note": "technical_analysis floor raised 0.0 -> 1.0 to the MEASURED value. This is a shrink-only ratchet: the class now scores 8/8 and any regression below 1.0 is a hard gate failure. The old ta-01 row scored a clean miss because it asked a liquidation-cascade question that no populated collection answers; it was repointed at master_skills (the populated TA reference corpus) rather than left to measure nothing."
   },
