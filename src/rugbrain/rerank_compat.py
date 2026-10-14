@@ -16,7 +16,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "http://127.0.0.1:8003")
+RERANKER_URL = os.getenv("RERANKER_URL", "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B")
 # 'fast'/'deep' both resolve to the canonical 4B lane: the 0.6B consumer
 # tier is retired (2026-08-29) and its endpoint is gone (2026-09-14).
 RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", RERANKER_URL)
@@ -33,7 +33,7 @@ class Reranker:
     """Backward-compatible Reranker class wrapping the new async API.
 
     Usage:
-        r = Reranker(url="http://127.0.0.1:8003")
+        r = Reranker(url=os.getenv("RERANKER_URL", "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B"))
         results = await r.rerank(query, docs, top_k=5)
     """
 
