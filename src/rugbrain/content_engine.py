@@ -42,7 +42,12 @@ from rugbrain.formatting.headline import style_for_site, style_headline
 logger = logging.getLogger("rugbrain.content")
 
 CHAT_URL = os.getenv("RAG_CHAT_URL", "http://127.0.0.1:8009/v1/chat/completions")
-CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "qwythos-9b")
+# MUST match the alias served at CHAT_URL. :8009 (llama.service chat profile)
+# serves the alias "chat"; "qwythos-9b" is the :8014 long-form alias. Pairing
+# the :8009 URL with the :8014 name makes llama-server return an EMPTY
+# completion with model=None - no error, just silence - which is why the bot
+# produced blank posts. Both are the SAME Qwythos-9B process, two profiles.
+CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "chat")
 CHAT_TIMEOUT = float(os.getenv("RAG_CHAT_TIMEOUT", "45"))
 
 _drafts_cache: dict[str, Any] = {"ts": 0.0, "data": None}
