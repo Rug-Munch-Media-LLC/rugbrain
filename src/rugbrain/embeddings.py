@@ -95,11 +95,23 @@ _LANE_GLOBALS: dict[str, str] = {
 
 #: The `auto` chain, in order. DeepInfra first (hosted, warm, no CPU
 #: contention), local :8004 second (same model ⇒ same space).
-#: NOT in this chain: `siliconflow` (credential 401-dead as of 2026-10-02,
-#: gated off by SILICONFLOW_ENABLED=0). A gated-off rung returns None and
-#: falls through, so it is safe in `_OVERRIDE_CHAINS` but adding it here
-#: would only add a guaranteed-miss HTTP round trip to every request.
-AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "int")
+#: CORRECTED 2026-10-14: this used to say siliconflow was "credential 401-dead
+#: as of 2026-10-02, gated off by SILICONFLOW_ENABLED=0" and therefore excluded
+#: it from the chain. Re-probed live today: siliconflow returns HTTP 200, and
+#: SILICONFLOW_ENABLED=1 in the runtime env. The note was stale and it was the
+#: reason the documented fallback did not exist. Stale comments are not harmless
+#: - this one silently deleted a backup provider for 12 days.
+#: FIXED 2026-10-14. The 2026-10-12 operator directive - "DeepInfra PRIMARY,
+#: SiliconFlow backup, OpenRouter backup, on BOTH the query and document lanes"
+#: - was recorded in the _OVERRIDE_CHAINS comment below and NEVER applied here.
+#: The default stayed ("deepinfra", "int"), so the documented fallback did not
+#: exist: a DeepInfra failure fell straight to the LOCAL lane instead of the two
+#: hosted backups. Written down is not implemented.
+#:
+#: 'int' is kept as the last rung - it is the in-process/local embedder and the
+#: only thing that still answers when every hosted provider is down. Order is
+#: therefore: hosted primary -> hosted backups -> local last resort.
+AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "siliconflow", "openrouter", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.
