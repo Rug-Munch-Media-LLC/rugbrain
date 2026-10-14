@@ -22,6 +22,20 @@ TWIN_SUFFIX = "_8b"
 
 
 def twin_name(base: str) -> str:
+    """The 4096 twin of a base collection.
+
+    Refuses to suffix a name that already carries the suffix. Without this the
+    fill loop created ``news_v2_8b_8b`` from ``news_v2_8b`` - a lane NOTHING
+    resolves to, so every point written there was silently invisible. It was
+    measured GROWING while both the live lane and the orphan rose in step.
+    ``lane_resolver.py`` already guards this way (``endswith(EIGHT_B_SUFFIX)``);
+    this file did not, and it is the one that writes.
+    """
+    if base.endswith(TWIN_SUFFIX):
+        raise ValueError(
+            f"twin_name({base!r}) would produce {base + TWIN_SUFFIX!r} - an orphan "
+            f"lane no tool resolves to. The base already carries {TWIN_SUFFIX!r}."
+        )
     return base + TWIN_SUFFIX
 
 
