@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import os
 import re
 import urllib.error
@@ -58,7 +59,10 @@ def _api_key() -> str:
 API_KEY = _api_key()
 
 # ── Logging ───────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO)
+# Standard stdio-MCP requirement: JSON-RPC owns STDOUT, so any log line
+# written there corrupts the protocol and the client fails the handshake.
+# Route logs to STDERR explicitly.
+logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 log = logging.getLogger("rugbrain-mcp")
 
 # ── FastMCP server ────────────────────────────────────────────────────────
