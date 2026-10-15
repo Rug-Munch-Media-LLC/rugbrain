@@ -49,7 +49,7 @@ def client() -> TestClient:
 
 def test_signals_returns_shape(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ta_route, "fetch_candles", lambda ref, hours=168: _series())
-    resp = client.get("/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
+    resp = client.get("/api/v1/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["pair"] == "ethereum:0xabc"
@@ -63,7 +63,7 @@ def test_signals_empty_series_is_not_an_error(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(ta_route, "fetch_candles", lambda ref, hours=168: Series([]))
-    resp = client.get("/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
+    resp = client.get("/api/v1/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
     assert resp.status_code == 200
     assert resp.json()["signals"] == []
 
@@ -75,7 +75,7 @@ def test_signals_store_down_maps_to_503(
         raise CandleReadError("clickhouse down")
 
     monkeypatch.setattr(ta_route, "fetch_candles", _boom)
-    resp = client.get("/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
+    resp = client.get("/api/v1/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
     assert resp.status_code == 503
 
 
@@ -86,7 +86,7 @@ def test_signals_bad_window_maps_to_400(
         raise ValueError("hours exceeds MAX_WINDOW_HOURS")
 
     monkeypatch.setattr(ta_route, "fetch_candles", _bad)
-    resp = client.get("/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
+    resp = client.get("/api/v1/ta/signals", params={"chain": "ethereum", "pair": "0xabc"})
     assert resp.status_code == 400
 
 
@@ -96,6 +96,6 @@ def test_stats_route(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> Non
         "table_stats",
         lambda: {"rows": 2640471, "pairs": 53935, "fresh": "2026-10-15 00:00:00"},
     )
-    resp = client.get("/ta/stats")
+    resp = client.get("/api/v1/ta/stats")
     assert resp.status_code == 200
     assert resp.json()["rows"] == 2640471

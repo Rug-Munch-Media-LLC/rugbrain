@@ -109,6 +109,13 @@ ignore_imports =
     # while fixing this, so a client type no longer forces the import.
     rugbrain.routes.search_retrieval -> rugbrain.search.lane_targets
 
+    # b74bb80 gave /rag/investigate a real wallet verdict: the route now calls
+    # rugbrain.wallet_profile.profile_wallet (function-local import, l.229).
+    # The edge is TRANSITIVE — wallet_profile -> qdrant_store -> httpx — the
+    # same thin-router debt class as the entries above. The route opens no
+    # client itself; it calls a service that happens to use one.
+    rugbrain.routes.rag_tools -> rugbrain.wallet_profile
+
 [importlinter:contract:routes-isolation]
 name = Routes package is independent (no cross-route imports)
 type = independence
