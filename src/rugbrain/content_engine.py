@@ -89,14 +89,16 @@ async def _write_post(notes: str) -> str | None:
         }
         if api_key:
             # Hosted-provider mode: Bearer auth + explicit UA (gateways
-            # behind Cloudflare historically block python-httpx UAs) +
-            # reasoning-off so reasoning-class models don't burn the token
-            # budget before writing content.
+            # behind Cloudflare historically block python-httpx UAs).
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "User-Agent": "opencode/1.0",
             }
-            payload["reasoning"] = {"enabled": False}
+            # 2026-10-15: the CoT-suppression field is a DeepInfra/llama.cpp
+            # extension — Groq and Gemini reject it (400 "property 'reasoning'
+            # is unsupported"). Opt-in only; the Groq Qwen lane runs without it.
+            if os.getenv("RAG_CHAT_REASONING_TOGGLE", "").lower() in ("1", "true", "yes"):
+                payload["reasoning"] = {"enabled": False}
             payload["max_tokens"] = 700
         async with httpx.AsyncClient(timeout=CHAT_TIMEOUT) as c:
             r = await c.post(
