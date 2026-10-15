@@ -18,7 +18,7 @@ from typing import Any
 
 from rugbrain.ingest_sources.x_intel.dedupe import dedupe_seen
 from rugbrain.ingest_sources.x_intel.pry_lane import PryLaneUnavailable
-from rugbrain.ingest_sources.x_intel.routing import route_account
+from rugbrain.ingest_sources.x_intel.routing import route_account, should_use_getxapi
 from rugbrain.ingest_sources.x_intel.storage import store_docs
 
 logger = logging.getLogger("rugbrain.x_intel")
@@ -104,9 +104,7 @@ async def _select_accounts() -> tuple[list[str], list[str]]:
         TIER2_ACCOUNTS,
     )
 
-    tier12 = [
-        h for h in list(TIER1_ACCOUNTS) + list(TIER2_ACCOUNTS) if route_account(h) == "getxapi"
-    ]
+    tier12 = list(TIER1_ACCOUNTS) + list(TIER2_ACCOUNTS)
     try:
         r = await get_redis_async()
         offset = int(await r.incr("xintel:rotation_offset") or 0)
@@ -121,8 +119,24 @@ async def _select_accounts() -> tuple[list[str], list[str]]:
         if tier12
         else []
     )
-    pry = [h for h in batch if route_account(h) == "pry"]
+    # Lane decision for the whole batch. While pacing is active or the
+    # GetXAPI budget is exhausted (plan credits expired 2026-10-02), TIER1/2
+    # falls to the free Pry lane — otherwise every cycle fetches nothing
+    # while the paid lane is dead. Fail-open: Redis down → paid lane.
+    use_gx = await should_use_getxapi("user-tweets")
+    if use_gx:
+        from rugbrain.ingest_sources.x_intel.budget import BudgetTracker
+
+        try:
+            use_gx = await BudgetTracker().can_afford_call()
+        except Exception as exc:
+            logger.debug("xintel:budget_check_failed err=%s", str(exc)[:120])
+            use_gx = True
+    if not use_gx:
+        logger.info("xintel:lane=pry (budget/pacing) handles=%d", len(batch))
+        return [], list(batch)
     gx = [h for h in batch if route_account(h) == "getxapi"]
+    pry = [h for h in batch if route_account(h) == "pry"]
     return gx, pry
 
 
@@ -157,8 +171,18 @@ async def run_cycle(
         from rugbrain.ingest_sources.x_intel.config import TWEETS_PER_ACCOUNT
 
         tweets: list[dict[str, Any]] = []
+        gx_tweets: list[dict[str, Any]] = []
         if gx:
-            tweets.extend(await _fetch_getxapi_tweets(gx, TWEETS_PER_ACCOUNT))
+            gx_tweets = await _fetch_getxapi_tweets(gx, TWEETS_PER_ACCOUNT)
+            tweets.extend(gx_tweets)
+        # Behavioral failover: a paid lane that returns NOTHING for a
+        # non-empty batch is dead (plan credits expired 2026-10-02) — hand
+        # its handles to the free Pry lane instead of ending the cycle with
+        # fetched=0. The budget ledger alone cannot catch this: an expired
+        # plan fails calls without ever charging the counters.
+        if gx and not gx_tweets:
+            logger.warning("xintel:getxapi_empty handles=%d -> pry failover", len(gx))
+            pry = list(pry) + list(gx)
         if pry:
             pry_tweets, pry_lane_dead = await pry_fetch(pry)
             tweets.extend(pry_tweets)
