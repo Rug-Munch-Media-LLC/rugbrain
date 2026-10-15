@@ -157,6 +157,14 @@ def _scroll(collection: str, limit: int = SCROLL) -> list[dict]:
         return []
 
 
+def _content(p: dict) -> str:
+    return str((p.get("payload") or {}).get("content") or "").lower()
+
+
+def _in_corpus(chunk: str, points: list[dict]) -> bool:
+    return any(chunk.lower() in _content(p) for p in points)
+
+
 def _verify(collection: str, chunks: list[str], doc_ids: list[str]) -> list[str]:
     """Return the anchors that are NOT present in the live collection."""
     points = _scroll(collection)
@@ -164,17 +172,10 @@ def _verify(collection: str, chunks: list[str], doc_ids: list[str]) -> list[str]
         return list(chunks)
     by_id = {str(p["id"]): p for p in points}
     target = by_id.get(doc_ids[0]) if doc_ids else None
-    target_content = (
-        str((target.get("payload") or {}).get("content") or "").lower() if target else ""
-    )
+    target_content = _content(target) if target else ""
     missing = []
     for chunk in chunks:
-        in_target = chunk.lower() in target_content
-        in_corpus = any(
-            chunk.lower() in str((p.get("payload") or {}).get("content") or "").lower()
-            for p in points
-        )
-        if not (in_target and in_corpus):
+        if not (chunk.lower() in target_content and _in_corpus(chunk, points)):
             missing.append(chunk)
     return missing
 

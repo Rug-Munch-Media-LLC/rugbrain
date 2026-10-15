@@ -39,35 +39,43 @@ def _scroll(collection: str, limit: int = SCROLL) -> list[dict]:
         return []
 
 
+def _load_entries(path: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def _scroll_cached(collection: str, cache: dict[str, list[dict]]) -> list[dict]:
+    if collection not in cache:
+        cache[collection] = _scroll(collection + "_8b")
+    return cache[collection]
+
+
+def _entry_covered(entry: dict, points: list[dict]) -> bool:
+    contents = [str((p.get("payload") or {}).get("content") or "").lower() for p in points]
+    ids = {str(p["id"]) for p in points}
+    chunks = [str(c) for c in (entry.get("gold_chunks") or []) if str(c).strip()]
+    doc_ids = [str(d) for d in (entry.get("relevant_doc_ids") or []) if str(d).strip()]
+    return bool(doc_ids and any(d in ids for d in doc_ids)) or any(
+        c.lower() in content for c in chunks for content in contents
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--path", type=Path, default=DEFAULT)
     args = ap.parse_args()
 
-    entries = [
-        json.loads(line)
-        for line in args.path.read_text().splitlines()
-        if line.strip() and not line.startswith("#")
-    ]
-
+    entries = _load_entries(args.path)
     cache: dict[str, list[dict]] = {}
-    per_collection: dict[str, list[int]] = defaultdict(lambda: [0, 0])  # [covered, total]
+    per_collection: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     orphans: list[str] = []
 
     for entry in entries:
         collection = str(entry.get("collection") or "security_patterns")
-        if collection not in cache:
-            cache[collection] = _scroll(collection + "_8b")
-        points = cache[collection]
-        contents = [str((p.get("payload") or {}).get("content") or "").lower() for p in points]
-        ids = {str(p["id"]) for p in points}
-
-        chunks = [str(c) for c in (entry.get("gold_chunks") or []) if str(c).strip()]
-        doc_ids = [str(d) for d in (entry.get("relevant_doc_ids") or []) if str(d).strip()]
-
-        covered = bool(doc_ids and any(d in ids for d in doc_ids)) or any(
-            c.lower() in content for c in chunks for content in contents
-        )
+        covered = _entry_covered(entry, _scroll_cached(collection, cache))
         per_collection[collection][1] += 1
         if covered:
             per_collection[collection][0] += 1
