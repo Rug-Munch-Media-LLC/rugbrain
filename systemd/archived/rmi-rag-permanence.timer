@@ -1,4 +1,7 @@
 # rmi-rag-permanence.timer — Nightly RAG permanence sync to B2
+#
+# NAMING: "permanence" = the B2 BACKUP job (backup/DR), not a serving tier.
+# See docs/DATA-PLACEMENT.md.
 # Source: /path/to/rugbrain/systemd/rmi-rag-permanence.timer
 # Deploy: /etc/systemd/system/rmi-rag-permanence.timer
 #

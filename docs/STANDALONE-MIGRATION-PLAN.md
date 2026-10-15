@@ -26,7 +26,7 @@ retunes embedder quota → prints verification checklist.
 
 | Unit / cron | Action |
 |---|---|
-| `rmi-rag-permanence.{service,timer}` | ✅ DONE — replaced by `rugbrain-permanence.*` (paths → rugbrain, After=rugbrain-api) |
+| `rmi-rag-permanence.{service,timer}` | ✅ DONE — replaced by `rugbrain-permanence.*` (paths → rugbrain, After=rugbrain-api). Both names are the **B2 backup job**, not a serving tier |
 | `rmi-rag-firehose.{service,timer}` | ✅ DONE — dead units removed (no service file; firehose cycles in-container) |
 | `/etc/cron.d/rugbrain-sec-edgar` | ✅ DONE — `cd rugbrain && docker compose run rag-ingest …` |
 | `rag-embed-migration.service` | ✅ disabled (old duplicate writer; migrate-embeds is canonical) |
@@ -65,12 +65,12 @@ Audited coupling (src grep 2026-08-25):
 
 Definition of done for "stands alone": `systemctl stop rmi-backend` (or backend
 container down) → firehose still ingests (direct adapters), API serves search/
-embed/context, permanence snapshots run, tg-ingest cycles. Backend down degrades
+embed/context, backup snapshots run, tg-ingest cycles. Backend down degrades
 scan-enrichment only.
 
 ## Phase 4 — retire rmi-rag
 
-Only after: flip done · permanence/firehose/tg-ingest restarted from rugbrain ·
+Only after: flip done · backup/firehose/tg-ingest restarted from rugbrain ·
 one full day of green logs.
 1. `systemctl disable --now migrate-embeds.service rag-embed-migration.service`
 2. Archive: `mv /srv/work/repos/rmi-rag /srv/work/repos/_retired/rmi-rag-$(date +%Y%m%d)`
@@ -84,5 +84,5 @@ one full day of green logs.
 - [ ] Flip script exits 0 with all post-flip checks green
 - [ ] tg_news `errors=0` (dim-mix crash gone), scam_watch ingest >0
 - [ ] Channel posting resumed (WO-3 writer/score contract served by rebuilt API)
-- [ ] `docker stop rmi-backend` for 10 min → firehose/API/permanence unaffected
+- [ ] `docker stop rmi-backend` for 10 min → firehose/API/backup unaffected
 - [ ] No unit/cron/script on the box references `/srv/work/repos/rmi-rag`

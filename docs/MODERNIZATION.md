@@ -79,7 +79,7 @@ The plan below fixes these in eight phases with shrink-only ratchets so the code
 | 29 | `news_clustering.py` | 526 | 19 | News clustering |
 | 30 | `search/filters.py` | 523 | — | Search filters |
 | 31 | `news_ranking.py` | 521 | 20 | News ranking |
-| 32 | `permanence.py` | 519 | 15 | B2/permanence retention |
+| 32 | `permanence.py` | 519 | 15 | B2 backup/retention (name = the B2 backup job) |
 | 33 | `monitors/token_distribution.py` | 516 | 20 | Token distribution monitor |
 | 34 | `crypto_schema.py` | 514 | — | Crypto document schema |
 | 35 | `embeddings.py` | 510 | 15 | Embedding lanes/backends |

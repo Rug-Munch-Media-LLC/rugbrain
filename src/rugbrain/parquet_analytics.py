@@ -1,4 +1,8 @@
-"""DuckDB analytics over RAG permanence snapshots on Backblaze B2.
+"""DuckDB analytics over RAG backup snapshots on Backblaze B2.
+
+("permanence" in the module names means the B2 BACKUP job — B2 is backup/DR
+for the code/RAG corpus; blockchain data is the tier authoritative on B2.
+See docs/DATA-PLACEMENT.md.)
 
 Query parquet snapshots written by ``scripts/b2_permanence.py`` with
 plain SQL:

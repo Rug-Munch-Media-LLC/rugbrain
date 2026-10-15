@@ -2,6 +2,11 @@
 RAG Permanence v2 - Backblaze B2 cold storage (native B2 API via b2sdk).
 Hot (Redis) → Warm (local 7-day cache) → Cold (B2 permanent + HF mirror).
 
+NAMING: "permanence" here means the B2 BACKUP job, not a serving tier. The
+code/RAG corpus is served from the server (hot set); B2 is backup/DR only.
+Blockchain data is the one tier that is authoritative on B2.
+See docs/DATA-PLACEMENT.md.
+
 Migrated from Cloudflare R2 to Backblaze B2 on 2026-07-31.
 Uses B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY credentials (b2sdk).
 HF mirror: opt-in dual-write to HuggingFace Storage Buckets via hf CLI.

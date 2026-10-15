@@ -62,7 +62,9 @@ surface**, not infrastructure. A cross-system retrieval is technically trivial
   Telegram bot (`/research`, `/investigate`), frontend AI chat. Agents have
   **no** RugBrain surface today.
 - **Deployment:** `rugbrain-api.service` (systemd, 127.0.0.1:8012; prod
-  `rugbrain.rugmunch.io/api/v1`), nightly B2 permanence snapshots.
+  `rugbrain.rugmunch.io/api/v1`), nightly Qdrant→B2 backup snapshots
+  (backup/DR only — the corpus is served from the server; see
+  [DATA-PLACEMENT.md](DATA-PLACEMENT.md)).
 - **Data (~447k points, 22 populated collections):** `news_v2` 143,985 ·
   `scam_intel_v2` 99,400 · `rag_documents` 46,235 · `wallet_profiles` 40,355 ·
   `known_scams` 26,720 · `social_intel` 20,979 · `threat_intel_v2` 16,741 ·

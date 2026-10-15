@@ -1,4 +1,10 @@
 # rmi-rag-permanence.service — Nightly Qdrant Snapshot → B2
+#
+# NAMING: "permanence" here means the B2 BACKUP job, not a serving tier.
+# The code/RAG corpus is served from the server (hot set); B2 is backup/DR.
+# Blockchain data is the one tier that is authoritative on B2.
+# See docs/DATA-PLACEMENT.md.
+#
 # Source: /path/to/rugbrain/systemd/rmi-rag-permanence.service
 # Deploy: /etc/systemd/system/rmi-rag-permanence.service
 #

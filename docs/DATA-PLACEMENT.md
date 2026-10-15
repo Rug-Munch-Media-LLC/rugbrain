@@ -9,6 +9,40 @@ Status: **canonical** · owner=Rug Munch Media LLC Engineering · supersedes ad-
 
 ---
 
+## Permanence vs backup — the binding policy (2026-10-15)
+
+> **Permanence lives on the server. B2 is backup only.**
+> **Blockchain data is the exception: it is authoritative on B2.**
+
+This is the operator's binding policy. It supersedes every earlier framing,
+including the rejected "B2 permanence" idea for a context7-like code MCP.
+
+| Tier | What lives there | Role | Permanence |
+|------|------------------|------|------------|
+| **Server (local, hot)** | The code/RAG corpus — code, docs, RAG collections, security patterns, skills. Qdrant + Redis + Neo4j on the box. | **Serving path.** The hot working set an agent queries. | **Authoritative.** Kept local so it can be structurally organized and served fast. |
+| **B2 (cold / DR)** | Parquet snapshots of the Qdrant collections + Qdrant snapshots, written nightly by `scripts/b2_permanence.py`. | **Backup only.** Disaster recovery and cold retention. | **Backup.** Never a serving path for the code/RAG corpus. |
+| **B2 + parquet + DuckDB + B2 MCP** | **Blockchain data** — chain-indexer parquet (transfers, DEX swaps, traces), the 90-day BigLake backup. | **Authoritative store** for chain data we do not index ourselves. | **Authoritative.** This is the one place B2 *is* the permanence tier. |
+| **DuckDB / parquet** | The read path over the B2-hosted blockchain data. | Derived query layer. | Derived. |
+
+**The rule in one sentence:** the code/RAG corpus is served from the server and
+backed up to B2; blockchain data is served from B2/parquet/DuckDB and is
+authoritative there.
+
+**Naming caveat — `permanence` in this repo means "the B2 backup job".**
+`src/rugbrain/permanence.py`, `scripts/b2_permanence.py`, the
+`rugbrain-permanence.{service,timer}` unit, and the `rmi-rag-permanence` bucket
+are all the **nightly Qdrant→B2 backup**, not a claim that B2 is the serving
+tier. The name is historical; read it as "backup". Do not rename the service or
+the bucket in this lane — the name is load-bearing in systemd, the
+EnvironmentFile, and the bucket itself.
+
+**Rejected framing (do not reintroduce):** "B2 permanence" as the storage model
+for a context7-like code MCP. A code server needs its hot set local; B2 is the
+cold/bulk tier. Do **not** add a B2 offload path for `codebase_reference_v2_8b`
+or any code/RAG collection.
+
+---
+
 ## The one-line rule
 
 > **Code → MCP. Knowledge → RAG.**

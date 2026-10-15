@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Shared helpers for the RugBrain B2 permanence pipeline.
+"""Shared helpers for the RugBrain B2 backup pipeline.
+
+NAMING: "permanence" in the module names means the B2 BACKUP job, not a
+serving tier — the corpus is served from the server; B2 is backup/DR.
+See docs/DATA-PLACEMENT.md.
 
 Implements the on-disk formats used by ``b2_permanence.py`` (upload),
 ``b2_restore.py`` (download) and ``migrate_to_parquet.py`` (convert):

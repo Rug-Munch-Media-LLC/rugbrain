@@ -8,7 +8,7 @@ snapshots of on-chain activity (ERC-20 transfers, DEX swaps) to B2:
         {chain}_dex_{YYYY-MM-DD}.parquet    # DEX swaps
 
 This is a *second* parquet data source for the RAG alongside the RAG's
-own permanence snapshots (``parquet_analytics.py`` → ``snapshots``
+own backup snapshots (``parquet_analytics.py`` → ``snapshots``
 view). It gives callers historical chain data: transfers, DEX events,
 whale activity — queryable with the same read-only SQL guard.
 

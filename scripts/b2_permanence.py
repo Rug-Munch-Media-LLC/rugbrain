@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Nightly B2 permanence sync — Qdrant snapshots to Backblaze B2.
+"""Nightly B2 backup sync — Qdrant snapshots to Backblaze B2.
+
+NAMING: "permanence" in this filename means the B2 BACKUP job, not a serving
+tier. The code/RAG corpus is served from the server (hot set); B2 is backup/DR
+only. Blockchain data is the one tier that is authoritative on B2.
+See docs/DATA-PLACEMENT.md.
 
 Exports canonical Qdrant collections as a columnar parquet file (default;
 generated ``*_8b`` mirror collections are excluded by default)

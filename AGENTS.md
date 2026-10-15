@@ -25,7 +25,7 @@ Do not duplicate these standards here; link to them.
 5. **Data placement** — knowledge belongs here; code belongs in `rmi-codebase-mcp` (see DATA-STORES.md).
 
 ## What This Repo Is
-RAG permanence layer for Rug Munch Intelligence. Stores vector embeddings of threats, scams, labels, and forensic insights in Qdrant. Owns Qdrant collection definitions, embedding model configs, and ingestion scripts from Ponder, Pry, and APIs.
+RAG knowledge layer for Rug Munch Intelligence. Stores vector embeddings of threats, scams, labels, and forensic insights in Qdrant (served from the server — the hot set). Owns Qdrant collection definitions, embedding model configs, and ingestion scripts from Ponder, Pry, and APIs. B2 is backup/DR only; blockchain data is the one tier that is authoritative on B2 (see docs/DATA-PLACEMENT.md).
 
 ## Type
 `backend` · language=Python 3.12

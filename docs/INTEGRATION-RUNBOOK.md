@@ -103,7 +103,8 @@ instead. Do **not** enable the namespace until 1b has printed the tool list.
 
 The RugBrain MCP reads Qdrant and writes Neo4j. **It needs no B2 key at all** —
 that is a backup-verification surface and mixing the two would put a storage
-key in an agent-reachable tool.
+key in an agent-reachable tool. (B2 is backup/DR only; the corpus is served
+from the server — see [DATA-PLACEMENT.md](DATA-PLACEMENT.md).)
 
 ### Qdrant
 

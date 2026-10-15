@@ -116,7 +116,7 @@ _REQUEST_TIMEOUT: Final[float] = 10.0
 
 #: Assignment targets / module constants whose job is to hold an EMBEDDING
 #: width. Deliberately narrow: "size" alone is excluded, because this tree has
-#: ``5 * 1024 * 1024`` byte arithmetic in the backup and permanence paths, and
+#: ``5 * 1024 * 1024`` byte arithmetic in the backup paths, and
 #: a chunk size is not a vector width. A bare ``size=`` on VectorParams is
 #: caught instead by the vector-construction rule below, which is precise.
 _DIM_NAME_TOKENS: Final[tuple[str, ...]] = (
@@ -724,7 +724,7 @@ def _is_arithmetic_operand(node: ast.Constant, parents: Mapping[int, ast.AST]) -
     """True when the literal is a factor in arithmetic, not a standalone value.
 
     ``5 * 1024 * 1024`` and ``4 * 1024 * 1024`` are byte sizes in the backup
-    and permanence paths. The literal is an *operand of a multiplication* — a
+    paths. The literal is an *operand of a multiplication* — a
     unit conversion — and can never be an embedding width. Without this rule
     the gate reports four byte-size bugs that are not bugs, and a gate that
     cries wolf on a backup script is a gate that gets muted.

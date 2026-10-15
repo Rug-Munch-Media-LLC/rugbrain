@@ -2,7 +2,7 @@
 
 ``GET /api/v1/health/full`` returns one JSON document covering:
 
-  * ``rugbrain``   — Qdrant, Redis, Qwen3 embedding, B2 permanence
+  * ``rugbrain``   — Qdrant, Redis, Qwen3 embedding, B2 backup
   * ``indexer``    — LiteChainIndexer: ClickHouse connectivity + per-chain
                      block advancement (read from the indexer hot store)
   * ``scanner``    — SENTINEL scanner modules + DataBus provider activity

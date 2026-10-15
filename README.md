@@ -82,7 +82,9 @@ protocol or a trending scam is immediately flagged.
   fused with Reciprocal Rank Fusion; optional MMR dedup + cross-encoder rerank.
 - **Ingestion:** scanner → Redis queues → subscriber/poller → embed → Qdrant;
   nightly news/social ingest; idempotent seed scripts.
-- **Permanence:** nightly snapshots to Backblaze B2 (`rmi-rag-permanence`).
+- **Backup:** nightly Qdrant→B2 parquet snapshots (`rmi-rag-permanence` bucket).
+  The corpus is served from the server (hot set); B2 is backup/DR only — see
+  [docs/DATA-PLACEMENT.md](docs/DATA-PLACEMENT.md).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full document (components,
 API reference, data flows, operations, roadmap).
@@ -93,7 +95,7 @@ API reference, data flows, operations, roadmap).
 - Embedding model configs (qwen3-embedding-8b primary) and chunking strategies
 - Ingestion scripts (threats, scams, news, wallet labels)
 - Three-pillar retrieval engine, RRF fusion, scam-check API
-- B2 permanence (backup/restore)
+- B2 backup/restore (the `permanence` module name means "the B2 backup job")
 
 ## Quick Start
 
@@ -143,7 +145,7 @@ Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
 | Collections in Qdrant | 40+ live, `*_v2` names (`threat_intel_v2`, `scam_intel_v2`, `research_v2`, …) — see [docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) |
 | Programmatic sources | 25+ `Source` implementations in `src/rugbrain/ingest_sources/` — see [docs/ADDING-A-SOURCE.md](docs/ADDING-A-SOURCE.md) |
 | `/investigate`, `/confidence` | Routed in `src/rugbrain/endpoints.py` (`/api/v1/rag/…`) |
-| Qdrant nightly backup → B2 | ✅ uploading to `rmi-rag-permanence` (b2sdk) |
+| Qdrant nightly backup → B2 | ✅ uploading to `rmi-rag-permanence` (b2sdk) — backup/DR, not a serving path |
 | Tests | 880+ collected; run `pytest` before pushing — see [TODO.md](TODO.md) |
 
 Source of truth for gaps: [TODO.md](TODO.md).

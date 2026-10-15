@@ -1,5 +1,9 @@
 # systemd units — NOT the deploy canonical
 
+> **Naming note:** `permanence` in every unit name below means the **nightly
+> Qdrant→B2 backup job** — B2 is backup/DR, not a serving tier. The corpus is
+> served from the server. See `docs/DATA-PLACEMENT.md`.
+
 **The deploy canonical for fleet systemd units is `fleet-infra/systemd/`**
 (flat layout, real paths, installed by `scripts/deploy/deploy-resource-control.sh`).
 
