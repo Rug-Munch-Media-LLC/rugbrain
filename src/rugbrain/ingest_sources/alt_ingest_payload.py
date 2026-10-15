@@ -41,8 +41,11 @@ __all__ = [
     "stable_point_id",
 ]
 
-#: Collection the alt-ingest writes to. The store resolves this to ``news_v2_8b``.
-COLLECTION = "news_v2"
+#: Collection the alt-ingest writes to. The store resolves this to
+#: ``social_intel_8b`` (declared twin). Operator directive 2026-10-15: the X +
+#: Telegram social scrape is social-origin content and belongs in social_intel,
+#: not in news_v2 — published media (RSS/news sites/newsletters) owns news_v2.
+COLLECTION = "social_intel"
 
 #: Below this a "message" is media-only / sticker noise (telegram_userbot rule).
 MIN_MESSAGE_CHARS = 30

@@ -55,6 +55,7 @@ _TEXT_RE = re.compile(
 )
 _TIME_RE = re.compile(r'<time[^>]*datetime="(?P<dt>[^"]+)"')
 
+
 def categorize(channel: str) -> str:
     blob = channel.lower()
     for cat, needles in CATEGORY_RULES:
@@ -189,7 +190,9 @@ async def run_cycle(max_channels: int = MAX_PER_CYCLE) -> dict[str, Any]:
         docs.append(
             {
                 "content": f"[TG/{cat}] {m['channel']}: {m['text'][:4000]}",
-                "collection": "threat_intel_v2" if sev in ("critical", "high") else "news_v2",
+                # Social-origin chatter -> social_intel (operator 2026-10-15);
+                # only critical/high severity escalates to threat_intel.
+                "collection": "threat_intel_v2" if sev in ("critical", "high") else "social_intel",
                 "severity": sev,
                 "source": f"t.me/{m['channel']}",
                 "metadata": {

@@ -71,11 +71,22 @@ def _declared_twins() -> frozenset[str]:
       mean a declared write source silently missed the canonical lane.
 
     Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
-    ``master_skills``, ``protocol_design``, ``exploits``, ``social_intel``,
+    ``master_skills``, ``protocol_design``, ``exploits``,
     ``codebase_reference_v2``, ``security_patterns_test``)
     are deliberately
     absent: routing a rugbrain source at them would widen write ownership past
     the gate's boundary.
+
+    ``social_intel`` WAS in that not-owned list and is now declared. Operator
+    directive 2026-10-15: the X + Telegram social scrape belongs in
+    ``social_intel``, not lumped into ``news_v2`` (which is where
+    ``alt_ingest_payload.COLLECTION`` and the telegram userbot/web defaults sent
+    it — measured: ``news_v2_8b`` 273,447 vs ``social_intel_8b`` 1). The writer
+    modules (``web_crawler``, ``social_intel``) already targeted the bare
+    ``social_intel`` name, so the resolver was sending every social write to the
+    BASE collection while the rest of the corpus migrated to ``_8b`` twins.
+    Declaring the twin is what makes ``resolve_collection("social_intel")``
+    return ``social_intel_8b``.
 
     ``security_patterns`` WAS in that not-owned list, and that omission was a
     live routing gap. Measured 2026-10-15 against live Qdrant: the 4096 base
@@ -126,6 +137,7 @@ def _declared_twins() -> frozenset[str]:
             "security_alerts",
             "security_feeds",
             "security_patterns",
+            "social_intel",
             "solana_patterns",
             "stablecoin_market",
             "threat_intel_v2",

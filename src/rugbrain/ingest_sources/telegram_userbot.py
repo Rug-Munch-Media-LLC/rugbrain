@@ -279,7 +279,9 @@ def _docs_from_messages(msgs: list[TgMessage], echo: dict[str, int]) -> list[dic
         docs.append(
             {
                 "content": f"[TG/{m.category}] {m.channel_title}: {m.text[:4000]}",
-                "collection": "threat_intel_v2" if sev in ("critical", "high") else "news_v2",
+                # Social-origin chatter -> social_intel (operator 2026-10-15);
+                # only critical/high severity escalates to threat_intel.
+                "collection": "threat_intel_v2" if sev in ("critical", "high") else "social_intel",
                 "severity": sev,
                 "source": f"telegram:{m.channel_title[:40]}",
                 "metadata": {
