@@ -122,7 +122,12 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://pipeline/exchange-flows",
         licence=LICENCE_PERMISSIVE,
         cadence=DAILY,
-        notes="Pinned 1024 (retired lane). 0 points.",
+        notes=(
+            "RETIRED 2026-10-15: 0 points, no source writes it "
+            "(exchange_flow.py has no write path). No twin exists, so "
+            "retired_dims stays empty (stranded shell, not a lagging copy). "
+            "See docs/DECISION-EMPTY-MARKET-COLLECTIONS.md."
+        ),
         observed=1024,
         retired=(),
     ),
@@ -148,7 +153,12 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://pipeline/liquidation-heatmap",
         licence=LICENCE_PERMISSIVE,
         cadence=DAILY,
-        notes="Pinned 1024. 0 points.",
+        notes=(
+            "RETIRED 2026-10-15: 0 points, no source writes it "
+            "(market_sources.py has no liquidation fetcher). No twin exists, so "
+            "retired_dims stays empty (stranded shell, not a lagging copy). "
+            "See docs/DECISION-EMPTY-MARKET-COLLECTIONS.md."
+        ),
         observed=1024,
         retired=(),
     ),

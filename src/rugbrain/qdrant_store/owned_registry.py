@@ -107,13 +107,17 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "exploits",
         "cross_chain",
         "protocol_design",
+        # RETIRED 2026-10-15: exchange_flows + liquidation_events are 1024-dim
+        # empty shells with no source that writes them. They stay in the owned
+        # set so the write gate still recognises the names if a future source is
+        # built, but nothing advertises them. See
+        # docs/DECISION-EMPTY-MARKET-COLLECTIONS.md.
         "exchange_flows",
         "market_health",
         "liquidation_events",
         "hyperliquid",
         "token_unlocks",
         "scanned_tokens",
-
         # Ingest targets that are absent from Qdrant entirely, so their sources
         # failed a THIRD time even once the collections were created
         # (2026-09-28). Same class as the August finding above, same root
