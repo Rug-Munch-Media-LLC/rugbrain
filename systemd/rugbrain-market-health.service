@@ -1,0 +1,28 @@
+# rugbrain-market-health — feed the market_health collection on a cadence.
+#
+# WHY THIS UNIT EXISTS
+#   ``market_health_8b`` had NO writer since 2026-09-11: the four market
+#   fetchers in ``firehose/market_sources.py`` had zero importers, so the
+#   collection sat at 627 points while the taxonomy promised live market
+#   awareness. The fetchers are now registered as an ingest source
+#   (``ingest_sources/market_health.py``) and this timer runs the real ingest
+#   path against them.
+#
+# Deploy:
+#   cp systemd/rugbrain-market-health.service /etc/systemd/system/
+#   cp systemd/rugbrain-market-health.timer   /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rugbrain-market-health.timer
+#
+# Read-only w.r.t. upstream: it fetches free public feeds and writes only the
+# owned ``market_health`` corpus (lane-resolved to ``market_health_8b``).
+[Unit]
+Description=RugBrain market-health ingest (CoinGecko global/FNG/derivatives)
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python scripts/ingest_all_sources.py --source market_health
+Nice=10
+# A failed fetch is a non-zero exit (the runner's contract); surface it.
+SuccessExitStatus=0

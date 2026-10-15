@@ -23,6 +23,7 @@ carrying a semantic ``doc_type``:
   * ``rekt_news``              — post-mortem articles        (post_mortem)
   * ``crypto_whitepapers``     — project whitepapers         (whitepaper)
   * ``defillama``              — live TVL/market context     (market_data)
+  * ``market_health``          — CoinGecko global/FNG/derivatives (market_data)
   * ``layerzero`` / ``axelar`` / ``ccip`` — bridge contracts (bridge_architecture)
   * ``l2beat``                 — L2/bridge risk framework    (l2_risk)
   * ``circom`` / ``snarkjs``   — ZK toolchain docs           (zk_circuit)
@@ -80,6 +81,7 @@ from rugbrain.ingest_sources.incidents import (
     SlowMistOpenReportsSource,
 )
 from rugbrain.ingest_sources.l2beat import L2BeatSource
+from rugbrain.ingest_sources.market_health import MarketHealthSource
 from rugbrain.ingest_sources.mev import MEVBoostRelaySource, MEVBoostSource
 from rugbrain.ingest_sources.openphish import OpenPhishSource
 from rugbrain.ingest_sources.opensanctions import OpenSanctionsSource
@@ -110,6 +112,7 @@ SOURCES: tuple[Source, ...] = (
     RektSource(),
     WhitepapersSource(),
     DeFiLlamaSource(),
+    MarketHealthSource(),
     LayerZeroSource(),
     AxelarSource(),
     CCIPSource(),

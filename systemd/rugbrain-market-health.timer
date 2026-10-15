@@ -1,0 +1,16 @@
+# rugbrain-market-health.timer — hourly market-health ingest.
+#
+# Hourly matches the corpus entry's declared cadence (``cadence=HOURLY`` in
+# corpus/entries_ops.py) and the freshness the market brief needs. Off the
+# hour (:17) so it does not collide with the fleet's :00 crowd (backups,
+# retention, registry, eval).
+[Unit]
+Description=Hourly RugBrain market-health ingest
+
+[Timer]
+OnCalendar=*-*-* *:17:00
+Persistent=true
+Unit=rugbrain-market-health.service
+
+[Install]
+WantedBy=timers.target
