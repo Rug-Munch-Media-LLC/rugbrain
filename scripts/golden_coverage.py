@@ -6,9 +6,25 @@ its ``relevant_doc_ids``) is present in the live Qdrant collection it targets.
 Rows whose anchors exist nowhere are *orphans* — they score as permanent misses
 regardless of retrieval quality, so they must be re-anchored or removed.
 
+COVERED IS NOT RETRIEVED
+    Coverage answers "does the anchor exist?" — it does NOT answer "does the
+    retriever rank it?". A row can be covered and still miss at top-5, and the
+    two failure modes need different fixes:
+
+      * ORPHAN (not covered) — the anchor is absent; re-anchor or drop the row.
+      * RANKED-OUT (covered, misses) — the anchor exists but the query's
+        vocabulary does not pull it into the top-k. Re-anchoring would be a LIE
+        (the chunk is right); the honest fix is to reword the query to the
+        corpus's own vocabulary, or accept the miss and record why.
+
+    ``--misses`` prints the known ranked-out rows with their measured rank and
+    the diagnosis, so the eval never silently re-anchors a correct chunk to a
+    wrong one just to make a number go green.
+
 Usage:
     python3 scripts/golden_coverage.py                 # golden_set.jsonl
     python3 scripts/golden_coverage.py --path <file>   # any golden JSONL
+    python3 scripts/golden_coverage.py --misses        # + ranked-out diagnosis
 """
 
 from __future__ import annotations
@@ -24,6 +40,11 @@ from pathlib import Path
 QDRANT = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 DEFAULT = Path(__file__).resolve().parent.parent / "src" / "rugbrain" / "eval" / "golden_set.jsonl"
 SCROLL = 10000
+
+# The covered-but-missed rows and their diagnosis live in the package so the
+# data is importable (and testable) without running this script.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from rugbrain.eval.ranked_out import RANKED_OUT  # noqa: E402
 
 
 def _scroll(collection: str, limit: int = SCROLL) -> list[dict]:
@@ -63,9 +84,24 @@ def _entry_covered(entry: dict, points: list[dict]) -> bool:
     )
 
 
+def _print_ranked_out() -> None:
+    """Print the covered-but-missed rows with their measured rank and cause."""
+    print(f"\nranked-out rows (covered, miss at top-5) — {len(RANKED_OUT)}:")
+    for query, info in RANKED_OUT.items():
+        rank = info["rank"]
+        rank_s = f"rank {rank}" if rank is not None else "not in top-500"
+        print(f"  - {query!r} [{info['collection']}] {rank_s} — {info['cause']}")
+        print(f"      {info['detail']}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--path", type=Path, default=DEFAULT)
+    ap.add_argument(
+        "--misses",
+        action="store_true",
+        help="also print the covered-but-ranked-out rows with their diagnosis",
+    )
     args = ap.parse_args()
 
     entries = _load_entries(args.path)
@@ -95,6 +131,8 @@ def main() -> int:
         print(f"\norphans ({len(orphans)}):")
         for query in orphans:
             print(f"  - {query}")
+    if args.misses:
+        _print_ranked_out()
     return 0
 
 

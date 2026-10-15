@@ -72,10 +72,23 @@ def _declared_twins() -> frozenset[str]:
 
     Twins that exist but are NOT owned (``agent_vectors``, ``cross_chain``,
     ``master_skills``, ``protocol_design``, ``exploits``, ``social_intel``,
-    ``codebase_reference_v2``, ``security_patterns``, ``security_patterns_test``)
+    ``codebase_reference_v2``, ``security_patterns_test``)
     are deliberately
     absent: routing a rugbrain source at them would widen write ownership past
     the gate's boundary.
+
+    ``security_patterns`` WAS in that not-owned list, and that omission was a
+    live routing gap. Measured 2026-10-15 against live Qdrant: the 4096 base
+    held only 278 points while ``security_patterns_8b`` held 7,063 — the twin
+    is where the corpus actually lives. The name is owned
+    (``owned_registry``), the corpus entry declares it with ``retired=(2560,)``
+    and the note "Base 2560, twin is the 4096 lane", and the golden ZK row
+    (``3e112d3f-…``, "Underconstrained Circuit Enables Proof Forgery") exists
+    ONLY in the twin. Because the name was absent from this table,
+    ``resolve_collection`` passed it through to the 278-point base, so the
+    retriever searched a near-empty collection and the row scored a permanent
+    miss. The twin is populated and the name is owned, so the fix belongs in
+    the declaration — exactly as ``scan_intel`` was fixed.
 
     ``scan_intel`` WAS in that not-owned list, and that omission was the live
     P0. Measured 2026-09-30 against live Qdrant (97 collections): the 2560 base
@@ -112,6 +125,7 @@ def _declared_twins() -> frozenset[str]:
             "scam_intel_v2",
             "security_alerts",
             "security_feeds",
+            "security_patterns",
             "solana_patterns",
             "stablecoin_market",
             "threat_intel_v2",

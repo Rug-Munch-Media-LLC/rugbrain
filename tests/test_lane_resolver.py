@@ -105,6 +105,26 @@ class TestRule:
         assert lr.resolve_collection("scan_intel_8b") == "scan_intel_8b"
         assert lr.declared_lane_dim("scan_intel") == 4096
 
+    def test_security_patterns_resolves_to_its_twin(self):
+        """The routing gap: the corpus lives in the twin, not the 278-pt base.
+
+        Measured live 2026-10-15: ``security_patterns`` held 278 points while
+        ``security_patterns_8b`` held 7,063. The name was absent from the table,
+        so ``resolve_collection`` passed it through to the near-empty base and
+        the golden ZK row (``3e112d3f-…``) — which exists ONLY in the twin —
+        scored a permanent miss. The name is owned and the twin is populated, so
+        it resolves like ``scan_intel`` does.
+        """
+        assert "security_patterns" in lr._DECLARED_TWINS
+        assert lr.resolve_collection("security_patterns") == "security_patterns_8b"
+        assert lr.resolve_collection("security_patterns_8b") == "security_patterns_8b"
+        assert lr.declared_lane_dim("security_patterns") == 4096
+
+    def test_security_patterns_test_fixture_stays_unrouted(self):
+        """The fixture twin is NOT owned: routing at it would widen the gate."""
+        assert "security_patterns_test" not in lr._DECLARED_TWINS
+        assert lr.resolve_collection("security_patterns_test") == "security_patterns_test"
+
 
 class TestIdempotence:
     def test_double_application_is_idempotent(self):

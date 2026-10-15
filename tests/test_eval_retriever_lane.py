@@ -34,6 +34,8 @@ LIVE_WIDTHS = {
     "threat_intel_v2_8b": 4096,
     "coding_knowledge_8b": 4096,
     "solana_patterns_8b": 4096,
+    "security_patterns": 4096,  # base is 4096 but near-empty (278 pts)
+    "security_patterns_8b": 4096,  # the twin holds the corpus (7,063 pts)
     "public_crypto_patterns": 2560,  # still pinned (no twin)
 }
 
@@ -168,6 +170,26 @@ async def test_already_resolved_twin_name_is_idempotent(
 
 
 @pytest.mark.asyncio
+async def test_security_patterns_row_searches_the_twin_not_the_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The routing gap: a ``security_patterns`` row must search the twin.
+
+    Both names are 4096, so a width check alone cannot catch this — the base is
+    a near-empty 278-point collection while the twin holds the corpus. Before
+    the fix the row searched ``security_patterns`` and the golden ZK chunk
+    (present only in the twin) could never be returned.
+    """
+    fake = _FakeQdrant()
+    _patch_io(monkeypatch, fake)
+    retrieve = qr.direct_qdrant_retriever(qdrant_url="http://stub")
+
+    await retrieve("zk circuit underconstrained proof vulnerability", "security_patterns", 5)
+
+    assert fake.searched == [("security_patterns_8b", 4096)], fake.searched
+
+
+@pytest.mark.asyncio
 async def test_unknown_width_raises_instead_of_guessing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -232,5 +254,5 @@ def test_live_width_table_matches_the_declared_lane() -> None:
 
     for base in ("defi_exploits", "threat_intel_v2"):
         assert resolve_collection(base) == f"{base}_8b"
-    for base in ("coding_knowledge", "solana_patterns"):
+    for base in ("coding_knowledge", "solana_patterns", "security_patterns"):
         assert resolve_collection(base) == f"{base}_8b"
