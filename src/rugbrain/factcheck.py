@@ -1,354 +1,177 @@
-"""Fact-check gate for RugBrain content pipeline.
+"""RugBrain fact-check gate — per-claim verdicts for a draft.
 
-Enforces editorial standards #21 (corroborate with 2+ sources), #12 (on-chain is
-ground truth), #15 (failure modes: 0→strip, 1→strip, all fail→reject).
+Four deterministic steps (design: docs/FACT-CHECK-GATE.md):
 
-The gate runs after LLM/template composition and before a draft is returned.
+  1. **extract**  — pull verifiable claims from the draft text
+     (addresses, tx hashes, amounts, percentages, protocol names).
+  2. **bind**     — match each claim to the sources that mention it.
+  3. **corroborate** — a claim passes when >= 2 *independent* sources
+     (distinct domains) support it.
+  4. **verdict**  — per-claim ``pass`` / ``flag`` plus a draft-level gate.
+
+Pure Python (stdlib + the existing ``news_rating`` claim extractor): no
+network, no embeddings, deterministic and testable. The embed/rerank stack
+is deliberately NOT used here — claim-source binding is exact-token
+matching, which is reproducible and cheap; a semantic rung can be layered
+on later behind the same ``bind_claims`` seam.
+
+Usage::
+
+    from rugbrain.factcheck import check_draft
+
+    report = check_draft(draft_text, sources)
+    print(report["verdict"], report["claims"])
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
+from rugbrain.news_rating.factual import _find_claims
+from rugbrain.news_rating.sources import domain_from_url
 
-class ClaimType(str, Enum):
-    ON_CHAIN = "on_chain"
-    PRICE = "price"
-    ENTITY_ACTION = "entity_action"
-    VULNERABILITY = "vulnerability"
-    GENERAL = "general"
+#: A claim passes when this many independent domains support it.
+MIN_INDEPENDENT_SOURCES = 2
 
-
-class Verdict(str, Enum):
-    PASS = "PASS"
-    FAIL = "FAIL"
-
-
-@dataclass
-class SourceRef:
-    """A single source reference for a claim."""
-
-    type: str  # qdrant | tx_hash | url | block
-    ref: str
-    collection: str | None = None
-    verified: bool = False
-
-
-@dataclass
-class Claim:
-    """A structured claim extracted from text."""
-
-    text: str
-    type: ClaimType
-    entities: list[str] = field(default_factory=list)
-    severity_hint: str = "medium"
-    source_refs: list[SourceRef] = field(default_factory=list)
-
-
-@dataclass
-class VerifiedClaim:
-    """A claim after corroboration."""
-
-    claim: Claim
-    verified: bool
-    independent_sources: int
-    on_chain_verified: bool
-    missing_sources: list[str] = field(default_factory=list)
-
-
-@dataclass
-class FactCheckResult:
-    """Result of the fact-check gate."""
-
-    verdict: Verdict
-    claims: list[VerifiedClaim]
-    stripped_claims: list[str] = field(default_factory=list)
-    unverifiable_claims: list[str] = field(default_factory=list)
-    missing: list[str] = field(default_factory=list)
-
-
-# ── Regex patterns for claim extraction ──
-
-# On-chain: tx hashes, block numbers, contract addresses
-TX_HASH_RE = re.compile(r"0x[a-fA-F0-9]{64}")
-BLOCK_RE = re.compile(r"\bblock\s+#?(\d+)\b", re.IGNORECASE)
-CONTRACT_RE = re.compile(r"0x[a-fA-F0-9]{40}")
-
-# Price: $ amounts with tickers
-PRICE_RE = re.compile(
-    r"\$?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:USD|USDC|USDT|ETH|BTC|SOL|BNB|MATIC|AVAX|ARB|OP|DOT|ADA|DOGE|SHIB|PEPE|WIF|BONK)",
-    re.IGNORECASE,
-)
-
-# Entity actions: deployer, team, hacker, exploiter, admin, owner
-ENTITY_ACTION_RE = re.compile(
-    r"\b(deployer|team|hacker|exploiter|admin|owner|attacker|malicious actor)\b",
-    re.IGNORECASE,
-)
-
-# Vulnerability: reentrancy, oracle manipulation, flash loan, etc.
-VULN_RE = re.compile(
-    r"\b(reentrancy|oracle manipulation|flash loan|sandwich attack|MEV|front.run|back.run|price manipulation|access control|privilege escalation)\b",
-    re.IGNORECASE,
+#: Claim categories that carry a verifiable, checkable value.
+_VERIFIABLE = (
+    "addresses",
+    "tx_hashes",
+    "solana_addresses",
+    "amounts_usd",
+    "amounts_token",
+    "percentages",
 )
 
 
-def extract_claims(text: str) -> list[Claim]:
-    """Extract structured claims from text.
+def _normalise(value: str) -> str:
+    """Case/space-insensitive key so '0xAB..' and '0xab..' bind alike."""
+    return re.sub(r"\s+", "", value.strip().lower())
 
-    Returns claims with type, entities, and severity hint.
+
+def extract_claims(draft: str) -> list[dict[str, Any]]:
+    """Step 1 — return the draft's verifiable claims as flat records.
+
+    Each record is ``{"category", "value", "key"}``; ``key`` is the
+    normalised form used for source binding. Protocol names are excluded
+    (they are context, not a checkable value).
     """
-    claims: list[Claim] = []
-    seen_texts = set()
-
-    # Split into sentences for claim granularity
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-
-    for sent in sentences:
-        sent = sent.strip()
-        if not sent or len(sent) < 20:
-            continue
-
-        # Deduplicate by content
-        key = sent[:120].lower()
-        if key in seen_texts:
-            continue
-        seen_texts.add(key)
-
-        # Determine claim type and entities
-        claim_type = ClaimType.GENERAL
-        entities: list[str] = []
-        severity = "medium"
-
-        # On-chain indicators
-        tx_hashes = TX_HASH_RE.findall(sent)
-        blocks = BLOCK_RE.findall(sent)
-        contracts = CONTRACT_RE.findall(sent)
-        if tx_hashes or blocks or contracts:
-            claim_type = ClaimType.ON_CHAIN
-            entities.extend(tx_hashes)
-            entities.extend([f"block:{b}" for b in blocks])
-            entities.extend(contracts)
-            severity = "high"
-
-        # Price indicators
-        if PRICE_RE.search(sent):
-            if claim_type == ClaimType.GENERAL:
-                claim_type = ClaimType.PRICE
-            entities.extend(PRICE_RE.findall(sent))
-            severity = "medium"
-
-        # Entity action indicators
-        entity_actions = ENTITY_ACTION_RE.findall(sent)
-        if entity_actions:
-            if claim_type == ClaimType.GENERAL:
-                claim_type = ClaimType.ENTITY_ACTION
-            entities.extend(entity_actions)
-            severity = "high"
-
-        # Vulnerability indicators
-        vulns = VULN_RE.findall(sent)
-        if vulns:
-            if claim_type == ClaimType.GENERAL:
-                claim_type = ClaimType.VULNERABILITY
-            entities.extend(vulns)
-            severity = "critical"
-
-        claims.append(
-            Claim(
-                text=sent,
-                type=claim_type,
-                entities=entities,
-                severity_hint=severity,
-            )
-        )
-
-    return claims
-
-
-async def bind_sources(claims: list[Claim], story: dict[str, Any]) -> list[Claim]:
-    """Bind source references to each claim by querying RugBrain collections.
-
-    This is a synchronous mock for now; real implementation queries Qdrant
-    collections (threat_intel_v2, rmi_agent_memory, rmi_community) and
-    on-chain verifiers.
-    """
-    # Import here to avoid circular deps
-    from rugbrain.qdrant_store import get_qdrant_store
-    from rugbrain.embeddings import get_query_embedding
-
-    store = await get_qdrant_store()
-
-    # Collections that serve as sources (editorial standard #21)
-    SOURCE_COLLECTIONS = [
-        "threat_intel_v2",  # on-chain exploits, hacks
-        "rmi_agent_memory",  # entity profiles, patterns
-        "rmi_community",  # best practices, guidance
-        "news_v2",  # news articles with URLs
-    ]
-
-    for claim in claims:
-        # Build a query from the claim text + entities
-        query_parts = [claim.text] + claim.entities
-        query = " ".join(query_parts)
-
-        try:
-            embedding = await get_query_embedding(query)
-        except Exception:
-            # Embedding failure → no sources bound
-            continue
-
-        for coll in SOURCE_COLLECTIONS:
-            try:
-                results = await store.search(
-                    embedding,
-                    collection=coll,
-                    limit=3,
-                    min_similarity=0.5,
-                )
-            except Exception:
+    found = _find_claims(draft or "")
+    claims: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for category in _VERIFIABLE:
+        for value in found.get(category, []):
+            key = _normalise(value)
+            if not key or key in seen:
                 continue
-
-            for r in results:
-                md = r.get("metadata", {})
-                content = r.get("content", "") or md.get("content", "")
-
-                # Create source reference
-                source_ref = SourceRef(
-                    type="qdrant",
-                    ref=r.get("id", ""),
-                    collection=coll,
-                    verified=bool(content),  # has content = verified
-                )
-                claim.source_refs.append(source_ref)
-
-        # Add on-chain verification for ON_CHAIN claims (editorial standard #12)
-        if claim.type == ClaimType.ON_CHAIN:
-            # Look for tx hashes in entities
-            for entity in claim.entities:
-                if TX_HASH_RE.match(entity):
-                    # Tx hash counts as 1 verified on-chain source
-                    claim.source_refs.append(
-                        SourceRef(
-                            type="tx_hash",
-                            ref=entity,
-                            collection="on_chain",
-                            verified=True,
-                        )
-                    )
-                    break  # one tx hash per claim is enough
-
+            seen.add(key)
+            claims.append({"category": category, "value": value, "key": key})
     return claims
 
 
-async def corroborate(bound_claims: list[Claim]) -> list[VerifiedClaim]:
-    """Corroborate each claim against editorial standards.
+def _source_text(source: dict[str, Any]) -> str:
+    """Concatenate the searchable text of one source record."""
+    parts = [
+        str(source.get("title") or ""),
+        str(source.get("content") or ""),
+        str(source.get("snippet") or ""),
+    ]
+    return " ".join(p for p in parts if p)
 
-    Rules (editorial-standards #21, #12, #15):
-    - Minimum 2 independent sources per claim
-    - Independent = different origin (on-chain + off-chain, or two distinct publishers)
-    - On-chain is ground truth — a tx hash/block counts as 1 source, needs 1 more
-    - The originating story does NOT count as a source for itself
+
+def _source_domain(source: dict[str, Any]) -> str:
+    """Resolve a source's domain from url/source fields ('' if unknown)."""
+    for field in ("url", "source_url", "source"):
+        raw = source.get(field)
+        if isinstance(raw, str) and raw.strip():
+            domain = domain_from_url(raw)
+            if domain:
+                return domain
+    return ""
+
+
+def bind_claims(
+    claims: list[dict[str, Any]], sources: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Step 2 — attach the sources that mention each claim.
+
+    A source supports a claim when the claim's normalised key appears in
+    the source text. Returns the claims with a ``sources`` list of
+    ``{"domain", "url"}`` records (deduplicated by domain).
     """
-    verified: list[VerifiedClaim] = []
-
-    for claim in bound_claims:
-        # Filter out self-references (story's own collection)
-        story_collections = {"news_v2"}  # stories come from news_v2
-        external_refs = [sr for sr in claim.source_refs if sr.collection not in story_collections]
-
-        # Count independent sources by origin
-        origins = set()
-        on_chain_count = 0
-        for sr in external_refs:
-            if sr.type in ("tx_hash", "block") and sr.verified:
-                origins.add("on_chain")
-                on_chain_count += 1
-            elif sr.type == "qdrant" and sr.verified:
-                origins.add(f"qdrant:{sr.collection}")
-
-        independent_sources = len(origins)
-        on_chain_verified = on_chain_count > 0
-
-        # Editorial standard #12: on-chain counts as 1, needs 1 more
-        # So if only on-chain, independent_sources == 1 → fail
-        # If on-chain + 1 off-chain → independent_sources == 2 → pass
-
-        missing = []
-        if independent_sources == 0:
-            missing.append("no_independent_sources")
-        elif independent_sources == 1:
-            if on_chain_verified:
-                missing.append("on_chain_only_needs_off_chain_corroboration")
-            else:
-                missing.append("single_source_needs_corroboration")
-
-        verified_claim = VerifiedClaim(
-            claim=claim,
-            verified=independent_sources >= 2,
-            independent_sources=independent_sources,
-            on_chain_verified=on_chain_verified,
-            missing=missing,
-        )
-        verified.append(verified_claim)
-
-    return verified
+    prepared = [
+        (_normalise(_source_text(s)), _source_domain(s), str(s.get("url") or "")) for s in sources
+    ]
+    bound: list[dict[str, Any]] = []
+    for claim in claims:
+        key = claim["key"]
+        matched: list[dict[str, str]] = []
+        seen_domains: set[str] = set()
+        for text, domain, url in prepared:
+            if key and key in text:
+                dedup_key = domain or url
+                if dedup_key in seen_domains:
+                    continue
+                seen_domains.add(dedup_key)
+                matched.append({"domain": domain, "url": url})
+        bound.append({**claim, "sources": matched})
+    return bound
 
 
-def verdict(verified_claims: list[VerifiedClaim]) -> FactCheckResult:
-    """Produce final verdict per editorial standard #15.
+def corroborate(claim: dict[str, Any]) -> dict[str, Any]:
+    """Step 3 — count independent domains supporting one bound claim."""
+    domains = {s["domain"] for s in claim.get("sources", []) if s.get("domain")}
+    independent = len(domains)
+    return {
+        **claim,
+        "independent_sources": independent,
+        "corroborated": independent >= MIN_INDEPENDENT_SOURCES,
+    }
 
-    - 0 sources → STRIP the claim
-    - 1 source → STRIP the claim
-    - All claims fail → REJECT the draft
-    - Stripping preserves signal where partial verification exists
+
+def verdict(claim: dict[str, Any]) -> dict[str, Any]:
+    """Step 4 — per-claim verdict: ``pass`` when corroborated, else ``flag``."""
+    return {
+        **claim,
+        "verdict": "pass" if claim.get("corroborated") else "flag",
+    }
+
+
+def check_draft(draft: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
+    """Run all four steps and return the draft-level fact-check report.
+
+    ``sources`` is a list of dicts with at least ``url``/``source`` and
+    ``title``/``content``/``snippet`` (the shape ``sources_registry``
+    produces). The draft gate is ``pass`` only when every claim passes;
+    a draft with no verifiable claims is ``flag`` (nothing to check).
     """
-    stripped: list[str] = []
-    unverifiable: list[str] = []
-    missing: list[str] = []
-    passing_claims: list[VerifiedClaim] = []
-
-    for vc in verified_claims:
-        if vc.verified:
-            passing_claims.append(vc)
-        elif vc.independent_sources == 0:
-            stripped.append(vc.claim.text[:100])
-            unverifiable.append(vc.claim.text[:100])
-            missing.extend(vc.missing)
-        elif vc.independent_sources == 1:
-            stripped.append(vc.claim.text[:100])
-            missing.extend(vc.missing)
-        else:
-            # Should not reach here (independent_sources >= 2 → verified)
-            pass
-
-    # Editorial standard #15: all claims fail → REJECT
-    overall_verdict = Verdict.PASS if passing_claims else Verdict.FAIL
-
-    return FactCheckResult(
-        verdict=overall_verdict,
-        claims=passing_claims,
-        stripped_claims=stripped,
-        unverifiable_claims=unverifiable,
-        missing=list(set(missing)),
-    )
+    claims = extract_claims(draft)
+    bound = bind_claims(claims, sources)
+    checked = [verdict(corroborate(c)) for c in bound]
+    passed = sum(1 for c in checked if c["verdict"] == "pass")
+    flagged = len(checked) - passed
+    if not checked:
+        gate = "flag"
+    elif flagged == 0:
+        gate = "pass"
+    else:
+        gate = "flag"
+    return {
+        "verdict": gate,
+        "claim_count": len(checked),
+        "passed": passed,
+        "flagged": flagged,
+        "min_independent_sources": MIN_INDEPENDENT_SOURCES,
+        "claims": checked,
+    }
 
 
-async def fact_check_gate(text: str, story: dict[str, Any]) -> FactCheckResult:
-    """Main entry point: run the full fact-check pipeline on composed text.
-
-    Returns FactCheckResult with verdict and detailed breakdown.
-    """
-    claims = extract_claims(text)
-    if not claims:
-        return FactCheckResult(
-            verdict=Verdict.PASS,  # no claims = nothing to verify
-            claims=[],
-        )
-
-    bound = await bind_sources(claims, story)
-    verified = await corroborate(bound)
-    return verdict(verified)
+__all__ = [
+    "MIN_INDEPENDENT_SOURCES",
+    "bind_claims",
+    "check_draft",
+    "corroborate",
+    "extract_claims",
+    "verdict",
+]
