@@ -209,11 +209,16 @@ def rugbrain_scam_check(
 
 @mcp.tool(name="rugbrain_wallet_profile")
 def rugbrain_wallet_profile(address: str, max_hops: int = 2) -> dict[str, Any]:
-    """Entity investigation for an address: fund-flow hops, related wallets.
+    """Entity investigation for an address: labels, risk verdict, related intel.
+
+    Looks the address up by exact match across the wallet/scam label corpora
+    (wallet_v2_8b, wallet_profiles_8b, known_scams_8b) and returns an auditable
+    verdict. ``found=false`` means the address is UNSEEN, not clean.
 
     Args:
         address: Wallet/contract address to investigate.
-        max_hops: Max graph traversal depth (1-5, default 2).
+        max_hops: Max graph traversal depth (1-5, default 2). Recorded for
+            compatibility; the label corpora are flat.
     """
     return _call(
         "/api/v1/rag/investigate",

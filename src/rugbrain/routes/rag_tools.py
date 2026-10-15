@@ -45,10 +45,7 @@ async def rag_query_snapshots(
     try:
         validate_read_only_sql(str(query))
     except ValueError as exc:
-        return JSONResponse(
-            status_code=400,
-            content={"error": str(exc), "code": "query.invalid"},
-        )
+        return JSONResponse(status_code=400, content={"error": str(exc), "code": "query.invalid"})
 
     try:
         result = run_snapshot_query(str(query), date=date, limit=limit)
@@ -56,10 +53,7 @@ async def rag_query_snapshots(
         logger.warning("rag_query_failed err=%s", exc)
         return JSONResponse(
             status_code=502,
-            content={
-                "error": "snapshot query unavailable",
-                "code": "query.execution_failed",
-            },
+            content={"error": "snapshot query unavailable", "code": "query.execution_failed"},
         )
     return cast(dict[str, Any], sanitize_public_result(result))
 
@@ -232,6 +226,10 @@ async def rag_investigate_endpoint(request: Request, data: dict[str, Any]) -> di
     q = data.get("query", "") or data.get("address", "")
     if not q:
         return {"error": "query is required"}
+    from rugbrain.wallet_profile import looks_like_address, profile_wallet
+
+    if data.get("type") == "wallet" or looks_like_address(q):
+        return await profile_wallet(q, max_hops=data.get("max_hops", 5))
     from rugbrain.compat import investigate  # external dependency
 
     return await investigate(
