@@ -110,7 +110,10 @@ DEFAULT_PAYLOAD_ONLY_COLLECTIONS = ("codebase_reference_v2",)
 ZSTD_LEVEL = int(os.environ.get("CC_ZSTD_LEVEL", "6"))
 
 SNAPSHOT_PREFIX = "snapshots"
-SCROLL_BATCH = 1000
+# 2026-10-15: was 1000. The nightly run OOM-killed at 4G with 1000-row
+# Arrow tables across ~60 collections; 400 keeps per-batch tables small
+# (paired with ARROW_DEFAULT_MEMORY_POOL=system in 62-arrow-pool.conf).
+SCROLL_BATCH = 400
 MANIFEST_SCHEMA_VERSION = 2
 
 
