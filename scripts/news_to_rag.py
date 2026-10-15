@@ -3,7 +3,7 @@
 
 Reads `news_items` from Postgres (populated by rmi-backend RSS ingest),
 chunks each article into 500-char sliding windows with 50-char overlap,
-embeds every chunk with Qwen3-8B (2560-dim) via llama.cpp `/embeddings`,
+embeds every chunk with Qwen3-Embedding-8B (4096-dim) via the hosted lane,
 and upserts the vectors into the Qdrant `news` collection with payload
 metadata: title, source, url, published_at, category, sentiment.
 
@@ -62,8 +62,8 @@ logger = logging.getLogger("news_to_rag")
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
-EMBED_DIM = 2560
-QDRANT_COLLECTION = "news_v2"
+EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", "4096"))
+QDRANT_COLLECTION = os.getenv("RAG_QDRANT_COLLECTION", "news_v2_8b")
 UUID_NS = uuid.NAMESPACE_DNS  # same namespace as rugbrain.qdrant_store._to_uuid
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "news_to_rag.lock")
 _ORDER_CLAUSES = {"asc": "ORDER BY published_at ASC", "desc": "ORDER BY published_at DESC"}
@@ -149,7 +149,7 @@ def _rate_article_payload(article: dict[str, Any], text: str) -> tuple[dict[str,
 
 # ── Qdrant REST helpers ────────────────────────────────────────────────
 async def _ensure_collection(client: httpx.AsyncClient, base: str) -> bool:
-    """Create the `news` collection (2560d Cosine) if missing. Idempotent."""
+    """Create the target collection (4096d Cosine) if missing. Idempotent."""
     r = await client.get(f"{base}/collections/{QDRANT_COLLECTION}")
     if r.status_code == 200:
         return True
