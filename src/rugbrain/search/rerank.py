@@ -72,17 +72,11 @@ DEEP_FALLBACK_CAP: int = int(os.getenv("RERANKER_DEEP_FALLBACK_CAP", "24"))
 # for a full pool vs 30s+ local on 2000-char docs).
 HOSTED_TIMEOUT_S: float = float(os.getenv("RERANKER_HOSTED_TIMEOUT", "6.0"))
 HOSTED_CANDIDATE_CAP: int = int(os.getenv("RERANKER_HOSTED_CAP", "40"))
-# The deep tier used to score EVERY fused candidate. A code-intent query fans
-# out over 8 collections x limit=10 -> 80 candidates -> measured 17,488
-# tokens to the cross-encoder for one query (35,976 at limit=20), while the
-# live tier capped at 40 the whole time. This bounds the deep tier the same way.
-DEEP_CANDIDATE_CAP: int = int(os.getenv("RERANKER_DEEP_CANDIDATE_CAP", "40"))
 # Sigmoid P(relevant) below this is confidently-irrelevant noise (Qwen3
 # rerank scores are 0-1). Applied only when enough strong candidates remain.
 _RERANK_NOISE_FLOOR = 0.10
 
 __all__ = [
-    "DEEP_CANDIDATE_CAP",
     "RERANKER_ENABLED",
     "RERANKER_TIMEOUT",
     "RERANKER_URL",
@@ -263,13 +257,11 @@ async def rerank_chunks(
 
     A thin delegate. The pipeline lives in `rerank_pipeline`; the scorer is
     passed IN rather than imported, so `monkeypatch.setattr(rerank,
-    "_post_rerank", ...)` and `rerank.DEEP_CANDIDATE_CAP = 5` still take effect
-    through this module's namespace. Importing the scorer here instead would
-    have frozen a copy at import time — the same "resolved once, then silently
-    stale" class of bug this refactor is trying to remove.
+    "hosted_rerank", ...)` and `rerank.HOSTED_CANDIDATE_CAP = 5` still take
+    effect through this module's namespace. Importing the scorer here instead
+    would have frozen a copy at import time — the same "resolved once, then
+    silently stale" class of bug this refactor is trying to remove.
     """
     from rugbrain.search.rerank_pipeline import rerank_chunks as _pipeline
 
-    return await _pipeline(
-        query, chunks, _score_candidates, top_n=top_n, keep=keep, tier=tier
-    )
+    return await _pipeline(query, chunks, _score_candidates, top_n=top_n, keep=keep, tier=tier)
