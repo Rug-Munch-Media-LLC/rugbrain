@@ -32,10 +32,17 @@ GOLDEN_SET = (
 
 
 async def fake_search(query: str, limit: int, collection: str | None) -> Any:
-    """Mock search: returns one doc per gold chunk, then distractors."""
-    example = _example_for(query)
+    """Mock search: returns one doc per gold chunk, then distractors.
+
+    Chunks come from the golden file's row for ``query`` when present; for a
+    query that is not in the file the query string itself is echoed as the
+    chunk, so a test can assert a hit without coupling to golden-file content.
+    """
+    _load_examples()
+    example = _EXAMPLES_BY_QUERY.get(query)
+    chunks = example.gold_chunks if example is not None else [query]
     results: list[dict[str, Any]] = []
-    for i, chunk in enumerate(example.gold_chunks):
+    for i, chunk in enumerate(chunks):
         results.append({"id": f"gold-doc-{i}", "content": chunk.lower()})
     while len(results) < limit:
         results.append({"id": f"distractor-{len(results)}", "content": "unrelated text"})
@@ -53,10 +60,10 @@ async def fake_search_error(query: str, limit: int, collection: str | None) -> A
 _EXAMPLES_BY_QUERY: dict[str, GoldenExample] = {}
 
 
-def _example_for(query: str) -> GoldenExample:
+def _load_examples() -> None:
+    """Populate the query -> example map from the shipped golden set (once)."""
     if not _EXAMPLES_BY_QUERY:
         _EXAMPLES_BY_QUERY.update({ex.query: ex for ex in load_golden_set(GOLDEN_SET)})
-    return _EXAMPLES_BY_QUERY[query]
 
 
 # ── golden-set loading ───────────────────────────────────────────────
@@ -120,7 +127,7 @@ class TestRelevance:
 class TestRunQuery:
     async def test_scores_hit_and_recall(self) -> None:
         ex = GoldenExample(
-            query="flash loan attack how it works", gold_chunks=["Flash Loan Price Attack"]
+            query="a query not in the golden file", gold_chunks=["a query not in the golden file"]
         )
         res = await run_query(fake_search, ex, top_k=5)
         assert res.error == ""
