@@ -32,8 +32,9 @@ LIVE_WIDTHS = {
     "defi_exploits_8b": 4096,
     "threat_intel_v2": 2560,
     "threat_intel_v2_8b": 4096,
-    "coding_knowledge": 2560,
-    "solana_patterns": 2560,
+    "coding_knowledge_8b": 4096,
+    "solana_patterns_8b": 4096,
+    "public_crypto_patterns": 2560,  # still pinned (no twin)
 }
 
 
@@ -137,17 +138,19 @@ async def test_pinned_2560_collection_stays_on_the_preserved_lane(
 ) -> None:
     """A pinned 2560 collection must NOT be pushed onto the canonical lane.
 
-    ``coding_knowledge`` is pinned to the retired generation with no ``_8b``
-    twin, so a 4096 vector can never enter it. This is a DELIBERATE exception,
-    not an oversight — the retriever must keep embedding 2560 for it.
+    ``public_crypto_patterns`` remains pinned to the retired generation with no
+    ``_8b`` twin, so a 4096 vector can never enter it. This is a DELIBERATE
+    exception, not an oversight — the retriever must keep embedding 2560 for it.
+    (``coding_knowledge`` / ``solana_patterns`` moved to ``_8b`` twins on
+    2026-10-15 and are covered by the twin tests.)
     """
     fake = _FakeQdrant()
     _patch_io(monkeypatch, fake)
     retrieve = qr.direct_qdrant_retriever(qdrant_url="http://stub")
 
-    await retrieve("reentrancy", "coding_knowledge", 5)
+    await retrieve("reentrancy", "public_crypto_patterns", 5)
 
-    assert fake.searched == [("coding_knowledge", 2560)], fake.searched
+    assert fake.searched == [("public_crypto_patterns", 2560)], fake.searched
 
 
 @pytest.mark.asyncio
@@ -229,5 +232,5 @@ def test_live_width_table_matches_the_declared_lane() -> None:
 
     for base in ("defi_exploits", "threat_intel_v2"):
         assert resolve_collection(base) == f"{base}_8b"
-    for pinned in ("coding_knowledge", "solana_patterns"):
-        assert resolve_collection(pinned) == pinned
+    for base in ("coding_knowledge", "solana_patterns"):
+        assert resolve_collection(base) == f"{base}_8b"

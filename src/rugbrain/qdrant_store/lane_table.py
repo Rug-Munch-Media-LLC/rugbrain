@@ -44,10 +44,24 @@ def _declared_twins() -> frozenset[str]:
       ``newsletters``, ``podcast_episodes``). Adding a twin for these would
       strand their data in a collection that does not exist.
     * Pinned to the 2560 generation with no twin (``rug_events``,
-      ``coding_knowledge``, ``public_crypto_patterns``, ``solana_patterns``) or
-      to 1024 (``wallet_clusters``, ``youtube_videos``). A 4096 vector cannot
-      enter any of them — :func:`declared_lane_dim` returns the pinned dim and
-      the existing dimension guard refuses. That refusal is correct and loud.
+      ``public_crypto_patterns``) or to 1024 (``wallet_clusters``,
+      ``youtube_videos``). A 4096 vector cannot enter any of them —
+      :func:`declared_lane_dim` returns the pinned dim and the existing
+      dimension guard refuses. That refusal is correct and loud.
+
+    ``coding_knowledge`` and ``solana_patterns`` WERE in that pinned group and
+    are now declared twins. Measured 2026-10-15 against live Qdrant: neither
+    the 2560 base nor a 4096 twin existed at all (HTTP 404 on both names), so
+    the pinned declaration described a collection that had been dropped, not a
+    retired one that was retained. The golden set still targeted both names
+    (20 + 3 of 44 rows), so every one of those rows errored and the nightly
+    gate failed on a corpus that was simply absent. The content sources were
+    never gone — ``scripts/ingest_rust_solana_knowledge.py`` (curated Solana
+    docs + cloned solana-labs/anchor docs) and
+    ``scripts/ingest_good_bad_contracts.py`` (curated good/bad snippets) still
+    build them — so the fix is to rebuild them on the canonical lane as
+    ``_8b`` twins and route writes there, exactly as ``scan_intel`` was fixed.
+    A pinned name whose collection does not exist is not a pin; it is a hole.
     * Owned names with no Qdrant collection at all (``bundle_patterns``,
       ``cluster_labels``, ``cryptography``, ``rag_docs``, ``rag_threats``,
       ``scanner_v2``, ``solidity_patterns``). Auto-creating a 4096 collection
@@ -77,6 +91,7 @@ def _declared_twins() -> frozenset[str]:
     """
     return frozenset(
         {
+            "coding_knowledge",
             "contract_audits",
             "contract_security",
             "crypto_vulnerabilities",
@@ -97,6 +112,7 @@ def _declared_twins() -> frozenset[str]:
             "scam_intel_v2",
             "security_alerts",
             "security_feeds",
+            "solana_patterns",
             "stablecoin_market",
             "threat_intel_v2",
             "wallet_profiles",
@@ -108,10 +124,8 @@ def _declared_twins() -> frozenset[str]:
 def _pinned_dims() -> Mapping[str, int]:
     """Owned names pinned below the canonical dim, and the dim they are at."""
     return {
-        "coding_knowledge": PRESERVED_LANE_DIM,
         "public_crypto_patterns": PRESERVED_LANE_DIM,
         "rug_events": PRESERVED_LANE_DIM,
-        "solana_patterns": PRESERVED_LANE_DIM,
         "wallet_clusters": 1024,
         "youtube_videos": 1024,
     }
