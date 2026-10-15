@@ -24,8 +24,10 @@ def test_recall_at_k_basic():
     relevant = ["b", "c", "d"]  # b and c are in both
 
     assert recall_at_k(retrieved, relevant, k=3) == 2 / 3
-    assert recall_at_k(retrieved, relevant, k=2) == 1 / 2  # only b
-    assert recall_at_k(retrieved, relevant, k=1) == 1 / 2  # only b (a is not relevant)
+    # top-2 = [a, b]; only b is relevant -> 1 of 3 relevant ids recalled
+    assert recall_at_k(retrieved, relevant, k=2) == 1 / 3
+    # top-1 = [a]; a is not relevant -> 0 of 3
+    assert recall_at_k(retrieved, relevant, k=1) == 0.0
     assert recall_at_k([], relevant, k=5) == 0.0
 
 
@@ -37,15 +39,18 @@ def test_mrr_basic():
     # first relevant at position 1
     assert mrr(["b", "x", "y"], ["b", "z"]) == 1.0
 
-    # no relevant retrieved
-    assert mrr(["x", "y", "z"], ["b", "z"]) == 0.0
+    # no relevant retrieved in top-1, but z is relevant at rank 3 -> 1/3
+    assert mrr(["x", "y", "z"], ["b", "z"]) == 1.0 / 3.0
 
 
 def test_ndcg_at_k_simple():
     """NDCG using binary relevance (1 if in relevant, else 0)."""
     # Top-3: retrieved a (not relevant), b (relevant), c (relevant)
-    # Ideal: b at pos 1, c at pos 2
-    assert math.isclose(ndcg_at_k(["a", "b", "c"], ["b", "c"], k=3), 1.0, rel_tol=1e-4)
+    # DCG  = 0/log2(2) + 1/log2(3) + 1/log2(4) = 0.6309 + 0.5 = 1.1309
+    # IDCG = 1/log2(2) + 1/log2(3)             = 1.0    + 0.6309 = 1.6309
+    # NDCG = 1.1309 / 1.6309 = 0.6934 (a is not relevant, so the ideal
+    # ordering b,c,a is strictly better than the retrieved a,b,c)
+    assert math.isclose(ndcg_at_k(["a", "b", "c"], ["b", "c"], k=3), 0.6934, rel_tol=1e-4)
 
     # no relevant
     assert ndcg_at_k(["a", "b", "c"], ["d"], k=3) == 0.0
@@ -62,10 +67,17 @@ def test_hit_rate_at_k():
 
 
 def test_dcg_at_k_zero_and_single():
-    """DCG edge cases."""
-    assert dcg_at_k([], [], k=5) == 0.0
+    """DCG edge cases.
+
+    ``dcg_at_k`` takes a per-rank GAIN sequence (not retrieved/relevant id
+    lists): ``dcg_at_k(gains, k)``. Rank 1 is undiscounted because the
+    discount is ``log2(i + 2)`` -> ``1 / log2(2) == 1.0``.
+    """
+    assert dcg_at_k([], k=5) == 0.0
     # Single relevant at position 1: gain=1, discount=log2(1+1)=1, DCG=1
-    assert dcg_at_k(["a"], ["a"], k=1) == 1.0 / math.log2(1 + 1)
+    assert dcg_at_k([1.0], k=1) == 1.0 / math.log2(1 + 1)
+    # A non-relevant top rank contributes nothing.
+    assert dcg_at_k([0.0, 1.0], k=2) == 1.0 / math.log2(2 + 1)
 
 
 def test_compute_metrics_for_report():
@@ -126,16 +138,8 @@ def test_format_report_matches_expected_baseline_structure():
     assert expected["total"] == report.total
     assert expected["errors"] == report.errors
     for k in [5, 10]:
-        assert math.isclose(
-            expected["metrics"][f"recall@{k}"], report.mean_recall.get(k, 0.0)
-        )
-        assert math.isclose(
-            expected["metrics"][f"ndcg@{k}"], report.mean_ndcg.get(k, 0.0)
-        )
+        assert math.isclose(expected["metrics"][f"recall@{k}"], report.mean_recall.get(k, 0.0))
+        assert math.isclose(expected["metrics"][f"ndcg@{k}"], report.mean_ndcg.get(k, 0.0))
     assert math.isclose(expected["metrics"]["mrr"], report.mean_mrr)
-    assert math.isclose(
-        expected["metrics"]["p50_latency_ms"], report.p50_latency_ms
-    )
-    assert math.isclose(
-        expected["metrics"]["p95_latency_ms"], report.p95_latency_ms
-    )
+    assert math.isclose(expected["metrics"]["p50_latency_ms"], report.p50_latency_ms)
+    assert math.isclose(expected["metrics"]["p95_latency_ms"], report.p95_latency_ms)

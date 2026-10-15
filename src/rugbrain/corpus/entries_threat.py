@@ -88,7 +88,7 @@ _THREAT: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=WEEKLY,
         notes="0 points, never fed.",
         observed=2560,
-        retired=()
+        retired=(),
     ),
     _d(
         "security-patterns-owasp-web3",
@@ -150,8 +150,10 @@ _THREAT: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://pipe/scan",
         licence=LICENCE_PERMISSIVE,
         cadence=DAILY,
-        notes="46,745 base at 2560 / 0 twin (audit §1.3) — canonical lane sees nothing.",
+        notes="46,745 base at 2560; twin is the 4096 serving lane (lane_table owns "
+        "the name), so retired=(2560,).",
         observed=2560,
+        retired=(2560,),
     ),
     _d(
         "security-alerts",

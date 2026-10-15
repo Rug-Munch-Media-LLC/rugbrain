@@ -59,7 +59,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=WEEKLY,
         notes="17 pts. Named vector; already canonical, no twin.",
         observed=4096,
-        retired=()
+        retired=(),
     ),
     _d(
         "podcast-episodes",
@@ -72,7 +72,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=WEEKLY,
         notes="26 pts. Named vector; already canonical, no twin.",
         observed=4096,
-        retired=()
+        retired=(),
     ),
     _d(
         "market-data",
@@ -95,9 +95,10 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://pipeline/market-health",
         licence=LICENCE_PERMISSIVE,
         cadence=HOURLY,
-        notes="627 pts, 17d stale (audit §5.1).",
+        notes="627 pts, 17d stale (audit §5.1). Base 2560, twin is the 4096 "
+        "serving lane (lane_table owns the name), so retired=(2560,).",
         observed=2560,
-        retired=(),
+        retired=(2560,),
     ),
     _d(
         "stablecoin-market",
@@ -123,7 +124,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="Pinned 1024 (retired lane). 0 points.",
         observed=1024,
-        retired=()
+        retired=(),
     ),
     _d(
         "hyperliquid-flows",
@@ -136,7 +137,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="Pinned 1024. 0 points.",
         observed=1024,
-        retired=()
+        retired=(),
     ),
     _d(
         "liquidation-events",
@@ -149,7 +150,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="Pinned 1024. 0 points.",
         observed=1024,
-        retired=()
+        retired=(),
     ),
     _d(
         "token-unlocks",
@@ -162,7 +163,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="Pinned 1024. 0 points.",
         observed=1024,
-        retired=()
+        retired=(),
     ),
     _d(
         "social-intel",

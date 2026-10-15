@@ -28,6 +28,7 @@ BASELINE_ENDPOINTS: frozenset[str] = frozenset(
         "GET /api/v1/feedback/stats",
         "GET /api/v1/health",
         "GET /api/v1/health/full",
+        "GET /api/v1/intel/address-risk",
         "GET /api/v1/market/context/{address}",
         "GET /api/v1/market/mood",
         "GET /api/v1/news/rate",

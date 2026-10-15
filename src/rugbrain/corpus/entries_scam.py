@@ -60,9 +60,10 @@ _SCAM: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://pipeline/scam-patterns",
         licence=LICENCE_PERMISSIVE,
         cadence=WEEKLY,
-        notes="7,102 pts.",
+        notes="7,102 pts. Base 2560, twin is the 4096 serving lane (lane_table "
+        "owns the name), so retired=(2560,).",
         observed=2560,
-        retired=()
+        retired=(2560,),
     ),
     _d(
         "scam-signatures",
@@ -75,7 +76,7 @@ _SCAM: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="0 points — declared, never fed.",
         observed=4096,
-        retired=()
+        retired=(),
     ),
     _d(
         "scams-v2",
@@ -180,7 +181,7 @@ _WALLET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=DAILY,
         notes="Pinned 1024 (retired lane). 0 points.",
         observed=1024,
-        retired=()
+        retired=(),
     ),
 )
 

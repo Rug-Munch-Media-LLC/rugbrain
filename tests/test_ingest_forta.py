@@ -9,6 +9,7 @@ import httpx
 
 # Import the module under test
 import sys
+
 sys.path.insert(0, "scripts")
 from ingest_forta import _parse_csv, _build_docs, run  # type: ignore
 
@@ -85,7 +86,9 @@ def test_build_docs():
         assert doc["metadata"]["attack_vector"] == expected["vector"]
         assert doc["metadata"]["tag"] == expected["tag"]
         assert doc["metadata"]["source_type"] == "forta_malicious_contract"
-        assert doc["severity"] == "critical"  # exploit -> critical
+        # severity is tag-derived: exploit/heist -> critical, everything else -> high
+        expected_severity = "critical" if expected["tag"] in ("exploit", "heist") else "high"
+        assert doc["severity"] == expected_severity
 
 
 def test_build_docs_limit():
@@ -96,31 +99,31 @@ def test_build_docs_limit():
 
 # ── Integration test with mocked HTTP ────────────────────────────────────
 
+
 @respx.mock
 @pytest.mark.asyncio
-async def test_run_dry_run():
+async def test_run_dry_run(monkeypatch):
     # Mock the two CSV URLs
-    for chain, url in {"ethereum": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/1/malicious_smart_contracts.csv",
-                       "optimism": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/10/malicious_smart_contracts.csv"}.items():
+    for chain, url in {
+        "ethereum": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/1/malicious_smart_contracts.csv",
+        "optimism": "https://raw.githubusercontent.com/forta-network/labelled-datasets/main/labels/10/malicious_smart_contracts.csv",
+    }.items():
         respx.get(url).mock(return_value=httpx.Response(200, text=SAMPLE_CSV))
 
-    # Mock embed_many to return dummy vectors
-    from rugbrain import ingest_common
-    original_embed = ingest_common.embed_many
-    async def mock_embed(client, texts):
-        return [[0.1] * 1024 for _ in texts]
-    ingest_common.embed_many = mock_embed
+    # The embedder seam is get_embedder() -> object with .embed(texts).
+    class _MockEmbedder:
+        async def embed(self, texts):
+            return [[0.1] * 4096 for _ in texts]
 
-    try:
-        stats = await run(dry_run=True, limit=1)
-    finally:
-        ingest_common.embed_many = original_embed
+    monkeypatch.setattr("ingest_forta.get_embedder", lambda: _MockEmbedder())
+
+    stats = await run(dry_run=True, limit=1)
 
     assert stats["dry_run"] is True
     assert stats["fetched"] == 4  # 2 entries * 2 chains
-    assert stats["embedded"] == 2  # limited to 1 per chain? Actually limit applies to total entries across both chains.
-    # The limit is applied in _build_docs after combining all entries, so total limited to 1.
+    # limit is applied in _build_docs over the COMBINED entry list, so 1 doc.
+    assert stats["embedded"] == 1
     assert stats["upserted"] == 0
     assert stats["errors"] == 0
-    assert stats["collection"] == "scam_intel_v2"
+    assert stats["collection"] == "scam_intel_v2_8b"
     assert stats["source"] == "forta"

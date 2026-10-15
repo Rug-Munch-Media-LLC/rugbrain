@@ -40,7 +40,7 @@ _CODE: Final[tuple[CorpusDeclaration, ...]] = (
             "with observed=2560 is the documented no-overwrite split, not a contradiction."
         ),
         observed=2560,
-        retired=()
+        retired=(),
     ),
     _d(
         "coding-lessons-good-bad",
@@ -51,8 +51,10 @@ _CODE: Final[tuple[CorpusDeclaration, ...]] = (
         url="internal://lessons/rmi-coding-findings",
         licence=LICENCE_PERMISSIVE,
         cadence=ON_DEMAND,
-        notes="2,440 house findings. 0 points, never fed.",
+        notes="2,440 house findings. 0 points, never fed. Base 2560, twin is the "
+        "4096 serving lane (lane_table owns the name), so retired=(2560,).",
         observed=2560,
+        retired=(2560,),
     ),
     _d(
         "our-good-bad-exemplars",

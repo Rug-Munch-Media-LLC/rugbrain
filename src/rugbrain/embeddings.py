@@ -110,8 +110,19 @@ _LANE_GLOBALS: dict[str, str] = {
 #:
 #: 'int' is kept as the last rung - it is the in-process/local embedder and the
 #: only thing that still answers when every hosted provider is down. Order is
-#: therefore: hosted primary -> hosted backups -> local last resort.
-AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "siliconflow", "openrouter", "int")
+#: therefore: hosted primary -> hosted backup -> local last resort.
+#:
+#: CORRECTED 2026-10-15: `openrouter` was briefly added here by 1db3cdd, but
+#: OpenRouter is a CROSS-MODEL lane (a different embedding model, hence a
+#: different vector space) and the 2026-08-29 consolidation doctrine is
+#: explicit: the auto chain NEVER touches cross-model lanes (gateway,
+#: OpenRouter, NIM) - those are reachable only via an explicit
+#: ``RAG_EMBED_BACKEND`` override. SiliconFlow stays because it serves the
+#: SAME ``Qwen/Qwen3-Embedding-8B`` @ 4096d, so a fallback vector is
+#: index-compatible. The 2026-10-12 operator directive (DeepInfra primary,
+#: SiliconFlow backup, OpenRouter backup) is honoured for the two same-space
+#: lanes; OpenRouter remains an override-only backup.
+AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "siliconflow", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.
