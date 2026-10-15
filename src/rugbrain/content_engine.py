@@ -36,7 +36,7 @@ from typing import Any
 import httpx
 
 from rugbrain import content_candidates
-from rugbrain.factcheck import FactCheckResult, fact_check_gate
+from rugbrain.factcheck_gate import fact_check_gate
 from rugbrain.formatting.headline import style_for_site, style_headline
 
 logger = logging.getLogger("rugbrain.content")
@@ -56,6 +56,12 @@ DRAFTS_CACHE_TTL = int(os.getenv("RAG_DRAFTS_CACHE_TTL", "1800"))  # 30 min
 SCANNER_BASE = os.getenv("RMI_SCANNER_BASE_URL", "https://rugmunch.io/scan")
 
 MAX_MAIN_PER_CYCLE = int(os.getenv("RAG_CONTENT_MAX_MAIN", "3"))
+
+#: Fact-check gate on the draft path (editorial standards #21, #12, #15).
+#: Default ON for drafts: a draft whose verifiable claims are all
+#: uncorroborated is blocked (writer="rejected"); a draft with no verifiable
+#: claims passes through. Set RAG_FACTCHECK_ENABLED=0 to bypass.
+FACTCHECK_ENABLED = os.getenv("RAG_FACTCHECK_ENABLED", "1").lower() not in ("0", "false", "no")
 
 WRITER_SYSTEM_PROMPT = (
     "You are the editor of a crypto-security intelligence desk. "
@@ -155,42 +161,34 @@ async def _compose(story: dict[str, Any]) -> tuple[str, str]:
 
 
 async def _compose_with_factcheck(story: dict[str, Any]) -> tuple[str, str]:
-    """Compose and run fact-check gate. Returns (text, writer)."""
+    """Compose, then run the fact-check gate (editorial standards #21/#12/#15).
+
+    FAIL (claims present, none corroborated) blocks the draft — empty text,
+    writer="rejected". PASS strips flagged claims and notes the count. SKIP
+    (no verifiable claims) passes through. Bypass with RAG_FACTCHECK_ENABLED=0.
+    """
     text, writer = await _compose(story)
-
-    # Run fact-check gate (editorial standards #21, #12, #15)
-    fc_result: FactCheckResult = await fact_check_gate(text, story)
-
-    if fc_result.verdict == "PASS" and fc_result.claims:
-        # Gate passed — return composed text with fact-check metadata
-        logger.info(
-            "factcheck_pass channel_story=%s claims_verified=%d stripped=%d",
-            story.get("source", "unknown"),
-            len(fc_result.claims),
-            len(fc_result.stripped_claims),
-        )
-        # Optionally append fact-check summary for transparency
-        if fc_result.stripped_claims:
-            strip_note = (
-                "\n\n[Fact-check: "
-                f"{len(fc_result.stripped_claims)} claim(s) stripped — "
-                "insufficient independent sources]"
-            )
-            text += strip_note
+    if not FACTCHECK_ENABLED:
         return text, writer
-
-    if fc_result.verdict == "FAIL":
-        # All claims failed verification — reject the draft
+    fc = fact_check_gate(text, story)
+    if fc.verdict == "FAIL":
         logger.warning(
-            "factcheck_reject channel_story=%s unverifiable=%d missing=%s",
-            story.get("source", "unknown"),
-            len(fc_result.unverifiable_claims),
-            fc_result.missing,
+            "factcheck_reject story=%s unverifiable=%d",
+            story.get("source"),
+            len(fc.unverifiable_claims),
         )
         return "", "rejected"
-
-    # No claims extracted = pass through
-    logger.debug("factcheck_no_claims channel_story=%s", story.get("source", "unknown"))
+    if fc.verdict == "PASS" and fc.stripped_claims:
+        text += (
+            f"\n\n[Fact-check: {len(fc.stripped_claims)} claim(s) stripped — insufficient sources]"
+        )
+    logger.info(
+        "factcheck_%s story=%s verified=%d stripped=%d",
+        fc.verdict.lower(),
+        story.get("source"),
+        len(fc.claims),
+        len(fc.stripped_claims),
+    )
     return text, writer
 
 
@@ -281,7 +279,7 @@ async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list
     # model shares CPU with the migration; serialized calls stall the endpoint.
     async def _timed_compose(story: dict[str, Any]) -> tuple[str, str]:
         try:
-            return await asyncio.wait_for(_compose(story), timeout=180.0)
+            return await asyncio.wait_for(_compose_with_factcheck(story), timeout=180.0)
         except Exception:
             return _template_post(story), "template"
 
