@@ -73,7 +73,17 @@ _TIER2_RAW = os.getenv(
     "halbornHQ,VitalikButerin,CZ_Binance,sassal0x,aeyakovenko,APompliano,"
     "TheCryptoLark,Nicholas_Merten,100trillionUSD,hasufl,jchervinsky,"
     "gakonst,trent_vanepps,nic__carter,Melt_Dem,CeterisPar1bus,danheld,"
-    "TheCryptoDog,cryptocobain,zhusu,aantonop,Boxmining,IvanOnTech,muneeb",
+    "TheCryptoDog,cryptocobain,zhusu,aantonop,Boxmining,IvanOnTech,muneeb,"
+    # 2026-10-15 expansion (operator: total social awareness): security
+    # researchers/alerts, on-chain analysts, and high-signal KOLs.
+    "CyversAlerts,Phalcon_xyz,hexagate_,AnciliaInc,GoPlusSecurity,"
+    "DeFiHackLabs,blocksec_com,tayvano_,lookonchain,spotonchain,whale_alert,"
+    "OnchainLens,ai_9684xtpa,EmberCN,0xScope,ArkhamIntel,bubble_maps,"
+    "pentosh1,AltcoinGordon,CryptoGodJohn,IncomeSharks,JRNYcrypto,"
+    "CryptoCred,dontbuythedip,CryptoMichNL,TraderMayne,CryptoHayes,"
+    "Bluntz_Capital,skewdotcom,CryptoQuant,kaiko_data,amberdata,"
+    "wublockchain,TheBlock__,DLNews,protos,decrypt_co,blockworks_,"
+    "BitcoinMagazine,Cointelegraph",
 )
 _TIER3_4_RAW = os.getenv(
     "XINTEL_TIER3_4_KEYWORD_QUERIES",
