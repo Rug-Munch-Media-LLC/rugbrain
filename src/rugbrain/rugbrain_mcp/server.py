@@ -70,7 +70,11 @@ log = logging.getLogger("rugbrain-mcp")
 RAG_API_HOST = os.getenv("RAG_API_HOST", "127.0.0.1")
 RAG_API_PORT = int(os.getenv("RAG_API_PORT", "8012"))
 BASE_URL = f"http://{RAG_API_HOST}:{RAG_API_PORT}"
-HEADERS = {"Content-Type": "application/json"}
+# The RAGAuthMiddleware requires X-API-Key on every non-health path, so the
+# async market-specialist surface must send it too — omitting it made
+# rugbrain_market_brief / rugbrain_social_sentiment / rugbrain_scam_radar
+# return 401 while the sync _call() tools worked.
+HEADERS = {"Content-Type": "application/json", "X-API-Key": API_KEY}
 
 
 class MultiSearchRequest(BaseModel):
@@ -295,7 +299,6 @@ def rugbrain_health(full: bool = False) -> dict[str, Any]:
     return _call("/health")
 
 
-
 # ── Market-specialist surface (moved in 2026-10-12) ──────────────────
 async def _call_search_multi(
     query: str,
@@ -322,9 +325,7 @@ async def _call_search_multi(
         return resp.json()
 
 
-def _extract_results(
-    resp: dict[str, Any], collection: str
-) -> list[dict[str, Any]]:
+def _extract_results(resp: dict[str, Any], collection: str) -> list[dict[str, Any]]:
     """Normalize raw API search results into a uniform item shape."""
     return [
         {
@@ -371,8 +372,7 @@ async def rugbrain_social_sentiment(
             {
                 "type": "text",
                 "text": "\n".join(
-                    f"[{_source_of(item)}] "
-                    f"{item.get('content', '')[:300]}"
+                    f"[{_source_of(item)}] {item.get('content', '')[:300]}"
                     for item in resp.get("results", [])
                 ),
             }
@@ -403,7 +403,9 @@ async def rugbrain_market_brief(
         "If empty, returns a general market brief.",
     ),
     limit: int = Field(
-        default=10, ge=1, le=100,
+        default=10,
+        ge=1,
+        le=100,
         description="Maximum number of items to return.",
     ),
 ) -> ToolResult:
@@ -424,9 +426,7 @@ async def rugbrain_market_brief(
         )
         all_items.extend(_extract_results(resp, coll))
     all_items.sort(key=lambda x: x["score"], reverse=True)
-    return ToolResult(
-        {"brief": all_items[:limit], "query": query, "limit": limit}
-    )
+    return ToolResult({"brief": all_items[:limit], "query": query, "limit": limit})
 
 
 @mcp.tool()
@@ -435,7 +435,9 @@ async def rugbrain_scam_radar(
         description="Token, address, or topic (e.g. '0x123...', 'BONK', 'pump and dump').",
     ),
     limit: int = Field(
-        default=10, ge=1, le=100,
+        default=10,
+        ge=1,
+        le=100,
         description="Maximum number of scam / shill indicators to return.",
     ),
 ) -> ToolResult:
@@ -466,9 +468,7 @@ async def rugbrain_scam_radar(
                 }
             )
     all_items.sort(key=lambda x: x["score"], reverse=True)
-    return ToolResult(
-        {"results": all_items[:limit], "query": query, "limit": limit}
-    )
+    return ToolResult({"results": all_items[:limit], "query": query, "limit": limit})
 
 
 def main() -> None:
