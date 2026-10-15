@@ -13,9 +13,12 @@ class TestReranker:
         assert r._url == "http://localhost:8003"
 
     def test_get_reranker_default(self) -> None:
+        # The local :8003 llama.cpp lane was retired 2026-10-11; the default
+        # is now the hosted DeepInfra Qwen3-Reranker-8B endpoint.
         r = get_reranker()
         assert r._url is not None
-        assert "8003" in r._url
+        assert "deepinfra" in r._url
+        assert "Qwen3-Reranker-8B" in r._url
 
     def test_reranker_class_type(self) -> None:
         r = Reranker()

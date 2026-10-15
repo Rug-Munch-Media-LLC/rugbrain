@@ -41,10 +41,34 @@ DENSITY_MAX: Final[float] = 0.8
 #: Snapshot of the tokenizer both model lanes run. Overridable for a
 #: different revision without touching code.
 TOKENIZER_PATH_ENV = "RUGBRAIN_TOKENIZER"
+#: HF cache root for the Qwen3-Embedding-8B tokenizer. The snapshot hash is
+#: resolved from ``refs/main`` at load time — a hardcoded hash goes stale the
+#: moment the cache is re-pulled (observed 2026-10-15: pinned 5cf2132a… while
+#: the live snapshot was 1d8ad4ca…, so every count silently fell back to the
+#: ratio path).
+_HF_CACHE_ROOT = "/root/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-8B"
 DEFAULT_TOKENIZER_PATH = (
-    "/root/.cache/huggingface/hub/models--Qwen--Qwen3-Embedding-8B/"
-    "snapshots/5cf2132abc99cad020ac570b19d031efec650f2b/tokenizer.json"
+    f"{_HF_CACHE_ROOT}/snapshots/5cf2132abc99cad020ac570b19d031efec650f2b/tokenizer.json"
 )
+
+
+def _resolve_tokenizer_path() -> str:
+    """Return the tokenizer path, following the HF cache's ``refs/main``.
+
+    Prefers the live snapshot the cache points at; falls back to the pinned
+    path so an explicit ``RUGBRAIN_TOKENIZER`` override or a non-HF layout
+    still works.
+    """
+    try:
+        with open(f"{_HF_CACHE_ROOT}/refs/main", encoding="utf-8") as fh:
+            snapshot = fh.read().strip()
+        if snapshot:
+            candidate = f"{_HF_CACHE_ROOT}/snapshots/{snapshot}/tokenizer.json"
+            if os.path.exists(candidate):
+                return candidate
+    except OSError:
+        pass
+    return DEFAULT_TOKENIZER_PATH
 
 
 class TokenCounter:
@@ -68,7 +92,7 @@ class TokenCounter:
         if self._probed:
             return self._encoder
         self._probed = True
-        path = os.getenv(TOKENIZER_PATH_ENV, DEFAULT_TOKENIZER_PATH)
+        path = os.getenv(TOKENIZER_PATH_ENV) or _resolve_tokenizer_path()
         try:  # pragma: no cover - depends on the local HF cache
             from tokenizers import Tokenizer
 

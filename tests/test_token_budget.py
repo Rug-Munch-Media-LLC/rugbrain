@@ -247,66 +247,58 @@ async def test_rerank_deep_tier_is_candidate_capped() -> None:
     Regression guard for the measured 17,488-token single-query pool: a
     code-intent query fans out over 8 collections and used to send every
     fused candidate to the cross-encoder while the live tier capped at 40.
+    Both tiers now resolve through the hosted chain, which applies
+    ``HOSTED_CANDIDATE_CAP``.
     """
     from rugbrain.search import rerank as sr
 
     sent: list[list[str]] = []
 
-    # Signature mirrors the real _post_rerank; the timeout param is per-endpoint
-    # policy in the source (noqa: ASYNC109) and is not used here.
-    async def _fake_post(
-        url: str,
-        query: str,
-        docs: list[str],
-        timeout: float,  # noqa: ASYNC109
-        label: str,
-    ):
+    async def _fake_hosted(query, docs, top_n=0, **kw):
         sent.append(list(docs))
         return [{"index": i, "relevance_score": 1.0 - i * 0.01} for i in range(len(docs))]
 
-    original = sr._post_rerank
-    sr._post_rerank = _fake_post  # type: ignore[assignment]
+    original_enabled = sr.hosted_enabled
+    original_hosted = sr.hosted_rerank
+    sr.hosted_enabled = lambda: True  # type: ignore[assignment]
+    sr.hosted_rerank = _fake_hosted  # type: ignore[assignment]
     try:
         candidates = [{"content": f"chunk {i} " * 50, "score": 1.0} for i in range(200)]
         scores, method = await sr._score_candidates("rug pull query", candidates, tier="deep")
     finally:
-        sr._post_rerank = original  # type: ignore[assignment]
+        sr.hosted_enabled = original_enabled  # type: ignore[assignment]
+        sr.hosted_rerank = original_hosted  # type: ignore[assignment]
 
     assert method != "none"
     assert len(scores) == 200
     assert len(sent) == 1
-    assert len(sent[0]) == sr.DEEP_CANDIDATE_CAP
+    assert len(sent[0]) == sr.HOSTED_CANDIDATE_CAP
     # The top-scoring candidates are the ones that got sent.
     assert sent[0][0].startswith("chunk 0")
 
 
-async def test_rerank_deep_cap_is_env_tunable() -> None:
+async def test_rerank_hosted_cap_is_env_tunable() -> None:
     from rugbrain.search import rerank as sr
 
-    with _env(**{"RERANKER_DEEP_CANDIDATE_CAP": "5"}):
-        sr.DEEP_CANDIDATE_CAP = 5
+    with _env(**{"RERANKER_HOSTED_CAP": "5"}):
+        sr.HOSTED_CANDIDATE_CAP = 5
     sent: list[int] = []
 
-    # Signature mirrors the real _post_rerank; the timeout param is per-endpoint
-    # policy in the source (noqa: ASYNC109) and is not used here.
-    async def _fake_post(
-        url: str,
-        query: str,
-        docs: list[str],
-        timeout: float,  # noqa: ASYNC109
-        label: str,
-    ):
+    async def _fake_hosted(query, docs, top_n=0, **kw):
         sent.append(len(docs))
         return [{"index": i, "relevance_score": 0.5} for i in range(len(docs))]
 
-    original = sr._post_rerank
-    sr._post_rerank = _fake_post  # type: ignore[assignment]
+    original_enabled = sr.hosted_enabled
+    original_hosted = sr.hosted_rerank
+    sr.hosted_enabled = lambda: True  # type: ignore[assignment]
+    sr.hosted_rerank = _fake_hosted  # type: ignore[assignment]
     try:
         candidates = [{"content": f"c{i} " * 20, "score": 1.0} for i in range(50)]
         await sr._score_candidates("q", candidates, tier="deep")
     finally:
-        sr._post_rerank = original  # type: ignore[assignment]
-        sr.DEEP_CANDIDATE_CAP = 40
+        sr.hosted_enabled = original_enabled  # type: ignore[assignment]
+        sr.hosted_rerank = original_hosted  # type: ignore[assignment]
+        sr.HOSTED_CANDIDATE_CAP = 40
 
     assert sent == [5]
 

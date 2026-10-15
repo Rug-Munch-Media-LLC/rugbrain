@@ -128,10 +128,17 @@ RANSOM_WALLET = {
 }
 
 
-def _lines(*entities: dict[str, Any]) -> AsyncIterator[str]:
-    async def gen() -> AsyncIterator[str]:
+def _lines(*entities: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
+    """Yield parsed entity dicts — the shape ``build_identity_index`` consumes.
+
+    ``build_identity_index`` takes an async iterator of already-parsed dicts
+    (the JSON decoding lives in ``_entities``, which streams the export). The
+    fixtures here are dicts, so the helper must yield dicts, not JSON strings.
+    """
+
+    async def gen() -> AsyncIterator[dict[str, Any]]:
         for ent in entities:
-            yield json.dumps(ent, ensure_ascii=False)
+            yield ent
 
     return gen()
 
@@ -287,11 +294,12 @@ async def test_index_ignores_non_identity_schemas() -> None:
 
 @pytest.mark.asyncio
 async def test_index_skips_blank_and_malformed_lines() -> None:
-    async def gen() -> AsyncIterator[str]:
+    async def gen() -> AsyncIterator[Any]:
         yield ""
         yield "["
         yield "{not json"
-        yield json.dumps(PERSON_ENTITY)
+        # the real feed yields parsed dicts; the guard skips junk lines
+        yield PERSON_ENTITY
 
     idx = await build_identity_index(gen())
     assert "NK-5vaKAsud8hFMsyUSjZCv8r" in idx

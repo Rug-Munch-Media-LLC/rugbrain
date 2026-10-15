@@ -43,6 +43,8 @@ BASELINE_ENDPOINTS: frozenset[str] = frozenset(
         "GET /api/v1/search/vector-landscape",
         "GET /api/v1/sentiment/market",
         "GET /api/v1/sentiment/token/{address}",
+        "GET /api/v1/ta/signals",
+        "GET /api/v1/ta/stats",
         "GET /api/v1/similar/{address}",
         "GET /health",
         "GET /metrics",

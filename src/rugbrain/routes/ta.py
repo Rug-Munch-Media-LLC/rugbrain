@@ -41,7 +41,7 @@ def _signal_to_dict(sig: Any) -> dict[str, Any]:
     }
 
 
-@router.get("/ta/signals")
+@router.get("/api/v1/ta/signals")
 async def ta_signals(
     chain: str = Query(..., description="Chain id, e.g. 'solana' or 'ethereum'."),
     pair: str = Query(..., description="DEX pair / pool address."),
@@ -74,7 +74,7 @@ async def ta_signals(
     }
 
 
-@router.get("/ta/stats")
+@router.get("/api/v1/ta/stats")
 async def ta_stats() -> dict[str, Any]:
     """Coverage + freshness of the OHLCV substrate (rows, pairs, latest hour)."""
     try:

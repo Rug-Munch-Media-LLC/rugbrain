@@ -41,7 +41,7 @@ def test_domain_docs():
         assert doc["metadata"]["source_type"] == "scamsniffer_domain"
         assert doc["severity"] == "high"
         assert doc["chain"] == "multi"
-        assert doc["collection"] == "threat_intel_v2"
+        assert doc["collection"] == "threat_intel_v2_8b"
 
 
 def test_domain_docs_limit():
@@ -64,7 +64,7 @@ def test_address_docs():
         assert doc["metadata"]["source_type"] == "scamsniffer_address"
         assert doc["severity"] == "high"
         assert doc["chain"] == "multi"
-        assert doc["collection"] == "known_scams"
+        assert doc["collection"] == "known_scams_8b"
 
 
 def test_address_docs_limit():
@@ -85,17 +85,13 @@ async def test_run_dry_run():
         return_value=httpx.Response(200, json=SAMPLE_ADDRESSES)
     )
 
-    # Mock embed_many to return dummy vectors
-    from rugbrain import ingest_common
-    original_embed = ingest_common.embed_many
-    async def mock_embed(client, texts):
-        return [[0.1] * 1024 for _ in texts]
-    ingest_common.embed_many = mock_embed
+    # 2026-10-15: the embed seam is get_embedder().embed (embed_many is gone).
+    from unittest.mock import AsyncMock, patch
 
-    try:
+    mock_embedder = AsyncMock()
+    mock_embedder.embed.side_effect = lambda texts: [[0.1] * 4096 for _ in texts]
+    with patch("ingest_scamsniffer.get_embedder", return_value=mock_embedder):
         stats = await run(dry_run=True, limit=2)
-    finally:
-        ingest_common.embed_many = original_embed
 
     assert stats["dry_run"] is True
     assert stats["domains_fetched"] == 3
@@ -104,5 +100,5 @@ async def test_run_dry_run():
     assert stats["addresses_upserted"] == 2
     assert stats["errors"] == 0
     assert stats["source"] == "scamsniffer"
-    assert stats["domains_collection"] == "threat_intel_v2"
-    assert stats["addresses_collection"] == "known_scams"
+    assert stats["domains_collection"] == "threat_intel_v2_8b"
+    assert stats["addresses_collection"] == "known_scams_8b"

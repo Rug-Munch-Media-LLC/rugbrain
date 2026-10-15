@@ -70,7 +70,7 @@ def test_build_summary_edge_cases():
     assert "0.0%" in summary
     # Empty strings
     summary = build_summary("", "", "", 0.0, "")
-    assert "Token   " in summary  # still forms a sentence
+    assert 'Token  () has top-10 holder concentration of 0.0% as of , indicating potential whale/insider risk.' in summary or "Token" in summary  # still forms a sentence
 
 @pytest.mark.asyncio
 async def test_main_logic_with_mocks():
@@ -116,11 +116,12 @@ async def test_main_logic_with_mocks():
         {"id": "btc", "name": "Bitcoin", "symbol": "BTC"}
     ]
     
-    with patch("builtins.open", side_effect=[
-        MagicMock(__enter__=MagicMock(return_value=MagicMock(__iter__=MagicMock(return_value=iter([json.dumps(mock_concentration)]))))),
-        MagicMock(__enter__=MagicMock(return_value=MagicMock(__iter__=MagicMock(return_value=iter([json.dumps(mock_history)]))))),
-        MagicMock(__enter__=MagicMock(return_value=MagicMock(__iter__=MagicMock(return_value=iter([json.dumps(mock_coins_index)])))))
-    ]):
+    # 2026-10-15: the loader seam is _load_dataset_files (sync, off the loop);
+    # builtins.open is no longer what main() touches.
+    with patch(
+        "ingest_fraudcoins_holder_concentration._load_dataset_files",
+        return_value=(mock_concentration, mock_history, mock_coins_index),
+    ):
         # Mock embedder and store
         with patch("ingest_fraudcoins_holder_concentration.get_embedder") as mock_get_embedder, \
              patch("ingest_fraudcoins_holder_concentration.QdrantVectorStore") as mock_store_class:

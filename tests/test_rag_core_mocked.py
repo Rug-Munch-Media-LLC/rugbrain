@@ -40,7 +40,9 @@ def _embed_response(dim: int | None = None) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_query_embedding_gets_instruct_prefix(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
+async def test_query_embedding_gets_instruct_prefix(
+    monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any
+) -> None:
     """query=True must send the Qwen3 Instruct template, not raw text."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
@@ -63,7 +65,9 @@ async def test_query_embedding_gets_instruct_prefix(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_document_embedding_stays_raw(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
+async def test_document_embedding_stays_raw(
+    monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any
+) -> None:
     """Documents must NOT carry the Instruct prefix (query-only template)."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
@@ -79,7 +83,9 @@ async def test_document_embedding_stays_raw(monkeypatch: pytest.MonkeyPatch, _fr
 
 
 @pytest.mark.asyncio
-async def test_get_query_embedding_helper_uses_prefix(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
+async def test_get_query_embedding_helper_uses_prefix(
+    monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any
+) -> None:
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "int")
     base = embeddings_mod.QWEN_EMBED_URL
 
@@ -94,7 +100,9 @@ async def test_get_query_embedding_helper_uses_prefix(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
-async def test_embedding_fails_loud_when_backends_down(monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any) -> None:
+async def test_embedding_fails_loud_when_backends_down(
+    monkeypatch: pytest.MonkeyPatch, _fresh_embedder_probe: Any
+) -> None:
     """T04 contract: no silent hash fallback — raise RAGUnavailableError."""
     monkeypatch.setattr(embeddings_mod, "_BACKEND", "auto")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -168,12 +176,17 @@ async def test_rerank_raw_attaches_documents(monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.mark.asyncio
 async def test_rerank_degrades_gracefully_when_down(monkeypatch: pytest.MonkeyPatch) -> Any:
-    async def _down() -> bool:
-        return False
+    """A transport failure on the hosted lane fails open to [] (never raises).
 
-    monkeypatch.setattr(reranker_mod, "_fast_health", _down)
-    # No respx mock at all: any real HTTP attempt would raise.
-    out = await reranker_mod.rerank("q", ["a", "b"])
+    The local :8003 lane and its ``_fast_health`` probe were retired
+    2026-10-11; ``rerank`` now POSTs the hosted chain directly and returns []
+    on any error. Force the error with respx so no live traffic is attempted.
+    """
+    import httpx
+
+    with respx.mock(assert_all_called=False) as rx:
+        rx.post(url__regex=r".*/rerank").mock(side_effect=httpx.ConnectError("down"))
+        out = await reranker_mod.rerank("q", ["a", "b"])
     assert out == []
 
 

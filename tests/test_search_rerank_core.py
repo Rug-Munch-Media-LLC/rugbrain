@@ -1,19 +1,22 @@
 """Search rerank core contracts (was 55% — lines 253-298 dark).
 
-Offline: httpx stubbed. Contracts for _score_candidates:
+Offline: the hosted chain is stubbed. Contracts for _score_candidates:
 
 * disabled reranker → ([], "none") without HTTP
 * empty candidates → ([], "none")
-* unhealthy (recent failure) → skip probe within 60s window
 * valid response: scores mapped back to ORIGINAL indices (empty docs
   skipped in payload but keep 0.0 slots)
-* non-200 → ([], "none") + health marked bad
-* transport error → health marked bad, ([], "none")
+* hosted chain unavailable → ([], "none") fail-open
+
+The local llama.cpp :8003 lane (4B/0.6B ladders) was retired 2026-10-11 —
+both tiers now resolve through the hosted multi-provider chain
+(``rerank_lanes``: deepinfra → siliconflow → openrouter → openrouter2, all
+Qwen3-Reranker-8B). The method label is provider-prefixed
+(``deepinfra:qwen3-reranker-8b``).
 """
 
 from __future__ import annotations
 
-import os
 import time
 from unittest.mock import MagicMock
 
@@ -25,19 +28,13 @@ from rugbrain.search import rerank as rr
 @pytest.fixture(autouse=True)
 def _healthy(monkeypatch):
     monkeypatch.setattr(rr, "RERANKER_ENABLED", True)
-    # Hermetic: force the local lane (hosted rung reads DEEPINFRA_API_KEY /
-    # /srv/secrets — present on Talos, absent in CI) and clear global strain
-    # state polluted by sibling tests (module-level defaultdict).
-    _prev_hosted = os.environ.get("RERANK_HOSTED")
-    os.environ["RERANK_HOSTED"] = "0"
+    # Hermetic: the hosted chain is stubbed per-test via ``hosted_rerank``;
+    # clear global strain state polluted by sibling tests (module-level
+    # defaultdict).
     rr._strain_failures.clear()
     rr._health["ok"] = True
     rr._health["last_check"] = time.time()
     yield
-    if _prev_hosted is None:
-        os.environ.pop("RERANK_HOSTED", None)
-    else:
-        os.environ["RERANK_HOSTED"] = _prev_hosted
     rr._health["ok"] = False
     rr._health["last_check"] = 0.0
     rr._strain_failures.clear()
@@ -97,17 +94,20 @@ async def test_scores_mapped_back_to_original_indices(monkeypatch):
         {"content": ""},
         {"content": "real doc two"},
     ]
-    resp = _resp(
-        {
-            "results": [
-                {"index": 0, "relevance_score": 0.9},  # first VALID doc
-                {"index": 1, "relevance_score": 0.4},  # second VALID doc
-            ]
-        }
-    )
-    monkeypatch.setattr(rr.httpx, "AsyncClient", lambda **k: FakeClient(resp))
+
+    async def fake_hosted(query, docs, top_n=0, **kw):
+        # Only the two VALID docs reach the hosted chain; the empty one is
+        # filtered by valid_docs before the call.
+        assert docs == ["real doc zero", "real doc two"]
+        return [
+            {"index": 0, "relevance_score": 0.9},  # first VALID doc
+            {"index": 1, "relevance_score": 0.4},  # second VALID doc
+        ]
+
+    monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
+    monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     scores, method = await rr._score_candidates("rug", candidates)
-    assert method == "qwen3-reranker-8b"
+    assert method == "deepinfra:qwen3-reranker-8b"
     assert len(scores) == 3
     assert scores[0] == pytest.approx(0.9)  # original index 0
     assert scores[1] == 0.0  # empty doc keeps neutral slot
@@ -115,26 +115,24 @@ async def test_scores_mapped_back_to_original_indices(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_non200_marks_unhealthy(monkeypatch):
-    monkeypatch.setattr(rr.httpx, "AsyncClient", lambda **k: FakeClient(_resp({}, status=500)))
+async def test_hosted_chain_down_fails_open(monkeypatch):
+    """Every hosted rung down → ([], "none"); search never breaks."""
+    monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
+
+    async def down(query, docs, top_n=0, **kw):
+        return None
+
+    monkeypatch.setattr(rr, "hosted_rerank", down)
     scores, method = await rr._score_candidates("q", [{"content": "d"}])
     assert scores == [] and method == "none"
-    # unified path records the failure via _post_rerank -> health bad
-    assert rr._health["ok"] is False
 
 
 @pytest.mark.asyncio
-async def test_transport_error_marks_unhealthy(monkeypatch):
-    import httpx
-
-    monkeypatch.setattr(
-        rr.httpx,
-        "AsyncClient",
-        lambda **k: FakeClient(exc=httpx.ConnectError("down")),
-    )
+async def test_hosted_disabled_fails_open(monkeypatch):
+    """Hosted chain disabled → ([], "none") without any HTTP."""
+    monkeypatch.setattr(rr, "hosted_enabled", lambda: False)
     scores, method = await rr._score_candidates("q", [{"content": "d"}])
     assert scores == [] and method == "none"
-    assert rr._health["ok"] is False
 
 
 @pytest.mark.asyncio
@@ -143,12 +141,13 @@ async def test_recent_failure_skips_probe(monkeypatch):
     rr._health["last_check"] = time.time()  # just failed
     called = {"n": 0}
 
-    class Spy(FakeClient):
-        async def post(self, url, json=None):
-            called["n"] += 1
-            return _resp({"results": []})
+    async def spy_hosted(query, docs, top_n=0, **kw):
+        called["n"] += 1
+        return [{"index": 0, "relevance_score": 0.5}]
 
-    monkeypatch.setattr(rr.httpx, "AsyncClient", lambda **k: Spy())
+    monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
+    monkeypatch.setattr(rr, "hosted_rerank", spy_hosted)
     scores, method = await rr._score_candidates("q", [{"content": "d"}])
-    assert scores == [] and method == "none"
-    assert called["n"] == 0  # probe suppressed within 60s window
+    # The hosted chain is the only lane; a stale health flag does not gate it.
+    assert method == "deepinfra:qwen3-reranker-8b"
+    assert called["n"] == 1

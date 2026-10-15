@@ -99,6 +99,11 @@ async def build_identity_index(
     """
     index: dict[str, dict[str, Any]] = {}
     async for entity in entities:
+        # Defensive: the stream is normally pre-parsed dicts (``_entities``),
+        # but a caller may hand us raw lines. Skip anything that is not a
+        # mapping rather than raising on ``.get``.
+        if not isinstance(entity, dict):
+            continue
         if entity.get("schema") not in IDENTITY_SCHEMAS:
             continue
         entity_id = str(entity.get("id") or "").strip()

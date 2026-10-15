@@ -165,7 +165,7 @@ async def run(dry_run: bool, limit: int | None) -> dict[str, Any]:
     stats = {
         "source": SOURCE,
         "domains_collection": DOMAIN_COLLECTION,
-        "address_collection": ADDRESS_COLLECTION,
+        "addresses_collection": ADDRESS_COLLECTION,
         "domains_fetched": 0,
         "addresses_fetched": 0,
         "domains_upserted": 0,
