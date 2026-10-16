@@ -51,6 +51,14 @@ _PUBLIC = frozenset(
         "crypto_vulnerabilities_8b",
         "defi_exploits_8b",
         "exploits_8b",
+        # 2026-10-16: the audit collections were migrated to _8b twins but the
+        # boundary table kept only the bare names, which now resolve to 0-point
+        # shells — so 1,050 contract_audits findings (plus contract_security
+        # 1,192 / github_audits 199) were unreachable through the public search
+        # surface. Same defect class as the 2026-10-11 block above.
+        "contract_audits_8b",
+        "contract_security_8b",
+        "github_audits_8b",
         "news_v2_8b",
         "protocol_design_8b",
         "regulation_enforcement_8b",
