@@ -186,7 +186,7 @@ _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
         cadence=HOURLY,
         notes="20,984 pts at 2560. Twin exists but is NOT owned by this repo.",
         observed=2560,
-        retired=(),
+        retired=(2560,),
     ),
 )
 
