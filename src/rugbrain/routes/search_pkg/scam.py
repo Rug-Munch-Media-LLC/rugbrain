@@ -37,8 +37,17 @@ async def scam_check(
         query=query,
         # Search the collections where known-scam / scam-pattern data is
         # actually stored (known_scams + scam_patterns), plus the migrated
-        # threat_intel_v2 collection and community reports.
-        collections=["known_scams", "scam_patterns", "threat_intel_v2", "rmi_community"],
+        # threat_intel_v2 collection and community reports. wallet_v2 is
+        # included because per-address malicious labels (Etherscan
+        # Fake_Phishing*) live there and nowhere else — without it a labelled
+        # address returned "unknown".
+        collections=[
+            "known_scams",
+            "scam_patterns",
+            "threat_intel_v2",
+            "rmi_community",
+            "wallet_v2",
+        ],
         limit=limit,
         min_similarity=0.4,
         entity_boost=2.0,
@@ -51,6 +60,31 @@ async def scam_check(
     matches = []
     max_score = 0.0
     risk_signals = 0
+
+    # Exact-address lookup FIRST. A wallet address is an identifier, and a
+    # semantic search for "scam check address 0x…" does not retrieve the
+    # address's own label row — so a labelled malicious address returned
+    # "unknown". The label corpora are keyed on metadata.address; match it
+    # exactly, exactly as wallet_profile does.
+    from rugbrain.wallet_profile import _exact_hits
+
+    for coll, payload in await _exact_hits(address):
+        sev = str(payload.get("severity", "") or "")
+        matches.append(
+            sanitize_public_result(
+                {
+                    "id": str(payload.get("doc_id", "") or ""),
+                    "content": (payload.get("content", "") or "")[:300],
+                    "similarity": 1.0,
+                    "severity": sev,
+                    "collection": coll,
+                    "source": str(payload.get("source", "") or ""),
+                }
+            )
+        )
+        max_score = max(max_score, 1.0)
+        if sev in ("high", "critical"):
+            risk_signals += 1
 
     for r in results_data.get("results", []):
         sim = r.get("similarity", 0)

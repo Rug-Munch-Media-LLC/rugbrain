@@ -155,6 +155,10 @@ async def run(source_filter: str | None, limit: int | None, dry_run: bool) -> di
         "embedded": 0,
         "skipped": 0,
         "errors": 0,
+        # A source whose FETCH raised FetchFailure. Incremented below; the key
+        # must exist here or the first fetch failure crashes the whole run with
+        # KeyError — which is how the threat-intel lane died silently.
+        "fetch_failed": 0,
         "dry_run": dry_run,
     }
     per_source: dict[str, dict[str, int]] = {}

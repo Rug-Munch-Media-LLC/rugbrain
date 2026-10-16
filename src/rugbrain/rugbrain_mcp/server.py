@@ -331,15 +331,28 @@ async def _call_search_multi(
 
 
 def _extract_results(resp: dict[str, Any], collection: str) -> list[dict[str, Any]]:
-    """Normalize raw API search results into a uniform item shape."""
-    return [
-        {
-            "content": item.get("content", ""),
-            "collection": collection,
-            "score": float(item.get("score", 0.0)),
-        }
-        for item in resp.get("results", [])
-    ]
+    """Normalize raw API search results into a uniform item shape.
+
+    The API does not emit a ``score`` key: a reranked hit carries
+    ``rerank_score``, a fused hit ``rrf_score``, and a raw hit ``similarity``.
+    Reading only ``score`` made every item 0.0, so the caller's sort was a
+    no-op and the brief was effectively unordered.
+    """
+    out: list[dict[str, Any]] = []
+    for item in resp.get("results", []):
+        score = item.get("rerank_score")
+        if score is None:
+            score = item.get("rrf_score")
+        if score is None:
+            score = item.get("similarity", 0.0)
+        out.append(
+            {
+                "content": item.get("content", ""),
+                "collection": collection,
+                "score": float(score or 0.0),
+            }
+        )
+    return out
 
 
 def _source_of(item: dict[str, Any]) -> str:
@@ -420,10 +433,14 @@ async def rugbrain_market_brief(
     each item carrying its source collection and relevance score.
     """
     collections = ["news_v2", "social_intel", "education"]
+    # /api/v1/search/multi short-circuits an empty query to {"results": []}, so
+    # the documented "empty = general market brief" default returned nothing.
+    # A general brief is a real query, not an empty one.
+    effective_query = query.strip() or "crypto market news today"
     all_items: list[dict[str, Any]] = []
     for coll in collections:
         resp = await _call_search_multi(
-            query=query,
+            query=effective_query,
             collections=[coll],
             limit=limit,
             limit_per_collection=limit,
