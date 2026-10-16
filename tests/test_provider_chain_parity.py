@@ -58,7 +58,38 @@ def test_key_resolution_prefers_env_then_file(module, tmp_path, monkeypatch) -> 
     assert module._key("deepinfra") == "from-env"
     monkeypatch.delenv(env_name, raising=False)
     module._KEYS["deepinfra"] = ""
-    monkeypatch.setattr(module, "_PROVIDERS", dict(module._PROVIDERS, deepinfra=("u", "m", env_name, str(keyfile))))
+    monkeypatch.setattr(
+        module, "_PROVIDERS", dict(module._PROVIDERS, deepinfra=("u", "m", env_name, str(keyfile)))
+    )
     module._KEYS.clear()
     assert module._key("deepinfra") == "from-file"
     module._KEYS.clear()
+
+
+@pytest.mark.parametrize("module", [embedder, rerank_lanes])
+def test_effective_order_is_canonical_without_override(module, monkeypatch) -> None:
+    """The EFFECTIVE chain (what dispatch walks) must be the canonical order.
+
+    ``DEFAULT_ORDER`` alone is not enough: the live drift of 2026-10-16 was an
+    ``RERANK_PROVIDER_ORDER=siliconflow,openrouter,deepinfra`` override in
+    ``/srv/secrets/rugbrain.env`` that demoted DeepInfra to third while
+    ContextCrypto's ``paid-first`` chain kept it primary. Pinning the default
+    left the override free to reorder the chain, so parity broke silently.
+    """
+    monkeypatch.delenv("RERANK_PROVIDER_ORDER", raising=False)
+    monkeypatch.delenv("EMBED_PROVIDER_ORDER", raising=False)
+    assert module._order() == EXPECTED
+
+
+@pytest.mark.parametrize("module", [embedder, rerank_lanes])
+def test_override_cannot_drop_a_rung(module, monkeypatch) -> None:
+    """An override may reorder, but every canonical rung must still be present.
+
+    A partial override (e.g. ``deepinfra``) must not silently shrink the chain
+    to one provider — the tail is always appended from ``DEFAULT_ORDER``.
+    """
+    monkeypatch.setenv("RERANK_PROVIDER_ORDER", "deepinfra")
+    monkeypatch.setenv("EMBED_PROVIDER_ORDER", "deepinfra")
+    order = module._order()
+    assert order[0] == "deepinfra"
+    assert set(EXPECTED) <= set(order)
