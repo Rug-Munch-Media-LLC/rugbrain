@@ -212,11 +212,17 @@ class MultiEmbedder:
         """REST endpoints to probe for actual collection dims (deduped).
 
         Qdrant :6333 = REST, :6334 = gRPC — only REST is probed here.
+
+        Host view is 6334 (rmi-qdrant-v2 publishes "127.0.0.1:6334:6333");
+        container view is 6333. The old default also listed host 6333, which
+        is a DEAD port on this host — it only ever produced an _error entry
+        and, in landscape(), inflated total_points by re-counting the same
+        instance under a second name.
         """
         urls: list[str] = []
         env_urls = os.getenv(
             "RAG_QDRANT_URLS",
-            f"{os.getenv('QDRANT_URL', 'http://rmi-qdrant-v2:6334')},http://127.0.0.1:6333,http://127.0.0.1:6334",
+            f"{os.getenv('QDRANT_URL', 'http://rmi-qdrant-v2:6334')},http://127.0.0.1:6334",
         )
         for u in env_urls.split(","):
             u = u.strip().rstrip("/")
@@ -381,18 +387,12 @@ class MultiEmbedder:
         """
         import time
 
-        urls = qdrant_urls or [
-            u.strip()
-            for u in os.getenv(
-                "RAG_QDRANT_URLS",
-                # Container-aware defaults: prefer the service-network Qdrant
-                # (legacy :6333 + v2 :6334 both live behind rmi-qdrant-v2's
-                # host publishes); 127.0.0.1 only works for host-side callers.
-                "http://rmi-qdrant-v2:6334,http://rmi-qdrant-v2:6334,"
-                "http://127.0.0.1:6333,http://127.0.0.1:6334",
-            ).split(",")
-            if u.strip()
-        ]
+        # Single source of truth for the probe list: _qdrant_rest_urls() is
+        # already deduped and drops the dead host :6333. The old inline default
+        # here listed rmi-qdrant-v2:6334 twice AND 127.0.0.1:6334 — the SAME
+        # instance under two names — so every collection was counted 3x and
+        # total_points read 16.8M against a real 5.6M.
+        urls = qdrant_urls or self._qdrant_rest_urls()
         t0 = time.monotonic()
 
         def _infer(dim: int | None) -> str:
@@ -412,6 +412,7 @@ class MultiEmbedder:
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         total = 0
+        _counted: set[str] = set()
         for url in urls:
             cols: dict[str, Any] = {}
             try:
@@ -428,7 +429,12 @@ class MultiEmbedder:
                         else:
                             dim = None
                         count = detail.get("points_count")
-                        total += count or 0
+                        # Count each collection once even if the same instance
+                        # is reachable under two names (belt-and-braces on top
+                        # of the URL dedupe above).
+                        if name not in _counted:
+                            _counted.add(name)
+                            total += count or 0
                         # Judge configuration against REALITY: seed the dim
                         # cache with the actual dim we just read, so
                         # backend_for() resolves dim-driven for unmapped
@@ -445,7 +451,14 @@ class MultiEmbedder:
                             "configured_backend": resolved_be.name,
                             "configured_dim": resolved_dim,
                         }
-                        if isinstance(dim, int) and dim != resolved_dim:
+                        # A 0-point collection cannot fail a search — there is
+                        # nothing to search. Flagging it MISMATCH on every probe
+                        # was noise: the retired 2560 shells (crypto_vulnerabilities,
+                        # defi_exploits, regulation_enforcement, scam_patterns) are
+                        # empty by design and their _8b twins are the live lane.
+                        # Only a POPULATED collection at the wrong dim is a real
+                        # mismatch.
+                        if isinstance(dim, int) and dim != resolved_dim and (count or 0) > 0:
                             entry_out["MISMATCH"] = True
                             out["mismatches"].append(
                                 {
