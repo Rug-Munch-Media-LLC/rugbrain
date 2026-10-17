@@ -39,7 +39,7 @@ def is_dead(provider: str) -> bool:
                 _DEAD_PROVIDERS.pop(provider, None)
                 return False
             return True
-    except Exception:  # noqa: BLE001 — a breaker bug must never block retrieval
+    except Exception:
         return False
 
 
@@ -50,7 +50,7 @@ def mark_dead(provider: str, seconds: float | None = None) -> None:
             _DEAD_PROVIDERS[provider] = time.time() + (
                 seconds if seconds is not None else _ttl()
             )
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
 
@@ -59,7 +59,7 @@ def clear(provider: str) -> None:
     try:
         with _LOCK:
             _DEAD_PROVIDERS.pop(provider, None)
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
 
 
@@ -69,5 +69,5 @@ def snapshot() -> dict[str, float]:
         now = time.time()
         with _LOCK:
             return {k: round(v - now, 1) for k, v in _DEAD_PROVIDERS.items() if v > now}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {}

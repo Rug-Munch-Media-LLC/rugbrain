@@ -20,7 +20,6 @@ from typing import Any
 import httpx
 
 from rugbrain import provider_breaker
-
 from rugbrain.rerank_compat import (
     RERANKER_ENABLED,
     RERANKER_URL,
@@ -30,13 +29,13 @@ from rugbrain.rerank_compat import (
 )
 from rugbrain.rerank_health import _fast_health, get_reranker_health, reranker_health_loop
 from rugbrain.rerank_health import _mark as _mark_health
-from rugbrain.rerank_lanes import hosted_enabled, hosted_rerank  # multi-provider chain (2026-11)
 from rugbrain.rerank_instructions import (
     RERANK_INSTRUCTIONS,
     rerank_alerts,
     rerank_instructed,
     rerank_kol_tweets,
 )
+from rugbrain.rerank_lanes import hosted_enabled, hosted_rerank  # multi-provider chain (2026-11)
 from rugbrain.token_budget import budget_documents
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,7 @@ async def _hosted_rung(query: str, documents: list[str], top_n: int) -> list[dic
         return None
     try:
         return await hosted_rerank(query, documents, top_n=top_n)
-    except Exception as exc:  # noqa: BLE001 — fail-open: never block ranking
+    except Exception as exc:
         if any(c in str(exc) for c in ("401", "402", "403")):
             provider_breaker.mark_dead("hosted-rerank")
         logger.warning("hosted rerank failed (%s) — local lane", exc)

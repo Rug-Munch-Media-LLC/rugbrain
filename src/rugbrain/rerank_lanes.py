@@ -117,7 +117,7 @@ async def _call(
             logger.warning("rerank_%s_status=%d", provider, resp.status_code)
             return None
         data = resp.json()
-    except Exception as exc:  # noqa: BLE001 — a rung must never kill the chain
+    except Exception as exc:
         logger.debug("rerank_%s_failed: %s", provider, str(exc)[:120])
         return None
 
