@@ -31,6 +31,7 @@ Exit codes: 0 ok, 1 one or more collections failed, 2 BM25 embedder missing.
 """
 
 from __future__ import annotations
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import asyncio
@@ -92,13 +93,13 @@ def build_args() -> argparse.Namespace:
     parser.add_argument(
         "--url",
         default=None,
-        help="Qdrant base URL (default: QDRANT_URL env or http://127.0.0.1:6333)",
+        help="Qdrant base URL (default: QDRANT_URL env or http://127.0.0.1:6334)",
     )
     return parser.parse_args()
 
 
 def _base_url(args: argparse.Namespace) -> str:
-    url = args.url or os.getenv("QDRANT_URL", "http://127.0.0.1:6333")
+    url = args.url or os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL)
     return str(url).rstrip("/")
 
 

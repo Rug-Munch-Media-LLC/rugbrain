@@ -36,6 +36,7 @@ Environment:
 """
 
 from __future__ import annotations
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import json
@@ -345,13 +346,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def resolve_qdrant_client(host: str | None, port: int | None) -> qdrant_client.QdrantClient:
-    port_str = str(port) if port is not None else (os.getenv("QDRANT_PORT") or "6333")
+    port_str = str(port) if port is not None else (os.getenv("QDRANT_PORT") or "6334")
     candidates = []
     if host:
         candidates.append(host)
     candidates.extend(
         [
-            os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333"),
+            os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL),
             f"http://127.0.0.1:{port_str}",
             f"http://localhost:{port_str}",
         ]

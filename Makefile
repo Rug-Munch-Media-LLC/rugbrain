@@ -29,7 +29,7 @@ api-dev: ## Start FastAPI dev server on :8012 with hot-reload
 	uvicorn rugbrain.main:app --host 0.0.0.0 --port 8012 --reload --log-level debug
 
 ingest: ## Run threat ingest into Qdrant (requires QDRANT_URL env)
-	@test -n "$$QDRANT_URL" || echo "QDRANT_URL not set - using default http://rmi-qdrant:6333"
+	@test -n "$$QDRANT_URL" || echo "QDRANT_URL not set - using default http://127.0.0.1:6334"
 	python scripts/ingest_threats.py
 
 backup: ## Snapshot Qdrant collection to local snapshot dir (QDRANT_URL env)

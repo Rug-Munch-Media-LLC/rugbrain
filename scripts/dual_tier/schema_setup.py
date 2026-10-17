@@ -11,17 +11,18 @@ incorrect per the official Qwen3 model card (Qwen3-Embedding-8B = 2560 dims).
 This script uses verified dimensions from live endpoints.
 
 Run once:  python -m scripts.dual_tier.schema_setup
-Verify:    GET http://localhost:6333/collections/crypto_intelligence
+Verify:    GET http://localhost:6334/collections/crypto_intelligence
 """
 
 from __future__ import annotations
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import os
 import sys
 
 from qdrant_client import QdrantClient, models
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL)
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")
 
 # Verified against live endpoints 2026-08-23:

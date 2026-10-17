@@ -23,6 +23,7 @@ Requires:
 """
 
 from __future__ import annotations
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import asyncio
@@ -37,7 +38,7 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("seed_all")
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
+QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL).rstrip("/")
 QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
 QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://rmi-backend:8000")

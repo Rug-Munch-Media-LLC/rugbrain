@@ -18,6 +18,7 @@ Design notes:
 """
 
 from __future__ import annotations
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import os
 import time
@@ -26,7 +27,7 @@ from typing import Any
 import aiohttp
 from qdrant_client import AsyncQdrantClient
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL)
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")
 
 ENDPOINTS = {

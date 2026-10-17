@@ -27,6 +27,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import requests
 from qdrant_client import QdrantClient
@@ -37,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import contextlib
 
 from b2_common import ensure_bucket, get_b2_api, list_object_keys, load_env_file, upload_file
+from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------
 # Defaults — override via env or --env-file
@@ -45,8 +47,9 @@ B2_BUCKET_DEFAULT = "rmi-rag-permanence"
 B2_KEY_PREFIX = "qdrant-snapshots"
 ENV_FILE_DEFAULT = "/path/to/b2-permanence.env"
 RCLONE_CONF_PATH = os.getenv("RCLONE_CONF", "~/.config/rclone/rclone.conf")
-QDRANT_HOST_DEFAULT = "rmi-qdrant"
-QDRANT_PORT_DEFAULT = 6333
+_QDRANT_DEFAULT = urlparse(os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL))
+QDRANT_HOST_DEFAULT = _QDRANT_DEFAULT.hostname or "rmi-qdrant"
+QDRANT_PORT_DEFAULT = _QDRANT_DEFAULT.port or 6334
 
 # Retain 3 most recent local snapshots per collection (older ones cleaned up)
 LOCAL_RETENTION_COUNT = 3

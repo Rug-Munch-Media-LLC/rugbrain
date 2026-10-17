@@ -5,12 +5,15 @@ Embeds with Qwen3-8B (2560d) and stores in Qdrant rag_threats collection.
 """
 
 import asyncio
+import os
 from typing import Any
 
 import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 from sentence_transformers import SentenceTransformer
+
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 COLLECTION = "rag_threats"
 MODEL_NAME = "qwen3-embedding-8b"
@@ -27,7 +30,7 @@ async def fetch_goplus_threats() -> list[dict[str, Any]]:
 
 def embed_and_store(threats: list[dict[str, Any]]) -> None:
     model = SentenceTransformer(MODEL_NAME)
-    client = QdrantClient(host="rmi-qdrant", port=6333)
+    client = QdrantClient(url=os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL))
     # Ensure target collection exists with matching vector size.
     existing = client.get_collections().collections
     if not any(c.name == COLLECTION for c in existing):

@@ -50,7 +50,8 @@ from rugbrain.scam_patterns import (
 
 logger = logging.getLogger("ingest_scam_patterns")
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://rmi-qdrant-v2:6333").rstrip("/")
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
+QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL).rstrip("/")
 KEY_FILES = (
     os.getenv("DEEPINFRA_KEY_FILE", ""),
     "/srv/secrets/deepinfra_api_key",
