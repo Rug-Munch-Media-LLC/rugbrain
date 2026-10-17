@@ -61,7 +61,40 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
                 di_key,
             )
         )
-    attempts.append(("local", _embeddings_endpoint(int_url), model, ""))
+    # 2026-10-17: the local llama.cpp lane (:8004) is not running — its socat
+    # forward targets 127.0.0.1:8004, which has no listener, so the attempt
+    # burns the full 30s timeout and then the route raises 502. Probe it first
+    # and only append when it actually answers. DeepInfra (primary) and the
+    # multi_embedder siliconflow lane still cover the space.
+    sf_key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+    if sf_key:
+        attempts.append(
+            (
+                "siliconflow",
+                _embeddings_endpoint(
+                    os.getenv(
+                        "SILICONFLOW_EMBED_URL",
+                        "https://api.siliconflow.com/v1/embeddings",
+                    )
+                ),
+                os.getenv("SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"),
+                sf_key,
+            )
+        )
+    import socket as _socket
+
+    def _local_lane_alive() -> bool:
+        host, _, port = int_url.partition("://")[2].partition("/")[0].partition(":")
+        if not port.isdigit():
+            return False
+        try:
+            with _socket.create_connection((host or "127.0.0.1", int(port)), timeout=1.5):
+                return True
+        except OSError:
+            return False
+
+    if _local_lane_alive():
+        attempts.append(("local", _embeddings_endpoint(int_url), model, ""))
     last_exc: Exception | None = None
     for name, url, req_model, bearer in attempts:
         # Local probe must fail FAST so the remote fallback engages inside

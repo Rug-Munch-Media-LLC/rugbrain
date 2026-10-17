@@ -132,6 +132,23 @@ def _default_backends() -> dict[str, Backend]:
             lane_dim,
             model=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"),
         ),
+        # 2026-10-17: SiliconFlow hosts the same qwen3-embedding-8b (verified
+        # 200 / dim 4096 from the rugbrain-api container). It is a REMOTE lane
+        # in the same vector space, so it is a valid fallback when DeepInfra
+        # is billing-blocked and the local llama.cpp lane is not running.
+        # Never a cross-family fallback: same model, same space.
+        "siliconflow": Backend(
+            "siliconflow",
+            "openai",
+            os.getenv(
+                "SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1/embeddings"
+            ),
+            lane_dim,
+            model=os.getenv(
+                "SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B"
+            ),
+            api_key_env="SILICONFLOW_API_KEY",
+        ),
         # LEGACY READS ONLY — interim 2048 `_i` shadow collections.
         "nemotron": Backend(
             "nemotron",
@@ -160,14 +177,23 @@ def _default_backends() -> dict[str, Backend]:
 # comparable with the target collection (no cross-family fallback, ever).
 # Canonical (2026-08-29): DeepInfra primary, local :8004 fallback.
 EMBED_CHAINS: dict[str, tuple[str, ...]] = {
-    "qwen8b": ("deepinfra", "qwen8b"),
-    "deepinfra": ("deepinfra", "qwen8b"),
-    "or_qwen8b": ("or_qwen8b", "qwen8b"),
+    # 2026-10-17: siliconflow inserted because the local :8004 lane is not
+    # running (the socat forward to 127.0.0.1:8004 has no listener) and
+    # DeepInfra is returning 402 (overdue invoices). Same model family in
+    # every position => same vector space => results stay comparable.
+    # 2026-10-17 order (operator: "never run out of credit"):
+    #   DeepInfra (primary) -> SiliconFlow -> OpenRouter backup -> local :8004.
+    # Every lane serves the same qwen3-embedding-8b => same vector space.
+    # On 2026-10-17 DeepInfra went 402 (overdue invoices) and the local lane
+    # was not running, which silently broke all of RAG; this order survives it.
+    "qwen8b": ("deepinfra", "siliconflow", "or_qwen8b", "qwen8b"),
+    "deepinfra": ("deepinfra", "siliconflow", "or_qwen8b", "qwen8b"),
+    "or_qwen8b": ("or_qwen8b", "siliconflow", "deepinfra", "qwen8b"),
 }
 
 # Backends that hit a remote HTTP API (used by RAG_QUERY_REMOTE_FALLBACK=0
 # to strip remote lanes and force a fully-local chain).
-_REMOTE_BACKENDS = frozenset({"deepinfra", "or_qwen8b", "nemotron"})
+_REMOTE_BACKENDS = frozenset({"deepinfra", "siliconflow", "or_qwen8b", "nemotron"})
 
 # Deprecated alias (pre-2026-08-29 name). Kept so any external importer or
 # ops script referencing it doesn't break; new code uses EMBED_CHAINS.

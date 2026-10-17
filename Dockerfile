@@ -7,11 +7,15 @@ FROM python:3.11-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627a
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # ── System deps ─────────────────────────────────────────────────────
+# 2026-10-17: the exact-version pins above held broken packages against the
+# current debian mirror (curl 8.14.1-2+deb13u5 no longer resolvable), which made
+# the image unrebuildable. Unpinned: build-essential/curl/ca-certificates/rclone
+# are picked from the mirror's current versions.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential=12.12 \
-      curl=8.14.1-2+deb13u5 \
-    ca-certificates=20250419 \
-    rclone=1.60.1+dfsg-4 \
+    build-essential \
+      curl \
+    ca-certificates \
+    rclone \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
