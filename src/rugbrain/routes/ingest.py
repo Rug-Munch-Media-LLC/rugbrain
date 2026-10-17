@@ -60,13 +60,21 @@ async def ingest_documents(
         sanitize_public_result,
     )
     from rugbrain.qdrant_store import QdrantVectorStore
+    from rugbrain.qdrant_store.lane_resolver import resolve_collection
 
     if not body.documents:
         return {"status": "ok", "ingested": 0, "results": []}
 
     try:
+        # 2026-10-17: a bare public name (defi_exploits, scam_patterns, ...) was
+        # written AS-IS, which recreated the retired 2560-dim shells on every
+        # ingest. resolve_collection() rewrites the write target to the serving
+        # _8b twin (strict mode), so a public ingest can never materialise a
+        # retired collection again.
         normalized_collections = [
-            require_public_collection(doc.collection) for doc in body.documents
+            resolve_collection(require_public_collection(doc.collection))
+            or require_public_collection(doc.collection)
+            for doc in body.documents
         ]
     except CollectionNotPublic as exc:
         raise HTTPException(

@@ -84,7 +84,12 @@ QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 # Canonical corpus dim: qwen3-embedding-8b is 2560-dim natively, both
 # locally (:8004) and on DeepInfra. The old 1024 default rejected every
 # vector and looped forever on embed_missing (fixed 2026-09-14).
-EMBEDDING_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "2560")
+# 2026-10-17: the 4B/2560 lane is RETIRED — the corpus is Qwen3-Embedding-8B
+# at 4096. This defaulted to 2560 and therefore CREATED retired shells.
+EMBEDDING_DIM = int(
+    os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM")
+    or os.getenv("RAG_EMBED_DIMS") or "4096"
+)
 KNOWLEDGE_DIR = Path(os.getenv("RAG_KNOWLEDGE_DIR", "/tmp/rag-knowledge"))  # noqa: S108  # nosec B108
 CHECKPOINT_PATH = Path(
     os.getenv("RAG_KNOWLEDGE_CHECKPOINT", str(KNOWLEDGE_DIR / "checkpoint.json"))
@@ -94,10 +99,14 @@ CHUNK_SIZE = 700
 CHUNK_OVERLAP = 70
 
 # Collection names (spec: defi_exploits, scam_patterns, crypto_vulnerabilities).
-COLLECTION_DEFI_EXPLOITS = "defi_exploits"
-COLLECTION_SCAM_PATTERNS = "scam_patterns"
-COLLECTION_VULNERABILITIES = "crypto_vulnerabilities"
-COLLECTION_CONTRACT_AUDITS = "contract_audits"
+# 2026-10-17: resolved through the lane table so a retired bare name can never
+# be created again. resolve_collection() maps defi_exploits -> defi_exploits_8b.
+from rugbrain.qdrant_store.lane_resolver import resolve_collection as _resolve
+
+COLLECTION_DEFI_EXPLOITS = _resolve("defi_exploits") or "defi_exploits_8b"
+COLLECTION_SCAM_PATTERNS = _resolve("scam_patterns") or "scam_patterns_8b"
+COLLECTION_VULNERABILITIES = _resolve("crypto_vulnerabilities") or "crypto_vulnerabilities_8b"
+COLLECTION_CONTRACT_AUDITS = _resolve("contract_audits") or "contract_audits_8b"
 
 # source → collection routing
 SOURCE_COLLECTIONS: dict[str, str] = {
