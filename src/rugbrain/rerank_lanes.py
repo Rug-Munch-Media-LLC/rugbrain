@@ -27,6 +27,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import provider_breaker
+
 logger = logging.getLogger(__name__)
 
 MODEL = os.getenv("RERANK_MODEL_ID", "Qwen/Qwen3-Reranker-8B")
@@ -91,6 +93,8 @@ async def _call(
     provider: str, query: str, documents: list[str], timeout: float | None
 ) -> list[dict[str, Any]] | None:
     base, model, _, _ = _PROVIDERS[provider]
+    if provider_breaker.is_dead(f"rerank:{provider}"):
+        return None
     body_query = query[:DOC_CHARS]
     docs = [d[:DOC_CHARS] for d in documents]
     try:
@@ -104,6 +108,11 @@ async def _call(
             resp = await client.post(
                 base, headers={"Authorization": f"Bearer {_key(provider)}"}, json=payload
             )
+        if resp.status_code in (401, 402, 403):
+            provider_breaker.mark_dead(f"rerank:{provider}")
+            provider_breaker.mark_dead("hosted-rerank")
+            logger.warning("rerank_%s_auth=%d breaker_open", provider, resp.status_code)
+            return None
         if resp.status_code != 200:
             logger.warning("rerank_%s_status=%d", provider, resp.status_code)
             return None

@@ -47,6 +47,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import provider_breaker
+
 logger = logging.getLogger("rugbrain.multi_embedder")
 
 # ── Backend definitions ───────────────────────────────────────────────────
@@ -384,13 +386,19 @@ class MultiEmbedder:
             if be.url.rstrip("/").endswith("/embeddings")
             else be.url.rstrip("/") + "/embeddings"
         )
+        if provider_breaker.is_dead(be.name):
+            raise RuntimeError(f"{be.name} circuit open (401/402/403) — skipped")
         async with httpx.AsyncClient(timeout=timeout) as c:
             r = await c.post(
                 url,
                 json={"model": be.model, "input": text[:8000]},
                 headers=headers,
             )
+            if r.status_code in (401, 402, 403):
+                provider_breaker.mark_dead(be.name)
+                raise RuntimeError(f"{be.name} auth/billing error {r.status_code}")
             r.raise_for_status()
+            provider_breaker.clear(be.name)
             data: list[dict[str, Any]] = r.json()["data"]
             vec: list[float] = data[0]["embedding"]
         # normalize to the target collection dim (MRL truncate-down only);

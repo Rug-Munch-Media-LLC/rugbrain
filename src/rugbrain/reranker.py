@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import provider_breaker
+
 from rugbrain.rerank_compat import (
     RERANKER_ENABLED,
     RERANKER_URL,
@@ -75,9 +77,15 @@ def _attach_documents(results: list[dict[str, Any]], documents: list[str]) -> No
 
 async def _hosted_rung(query: str, documents: list[str], top_n: int) -> list[dict[str, Any]] | None:
     """Hosted DeepInfra rung — None when unavailable so the local lane runs."""
-    if not hosted_enabled():
+    if not hosted_enabled() or provider_breaker.is_dead("hosted-rerank"):
         return None
-    return await hosted_rerank(query, documents, top_n=top_n)
+    try:
+        return await hosted_rerank(query, documents, top_n=top_n)
+    except Exception as exc:  # noqa: BLE001 — fail-open: never block ranking
+        if any(c in str(exc) for c in ("401", "402", "403")):
+            provider_breaker.mark_dead("hosted-rerank")
+        logger.warning("hosted rerank failed (%s) — local lane", exc)
+        return None
 
 
 async def rerank(
