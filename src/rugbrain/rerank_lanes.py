@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 MODEL = os.getenv("RERANK_MODEL_ID", "Qwen/Qwen3-Reranker-8B")
 TIMEOUT = float(os.getenv("RERANK_HOSTED_TIMEOUT", "30.0"))
 DOC_CHARS = int(os.getenv("RERANK_HOSTED_DOC_CHARS", "2000"))
-DEFAULT_ORDER = ("deepinfra", "siliconflow", "openrouter", "openrouter2")
+DEFAULT_ORDER = ("siliconflow", "openrouter", "openrouter2", "deepinfra")
 
 #: provider -> (base url, model id, credential env var, credential file)
 _PROVIDERS: dict[str, tuple[str, str, str, str]] = {
@@ -48,7 +48,7 @@ _PROVIDERS: dict[str, tuple[str, str, str, str]] = {
         "https://openrouter.ai/api/v1/rerank",
         "qwen/qwen3-reranker-8b",
         "OPENROUTER_API_KEY",
-        "/srv/secrets/openrouter_account1_api_key",
+        "/srv/secrets/openrouter_account2_api_key",
     ),
     "openrouter2": (
         "https://openrouter.ai/api/v1/rerank",

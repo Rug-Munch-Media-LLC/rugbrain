@@ -15,11 +15,11 @@ import pytest
 
 from rugbrain import embedder, rerank_lanes
 
-EXPECTED = ("deepinfra", "siliconflow", "openrouter", "openrouter2")
+EXPECTED = ("siliconflow", "openrouter", "openrouter2", "deepinfra")
 EXPECTED_KEY_FILES = {
     "deepinfra": "/srv/secrets/deepinfra_api_key",
     "siliconflow": "/srv/secrets/siliconflow_api_key",
-    "openrouter": "/srv/secrets/openrouter_account1_api_key",
+    "openrouter": "/srv/secrets/openrouter_account2_api_key",
     "openrouter2": "/srv/secrets/openrouter_account2_api_key",
 }
 
