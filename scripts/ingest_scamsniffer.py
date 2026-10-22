@@ -225,7 +225,6 @@ def main() -> None:
     args = parser.parse_args()
 
     stats = asyncio.run(run(args.dry_run, args.limit))
-    import json
 
     print(json.dumps(stats, indent=2))
 

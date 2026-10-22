@@ -70,10 +70,3 @@ class VerificationReport:
             f"unreachable={len(self.unreachable)}"
         )
 
-
-async def _live_collection_names(client: httpx.AsyncClient) -> set[str]:
-    """Names live in Qdrant. GET ``/collections`` only."""
-    response = await client.get("/collections", timeout=10.0)
-    response.raise_for_status()
-    result = response.json().get("result", {}) or {}
-    return {c["name"] for c in result.get("collections", []) if isinstance(c, dict) and "name" in c}

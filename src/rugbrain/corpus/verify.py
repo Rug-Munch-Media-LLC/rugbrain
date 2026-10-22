@@ -141,5 +141,3 @@ async def verify_live_widths(
             continue
         report.declared_but_absent.append(collection)
     return report
-
-from .reports import DimMismatch, VerificationReport

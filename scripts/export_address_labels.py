@@ -41,14 +41,17 @@ import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from rugbrain.clickhouse_labels import (
-    CLICKHOUSE_FALLBACK_DATABASE,
     SCAN_TABLE,
-    _load_env_rag,
-    ensure_table,
     get_client,
     insert_rows,
     label_counts,
     scan_row,
+)
+from rugbrain.clickhouse_store import (
+    CLICKHOUSE_FALLBACK_DATABASE,
+    ensure_table,
+    load_env_rag,
+    qualified,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
