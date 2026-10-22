@@ -491,7 +491,12 @@ async def run(
             args += [shards, shard % shards]
         query = (
             "SELECT news_id, url, title, summary, body_markdown, source, "  # nosec B608
-            "published_at, chains_mentioned, tokens_mentioned, sentiment_score "
+            "published_at, chains_mentioned, tokens_mentioned, sentiment_score, "
+            # `category` is load-bearing: news_filter.is_noise_article() keeps
+            # TOPICAL_CATEGORIES rows on the category alone. Omitting it made
+            # every row look uncategorised, so whole topical batches were
+            # dropped as noise while their rows stayed rag_embedding_id NULL.
+            "category "
             "FROM news_items "
             "WHERE (rag_embedding_id IS NULL OR rag_embedding_id = news_id)"
             + shard_sql
