@@ -12,9 +12,11 @@ MRL-truncated; a NARROWER vector is refused by :func:`resize` per T04.
 from __future__ import annotations
 
 import logging
+import os
 
 import httpx
 
+from rugbrain.embeddings_pkg import admission
 from rugbrain.embeddings_pkg.config import (
     DEEPINFRA_EMBED_MODEL,
     DEEPINFRA_EMBED_URL,
@@ -28,9 +30,11 @@ log = logging.getLogger(__name__)
 #: Embed text is clipped to this many CHARS before the provider sees it.
 MAX_CHARS: int = 8000
 
-#: Per-call timeout. Queries fail fast; a cold 8B cold-start may take longer.
-DOC_TIMEOUT: float = 30.0
-QUERY_TIMEOUT: float = 45.0
+#: Per-call timeout. A hosted provider answers in ms; the local 8B lane this
+#: rung points at in the fleet deployment queues, so the deadline must outlive
+#: a slot wait (measured 2026-10-22: 38s with 6 deferred, >120s in bursts).
+DOC_TIMEOUT: float = float(os.getenv("RAG_EMBED_DOC_TIMEOUT", "300"))
+QUERY_TIMEOUT: float = float(os.getenv("RAG_EMBED_QUERY_TIMEOUT", "180"))
 
 
 def ready() -> bool:
@@ -68,22 +72,23 @@ async def embed(
             log.debug("deepinfra_embed_skipped no_api_key")
             return None
         payload_text = QUERY_INSTRUCT.format(text) if query else text
-        async with httpx.AsyncClient(
-            timeout=timeout or (QUERY_TIMEOUT if query else DOC_TIMEOUT)
-        ) as c:
-            r = await c.post(
-                DEEPINFRA_EMBED_URL,
-                headers={"Authorization": f"Bearer {key}"},
-                json={"model": DEEPINFRA_EMBED_MODEL, "input": [payload_text[:MAX_CHARS]]},
-            )
+        async with admission.gate():
+            async with httpx.AsyncClient(
+                timeout=timeout or (QUERY_TIMEOUT if query else DOC_TIMEOUT)
+            ) as c:
+                r = await c.post(
+                    DEEPINFRA_EMBED_URL,
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={"model": DEEPINFRA_EMBED_MODEL, "input": [payload_text[:MAX_CHARS]]},
+                )
             if r.status_code != 200:
-                log.debug("deepinfra_embed_http_%s", r.status_code)
+                log.warning("deepinfra_embed_http_%s", r.status_code)
                 return None
             vec = (r.json().get("data") or [{}])[0].get("embedding")
             if not vec or not isinstance(vec, list):
                 return None
     except Exception as e:
-        log.debug("deepinfra_embed_failed: %s", e)
+        log.warning("deepinfra_embed_failed: %s", e)
         return None
     # A wider vector is MRL-truncate-down (mirrors multi_embedder); a narrower
     # one reaches resize() and raises there rather than being padded.

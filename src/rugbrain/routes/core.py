@@ -94,7 +94,17 @@ async def embed_text(request: EmbedRequest) -> dict[str, Any]:
             return False
 
     if _local_lane_alive():
-        attempts.append(("local", _embeddings_endpoint(int_url), model, ""))
+        # The :8024 lane is started with --api-key, so it needs the bearer
+        # here as well; without it this was a guaranteed 401.
+        attempts.append(
+            ("local", _embeddings_endpoint(int_url), model, os.getenv("QWEN_EMBED_API_KEY", "").strip())
+        )
+    # 2026-10-22: match the RAG chain (SiliconFlow leads). The only live 4096d
+    # hosted credential is api.siliconflow.com; DeepInfra answers 401 "user not
+    # authorized", so trying it first only added latency (measured 0.35-15 s)
+    # before the same answer. Insertion order is kept for every other lane.
+    attempts.sort(key=lambda a: {"siliconflow": 0, "deepinfra": 1}.get(a[0], 2))
+
     last_exc: Exception | None = None
     for name, url, req_model, bearer in attempts:
         # Local probe must fail FAST so the remote fallback engages inside

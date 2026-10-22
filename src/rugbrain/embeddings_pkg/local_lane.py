@@ -22,6 +22,7 @@ from rugbrain.embeddings_pkg.config import (
     QWEN_EMBED_MODEL,
     QWEN_EMBED_URL,
 )
+from rugbrain.embeddings_pkg import admission
 from rugbrain.embeddings_pkg.normalize import resize
 
 log = logging.getLogger(__name__)
@@ -30,9 +31,11 @@ log = logging.getLogger(__name__)
 #: (2048-token budget; see ``rugbrain.token_budget``).
 MAX_CHARS: int = 8000
 
-#: Per-call timeouts. Queries fail fast; an ingest of long documents may wait.
-DOC_TIMEOUT: float = 300.0
-QUERY_TIMEOUT: float = 45.0
+#: Per-call timeouts. Queries must outlive a QUEUED slot: the 8B lane serves
+#: two slots at ~8-20s each, so a query behind a few documents needs far more
+#: than the old 45s (measured 2026-10-22: 38s with 6 deferred, >120s burst).
+DOC_TIMEOUT: float = float(os.getenv("RAG_EMBED_DOC_TIMEOUT", "300"))
+QUERY_TIMEOUT: float = float(os.getenv("RAG_EMBED_QUERY_TIMEOUT", "180"))
 
 #: The health probe is cached in the ENVIRONMENT (not a module global) so a
 #: long-lived worker and a short-lived script cannot disagree about whether
@@ -63,6 +66,16 @@ def _store_probe(ok: bool) -> None:
     os.environ["_QWEN_OK"] = "1" if ok else "0"
 
 
+def _auth_headers() -> dict[str, str]:
+    """Bearer header for the token-protected local lane, or {} when unkeyed.
+
+    Read per call (not at import) so the lane key can be rotated with a
+    container restart alone. The value is never logged.
+    """
+    key = os.getenv("QWEN_EMBED_API_KEY", "").strip()
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
 async def embed(
     text: str,
     dim: int = EMBEDDING_DIM,
@@ -78,15 +91,27 @@ async def embed(
     """
     try:
         payload_text = QUERY_INSTRUCT.format(text) if query else text
-        async with httpx.AsyncClient(
-            timeout=timeout or (QUERY_TIMEOUT if query else DOC_TIMEOUT)
-        ) as c:
-            r = await c.post(
-                f"{QWEN_EMBED_URL}/embeddings",
-                json={"model": QWEN_EMBED_MODEL, "input": [payload_text[:MAX_CHARS]]},
-            )
+        async with admission.gate():
+            async with httpx.AsyncClient(
+                timeout=timeout or (QUERY_TIMEOUT if query else DOC_TIMEOUT)
+            ) as c:
+                # The :8024 Qwen3-Embedding-8B lane starts with --api-key, so
+                # an unauthenticated POST is a hard 401: without this header the
+                # last-resort rung could never answer even when the lane was
+                # healthy. This was the difference between "no backend" and a
+                # working 4096d fallback.
+                r = await c.post(
+                    f"{QWEN_EMBED_URL}/embeddings",
+                    headers=_auth_headers(),
+                    json={"model": QWEN_EMBED_MODEL, "input": [payload_text[:MAX_CHARS]]},
+                )
             if r.status_code != 200:
-                log.debug("int_embed_http_%s", r.status_code)
+                log.warning(
+                    "int_embed_http_%s url=%s body=%s",
+                    r.status_code,
+                    QWEN_EMBED_URL,
+                    r.text[:160],
+                )
                 return None
             vec = (r.json().get("data") or [{}])[0].get("embedding")
             if not vec or not isinstance(vec, list):
@@ -112,6 +137,12 @@ def reachable() -> bool:
     try:
         with httpx.Client(timeout=5.0) as c:
             ok = c.get(f"{QWEN_EMBED_URL}/health").status_code == 200
+    except httpx.TimeoutException:
+        # A BUSY lane is not a dead lane: the healthy-but-saturated 8B server
+        # answered the probe later than 5s (2026-10-22). Only a refused
+        # connection proves nothing is listening; the embed call itself owns
+        # the real deadline.
+        ok = True
     except Exception:
         ok = False
     _store_probe(ok)

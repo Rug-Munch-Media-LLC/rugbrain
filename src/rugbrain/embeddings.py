@@ -93,36 +93,17 @@ _LANE_GLOBALS: dict[str, str] = {
     "siliconflow": "_siliconflow_embed",
 }
 
-#: The `auto` chain, in order. DeepInfra first (hosted, warm, no CPU
-#: contention), local :8004 second (same model ⇒ same space).
-#: CORRECTED 2026-10-14: this used to say siliconflow was "credential 401-dead
-#: as of 2026-10-02, gated off by SILICONFLOW_ENABLED=0" and therefore excluded
-#: it from the chain. Re-probed live today: siliconflow returns HTTP 200, and
-#: SILICONFLOW_ENABLED=1 in the runtime env. The note was stale and it was the
-#: reason the documented fallback did not exist. Stale comments are not harmless
-#: - this one silently deleted a backup provider for 12 days.
-#: FIXED 2026-10-14. The 2026-10-12 operator directive - "DeepInfra PRIMARY,
-#: SiliconFlow backup, OpenRouter backup, on BOTH the query and document lanes"
-#: - was recorded in the _OVERRIDE_CHAINS comment below and NEVER applied here.
-#: The default stayed ("deepinfra", "int"), so the documented fallback did not
-#: exist: a DeepInfra failure fell straight to the LOCAL lane instead of the two
-#: hosted backups. Written down is not implemented.
+#: The ``auto`` chain, in order. Every rung serves the SAME
+#: ``Qwen/Qwen3-Embedding-8B`` @ 4096d, so a fall-through never changes the
+#: vector space the collections were built in; order is purely about latency
+#: and liveness. Cross-model lanes (gateway, OpenRouter, NIM) are NEVER here —
+#: they are reachable only through an explicit ``RAG_EMBED_BACKEND`` override.
 #:
-#: 'int' is kept as the last rung - it is the in-process/local embedder and the
-#: only thing that still answers when every hosted provider is down. Order is
-#: therefore: hosted primary -> hosted backup -> local last resort.
-#:
-#: CORRECTED 2026-10-15: `openrouter` was briefly added here by 1db3cdd, but
-#: OpenRouter is a CROSS-MODEL lane (a different embedding model, hence a
-#: different vector space) and the 2026-08-29 consolidation doctrine is
-#: explicit: the auto chain NEVER touches cross-model lanes (gateway,
-#: OpenRouter, NIM) - those are reachable only via an explicit
-#: ``RAG_EMBED_BACKEND`` override. SiliconFlow stays because it serves the
-#: SAME ``Qwen/Qwen3-Embedding-8B`` @ 4096d, so a fallback vector is
-#: index-compatible. The 2026-10-12 operator directive (DeepInfra primary,
-#: SiliconFlow backup, OpenRouter backup) is honoured for the two same-space
-#: lanes; OpenRouter remains an override-only backup.
-AUTO_CHAIN: tuple[str, ...] = ("deepinfra", "siliconflow", "int")
+#: 2026-10-22 (measured): SiliconFlow LEADS — it is the only hosted lane with a
+#: live 200 @ 4096 credential (api.siliconflow.com; the .cn host 401s the same
+#: key). DeepInfra is second and 401s "user not authorized", the local :8024 8B
+#: lane is last because it is slow (9-44 s/query on CPU) but always ours.
+AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "deepinfra", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.
@@ -248,9 +229,19 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
 
 
 def current_backend() -> str:
-    """Which tier is currently active? For observability."""
+    """Which lane the chain would serve from right now (observability).
+
+    2026-10-22: this answered "deepinfra" while SiliconFlow was doing the work,
+    because it only knew the two original rungs. A backend probe that names the
+    wrong provider is worse than none — it sent every 503 triage down the wrong
+    lane. Reports the FIRST usable rung, i.e. AUTO_CHAIN order.
+    """
     if _BACKEND != "auto":
         return _BACKEND
+    from rugbrain.embeddings_pkg import siliconflow_lane as _sf
+
+    if _sf.SILICONFLOW_ENABLED and _sf._api_key():
+        return "siliconflow"
     if deepinfra_ready():
         return "deepinfra"
     if int_reachable():

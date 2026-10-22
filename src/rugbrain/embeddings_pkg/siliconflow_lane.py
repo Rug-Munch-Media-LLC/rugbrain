@@ -4,12 +4,14 @@ Third rung of the embed chain. Same 8B family as the DeepInfra primary
 (``Qwen/Qwen3-Embedding-8B``, 4096d), so a vector from this lane is
 index-compatible with the ``*_8b`` collections.
 
-**BLOCKED as of 2026-10-02.** The only credential on this box returns HTTP 401
-"Token is invalid", and it is UNVERIFIED whether SiliconFlow serves the 8B model
-id at all. So this lane is gated behind ``SILICONFLOW_ENABLED=1`` and returns
-``None`` — never raises, never returns a placeholder vector — until an operator
-rotates the key AND observes HTTP 200 at dim=4096. See the unblock recipe in
-``.env.rag``. Per T04 a dead lane must fall through, never fabricate a vector.
+**HOST MATTERS: ``.cn`` and ``.com`` are DIFFERENT hosts with DIFFERENT
+credentials.** Measured 2026-10-22 from Talos: the key in
+``/srv/secrets/siliconflow_api_key`` returns HTTP 200, ``dim=4096``,
+``model=Qwen/Qwen3-Embedding-8B`` against ``api.siliconflow.com``, and HTTP 401
+``code=30014 Token is invalid`` against ``api.siliconflow.cn``. The old note
+here (blocked, token invalid) was measured against ``.cn`` and wrongly retired
+a healthy 8B/4096d provider — the exact dimension-correct backup this chain
+needs. Never point the default back at ``.cn``.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ SILICONFLOW_ENABLED = os.getenv("SILICONFLOW_ENABLED", "0").strip().lower() in (
     "on",
 )
 SILICONFLOW_URL = os.getenv(
-    "SILICONFLOW_EMBED_URL", "https://api.siliconflow.cn/v1/embeddings"
+    "SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1/embeddings"
 ).rstrip("/")
 SILICONFLOW_MODEL = os.getenv("SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 SILICONFLOW_KEY_FILE = os.getenv("SILICONFLOW_KEY_FILE", "/srv/secrets/siliconflow_api_key")
@@ -61,7 +63,14 @@ async def embed(
     dimension that is not 4096. It never raises, so a dead rung can sit in a
     chain without taking the request down.
     """
-    if not SILICONFLOW_ENABLED or not text.strip():
+    if not SILICONFLOW_ENABLED:
+        # 2026-10-22: this used to return None with NO log at all, so a
+        # config-gated-OFF rung looked identical to a working one during 503
+        # triage. That silence is why the chain appeared to have a backup
+        # provider it never actually called.
+        logger.warning("siliconflow_disabled url=%s", SILICONFLOW_URL)
+        return None
+    if not text.strip():
         return None
     key = _api_key()
     if not key:
@@ -75,7 +84,12 @@ async def embed(
                 json={"model": SILICONFLOW_MODEL, "input": [text]},
             )
         if resp.status_code != 200:
-            logger.warning("siliconflow_status=%d", resp.status_code)
+            logger.warning(
+                "siliconflow_status=%d url=%s body=%s",
+                resp.status_code,
+                SILICONFLOW_URL,
+                resp.text[:160],
+            )
             return None
         vector = (resp.json().get("data") or [{}])[0].get("embedding")
         if not isinstance(vector, list) or len(vector) != 4096:
