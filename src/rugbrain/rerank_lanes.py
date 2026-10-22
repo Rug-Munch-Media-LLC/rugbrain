@@ -128,18 +128,33 @@ async def _call(
             return None
         results = [{"index": i, "relevance_score": float(s)} for i, s in enumerate(scores)]
     else:
-        entries = data.get("results") or []
-        if len(entries) != len(documents):
-            logger.warning("rerank_%s_shape got=%d want=%d", provider, len(entries), len(documents))
+        # Documented minimum: ``results[]`` entries carrying ``index`` and
+        # ``relevance_score``. The length is NOT part of the contract — 2026-10-22
+        # live: 13 documents -> 8 entries (the provider omits chunks it cannot
+        # tokenize and silently stops at its per-request budget). Requiring
+        # ``len(results) == len(documents)`` rejected that valid body, so every
+        # query fell through to the 401/breaker rungs and took 45-80s.
+        entries = data.get("results")
+        if not isinstance(entries, list) or not entries:
+            logger.warning("rerank_%s_shape missing_results keys=%s", provider, sorted(data)[:8])
             return None
         results = []
         for entry in entries:
             index = entry.get("index")
             score = entry.get("relevance_score")
-            if not isinstance(index, int) or score is None:
+            if (
+                not isinstance(index, int)
+                or isinstance(index, bool)
+                or not 0 <= index < len(documents)
+                or not isinstance(score, (int, float))
+                or isinstance(score, bool)
+            ):
                 logger.warning("rerank_%s_shape bad_entry=%s", provider, str(entry)[:80])
                 return None
             results.append({"index": index, "relevance_score": float(score)})
+        if len(results) != len(documents):
+            # Omitted positions stay unscored (scatter() keeps 0.0 for them).
+            logger.info("rerank_%s_partial got=%d want=%d", provider, len(results), len(documents))
     results.sort(key=lambda r: r["relevance_score"], reverse=True)
     return results
 

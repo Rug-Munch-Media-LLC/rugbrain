@@ -114,13 +114,15 @@ services:
       - HF_HOME=/opt/hf-cache
       # local 4B llama.cpp lane RETIRED 2026-10-11 — DeepInfra 8B canonical only
       # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
-      - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
       # Embedding provider (qwen3-embedding-8b, 2560d): EMBED_PROVIDER=local
       # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-8B,
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
-      - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
+      # 2026-10-22: this line used to default DEEPINFRA_EMBED_URL to the dead
+      # local :8025 listener, so the hosted lane silently POSTed into a socket
+      # that accepts and never answers (45 s hang, then fall-through). It now
+      # has NO value here: .env.rag owns the endpoint, single source of truth.
       - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-8B}
       # local :8003 rerank lane RETIRED 2026-10-11 — hosted Qwen3-Reranker-8B only
       - RERANKER_TIMEOUT=30
@@ -149,11 +151,11 @@ services:
           cpus: "0.5"
           memory: "512m"
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8012/ready'); exit(0 if r.status_code == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8012/ready', timeout=20); exit(0 if r.status_code == 200 else 1)"]
       interval: 30s
-      timeout: 5s
+      timeout: 25s
       retries: 3
-      start_period: 15s
+      start_period: 60s
 
   # ── Threat ingest (one-shot) ────────────────────────────────────
   rag-ingest:
@@ -181,12 +183,11 @@ services:
       - HF_HOME=/opt/hf-cache
       # local 4B llama.cpp lane RETIRED 2026-10-11 — DeepInfra 8B canonical only
       # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
-      - DEEPINFRA_EMBED_URL=http://172.18.0.1:20201/v1
       # Embedding provider — see rag-api service for semantics.
       # rag-ingest is the BULK worker: default to DeepInfra (same model,
       # ~80x faster) so heavy ingestion never saturates the local server.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-deepinfra}
-      - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-https://api.deepinfra.com/v1}
+      - DEEPINFRA_EMBED_URL=${DEEPINFRA_EMBED_URL:-http://172.18.0.1:8025/v1/embeddings}
       - DEEPINFRA_EMBED_MODEL=${DEEPINFRA_EMBED_MODEL:-Qwen/Qwen3-Embedding-8B}
     volumes:
       - /path/to/hf-cache:/opt/hf-cache:ro
