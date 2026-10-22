@@ -175,6 +175,7 @@ def _docs_since(
                 "url": url,
                 "category": category,
                 "subcategory": subcategory,
+                "vector": vector,
                 "description": description,
                 "addresses": [str(a) for a in addresses[:12]],
                 "detected_at": str(detected_at_dt) if detected_at_dt else "",
