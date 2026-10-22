@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the rugbrain X session-cookie ingest lane every 30 minutes
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+
+[Timer]
+OnCalendar=*:0/30
+AccuracySec=2min
+RandomizedDelaySec=3min
+Persistent=true
+Unit=rugbrain-x-ingest.service
+
+[Install]
+WantedBy=timers.target

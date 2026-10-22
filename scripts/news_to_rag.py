@@ -229,9 +229,16 @@ async def _embed_batch(
     _provider, lane_base, lane_headers, lane_model = resolve_lane()
     base = lane_base if _provider == "deepinfra" else base
     model = lane_model if _provider == "deepinfra" else model
+    # DEEPINFRA_EMBED_URL is written both as a base and as a full endpoint in
+    # the fleet's env files; appending blindly produced
+    # POST .../v1/embeddings/embeddings -> 404 and silently failed every hosted
+    # embed (seen 2026-10-22: articles_embedded=0, errors=1665). Same guard as
+    # embed_lane.embed_batch.
+    base = base.rstrip("/")
+    url = base if base.endswith("/embeddings") else f"{base}/embeddings"
     try:
         r = await client.post(
-            f"{base}/embeddings",
+            url,
             headers=lane_headers,
             json={"model": model, "input": texts},
             timeout=httpx.Timeout(300.0),

@@ -1,0 +1,100 @@
+{
+  "_note": "X ingest lane seed handles. class drives source_trust: security 0.95, news 0.85, research 0.85, ecosystem 0.80.",
+  "handles": [
+    {
+      "handle": "bubblemaps",
+      "class": "research"
+    },
+    {
+      "handle": "lookonchain",
+      "class": "research"
+    },
+    {
+      "handle": "zachxbt",
+      "class": "security"
+    },
+    {
+      "handle": "gmgnai",
+      "class": "research"
+    },
+    {
+      "handle": "realScamSniffer",
+      "class": "security"
+    },
+    {
+      "handle": "PeckShieldAlert",
+      "class": "security"
+    },
+    {
+      "handle": "CertiKAlert",
+      "class": "security"
+    },
+    {
+      "handle": "SlowMist_Team",
+      "class": "security"
+    },
+    {
+      "handle": "BlockSecTeam",
+      "class": "security"
+    },
+    {
+      "handle": "SEAL_911",
+      "class": "security"
+    },
+    {
+      "handle": "arkham",
+      "class": "research"
+    },
+    {
+      "handle": "spotonchain",
+      "class": "research"
+    },
+    {
+      "handle": "whale_alert",
+      "class": "research"
+    },
+    {
+      "handle": "OnchainLens",
+      "class": "research"
+    },
+    {
+      "handle": "DefiLlama",
+      "class": "research"
+    },
+    {
+      "handle": "rekt",
+      "class": "news"
+    },
+    {
+      "handle": "CoinDesk",
+      "class": "news"
+    },
+    {
+      "handle": "TheBlock",
+      "class": "news"
+    },
+    {
+      "handle": "WuBlockchain",
+      "class": "news"
+    },
+    {
+      "handle": "Cointelegraph",
+      "class": "news"
+    },
+    {
+      "handle": "solana",
+      "class": "ecosystem"
+    },
+    {
+      "handle": "ethereum",
+      "class": "ecosystem"
+    }
+  ],
+  "_verified_corrections": {
+    "realScamSniffer": "requested 'ScamSniffer': suspended handle -> verified @realScamSniffer 88,367 followers",
+    "SlowMist_Team": "requested 'SlowMist': @SlowMist is a 40-follower copy; verified @SlowMist_Team 90,421",
+    "arkham": "requested 'arkhamintelligence': renamed -> verified @arkham 1,488,109 followers",
+    "rekt": "requested 'rektnews': @rektnews is a 68-follower copy; verified @rekt 88,380",
+    "TheBlock": "requested 'TheBlock__': renamed -> verified @TheBlock 116,218 followers"
+  }
+}

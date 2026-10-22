@@ -1,0 +1,19 @@
+# session-cookie transport lane: authenticated browser session, guest-token fallback
+[Unit]
+Description=rugbrain X news ingest — session-cookie GraphQL lane (distinct from rmi-rag-x-ingest's GetXAPI+Pry lane)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+EnvironmentFile=/srv/secrets/backend.env
+Environment=X_COOKIE_PATH=/srv/secrets/firefox-cookies.json
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python scripts/xsession_ingest.py --once --max-pages 1
+TimeoutStartSec=1800
+Nice=10
+# never log cookie values: the CLI redacts by construction, and stdout is the report table
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rugbrain-x-session
