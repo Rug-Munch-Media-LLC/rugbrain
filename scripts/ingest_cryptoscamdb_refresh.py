@@ -239,7 +239,7 @@ async def run(
     stored_stats = {"inserted": 0, "chunks": 0, "failed": 0}
     store = QdrantVectorStore(os.getenv("QDRANT_URL", "http://127.0.0.1:6334"))
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=120.0):
             embedder = get_embedder()
             for i, doc in enumerate(docs, start=1):
                 text = (doc.get("text") or "").strip()

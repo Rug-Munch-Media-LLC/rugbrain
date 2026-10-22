@@ -6,11 +6,7 @@ https://blog.trailofbits.com/feed/	Trail of Bits
 https://www.chainalysis.com/blog/feed/	Chainalysis
 https://blog.openzeppelin.com/feed/	OpenZeppelin
 https://consensys.io/diligence/blog/feed/	Consensys Diligence
-https://halborn.com/feed/	Halborn
-https://quantstamp.com/blog/feed/	Quantstamp
-https://blog.solidified.io/feed/	Solidified
 https://osec.io/blog/feed	OSEC
-https://blog.hexens.io/feed	Hexens
 https://dedaub.com/blog/feed	Dedaub
 https://cointelegraph.com/rss	CoinTelegraph
 https://decrypt.co/feed	Decrypt
@@ -37,98 +33,43 @@ https://coinjournal.net/feed/	CoinJournal
 https://blockonomi.com/feed/	Blockonomi
 https://dailycoin.com/feed/	DailyCoin
 https://cryptoslate.com/feed/	CryptoSlate
-https://coincodex.com/blog/feed/	CoinCodex
-https://crypto.com/blog/feed/	Crypto.com
 https://insights.glassnode.com/feed/	Glassnode
 https://dune.com/blog/feed	Dune Analytics
 https://messari.io/feed	Messari
 https://www.nansen.ai/research/feed/	Nansen
 https://blog.chainalysis.com/reports/feed/	Chainalysis Reports
 https://kaiko.com/feed	Kaiko
-https://www.thetie.is/feed	The Tie
 https://coinmetrics.io/blog/feed/	CoinMetrics
-https://blog.intotheblock.com/feed/	IntoTheBlock
 https://defillama.com/feed	DeFi Llama
 https://tokenterminal.com/blog/feed	Token Terminal
-https://blog.bitquery.io/feed	Bitquery
 https://blog.ethereum.org/feed.xml	Ethereum Foundation
 https://solana.com/news/feed	Solana
 https://blog.arbitrum.io/feed	Arbitrum
-https://blog.optimism.io/feed	Optimism
-https://polygon.technology/blog/feed	Polygon
-https://www.avax.network/blog/feed	Avalanche
-https://near.org/blog/feed/	NEAR Protocol
-https://blog.sui.io/feed	Sui
 https://aptoslabs.medium.com/feed	Aptos
-https://blog.cosmos.network/feed	Cosmos
-https://polkadot.network/blog/feed/	Polkadot
 https://blog.celestia.org/feed	Celestia
 https://blog.eigenlayer.xyz/feed	EigenLayer
 https://blog.base.org/feed	Base
 https://starkware.medium.com/feed	StarkWare
-https://uniswap.org/blog/feed.xml	Uniswap
-https://aave.com/blog/feed	Aave
-https://blog.compound.finance/feed/	Compound
-https://blog.makerdao.com/feed/	MakerDAO
 https://blog.lido.fi/feed	Lido
-https://blog.curve.fi/rss/	Curve
-https://blog.balancer.fi/feed/	Balancer
-https://blog.1inch.io/feed	1inch
-https://blog.chain.link/feed	Chainlink
 https://blog.synthetix.io/feed	Synthetix
-https://blog.injective.com/feed	Injective
 https://pancakeswap.medium.com/feed	PancakeSwap
-https://blog.dydx.exchange/feed	dYdX
-https://blog.gmx.io/feed	GMX
-https://blog.pendle.finance/feed	Pendle
-https://blog.morpho.org/feed	Morpho
-https://blog.venus.io/feed	Venus
 https://blog.yearn.fi/feed/	Yearn
 https://blog.trezor.io/feed	Trezor
 https://blog.kraken.com/feed/	Kraken
 https://blog.bitfinex.com/feed/	Bitfinex
 https://blog.mexc.com/feed	MEXC
-https://www.binance.com/en/feed/news	Binance
 https://blog.coinbase.com/feed	Coinbase
-https://www.okx.com/feed/blog	OKX
-https://blog.bybit.com/feed/	Bybit
-https://www.gemini.com/blog/feed	Gemini
-https://blog.kucoin.com/feed/	KuCoin
-https://www.gate.io/learn/feed	Gate.io
-https://blog.ledger.com/feed/	Ledger
 https://a16zcrypto.com/feed/	a16z Crypto
 https://www.paradigm.xyz/feed	Paradigm
-https://panteracapital.com/feed/	Pantera Capital
-https://multicoin.capital/feed/	Multicoin Capital
-https://www.dragonfly.xyz/feed	Dragonfly
-https://variant.fund/feed/	Variant Fund
-https://1confirmation.com/feed	1confirmation
 https://www.electriccapital.com/feed/	Electric Capital
-https://www.coinbase.com/blog/feed	Coinbase Ventures
-https://www.cmsholdings.co/feed/	CMS Holdings
-https://blog.spartangroup.io/feed	Spartan Group
-https://placeholder.vc/feed/	Placeholder
-https://cyber.stanford.edu/blog/feed	Stanford CBR
-https://dci.mit.edu/feed	MIT DCI
-https://www.initc3.org/feed	IC3 (Cornell)
-https://blockchain.berkeley.edu/feed/	Berkeley Blockchain
-https://www.src.ac.uk/feed/	SRC Research (UK)
 https://cbr.stanford.edu/feed/	Stanford CBR
 https://www.sec.gov/news/pressreleases.rss	SEC
 https://www.cftc.gov/PressRoom/PressReleases/rss.xml	CFTC
 https://www.fatf-gafi.org/en/rss.html	FATF
 https://www.fincen.gov/news/rss	FinCEN
 https://www.esma.europa.eu/press-news/rss	ESMA
-https://weekinethereum.substack.com/feed	Week in Ethereum
-https://banklessdao.substack.com/feed	Bankless DAO
 https://thedefiant.substack.com/feed	The Defiant Substack
 https://rekt.substack.com/feed	REKT Newsletter
-https://cryptohayes.substack.com/feed	Arthur Hayes
-https://doseofdefi.substack.com/feed	Dose of DeFi
-https://cryptosecurity.substack.com/feed	CryptoSecurity
-https://tokeninsight.substack.com/feed	TokenInsight
-https://defieducation.substack.com/feed	DeFi Education
-https://blockanalytica.substack.com/feed	BlockAnalytica
 https://feeds.feedburner.com/TheHackersNews	The Hacker News
 https://www.bleepingcomputer.com/feed/	BleepingComputer
 https://krebsonsecurity.com/feed/	Krebs on Security
@@ -138,24 +79,10 @@ https://forum.openzeppelin.com/posts.rss	OpenZeppelin Forum
 https://ethereum-magicians.org/posts.rss	ETH Magicians
 https://ethresear.ch/posts.rss	ETH Research
 https://gov.uniswap.org/posts.rss	Uniswap Governance
-https://forum.makerdao.com/posts.rss	MakerDAO Forum
-https://www.tradingview.com/blog/feed/	TradingView
-https://blog.santiment.net/feed/	Santiment
-https://blog.coinmarketcap.com/feed/	CoinMarketCap
-https://www.coingecko.com/en/blog/feed	CoinGecko Blog
 https://nftevening.com/feed/	NFTEvening
 https://nftplazas.com/feed/	NFTPlazas
-https://playtoearn.net/feed	PlayToEarn
-https://dappradar.com/blog/feed	DappRadar
 https://blog.matter-labs.io/feed	zkSync
-https://starknet.io/blog/feed/	StarkNet
-https://blog.scroll.io/feed	Scroll
-https://blog.linea.build/feed	Linea
 https://collective.flashbots.net/latest.rss	Flashbots
-https://blog.chainstack.com/feed/	Chainstack
-https://blog.alchemy.com/feed/	Alchemy
-https://blog.infura.io/feed	Infura
-https://blog.tenderly.co/feed	Tenderly
 https://cryptobriefing.com/feed/	CryptoBriefing
 https://dailyhodl.com/feed/	Daily Hodl
 https://cryptopotato.com/feed/	CryptoPotato
@@ -166,22 +93,17 @@ https://techcrunch.com/feed/	TechCrunch
 https://www.theverge.com/rss/index.xml	The Verge
 https://arstechnica.com/feed/	Ars Technica
 https://www.wired.com/feed/rss	Wired
-https://venturebeat.com/feed/	VentureBeat
 https://openai.com/blog/rss.xml	OpenAI
 https://blog.google/innovation-and-ai/technology/ai/rss/	Google AI
 https://deepmind.google/blog/feed/	DeepMind
 https://huggingface.co/blog/feed.xml	Hugging Face
-https://www.artificialintelligence-news.com/feed/	AI News
 https://paragraph.xyz/@bankless/rss	Paragraph/Bankless
 https://www.web3isgoinggreat.com/feed	Web3 is Going Great
 https://nftnow.com/feed/	NFT Now
-
-# ── expansion 2026-10-22: probed live (HTTP 200 + >=1 entry) by scripts/rss_feed_health.py ──
 https://www.coindesk.com/arc/outboundfeeds/rss/	CoinDesk RSS
 https://www.dlnews.com/arc/outboundfeeds/rss/	DL News
 https://thedefiant.io/api/feed	The Defiant
 https://coingape.com/feed/	CoinGape
-https://www.cryptopotato.com/feed/	CryptoPotato
 https://zycrypto.com/feed/	ZyCrypto
 https://cryptoadventure.com/feed/	CryptoAdventure
 https://www.livebitcoinnews.com/feed/	Live Bitcoin News
@@ -199,7 +121,6 @@ https://www.coindesk.com/feed	CoinDesk legacy (404/redirect)
 https://blog.openzeppelin.com/rss.xml	OpenZeppelin
 https://ethresear.ch/latest.rss	Ethresear.ch
 https://osec.io/rss.xml	OSEC
-# ── expansion round 2 (2026-10-22): Google News topic RSS, sub-tag feeds, Reddit/Medium ──
 https://news.google.com/rss/search?q=crypto+currency&hl=en-US&gl=US&ceid=US:en	GoogleNews Crypto
 https://news.google.com/rss/search?q=bitcoin&hl=en-US&gl=US&ceid=US:en	GoogleNews Bitcoin
 https://news.google.com/rss/search?q=ethereum&hl=en-US&gl=US&ceid=US:en	GoogleNews Ethereum

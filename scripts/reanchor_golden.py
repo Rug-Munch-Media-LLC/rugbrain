@@ -103,7 +103,7 @@ def main() -> int:
     lines = GOLDEN.read_text().splitlines()
     entries = [json.loads(line) for line in lines if line.strip() and not line.startswith("#")]
     cache: dict[str, list[dict]] = {}
-    resolved = unresolved = skipped = 0
+    resolved = unresolved = 0
 
     out_entries = []
     for entry in entries:

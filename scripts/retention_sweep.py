@@ -102,7 +102,6 @@ def _ts_of(payload: dict) -> datetime | None:
 
 def sweep(collection: str, ttl_days: int, apply: bool, per_source: dict[str, int] | None = None) -> tuple[int, int]:
     """Delete points older than ttl_days. Returns (scanned, deleted)."""
-    cutoff = datetime.now(tz=UTC) - timedelta(days=ttl_days)
     offset, scanned, expired = None, 0, []
     while True:
         body: dict = {"limit": BATCH, "with_payload": True, "with_vector": False}

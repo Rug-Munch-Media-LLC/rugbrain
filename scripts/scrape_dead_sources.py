@@ -54,6 +54,8 @@ STATUS_FILE = Path(
         "/srv/work/repos/rmi-backend/app/databus/news_sources_status.json",
     )
 )
+_SRC_ROOT = str(Path(__file__).resolve().parents[1] / "src")
+_NEWS_SOURCES_FILE = Path("/srv/work/repos/rmi-backend/app/databus/unified_news_sources.json")
 UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -107,7 +109,7 @@ async def _flare_get(client: httpx.AsyncClient, url: str) -> str | None:
 
 async def _pry_scrape(client: httpx.AsyncClient, url: str) -> str | None:
     """Listing/JS fetch through Pry with the internal credential."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, _SRC_ROOT)
     from rugbrain.ingest_sources.x_intel import pry_internal_auth
 
     base = os.getenv("PRYSCRAPER_URL", "http://127.0.0.1:8005").rstrip("/")
@@ -278,10 +280,8 @@ async def _ingest_source(
 
 
 async def _main(args: argparse.Namespace) -> int:
-    status = json.loads(STATUS_FILE.read_text())["sources"]
-    data = json.loads(
-        Path("/srv/work/repos/rmi-backend/app/databus/unified_news_sources.json").read_text()
-    )
+    status = json.loads(await asyncio.to_thread(STATUS_FILE.read_text))["sources"]
+    data = json.loads(await asyncio.to_thread(_NEWS_SOURCES_FILE.read_text))
     by_id = {s["id"]: s for s in data["sources"]}
     dead = [
         sid for sid, st in status.items() if st.get("status") in ("DEAD", "STALE") and sid in by_id

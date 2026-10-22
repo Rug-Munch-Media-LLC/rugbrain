@@ -168,6 +168,28 @@ async def fetch_and_parse(client: httpx.AsyncClient, feed_url: str) -> list[dict
     return items
 
 
+def _read_feeds_file(path: str) -> list[tuple[str, str]]:
+    """Parse a ``--feeds-file`` into (url, source) pairs.
+
+    Blocking file I/O — callers on the event loop go through ``asyncio.to_thread``.
+    """
+    feeds: list[tuple[str, str]] = []
+    with open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split(None, 1)
+            url = parts[0]
+            name = (
+                parts[1].strip()
+                if len(parts) > 1
+                else re.sub(r"^https?://", "", url).split("/")[0]
+            )
+            feeds.append((url, name))
+    return feeds
+
+
 async def run(
     days: int | None,
     dry_run: bool,
@@ -190,19 +212,7 @@ async def run(
     # feed when not provided (backward compatible).
     feeds: list[tuple[str, str]] = []
     if feeds_file:
-        with open(feeds_file, encoding="utf-8") as fh:
-            for raw in fh:
-                line = raw.strip()
-                if not line or line.startswith("#"):
-                    continue
-                parts = line.split(None, 1)
-                url = parts[0]
-                name = (
-                    parts[1].strip()
-                    if len(parts) > 1
-                    else re.sub(r"^https?://", "", url).split("/")[0]
-                )
-                feeds.append((url, name))
+        feeds = await asyncio.to_thread(_read_feeds_file, feeds_file)
         logger.info("feeds_file_loaded count=%d path=%s", len(feeds), feeds_file)
     if not feeds:
         feeds = [(feed_url or _resolve_feed_url(), SOURCE)]

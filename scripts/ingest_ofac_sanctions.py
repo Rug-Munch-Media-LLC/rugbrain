@@ -36,6 +36,7 @@ import os
 import re
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -69,18 +70,17 @@ CRYPTO_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{32,44}\b"), "SOL"),  # SOL last, generic base58
 ]
 
-CACHE_FILE = "/tmp/ofac_sdn_cache.xml"
+CACHE_FILE = Path("/tmp/ofac_sdn_cache.xml")
 
 
 async def _fetch_ofac_sdn_xml(use_cache: bool = True) -> str | None:
     """Fetch the OFAC SDN XML list."""
-    if use_cache and os.path.exists(CACHE_FILE):
-        mtime = os.path.getmtime(CACHE_FILE)
+    if use_cache and await asyncio.to_thread(CACHE_FILE.exists):
+        mtime = (await asyncio.to_thread(CACHE_FILE.stat)).st_mtime
         age_hours = (datetime.now(UTC).timestamp() - mtime) / 3600
         if age_hours < 24:
             logger.info("ofac_sdn_cache_hit age=%.1fh", age_hours)
-            with open(CACHE_FILE, encoding="utf-8") as f:
-                return f.read()
+            return await asyncio.to_thread(CACHE_FILE.read_text, encoding="utf-8")
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as c:
@@ -90,8 +90,7 @@ async def _fetch_ofac_sdn_xml(use_cache: bool = True) -> str | None:
             if r.status_code == 200:
                 xml_text = r.text
                 # Cache for 24h
-                with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                    f.write(xml_text)
+                await asyncio.to_thread(CACHE_FILE.write_text, xml_text, encoding="utf-8")
                 return xml_text
             else:
                 logger.warning("ofac_fetch_failed status=%d", r.status_code)

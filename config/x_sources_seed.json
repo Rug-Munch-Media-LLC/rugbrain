@@ -1,0 +1,1014 @@
+{
+ "version": 1,
+ "generated_at": "2026-10-23",
+ "policy": {
+  "category_trust": {
+   "news_primary": 0.9,
+   "research": 0.9,
+   "security": 0.95,
+   "aggregator": 0.5,
+   "ecosystem": 0.8,
+   "kol": 0.4,
+   "shill": 0.05,
+   "squat": 0.0
+  },
+  "follower_floor": {
+   "news_primary": 5000,
+   "research": 500,
+   "security": 300,
+   "aggregator": 500,
+   "ecosystem": 300,
+   "kol": 300
+  },
+  "squat_max_age_days": 120,
+  "mismatch_is_squat": true
+ },
+ "renames": {
+  "TheBlock__": "TheBlock",
+  "blockworks_": "Blockworks_",
+  "optimismPBC": "Optimism",
+  "arbitrum": "Arbitrum",
+  "eigencloud": "eigenlayer",
+  "solana": "solana"
+ },
+ "entries": [
+  {
+   "handle": "CoinDesk",
+   "name": "CoinDesk",
+   "category": "news_primary",
+   "site": "https://www.coindesk.com"
+  },
+  {
+   "handle": "TheBlock",
+   "name": "The Block",
+   "category": "news_primary",
+   "site": "https://www.theblock.co"
+  },
+  {
+   "handle": "blockworks",
+   "name": "Blockworks",
+   "category": "news_primary",
+   "site": "https://blockworks.co"
+  },
+  {
+   "handle": "Cointelegraph",
+   "name": "Cointelegraph",
+   "category": "news_primary",
+   "site": "https://cointelegraph.com"
+  },
+  {
+   "handle": "WuBlockchain",
+   "name": "Wu Blockchain",
+   "category": "news_primary",
+   "site": "https://wublockchain.com"
+  },
+  {
+   "handle": "DLNews",
+   "name": "DL News",
+   "category": "news_primary",
+   "site": "https://www.dlnews.com"
+  },
+  {
+   "handle": "decrypt_co",
+   "name": "Decrypt",
+   "category": "news_primary",
+   "site": "https://decrypt.co"
+  },
+  {
+   "handle": "DefiantNews",
+   "name": "The Defiant",
+   "category": "news_primary",
+   "site": "https://thedefiant.io"
+  },
+  {
+   "handle": "protos",
+   "name": "Protos",
+   "category": "news_primary",
+   "site": "https://protos.com"
+  },
+  {
+   "handle": "BitcoinMagazine",
+   "name": "Bitcoin Magazine",
+   "category": "news_primary",
+   "site": "https://bitcoinmagazine.com"
+  },
+  {
+   "handle": "Bankless",
+   "name": "Bankless",
+   "category": "news_primary",
+   "site": "https://www.bankless.com"
+  },
+  {
+   "handle": "cryptonews",
+   "name": "Crypto.news",
+   "category": "news_primary",
+   "site": "https://crypto.news"
+  },
+  {
+   "handle": "CoinDeskMarkets",
+   "name": "CoinDesk Markets",
+   "category": "news_primary"
+  },
+  {
+   "handle": "TheBlockResearch",
+   "name": "The Block Research",
+   "category": "research",
+   "site": "https://www.theblock.co/research"
+  },
+  {
+   "handle": "zachxbt",
+   "name": "ZachXBT",
+   "category": "security"
+  },
+  {
+   "handle": "SlowMist_Team",
+   "name": "SlowMist",
+   "category": "security",
+   "site": "https://slowmist.com"
+  },
+  {
+   "handle": "peckshield",
+   "name": "PeckShield",
+   "category": "security",
+   "site": "https://peckshield.com"
+  },
+  {
+   "handle": "CertiKAlert",
+   "name": "CertiK Alert",
+   "category": "security",
+   "site": "https://www.certik.com"
+  },
+  {
+   "handle": "realScamSniffer",
+   "name": "ScamSniffer",
+   "category": "security",
+   "site": "https://www.scamsniffer.io"
+  },
+  {
+   "handle": "BlockSecTeam",
+   "name": "BlockSec",
+   "category": "security",
+   "site": "https://blocksec.com"
+  },
+  {
+   "handle": "Chainalysis",
+   "name": "Chainalysis",
+   "category": "security",
+   "site": "https://www.chainalysis.com"
+  },
+  {
+   "handle": "TRMLabs",
+   "name": "TRM Labs",
+   "category": "security",
+   "site": "https://www.trmlabs.com"
+  },
+  {
+   "handle": "_SEAL_Org",
+   "name": "Security Alliance (SEAL)",
+   "category": "security",
+   "site": "https://securityalliance.org"
+  },
+  {
+   "handle": "CyversAlerts",
+   "name": "Cyvers",
+   "category": "security",
+   "site": "https://cyvers.ai"
+  },
+  {
+   "handle": "Phalcon_xyz",
+   "name": "BlockSec Phalcon",
+   "category": "security",
+   "site": "https://blocksec.com/phalcon"
+  },
+  {
+   "handle": "hexagate_",
+   "name": "Hexagate",
+   "category": "security",
+   "site": "https://hexagate.com"
+  },
+  {
+   "handle": "AnciliaInc",
+   "name": "Ancilia",
+   "category": "security"
+  },
+  {
+   "handle": "GoPlusSecurity",
+   "name": "GoPlus Security",
+   "category": "security",
+   "site": "https://gopluslabs.io"
+  },
+  {
+   "handle": "DeFiHackLabs",
+   "name": "DeFiHackLabs",
+   "category": "security"
+  },
+  {
+   "handle": "BeosinAlert",
+   "name": "Beosin",
+   "category": "security",
+   "site": "https://beosin.com"
+  },
+  {
+   "handle": "hackenclub",
+   "name": "Hacken",
+   "category": "security",
+   "site": "https://hacken.io"
+  },
+  {
+   "handle": "trailofbits",
+   "name": "Trail of Bits",
+   "category": "security",
+   "site": "https://blog.trailofbits.com"
+  },
+  {
+   "handle": "OpenZeppelin",
+   "name": "OpenZeppelin",
+   "category": "security",
+   "site": "https://www.openzeppelin.com"
+  },
+  {
+   "handle": "samczsun",
+   "name": "samczsun",
+   "category": "security",
+   "site": "https://samczsun.com"
+  },
+  {
+   "handle": "tayvano_",
+   "name": "Taylor Monahan",
+   "category": "security"
+  },
+  {
+   "handle": "pwnfoo",
+   "name": "pwnfoo",
+   "category": "security"
+  },
+  {
+   "handle": "Immunefi",
+   "name": "Immunefi",
+   "category": "security",
+   "site": "https://immunefi.com"
+  },
+  {
+   "handle": "Arkham",
+   "name": "Arkham",
+   "category": "security",
+   "site": "https://arkm.com"
+  },
+  {
+   "handle": "lookonchain",
+   "name": "Lookonchain",
+   "category": "research",
+   "site": "https://lookonchain.com"
+  },
+  {
+   "handle": "DefiLlama",
+   "name": "DefiLlama",
+   "category": "research",
+   "site": "https://defillama.com"
+  },
+  {
+   "handle": "nansen_ai",
+   "name": "Nansen",
+   "category": "research",
+   "site": "https://www.nansen.ai"
+  },
+  {
+   "handle": "glassnode",
+   "name": "Glassnode",
+   "category": "research",
+   "site": "https://glassnode.com"
+  },
+  {
+   "handle": "CryptoQuant",
+   "name": "CryptoQuant",
+   "category": "research",
+   "site": "https://cryptoquant.com"
+  },
+  {
+   "handle": "spotonchain",
+   "name": "Spot On Chain",
+   "category": "research",
+   "site": "https://spotonchain.ai"
+  },
+  {
+   "handle": "Dune",
+   "name": "Dune",
+   "category": "research",
+   "site": "https://dune.com"
+  },
+  {
+   "handle": "coinmetrics",
+   "name": "Coin Metrics",
+   "category": "research",
+   "site": "https://coinmetrics.io"
+  },
+  {
+   "handle": "kaiko_data",
+   "name": "Kaiko",
+   "category": "research",
+   "site": "https://www.kaiko.com"
+  },
+  {
+   "handle": "amberdata",
+   "name": "Amberdata",
+   "category": "research",
+   "site": "https://www.amberdata.io"
+  },
+  {
+   "handle": "intotheblock",
+   "name": "IntoTheBlock",
+   "category": "research",
+   "site": "https://www.intotheblock.com"
+  },
+  {
+   "handle": "SantimentFeed",
+   "name": "Santiment",
+   "category": "research",
+   "site": "https://santiment.net"
+  },
+  {
+   "handle": "0xScope",
+   "name": "Scope",
+   "category": "research",
+   "site": "https://0xscope.com"
+  },
+  {
+   "handle": "OnchainLens",
+   "name": "Onchain Lens",
+   "category": "research"
+  },
+  {
+   "handle": "EmberCN",
+   "name": "EmberCN",
+   "category": "research"
+  },
+  {
+   "handle": "ai_9684xtpa",
+   "name": "Ai \u59e8",
+   "category": "research"
+  },
+  {
+   "handle": "bubblemaps",
+   "name": "Bubblemaps",
+   "category": "research",
+   "site": "https://bubblemaps.io"
+  },
+  {
+   "handle": "etherscan",
+   "name": "Etherscan",
+   "category": "research",
+   "site": "https://etherscan.io"
+  },
+  {
+   "handle": "eigenphi",
+   "name": "EigenPhi",
+   "category": "research",
+   "site": "https://eigenphi.io"
+  },
+  {
+   "handle": "VitalikButerin",
+   "name": "Vitalik Buterin",
+   "category": "research",
+   "site": "https://vitalik.eth.limo"
+  },
+  {
+   "handle": "a16zcrypto",
+   "name": "a16z crypto",
+   "category": "research",
+   "site": "https://a16zcrypto.com"
+  },
+  {
+   "handle": "SECGov",
+   "name": "U.S. SEC",
+   "category": "research",
+   "site": "https://www.sec.gov"
+  },
+  {
+   "handle": "CFTC",
+   "name": "U.S. CFTC",
+   "category": "research",
+   "site": "https://www.cftc.gov"
+  },
+  {
+   "handle": "USTreasury",
+   "name": "U.S. Treasury",
+   "category": "research",
+   "site": "https://home.treasury.gov"
+  },
+  {
+   "handle": "federalreserve",
+   "name": "Federal Reserve",
+   "category": "research",
+   "site": "https://www.federalreserve.gov"
+  },
+  {
+   "handle": "BIS_org",
+   "name": "Bank for International Settlements",
+   "category": "research",
+   "site": "https://www.bis.org"
+  },
+  {
+   "handle": "IMFNews",
+   "name": "IMF",
+   "category": "research",
+   "site": "https://www.imf.org"
+  },
+  {
+   "handle": "WatcherGuru",
+   "name": "Watcher.Guru",
+   "category": "aggregator"
+  },
+  {
+   "handle": "dbnewswire",
+   "name": "DB News Wire",
+   "category": "aggregator"
+  },
+  {
+   "handle": "treenews",
+   "name": "Tree News",
+   "category": "aggregator",
+   "site": "https://tree.news"
+  },
+  {
+   "handle": "whale_alert",
+   "name": "Whale Alert",
+   "category": "aggregator",
+   "site": "https://whale-alert.io"
+  },
+  {
+   "handle": "CryptoRank_io",
+   "name": "CryptoRank",
+   "category": "aggregator",
+   "site": "https://cryptorank.io"
+  },
+  {
+   "handle": "solana",
+   "name": "Solana",
+   "category": "ecosystem",
+   "site": "https://solana.com"
+  },
+  {
+   "handle": "SolanaFndn",
+   "name": "Solana Foundation",
+   "category": "ecosystem",
+   "site": "https://solana.org"
+  },
+  {
+   "handle": "JupiterExchange",
+   "name": "Jupiter",
+   "category": "ecosystem",
+   "site": "https://jup.ag"
+  },
+  {
+   "handle": "Raydium",
+   "name": "Raydium",
+   "category": "ecosystem",
+   "site": "https://raydium.io"
+  },
+  {
+   "handle": "MeteoraAG",
+   "name": "Meteora",
+   "category": "ecosystem",
+   "site": "https://meteora.ag"
+  },
+  {
+   "handle": "DriftProtocol",
+   "name": "Drift",
+   "category": "ecosystem",
+   "site": "https://drift.trade"
+  },
+  {
+   "handle": "KaminoFinance",
+   "name": "Kamino",
+   "category": "ecosystem",
+   "site": "https://kamino.finance"
+  },
+  {
+   "handle": "jito_labs",
+   "name": "Jito",
+   "category": "ecosystem",
+   "site": "https://jito.network"
+  },
+  {
+   "handle": "helius",
+   "name": "Helius",
+   "category": "ecosystem",
+   "site": "https://helius.dev"
+  },
+  {
+   "handle": "pumpfun",
+   "name": "pump.fun",
+   "category": "ecosystem",
+   "site": "https://pump.fun"
+  },
+  {
+   "handle": "Uniswap",
+   "name": "Uniswap",
+   "category": "ecosystem",
+   "site": "https://uniswap.org"
+  },
+  {
+   "handle": "aave",
+   "name": "Aave",
+   "category": "ecosystem",
+   "site": "https://aave.com"
+  },
+  {
+   "handle": "compoundfinance",
+   "name": "Compound",
+   "category": "ecosystem",
+   "site": "https://compound.finance"
+  },
+  {
+   "handle": "SkyEcosystem",
+   "name": "Sky",
+   "category": "ecosystem",
+   "site": "https://sky.money"
+  },
+  {
+   "handle": "LidoFinance",
+   "name": "Lido",
+   "category": "ecosystem",
+   "site": "https://lido.fi"
+  },
+  {
+   "handle": "eigencloud",
+   "name": "EigenCloud",
+   "category": "ecosystem",
+   "site": "https://www.eigencloud.xyz"
+  },
+  {
+   "handle": "ethena",
+   "name": "Ethena",
+   "category": "ecosystem",
+   "site": "https://ethena.fi"
+  },
+  {
+   "handle": "pendle_fi",
+   "name": "Pendle",
+   "category": "ecosystem",
+   "site": "https://www.pendle.finance"
+  },
+  {
+   "handle": "CurveFinance",
+   "name": "Curve",
+   "category": "ecosystem",
+   "site": "https://curve.fi"
+  },
+  {
+   "handle": "Balancer",
+   "name": "Balancer",
+   "category": "ecosystem",
+   "site": "https://balancer.fi"
+  },
+  {
+   "handle": "Morpho",
+   "name": "Morpho",
+   "category": "ecosystem",
+   "site": "https://morpho.org"
+  },
+  {
+   "handle": "chainlink",
+   "name": "Chainlink",
+   "category": "ecosystem",
+   "site": "https://chain.link"
+  },
+  {
+   "handle": "PythNetwork",
+   "name": "Pyth Network",
+   "category": "ecosystem",
+   "site": "https://pyth.network"
+  },
+  {
+   "handle": "wormhole",
+   "name": "Wormhole",
+   "category": "ecosystem",
+   "site": "https://wormhole.com"
+  },
+  {
+   "handle": "LayerZero_Fndn",
+   "name": "LayerZero Foundation",
+   "category": "ecosystem",
+   "site": "https://layerzero.network"
+  },
+  {
+   "handle": "Arbitrum",
+   "name": "Arbitrum",
+   "category": "ecosystem",
+   "site": "https://arbitrum.io"
+  },
+  {
+   "handle": "Optimism",
+   "name": "Optimism",
+   "category": "ecosystem",
+   "site": "https://optimism.io"
+  },
+  {
+   "handle": "base",
+   "name": "Base",
+   "category": "ecosystem",
+   "site": "https://base.org"
+  },
+  {
+   "handle": "0xPolygon",
+   "name": "Polygon",
+   "category": "ecosystem",
+   "site": "https://polygon.technology"
+  },
+  {
+   "handle": "Avalanche",
+   "name": "Avalanche",
+   "category": "ecosystem",
+   "site": "https://avax.network"
+  },
+  {
+   "handle": "HyperliquidX",
+   "name": "Hyperliquid",
+   "category": "ecosystem",
+   "site": "https://hyperliquid.xyz"
+  },
+  {
+   "handle": "GMX_IO",
+   "name": "GMX",
+   "category": "ecosystem",
+   "site": "https://gmx.io"
+  },
+  {
+   "handle": "dYdX",
+   "name": "dYdX",
+   "category": "ecosystem",
+   "site": "https://dydx.exchange"
+  },
+  {
+   "handle": "ethereumfndn",
+   "name": "Ethereum Foundation",
+   "category": "ecosystem",
+   "site": "https://ethereum.org"
+  },
+  {
+   "handle": "bitcoincoreorg",
+   "name": "Bitcoin Core Project",
+   "category": "ecosystem",
+   "site": "https://bitcoincore.org"
+  },
+  {
+   "handle": "coingecko",
+   "name": "CoinGecko",
+   "category": "ecosystem",
+   "site": "https://www.coingecko.com"
+  },
+  {
+   "handle": "coinmarketcap",
+   "name": "CoinMarketCap",
+   "category": "ecosystem",
+   "site": "https://coinmarketcap.com"
+  },
+  {
+   "handle": "dexscreener",
+   "name": "DexScreener",
+   "category": "ecosystem",
+   "site": "https://dexscreener.com"
+  },
+  {
+   "handle": "cobie",
+   "name": "Cobie",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "hasufl",
+   "name": "Hasu",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "0xfoobar",
+   "name": "foobar",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "sassal0x",
+   "name": "Anthony Sassano",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "lightcrypto",
+   "name": "Light",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "Rewkang",
+   "name": "Rewkang",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "ThinkingUSD",
+   "name": "ThinkingUSD",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "CryptoHayes",
+   "name": "Arthur Hayes",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "RaoulGMI",
+   "name": "Raoul Pal",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "APompliano",
+   "name": "Anthony Pompliano",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "nic__carter",
+   "name": "Nic Carter",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "LynAldenContact",
+   "name": "Lyn Alden",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "100trillionUSD",
+   "name": "PlanB",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "EricBalchunas",
+   "name": "Eric Balchunas",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "JSeyff",
+   "name": "James Seyffart",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "Matt_Hougan",
+   "name": "Matt Hougan",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "biancoresearch",
+   "name": "Jim Bianco",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "aeyakovenko",
+   "name": "Anatoly Yakovenko",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "0xMert_",
+   "name": "Mert Mumtaz",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "blknoiz06",
+   "name": "blknoiz06",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "MustStopMurad",
+   "name": "Murad",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "theunipcs",
+   "name": "Unipcs",
+   "category": "kol",
+   "trust": 0.3
+  },
+  {
+   "handle": "CryptoKaleo",
+   "name": "Kaleo",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "Pentosh1",
+   "name": "Pentoshi",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "Bluntz_Capital",
+   "name": "Bluntz",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "CryptoCred",
+   "name": "Cred",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "CryptoMichNL",
+   "name": "Micha\u00ebl van de Poppe",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "TraderMayne",
+   "name": "Trader Mayne",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "JRNYcrypto",
+   "name": "JRNY Crypto",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "CeterisPar1bus",
+   "name": "Ceteris",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "Melt_Dem",
+   "name": "Meltem Demirors",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "danheld",
+   "name": "Dan Held",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "TheCryptoDog",
+   "name": "The Crypto Dog",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "cryptocobain",
+   "name": "Crypto Cobain",
+   "category": "kol",
+   "trust": 0.4
+  },
+  {
+   "handle": "zhusu",
+   "name": "Zhu Su",
+   "category": "kol",
+   "trust": 0.3
+  },
+  {
+   "handle": "aantonop",
+   "name": "Andreas M. Antonopoulos",
+   "category": "kol",
+   "trust": 0.7
+  },
+  {
+   "handle": "CZ_Binance",
+   "name": "CZ",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "jchervinsky",
+   "name": "Jake Chervinsky",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "gakonst",
+   "name": "Georgios Konstantopoulos",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "trent_vanepps",
+   "name": "trent.eth",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "punk6529",
+   "name": "punk6529",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "hildobby",
+   "name": "hildobby",
+   "category": "kol",
+   "trust": 0.6
+  },
+  {
+   "handle": "0xCygaar",
+   "name": "Cygaar",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "DoveyWan",
+   "name": "Dovey Wan",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "santisiri",
+   "name": "Santiago Siri",
+   "category": "kol",
+   "trust": 0.5
+  },
+  {
+   "handle": "nicolasgarcia",
+   "name": "Nicolas Garcia",
+   "category": "kol",
+   "trust": 0.3
+  },
+  {
+   "handle": "DecryptMedia",
+   "name": "Decrypt",
+   "category": "news_primary",
+   "site": "https://decrypt.co"
+  },
+  {
+   "handle": "tier10k",
+   "name": "DB News Wire",
+   "category": "aggregator"
+  }
+ ],
+ "squat_probes": [
+  "a16zcrypto_official",
+  "aave_official",
+  "aaveofficial",
+  "arbitrum_one",
+  "base_official",
+  "blockworks",
+  "certik_alert",
+  "certik_team",
+  "certikofficial",
+  "chainlink_official",
+  "coinbase_official",
+  "coindesk_news",
+  "coindesknews",
+  "cointelegraph_",
+  "defillama_",
+  "ethereum_foundation",
+  "hyperliquid_",
+  "jupiter_exchange",
+  "kaiko",
+  "layerzero",
+  "messari",
+  "metamask_official",
+  "nansen_official",
+  "optimism_fndn",
+  "peckshield",
+  "peckshield_alert",
+  "pendle",
+  "seal_org",
+  "slowmist",
+  "solana_fndn",
+  "solana_news",
+  "solanafoundation",
+  "theblock_",
+  "theblocknews",
+  "thedefiant",
+  "tree_news_",
+  "uniswap_org",
+  "uniswaporg",
+  "whalealert",
+  "zachxbt_",
+  "zachxbt_official",
+  "zachxbtfan"
+ ],
+ "probe_targets": {
+  "blockworks": {
+   "name": "Blockworks",
+   "category": "news_primary"
+  },
+  "peckshield": {
+   "name": "PeckShield",
+   "category": "security"
+  }
+ }
+}

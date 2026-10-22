@@ -246,10 +246,15 @@ async def _embed_batch(
         if r.status_code != 200:
             logger.warning("_embed_failed status=%d body=%s", r.status_code, r.text[:200])
             return None
-        items = r.json().get("data") or []
-        embeddings = [
-            item.get("embedding", []) for item in sorted(items, key=lambda i: i.get("index", 0))
-        ]
+        payload = r.json()
+        items = payload.get("data") if isinstance(payload, dict) else payload
+        items = items or []
+        embeddings = []
+        for item in sorted(items, key=lambda i: i.get("index", 0)):
+            emb = item.get("embedding", [])
+            if emb and isinstance(emb[0], list):
+                emb = emb[0]
+            embeddings.append(emb)
         if not embeddings or len(embeddings) != len(texts):
             logger.warning("_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts))
             return None

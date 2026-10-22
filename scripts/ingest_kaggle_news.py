@@ -143,6 +143,23 @@ def _extract_entities(entity_field_value: str | None) -> list[str]:
     return list(dict.fromkeys(entities))  # Deduplicate while preserving order
 
 
+def _load_csv_rows(filepath: str, has_header: bool) -> list[dict[str, Any]] | None:
+    """Read a dataset CSV into row dicts, or ``None`` when the file is absent.
+
+    Blocking file I/O — callers on the event loop go through ``asyncio.to_thread``.
+    """
+    if not os.path.exists(filepath):
+        return None
+    with open(filepath, encoding="utf-8") as f:
+        # Handle potential BOM
+        if f.read(1) == "\ufeff":
+            f.seek(0)  # Reset after BOM
+        else:
+            f.seek(0)
+
+        return list(csv.DictReader(f)) if has_header else []
+
+
 async def _ingest_dataset(
     dataset_name: str,
     limit: int | None,
@@ -152,7 +169,8 @@ async def _ingest_dataset(
     config = DATASETS[dataset_name]
     filepath = os.path.join(os.path.dirname(__file__), "..", config["path"])
 
-    if not os.path.exists(filepath):
+    rows = await asyncio.to_thread(_load_csv_rows, filepath, config["has_header"])
+    if rows is None:
         logger.error(f"Dataset file not found: {filepath}")
         return {"status": "error", "message": f"File not found: {filepath}"}
 
@@ -172,21 +190,10 @@ async def _ingest_dataset(
         embedder = Qwen3Embedder()
         store = QdrantVectorStore()
 
-        # Read CSV file
-        with open(filepath, encoding="utf-8") as f:
-            # Handle potential BOM
-            if f.read(1) == "\ufeff":
-                f.seek(0)  # Reset after BOM
-            else:
-                f.seek(0)
-
-            reader = csv.DictReader(f)
-            rows = list(reader) if config["has_header"] else []
-
-            if not config["has_header"]:
-                # Handle headerless case if needed
-                logger.warning(f"Headerless CSV not implemented for {dataset_name}")
-                return stats
+        if not config["has_header"]:
+            # Handle headerless case if needed
+            logger.warning(f"Headerless CSV not implemented for {dataset_name}")
+            return stats
 
         if limit:
             rows = rows[:limit]

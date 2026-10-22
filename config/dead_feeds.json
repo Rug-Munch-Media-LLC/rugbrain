@@ -1,0 +1,33 @@
+{
+  "_comment": "Dispositions for every feed that errors in rss_feed_status. 'recover' = site still publishes, so scrape_dead_sources' sitemap -> FlareSolverr -> Pry path is used. 'dead' = never re-fetch with an RSS reader; the reason is written to rss_feed_status so the error is explained, not silent.",
+  "_updated": "2026-10-23",
+  "recover": [
+    {"source": "CFTC", "url": "https://www.cftc.gov/PressRoom/PressReleases/rss.xml", "why": "primary regulator; 403 to plain clients, sitemap reachable"},
+    {"source": "ESMA", "url": "https://www.esma.europa.eu/press-news/rss", "why": "primary regulator; 403 bot wall"},
+    {"source": "FinCEN", "url": "https://www.fincen.gov/news/rss", "why": "primary regulator; feed path retired, newsroom sitemap live"},
+    {"source": "FATF", "url": "https://www.fatf-gafi.org/en/rss.html", "why": "primary standards body; 403 bot wall"},
+    {"source": "Coinbase", "url": "https://blog.coinbase.com/feed", "why": "exchange research; 403, sitemap live"},
+    {"source": "Kraken", "url": "https://blog.kraken.com/feed/", "why": "exchange research; 403, sitemap live"},
+    {"source": "Messari", "url": "https://messari.io/feed", "why": "research desk; 429 rate wall, sitemap live"},
+    {"source": "Kaiko", "url": "https://kaiko.com/feed", "why": "market-data research; 404 feed, sitemap live"},
+    {"source": "Nansen", "url": "https://www.nansen.ai/research/feed", "why": "on-chain research; 404 feed, sitemap live"},
+    {"source": "Token Terminal", "url": "https://tokenterminal.com/blog/feed", "why": "fundamentals data; 404 feed, sitemap live"},
+    {"source": "CoinMetrics", "url": "https://coinmetrics.io/blog/feed/", "why": "market-data research; feed parses to zero entries, sitemap live"},
+    {"source": "Electric Capital", "url": "https://www.electriccapital.com/feed/", "why": "VC research reports; 404 feed, sitemap live"},
+    {"source": "Dune Analytics", "url": "https://dune.com/blog/feed", "why": "analytics research; 403 bot wall"},
+    {"source": "DeFi Llama", "url": "https://defillama.com/feed", "why": "TVL/stablecoin primary data; 403 bot wall"},
+    {"source": "REKT Newsletter", "url": "https://rekt.substack.com/feed", "why": "exploit post-mortems; 403 substack wall, FlareSolverr"},
+    {"source": "The Defiant Substack", "url": "https://thedefiant.substack.com/feed", "why": "DeFi reporting; 403 substack wall, FlareSolverr"},
+    {"source": "Consensys Diligence", "url": "https://consensys.io/diligence/blog/feed/", "why": "audit write-ups; 403 bot wall"},
+    {"source": "OpenZeppelin", "url": "https://blog.openzeppelin.com/feed/", "why": "security research; 404 feed, sitemap live"},
+    {"source": "Dedaub", "url": "https://dedaub.com/blog/feed", "why": "exploit analysis; 404 feed, sitemap live"},
+    {"source": "Paradigm", "url": "https://www.paradigm.xyz/feed", "why": "research essays; 404 feed, sitemap live"}
+  ],
+  "dead_rules": {
+    "dns": "permanently dead: domain no longer resolves (feed host retired)",
+    "401": "permanently dead: publisher requires authentication (401)",
+    "410": "permanently dead: publisher retired the feed (410)",
+    "404": "permanently dead: feed path removed and no article sitemap (404)",
+    "default": "permanently dead: no RSS, no reachable sitemap — needs a dedicated per-site scraper"
+  }
+}

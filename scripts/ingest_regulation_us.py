@@ -220,7 +220,6 @@ async def run(
         "errors": 0,
         "dry_run": dry_run,
     }
-    qdrant_url = os.getenv("QDRANT_URL", "http://127.0.0.1:6334").rstrip("/")
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         try:

@@ -1,0 +1,47 @@
+# permanently dead feeds — pruned 2026-10-22
+# URL\tName\tReason   (kept for audit; do not re-add without a new site)
+https://1confirmation.com/feed	1confirmation	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://aave.com/blog/feed	Aave	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://blockchain.berkeley.edu/feed/	Berkeley Blockchain	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://blog.1inch.io/feed	1inch	publisher retired the feed (HTTP 410) and no article sitemap was found
+https://blog.alchemy.com/feed/	Alchemy	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://blog.balancer.fi/feed/	Balancer	domain no longer resolves (DNS) — the site is gone
+https://blog.bitquery.io/feed	Bitquery	domain no longer resolves (DNS) — the site is gone
+https://blog.bybit.com/feed/	Bybit	domain no longer resolves (DNS) — the site is gone
+https://blog.chainstack.com/feed/	Chainstack	domain no longer resolves (DNS) — the site is gone
+https://blog.compound.finance/feed/	Compound	domain no longer resolves (DNS) — the site is gone
+https://blog.curve.fi/rss/	Curve	domain no longer resolves (DNS) — the site is gone
+https://blog.dydx.exchange/feed	dYdX	domain no longer resolves (DNS) — the site is gone
+https://blog.gmx.io/feed	GMX	domain no longer resolves (DNS) — the site is gone
+https://blog.hexens.io/feed	Hexens	domain no longer resolves (DNS) — the site is gone
+https://blog.infura.io/feed	Infura	domain no longer resolves (DNS) — the site is gone
+https://blog.intotheblock.com/feed/	IntoTheBlock	domain no longer resolves (DNS) — the site is gone
+https://blog.kucoin.com/feed/	KuCoin	domain no longer resolves (DNS) — the site is gone
+https://blog.ledger.com/feed/	Ledger	publisher retired the feed (HTTP 401) and no article sitemap was found
+https://blog.linea.build/feed	Linea	domain no longer resolves (DNS) — the site is gone
+https://blog.morpho.org/feed	Morpho	domain no longer resolves (DNS) — the site is gone
+https://blog.optimism.io/feed	Optimism	domain no longer resolves (DNS) — the site is gone
+https://blog.pendle.finance/feed	Pendle	domain no longer resolves (DNS) — the site is gone
+https://blog.santiment.net/feed/	Santiment	domain no longer resolves (DNS) — the site is gone
+https://blog.scroll.io/feed	Scroll	domain no longer resolves (DNS) — the site is gone
+https://blog.solidified.io/feed/	Solidified	domain no longer resolves (DNS) — the site is gone
+https://blog.spartangroup.io/feed	Spartan Group	domain no longer resolves (DNS) — the site is gone
+https://blog.venus.io/feed	Venus	domain no longer resolves (DNS) — the site is gone
+https://coincodex.com/blog/feed/	CoinCodex	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://crypto.com/blog/feed/	Crypto.com	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://cyber.stanford.edu/blog/feed	Stanford CBR	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://dci.mit.edu/feed	MIT DCI	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://halborn.com/feed/	Halborn	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://multicoin.capital/feed/	Multicoin Capital	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://near.org/blog/feed/	NEAR Protocol	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://placeholder.vc/feed/	Placeholder	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://playtoearn.net/feed	PlayToEarn	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://polygon.technology/blog/feed	Polygon	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://quantstamp.com/blog/feed/	Quantstamp	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://uniswap.org/blog/feed.xml	Uniswap	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://www.avax.network/blog/feed	Avalanche	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://www.cmsholdings.co/feed/	CMS Holdings	domain no longer resolves (DNS) — the site is gone
+https://www.gate.io/learn/feed	Gate.io	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://www.okx.com/feed/blog	OKX	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://www.src.ac.uk/feed/	SRC Research (UK)	publisher retired the feed (HTTP 404) and no article sitemap was found
+https://www.thetie.is/feed	The Tie	domain no longer resolves (DNS) — the site is gone
