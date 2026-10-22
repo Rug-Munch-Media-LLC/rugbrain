@@ -1,0 +1,25 @@
+# Security-source web intake → news_items (trust 0.9).  Paths verified 2026-10-23
+# with a real GET (status + parsed entry count) from Talos; see
+# docs/SECURITY-FEEDS.md for the probe table and the blocked list.
+#
+# Format: URL<TAB>Source<TAB>kind   (kind = rss | sitemap)
+#
+# Publisher feeds that answer 200 with entries.
+https://slowmist.medium.com/feed	SlowMist	rss
+https://peckshield.medium.com/feed	PeckShield	rss
+https://certik.medium.com/feed	CertiK	rss
+https://www.chainalysis.com/blog/feed/	Chainalysis	rss
+https://wublockchain.medium.com/feed	Wu Blockchain	rss
+https://www.jupresear.ch/latest.rss	Jupiter Research	rss
+https://www.coindesk.com/arc/outboundfeeds/rss/	CoinDesk	rss
+# Feed retired; article sitemap live (3870 /blog/ locs, english locale only).
+https://blocksec.com/sitemap.xml	BlockSec	sitemap
+# Blocked, NOT enabled here:
+#   dune.com/blog/feed   403 Cloudflare wall to this host (needs FlareSolverr path)
+#   messari.io/feed      429 rate wall
+#   nansen.ai/research   no feed; Next.js payload only
+#   defillama.com/feed   404; sitemap carries data pages, no blog
+#   hyperliquid.xyz      403 site+sitemap; gitbook docs sitemap is product docs
+#   scamsniffer.io       no sitemap, no feed (X only)
+#   misttrack.io         no blog path, no sitemap article (X only)
+#   lookonchain.com      /articles/ is JS-rendered, no sitemap (X only)
