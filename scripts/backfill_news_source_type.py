@@ -15,8 +15,8 @@ guess about content:
                    (publisher class, deterministic allow-list below).
   * ``rss``       — everything else in the ``cryptopanic:`` feed namespace.
 
-Precedence is that order, so a Telegram post quoting an x.com link stays
-``telegram``. Existing non-NULL ``source_type`` is never overwritten. Nothing
+Precedence is Telegram before X, so a channel post quoting an x.com link
+stays ``telegram``. Existing non-NULL ``source_type`` is never overwritten. Nothing
 is deleted. ``--dry-run`` prints the same counts without writing.
 """
 
@@ -69,9 +69,9 @@ def classify_row(row: asyncpg.Record) -> str:
     source = (row["source"] or "").strip().lower()
     prefix = news_id.split(":", 1)[0].lower()
 
-    if prefix == "x" or url.startswith(("https://x.com/", "https://twitter.com/",
-                                        "https://www.x.com/", "https://www.twitter.com/")):
-        return "x"
+    # Telegram first: a channel post that QUOTES an x.com link is still a
+    # Telegram post (its news_id/body_source say so). Doing x first relabelled
+    # those rows — caught 2026-10-23 on tg:69eaff… whose url was an x.com link.
     if (
         prefix == "tg"
         or body_source.startswith("tg:")
@@ -79,6 +79,9 @@ def classify_row(row: asyncpg.Record) -> str:
         or "t.me/" in url
     ):
         return "telegram"
+    if prefix == "x" or url.startswith(("https://x.com/", "https://twitter.com/",
+                                        "https://www.x.com/", "https://www.twitter.com/")):
+        return "x"
     if prefix == "scraped" or prefix not in ("cryptopanic", "tg", "x"):
         return "web"
     if source in SECURITY_SOURCES:

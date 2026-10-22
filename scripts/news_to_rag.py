@@ -451,7 +451,12 @@ async def purge_orphans() -> dict[str, Any]:
 
 
 async def run(
-    limit: int, max_chunks: int, embed_model: str, newest_first: bool = True
+    limit: int,
+    max_chunks: int,
+    embed_model: str,
+    newest_first: bool = True,
+    shard: int = 0,
+    shards: int = 0,
 ) -> dict[str, Any]:
     lock = await asyncio.to_thread(open, LOCK_PATH, "w")
     try:
@@ -476,15 +481,24 @@ async def run(
         # (rag_embedding_id == news_id was the pre-pipeline placeholder).
         # SQL is static: only _ORDER_CLAUSES ("asc"/"desc" fixed strings) is
         # interpolated; the limit is bound via the $1 parameter.
+        # Sharding lets several processes work the backlog in parallel without
+        # overlapping: the partition is a hash of news_id, so every row lands
+        # in exactly one shard and each run's lock file (TMPDIR) is separate.
+        shard_sql = ""
+        args: list[Any] = [limit]
+        if shards > 1:
+            shard_sql = " AND mod(abs(hashtext(news_id)), $2) = $3 "
+            args += [shards, shard % shards]
         query = (
             "SELECT news_id, url, title, summary, body_markdown, source, "  # nosec B608
             "published_at, chains_mentioned, tokens_mentioned, sentiment_score "
             "FROM news_items "
-            "WHERE rag_embedding_id IS NULL OR rag_embedding_id = news_id "
+            "WHERE (rag_embedding_id IS NULL OR rag_embedding_id = news_id)"
+            + shard_sql
             + _ORDER_CLAUSES["desc" if newest_first else "asc"]
             + " LIMIT $1"
         )
-        rows = await conn.fetch(query, limit)
+        rows = await conn.fetch(query, *args)
         stats["articles_scanned"] = len(rows)
         logger.info("candidate_articles=%d limit=%d", len(rows), limit)
         if not rows:
@@ -649,6 +663,8 @@ def main() -> None:
         default=int(os.getenv("NEWS_TO_RAG_MAX_CHUNKS", "4096")),
         help="max chunks per run (default 4096; 0 = unlimited)",
     )
+    parser.add_argument("--shard", type=int, default=0, help="0-based shard index")
+    parser.add_argument("--shards", type=int, default=0, help="shard count (0/1 = no sharding)")
     parser.add_argument("--model", default=os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"))
     parser.add_argument(
         "--oldest-first",
@@ -679,7 +695,8 @@ def main() -> None:
             stats = asyncio.run(purge_orphans())
         else:
             stats = asyncio.run(
-                run(limit, max_chunks, args.model, newest_first=not args.oldest_first)
+                run(limit, max_chunks, args.model, newest_first=not args.oldest_first,
+                    shard=args.shard, shards=args.shards)
             )
     except Exception as e:  # surface cleanly to cron/journald
         logger.error("news_to_rag_failed err=%s", e)

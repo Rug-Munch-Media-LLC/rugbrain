@@ -63,7 +63,6 @@ FETCH = """
 SELECT news_id, title, url, summary, body_markdown, body_source
   FROM news_items
  WHERE body_source = 'google_shell'
-   AND resolved_at IS NULL
    AND url LIKE '%%news.google.com/rss/articles%%'
 ORDER BY published_at DESC
 LIMIT $1
