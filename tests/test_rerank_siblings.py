@@ -15,6 +15,19 @@ import pytest
 from rugbrain import rerank_compat, rerank_health, rerank_instructions
 
 
+@pytest.fixture
+def configured_rerank_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure the local :8003 rerank lane for the tests that need a URL.
+
+    Deliberately NOT autouse: ``RERANKER_URL`` is required config (2026-10-23),
+    and the unset path is real behaviour that most tests here assert. Only the
+    tests that exercise the configured lane opt in.
+    """
+    monkeypatch.setattr(rerank_health, "url_getter", lambda: "http://127.0.0.1:8003")
+    monkeypatch.setattr(rerank_compat, "RERANKER_URL", "http://127.0.0.1:8003")
+    monkeypatch.setattr(rerank_compat, "RERANK_FAST_URL", "http://127.0.0.1:8003")
+
+
 class FakeResp:
     def __init__(self, status_code: int = 200, payload: dict | None = None) -> None:
         self.status_code = status_code
@@ -77,7 +90,9 @@ class TestHealthCache:
 
 
 class TestHealthProbe:
-    async def test_probe_ok_updates_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_probe_ok_updates_cache(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         seen: list = []
         monkeypatch.setattr(rerank_health, "enabled_getter", lambda: True)
         monkeypatch.setattr(
@@ -96,7 +111,9 @@ class TestHealthProbe:
         out = await rerank_health.get_reranker_health()
         assert out == {"ok": False, "enabled": False, "reason": "RERANKER_ENABLED=false"}
 
-    async def test_probe_non_200_marks_down(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_probe_non_200_marks_down(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         monkeypatch.setattr(rerank_health, "enabled_getter", lambda: True)
         monkeypatch.setattr(
             rerank_health.httpx, "AsyncClient", lambda **k: FakeClient(FakeResp(503))
@@ -106,7 +123,9 @@ class TestHealthProbe:
         assert out["status_code"] == 503
         assert rerank_health.cache()["ok"] is False
 
-    async def test_probe_connect_error_marks_down(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_probe_connect_error_marks_down(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         monkeypatch.setattr(rerank_health, "enabled_getter", lambda: True)
 
         class Boom:
@@ -232,7 +251,9 @@ class TestCompatSurface:
     async def test_tiered_empty_docs_returns_empty(self) -> None:
         assert await rerank_compat.rerank_tiered("q", []) == []
 
-    async def test_tiered_sorts_and_truncates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_tiered_sorts_and_truncates(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         payload = {
             "results": [{"index": 0, "relevance_score": 0.1}, {"index": 1, "relevance_score": 0.9}]
         }
@@ -242,7 +263,9 @@ class TestCompatSurface:
         out = await rerank_compat.rerank_tiered("q", ["a", "b"], top_k=1)
         assert [r["index"] for r in out] == [1]
 
-    async def test_tiered_raw_returns_all(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_tiered_raw_returns_all(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         payload = {
             "results": [{"index": 0, "relevance_score": 0.1}, {"index": 1, "relevance_score": 0.9}]
         }
@@ -286,7 +309,9 @@ class TestCompatSurface:
         monkeypatch.setattr(rerank_compat, "RERANKER_ENABLED", False)
         assert await rerank_compat.Reranker().health() == {"ok": False, "enabled": False}
 
-    async def test_class_health_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_class_health_ok(
+        self, monkeypatch: pytest.MonkeyPatch, configured_rerank_url: None
+    ) -> None:
         monkeypatch.setattr(rerank_compat, "RERANKER_ENABLED", True)
         monkeypatch.setattr(
             rerank_compat.httpx,

@@ -43,12 +43,14 @@ import httpx
 
 from rugbrain.dim_policy import COLLECTION_DIM
 from rugbrain.news_clustering import Story, StorySource, cosine_similarity
+from rugbrain.rerank_endpoint import rerank_endpoint
 
 logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
-RERANKER_URL = os.getenv("RERANKER_URL", "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B").rstrip("/")
+# Required config — the DeepInfra default died on 402 (see rerank_compat).
+RERANKER_URL = os.getenv("RERANKER_URL", "").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 NEWS_V2_COLLECTION = os.getenv("NEWS_V2_COLLECTION", "news_v2")
 EMBED_DIM = int(os.getenv("RAG_EMBED_DIM", str(COLLECTION_DIM)))  # canonical lane
@@ -72,15 +74,12 @@ async def rerank_story_sources(
     story: Story,
     timeout: float = 30.0,  # noqa: ASYNC109 - kept explicit for httpx client timeout
 ) -> tuple[list[StorySource], str]:
-    """Rerank the story's source articles against its title.
+    """Rerank a story's source articles against its title.
 
-    Calls the self-hosted Qwen3-Reranker-8B ``POST /rerank`` with
-    ``query=story.title`` and ``documents=article_summaries``. The top
-    document becomes the story's primary source. When the reranker is
-    unreachable the sources are returned sorted by credibility (best-effort)
-    with ``method="fallback"``.
-
-    Returns ``(sorted_sources, method)``.
+    POSTs ``story.title`` + article summaries to ``RERANKER_URL`` (required,
+    no baked default). The top document becomes the primary source; an unset
+    or unreachable lane returns the sources by credibility
+    (``method="fallback"``). Returns ``(sorted_sources, method)``.
     """
     if not story.sources:
         return [], "empty"
@@ -89,7 +88,7 @@ async def rerank_story_sources(
     try:
         async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
             resp = await client.post(
-                f"{RERANKER_URL}/rerank",
+                rerank_endpoint(RERANKER_URL),
                 json={
                     "query": story.title[:2000],
                     "documents": documents,

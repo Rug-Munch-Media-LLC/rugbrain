@@ -37,23 +37,16 @@ RERANK_HOSTED_CAP = int(os.getenv("RERANK_HOSTED_CAP", "40"))
 _HOSTED_DOC_CHARS = int(os.getenv("RERANK_HOSTED_DOC_CHARS", "2000"))
 
 # ── Intelligent provider fallback (2026-10-17) ────────────────────────────
-# Operator rule: "never run out of credit". Order: DeepInfra -> SiliconFlow
-# -> OpenRouter (backup account). Every lane serves the same Qwen3-Reranker-8B
-# so scores stay comparable; a lane that errors is skipped, never fatal.
-# On 2026-10-17 DeepInfra returned 402 (overdue invoices) and, because
-# hosted_enabled() gated on the DeepInfra key alone, ALL reranking silently
-# stopped. This chain is the fix.
+# Operator rule: "never run out of credit". Order (2026-10-22, MEASURED):
+# SiliconFlow -> OpenRouter (backup account) -> DeepInfra (dead, kept last).
+# Every lane serves the same Qwen3-Reranker-8B so scores stay comparable; a lane
+# that errors is skipped, never fatal. SiliconFlow `api.siliconflow.com/v1/rerank`
+# answered 200 in ~440 ms; DeepInfra answers 402 (overdue invoices) and stays in
+# the tuple as an explicit dead rung -- present and auditable, never preferred.
 # `request_form`: deepinfra's inference API takes "queries": [str]; the
 # OpenAI-compatible lanes (siliconflow, openrouter) take "query": str.
 # Verified 2026-10-17 against all three live endpoints.
 RERANK_LANES: tuple[dict[str, str], ...] = (
-    {
-        "name": "deepinfra",
-        "url": RERANK_HOSTED_URL,
-        "model": RERANK_HOSTED_MODEL,
-        "key_env": "DEEPINFRA_API_KEY",
-        "request_form": "queries",
-    },
     {
         "name": "siliconflow",
         "url": os.getenv(
@@ -71,6 +64,13 @@ RERANK_LANES: tuple[dict[str, str], ...] = (
         "model": os.getenv("OPENROUTER_RERANK_MODEL", "qwen/qwen3-reranker-8b"),
         "key_env": "OPENROUTER_API_KEY",
         "request_form": "query",
+    },
+    {
+        "name": "deepinfra",
+        "url": RERANK_HOSTED_URL,
+        "model": RERANK_HOSTED_MODEL,
+        "key_env": "DEEPINFRA_API_KEY",
+        "request_form": "queries",
     },
 )
 

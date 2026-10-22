@@ -1,8 +1,11 @@
-"""SiliconFlow 8B embedding lane — CONFIG-GATED, DISABLED BY DEFAULT.
+"""SiliconFlow 8B embedding lane — the HEAD of the embed chain.
 
-Third rung of the embed chain. Same 8B family as the DeepInfra primary
-(``Qwen/Qwen3-Embedding-8B``, 4096d), so a vector from this lane is
-index-compatible with the ``*_8b`` collections.
+``SILICONFLOW_ENABLED`` still defaults to OFF in code (an unkeyed lane must
+never be reached by accident), but the deployed env sets it to 1 and
+``embeddings.AUTO_CHAIN`` puts this lane FIRST: it is the only hosted lane with a
+live 200-at-4096 credential. DeepInfra is the DEAD tail rung (402), not a
+primary. Same ``Qwen/Qwen3-Embedding-8B`` family at 4096d, so a vector from this
+lane is index-compatible with the ``*_8b`` collections.
 
 **HOST MATTERS: ``.cn`` and ``.com`` are DIFFERENT hosts with DIFFERENT
 credentials.** Measured 2026-10-22 from Talos: the key in

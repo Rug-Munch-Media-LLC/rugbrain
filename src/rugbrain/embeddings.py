@@ -59,6 +59,7 @@ from rugbrain.embeddings_pkg.local_lane import embed as int_embed
 from rugbrain.embeddings_pkg.local_lane import reachable as int_reachable
 from rugbrain.embeddings_pkg.normalize import resize as resize_fn
 from rugbrain.embeddings_pkg.siliconflow_lane import embed as siliconflow_embed
+from rugbrain.embeddings_pkg.width_guard import accepts_vector
 
 log = logging.getLogger(__name__)
 
@@ -99,11 +100,12 @@ _LANE_GLOBALS: dict[str, str] = {
 #: and liveness. Cross-model lanes (gateway, OpenRouter, NIM) are NEVER here —
 #: they are reachable only through an explicit ``RAG_EMBED_BACKEND`` override.
 #:
-#: 2026-10-22 (measured): SiliconFlow LEADS — it is the only hosted lane with a
-#: live 200 @ 4096 credential (api.siliconflow.com; the .cn host 401s the same
-#: key). DeepInfra is second and 401s "user not authorized", the local :8024 8B
-#: lane is last because it is slow (9-44 s/query on CPU) but always ours.
-AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "deepinfra", "int")
+#: 2026-10-23 (measured): SiliconFlow LEADS (only live 200 @ 4096, 0.77 s), then
+#: DeepInfra (402 today, breaker-skipped), then OpenRouter (402 credits, walked
+#: so a funded account needs no code change), then the local :8024 8B lane —
+#: slow but ours, and 4096-dim. The 0.6B/1024 lane on :8004 is supermemory's
+#: and is deliberately absent; the width guard would refuse it anyway.
+AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "deepinfra", "openrouter", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.
@@ -115,20 +117,14 @@ _OVERRIDE_CHAINS: dict[str, tuple[str, ...]] = {
     # so an exhausted OR pool is never allowed to be the end of the road.
     "openrouter": ("openrouter", "nim"),
     "nim": ("nim",),
-    # 2026-10-12 (operator directive): DeepInfra PRIMARY, SiliconFlow backup,
-    # OpenRouter backup -- on BOTH the query and document lanes, matching
-    # ContextCrypto. This chain previously led with siliconflow on a stale
-    # "DeepInfra is out of credit" note. DeepInfra has been topped up and
-    # re-proved live (4096-dim embed + rerank), but queries kept embedding on
-    # SiliconFlow while the corpus was embedded on DeepInfra -- two providers,
-    # one model name, a different vector space. Any collection whose top
-    # similarity sat near the 0.4 threshold then silently returned zero hits
-    # (measured: social_intel 0.519 stored vs sub-threshold served).
-    # Chain order MUST match the lane the corpus was embedded with.
-    "siliconflow": ("deepinfra", "siliconflow", "openrouter"),
+    # 2026-10-23 (MEASURED): requesting the siliconflow lane must start there.
+    # DeepInfra is rung 2 (402, breaker-skipped), OpenRouter rung 3 (402 credits,
+    # kept walked). Every rung serves qwen3-embedding-8b and the width guard in
+    # _get_embedding_impl refuses any vector that is not 4096.
+    "siliconflow": ("siliconflow", "deepinfra", "openrouter"),
     # The full chain without pinning a primary, for operators who would rather
     # take whatever answers first than hold a lane at the head.
-    "hosted": ("deepinfra", "siliconflow", "openrouter"),
+    "hosted": ("siliconflow", "deepinfra", "openrouter"),
 }
 
 
@@ -179,7 +175,8 @@ async def _get_embedding_impl(text: str, query: bool = False) -> list[float]:
         if lane == "int" and not await asyncio.to_thread(_int_reachable):
             continue
         vector = await _call_lane(lane, text, query, timeout)
-        if vector is not None:
+        # Width guard: a 1024/2048/2560 vector is refused, the walk continues.
+        if accepts_vector(vector, EMBEDDING_DIM, lane):
             return vector  # type: ignore[return-value]
 
     raise RAGUnavailableError(
@@ -244,6 +241,8 @@ def current_backend() -> str:
         return "siliconflow"
     if deepinfra_ready():
         return "deepinfra"
+    if or_key_pool():
+        return "openrouter"
     if int_reachable():
         return "int"
     return "unavailable"

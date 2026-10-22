@@ -123,6 +123,10 @@ async def test_rerank_sorts_and_truncates(monkeypatch: pytest.MonkeyPatch) -> An
         return True
 
     monkeypatch.setattr(reranker_mod, "_fast_health", _ok)
+    # RERANKER_URL is required config (2026-10-23): unset resolves to "",
+    # which respx cannot use as a base URL. These two tests exercise the
+    # configured lane, so they state it explicitly.
+    monkeypatch.setattr(reranker_mod, "RERANKER_URL", "http://127.0.0.1:8003")
     base = reranker_mod.RERANKER_URL
 
     with respx.mock(base_url=base, assert_all_called=False) as rx:
@@ -154,6 +158,10 @@ async def test_rerank_raw_attaches_documents(monkeypatch: pytest.MonkeyPatch) ->
         return True
 
     monkeypatch.setattr(reranker_mod, "_fast_health", _ok)
+    # RERANKER_URL is required config (2026-10-23): unset resolves to "",
+    # which respx cannot use as a base URL. These two tests exercise the
+    # configured lane, so they state it explicitly.
+    monkeypatch.setattr(reranker_mod, "RERANKER_URL", "http://127.0.0.1:8003")
     base = reranker_mod.RERANKER_URL
 
     with respx.mock(base_url=base, assert_all_called=False) as rx:

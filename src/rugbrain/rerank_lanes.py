@@ -159,6 +159,12 @@ async def _call(
     return results
 
 
+class RerankScores(list):
+    """Ranked scores that remember which hosted lane produced them (`lane`)."""
+
+    lane: str = ""
+
+
 async def hosted_rerank(
     query: str,
     documents: list[str],
@@ -170,7 +176,8 @@ async def hosted_rerank(
 
     Returns llama.cpp-shaped ``[{"index": int, "relevance_score": float}]``
     sorted by score descending (all documents scored; ``top_n > 0`` truncates),
-    or ``None`` when every rung is unavailable — the same contract the
+    tagged with the answering ``lane``, or ``None`` when every rung is
+    unavailable — the same contract the
     DeepInfra-only lane had, so no caller had to change.
     """
     if not documents:
@@ -181,7 +188,9 @@ async def hosted_rerank(
         results = await _call(provider, query, documents, timeout)
         if results is not None:
             logger.info("rerank_lane=%s docs=%d", provider, len(documents))
-            return results[:top_n] if top_n and top_n > 0 else results
+            kept = RerankScores(results[:top_n] if top_n and top_n > 0 else results)
+            kept.lane = provider
+            return kept
     return None
 
 

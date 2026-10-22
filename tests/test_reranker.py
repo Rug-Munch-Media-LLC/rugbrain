@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
+from rugbrain import rerank_compat
 from rugbrain.reranker import Reranker, get_reranker, get_reranker_health, rerank
 
 
@@ -13,12 +16,19 @@ class TestReranker:
         assert r._url == "http://localhost:8003"
 
     def test_get_reranker_default(self) -> None:
-        # The local :8003 llama.cpp lane was retired 2026-10-11; the default
-        # is now the hosted DeepInfra Qwen3-Reranker-8B endpoint.
+        # 2026-10-23 contract change: RERANKER_URL is REQUIRED config. The old
+        # baked default was the DeepInfra inference URL, which answers 402
+        # (overdue invoices) since 2026-10-22 — a default pointing at a dead
+        # paid lane. No default is the honest shape: deployments set it.
         r = get_reranker()
-        assert r._url is not None
-        assert "deepinfra" in r._url
-        assert "Qwen3-Reranker-8B" in r._url
+        assert r._url == os.getenv("RERANKER_URL", "").rstrip("/")
+
+    @pytest.mark.asyncio
+    async def test_health_reports_unconfigured_url(self, monkeypatch) -> None:
+        monkeypatch.setattr(rerank_compat, "RERANKER_URL", "")
+        health = await Reranker(url="").health()
+        assert health["ok"] is False
+        assert "RERANKER_URL" in health["error"]
 
     def test_reranker_class_type(self) -> None:
         r = Reranker()

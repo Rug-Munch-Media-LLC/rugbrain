@@ -95,12 +95,11 @@ def resolve_lane() -> tuple[str, str, dict[str, str], str]:
             DEEPINFRA_EMBED_MODEL,
         )
     if provider == "local":
-        return (
-            "local",
-            QWEN_EMBED_URL,
-            {"Content-Type": "application/json"},
-            QWEN_EMBED_MODEL_NAME,
-        )
+        headers = {"Content-Type": "application/json"}
+        local_key = os.getenv("LLAMA_EMBED_KEY", "").strip()
+        if local_key:
+            headers["Authorization"] = f"Bearer {local_key}"
+        return ("local", QWEN_EMBED_URL, headers, QWEN_EMBED_MODEL_NAME)
     raise RuntimeError(f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|local)")
 
 

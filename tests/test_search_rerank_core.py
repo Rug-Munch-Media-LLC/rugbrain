@@ -11,8 +11,8 @@ Offline: the hosted chain is stubbed. Contracts for _score_candidates:
 The local llama.cpp :8003 lane (4B/0.6B ladders) was retired 2026-10-11 —
 both tiers now resolve through the hosted multi-provider chain
 (``rerank_lanes``: deepinfra → siliconflow → openrouter → openrouter2, all
-Qwen3-Reranker-8B). The method label is provider-prefixed
-(``deepinfra:qwen3-reranker-8b``).
+Qwen3-Reranker-8B). The method label is lane-prefixed: ``<lane>:qwen3-reranker-8b`` for a
+real call, ``hosted:qwen3-reranker-8b`` when the lane is not captured.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ async def test_scores_mapped_back_to_original_indices(monkeypatch):
     monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
     monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     scores, method = await rr._score_candidates("rug", candidates)
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert len(scores) == 3
     assert scores[0] == pytest.approx(0.9)  # original index 0
     assert scores[1] == 0.0  # empty doc keeps neutral slot
@@ -149,5 +149,5 @@ async def test_recent_failure_skips_probe(monkeypatch):
     monkeypatch.setattr(rr, "hosted_rerank", spy_hosted)
     scores, method = await rr._score_candidates("q", [{"content": "d"}])
     # The hosted chain is the only lane; a stale health flag does not gate it.
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert called["n"] == 1

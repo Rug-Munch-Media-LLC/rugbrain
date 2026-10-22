@@ -14,9 +14,15 @@ from typing import Any
 
 import httpx
 
+from rugbrain.rerank_endpoint import rerank_endpoint
+
 logger = logging.getLogger(__name__)
 
-RERANKER_URL = os.getenv("RERANKER_URL", "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B")
+# REQUIRED config, no default: the only baked default used to be the DeepInfra
+# inference URL, which answers 402 (overdue invoices) since 2026-10-22 — a
+# default that silently points at a dead paid lane is worse than no default.
+# Deployments set RERANKER_URL (`.env.example` -> the local :8003 rerank lane).
+RERANKER_URL = os.getenv("RERANKER_URL", "").rstrip("/")
 # 'fast'/'deep' both resolve to the canonical 4B lane: the 0.6B consumer
 # tier is retired (2026-08-29) and its endpoint is gone (2026-09-14).
 RERANK_FAST_URL = os.getenv("RERANK_FAST_URL", RERANKER_URL)
@@ -33,7 +39,7 @@ class Reranker:
     """Backward-compatible Reranker class wrapping the new async API.
 
     Usage:
-        r = Reranker(url=os.getenv("RERANKER_URL", "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-Reranker-8B"))
+        r = Reranker(url=os.getenv("RERANKER_URL", ""))
         results = await r.rerank(query, docs, top_k=5)
     """
 
@@ -56,6 +62,8 @@ class Reranker:
         if not RERANKER_ENABLED:
             return {"ok": False, "enabled": False}
         try:
+            if not self._url:
+                return {"ok": False, "error": "RERANKER_URL not configured"}
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{self._url}/health")
                 if resp.status_code == 200:
@@ -85,6 +93,9 @@ async def rerank_tiered(
     url = RERANK_FAST_URL if tier == "fast" else RERANKER_URL
     if not RERANKER_ENABLED or not documents:
         return []
+    if not url:
+        logger.warning("reranker_url_unset tier=%s — set RERANKER_URL", tier)
+        return []
     try:
         async with httpx.AsyncClient(timeout=RERANK_CALL_TIMEOUT) as client:
             payload: dict[str, Any] = {
@@ -92,7 +103,7 @@ async def rerank_tiered(
                 "documents": documents,
                 "top_n": top_k if not raw else len(documents),
             }
-            resp = await client.post(f"{url}/rerank", json=payload)
+            resp = await client.post(rerank_endpoint(url), json=payload)
             if resp.status_code != 200:
                 logger.warning("reranker_status=%d url=%s", resp.status_code, url)
                 return []

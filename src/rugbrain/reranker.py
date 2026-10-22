@@ -27,6 +27,7 @@ from rugbrain.rerank_compat import (
     get_reranker,
     rerank_tiered,
 )
+from rugbrain.rerank_endpoint import rerank_endpoint
 from rugbrain.rerank_health import _fast_health, get_reranker_health, reranker_health_loop
 from rugbrain.rerank_health import _mark as _mark_health
 from rugbrain.rerank_instructions import (
@@ -126,6 +127,10 @@ async def rerank(
             _attach_documents(hosted_results, documents)
         return hosted_results
 
+    if not RERANKER_URL:
+        logger.warning("reranker_url_unset — set RERANKER_URL (hosted chain only)")
+        return []
+
     # Health check with caching (don't hammer a down server)
     if not await _fast_health():
         return []
@@ -138,7 +143,7 @@ async def rerank(
                 "top_n": top_k if not raw else len(documents),
             }
             t0 = time.monotonic()
-            resp = await client.post(f"{RERANKER_URL}/rerank", json=payload)
+            resp = await client.post(rerank_endpoint(RERANKER_URL), json=payload)
             t1 = time.monotonic()
 
             if resp.status_code != 200:

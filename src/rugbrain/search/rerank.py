@@ -38,6 +38,8 @@ from typing import Any, cast
 
 import httpx
 
+from rugbrain.rerank_endpoint import rerank_endpoint
+from rugbrain.rerank_lanes import MODEL as RERANK_MODEL  # name of the served model
 from rugbrain.rerank_lanes import hosted_enabled, hosted_rerank  # multi-provider chain (2026-11)
 from rugbrain.search.rerank_instructions import apply_instruction, detect_vertical
 from rugbrain.search.rerank_scores import (
@@ -62,6 +64,8 @@ _chunk_text = chunk_text
 RERANKER_URL = os.getenv("RERANKER_URL", "").rstrip("/")
 RERANKER_TIMEOUT = float(os.getenv("RERANKER_TIMEOUT", "30"))
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
+# Provenance label = the lane that ACTUALLY answered + the model it served.
+_RERANK_MODEL_LABEL = RERANK_MODEL.rsplit("/", 1)[-1].lower()
 # Live-lane candidate cap + the local 8B fallback cap. The 0.6B speed
 # tier these used to bound was retired 2026-08-29; its endpoint was removed
 # 2026-09-14 (all rerank traffic is the 8B family now).
@@ -180,7 +184,7 @@ async def _post_rerank(
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
-                f"{url}/rerank",
+                rerank_endpoint(url),
                 json={
                     "query": apply_instruction(query),
                     "documents": docs,
@@ -206,7 +210,10 @@ async def _hosted_scores(
     valid: list[tuple[int, str]],
     total: int,
 ) -> tuple[list[float], str] | None:
-    """Hosted DeepInfra rung, candidate-capped. None when unavailable."""
+    """Hosted lane (siliconflow -> openrouter -> openrouter2 -> deepinfra).
+
+    Candidate-capped; None when every rung is unavailable.
+    """
     if not hosted_enabled():
         return None
     capped = valid[:HOSTED_CANDIDATE_CAP]
@@ -215,7 +222,11 @@ async def _hosted_scores(
     )
     if results is None:
         return None
-    return scatter(results, capped, total), "deepinfra:qwen3-reranker-8b"
+    # The label must name the lane that answered: deepinfra is now the LAST
+    # rung and usually contributes nothing, so a hardcoded prefix lied about
+    # which provider produced the scores (and about which one to debug).
+    lane = getattr(results, "lane", "") or "hosted"
+    return scatter(results, capped, total), f"{lane}:{_RERANK_MODEL_LABEL}"
 
 
 async def _score_candidates(

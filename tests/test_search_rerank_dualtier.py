@@ -3,8 +3,8 @@
 The local llama.cpp :8003 lane (the 4B/0.6B ladders) was retired 2026-10-11
 (operator directive: 8B ONLY). Both tiers now resolve through the hosted
 multi-provider chain (``rerank_lanes``: deepinfra → siliconflow → openrouter
-→ openrouter2, all Qwen3-Reranker-8B). The method label is provider-prefixed
-(``deepinfra:qwen3-reranker-8b``).
+→ openrouter2, all Qwen3-Reranker-8B). The method label is lane-prefixed: ``<lane>:qwen3-reranker-8b`` for a
+real call, ``hosted:qwen3-reranker-8b`` when the lane is not captured.
 
 Offline: ``hosted_rerank`` stubbed. Contracts:
 
@@ -46,7 +46,7 @@ async def test_live_tier_serves_from_the_hosted_chain(monkeypatch):
     monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     docs = [{"content": f"d{i}"} for i in range(100)]
     scores, method = await rr._score_candidates("rug", docs, tier="live")
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert calls[0] == min(rr.HOSTED_CANDIDATE_CAP, len(docs))
     assert len(scores) == len(docs)  # full score vector preserved
 
@@ -65,7 +65,7 @@ async def test_live_ladder_hosted_chain(monkeypatch):
     monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     docs = [{"content": f"doc{i}"} for i in range(60)]
     scores, method = await rr._score_candidates("q", docs, tier="live")
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert calls[0] == min(rr.HOSTED_CANDIDATE_CAP, len(docs))
     assert any(s > 0 for s in scores)
 
@@ -92,7 +92,7 @@ async def test_deep_default_single_shot(monkeypatch):
     monkeypatch.setattr(rr, "hosted_enabled", lambda: True)
     monkeypatch.setattr(rr, "hosted_rerank", fake_hosted)
     out = await rr._score_candidates("q", [{"content": "a"}], tier="deep")
-    assert out[1] == "deepinfra:qwen3-reranker-8b"
+    assert out[1] == "hosted:qwen3-reranker-8b"
     assert calls == [1]
 
 

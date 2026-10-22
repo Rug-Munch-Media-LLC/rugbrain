@@ -83,6 +83,8 @@ async def get_reranker_health() -> dict[str, Any]:
         return {"ok": False, "enabled": False, "reason": "RERANKER_ENABLED=false"}
 
     url = url_getter()
+    if not url:
+        return {"ok": False, "enabled": True, "reason": "RERANKER_URL not configured"}
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             t0 = time.monotonic()

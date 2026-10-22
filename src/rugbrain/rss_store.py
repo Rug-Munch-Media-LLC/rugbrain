@@ -21,6 +21,7 @@ from typing import Any
 import asyncpg
 
 from rugbrain.rss_classify import classify
+from rugbrain.rss_extract import clean_item
 from rugbrain.rss_feed import fetch_feed, newest_epoch
 from rugbrain.rss_feed_status import conditional_headers, record_status, remember_validators
 
@@ -28,8 +29,9 @@ PREFIX = "cryptopanic"  # legacy id namespace — do not rename, RAG joins on it
 INSERT = """
 INSERT INTO news_items (news_id, url, title, summary, body_markdown, source,
                         published_at, ingested_at, chains_mentioned, tokens_mentioned,
-                        sentiment_score, category, source_trust, content_hash)
-VALUES ($1,$2,$3,$4,NULL,$5,$6,now(),$7,$8,NULL,$9,$10,$11)
+                        sentiment_score, category, source_trust, content_hash,
+                        body_source, truncated)
+VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,NULL,$10,$11,$12,$13,$14)
 ON CONFLICT DO NOTHING  -- news_id PK or content_hash unique index
 """
 CHAINS = {
@@ -66,11 +68,13 @@ def _row(source: str, item: dict[str, Any], pub: float) -> tuple[Any, ...]:
     chains = [c for c, keys in CHAINS.items() if any(k in low for k in keys)]
     tickers = sorted(set(re.findall(r"\$([A-Z]{2,6})\b", text)))
     category, trust = classify(title, desc, source)
+    extracted = clean_item(item, source)
     return (
         news_id_for(link),
         link[:2048],
         title[:500],
         desc[:2000],
+        extracted["body"][:20000],
         source,
         datetime.fromtimestamp(pub, tz=UTC),
         chains,
@@ -78,6 +82,8 @@ def _row(source: str, item: dict[str, Any], pub: float) -> tuple[Any, ...]:
         category,
         trust,
         content_hash(title, item.get("guid", ""), link),
+        extracted["body_source"],
+        extracted["truncated"],
     )
 
 

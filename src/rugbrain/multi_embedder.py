@@ -177,18 +177,17 @@ def _default_backends() -> dict[str, Backend]:
 # Provider chains per backend, in try-order. Every lane inside a chain
 # serves the SAME model family ⇒ same vector space ⇒ results stay
 # comparable with the target collection (no cross-family fallback, ever).
-# Canonical (2026-08-29): DeepInfra primary, local :8004 fallback.
+# Canonical (2026-10-22, MEASURED): SiliconFlow `qwen8b` primary, DeepInfra last.
 EMBED_CHAINS: dict[str, tuple[str, ...]] = {
-    # 2026-10-17: siliconflow inserted because the local :8004 lane is not
-    # running (the socat forward to 127.0.0.1:8004 has no listener) and
-    # DeepInfra is returning 402 (overdue invoices). Same model family in
-    # every position => same vector space => results stay comparable.
-    # 2026-10-17 order (operator: "never run out of credit"):
-    #   DeepInfra (primary) -> SiliconFlow -> OpenRouter backup -> local :8004.
-    # Every lane serves the same qwen3-embedding-8b => same vector space.
-    # On 2026-10-17 DeepInfra went 402 (overdue invoices) and the local lane
-    # was not running, which silently broke all of RAG; this order survives it.
-    "qwen8b": ("deepinfra", "siliconflow", "or_qwen8b", "qwen8b"),
+    # 2026-10-22: SiliconFlow LEADS. It is the only hosted lane with a live
+    # 200-at-4096 credential: api.siliconflow.com answers Qwen/Qwen3-Embedding-8B
+    # in 0.44-1.21 s at 4096 dims, while DeepInfra answers 402 (overdue
+    # invoices) and the local :8004 lane is not running. Every lane here serves
+    # the same qwen3-embedding-8b => same vector space => results stay
+    # comparable, so the order is purely about liveness.
+    # DeepInfra stays as the last HOSTED rung (explicit, never preferred) so the
+    # day it is paid up it is one env flip away, not a code change.
+    "qwen8b": ("siliconflow", "deepinfra", "or_qwen8b", "qwen8b"),
     "deepinfra": ("deepinfra", "siliconflow", "or_qwen8b", "qwen8b"),
     "or_qwen8b": ("or_qwen8b", "siliconflow", "deepinfra", "qwen8b"),
 }

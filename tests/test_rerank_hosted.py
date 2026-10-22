@@ -116,7 +116,7 @@ def test_live_tier_prefers_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="live"))
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert scores[1] == 0.9
     assert scores[0] == 0.2
     assert local_calls["n"] == 0
@@ -180,5 +180,5 @@ def test_deep_tier_hosted_fallback_on_local_failure(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(sr, "_post_rerank", fake_post)
 
     scores, method = asyncio.run(sr._score_candidates("q", _chunks(2), tier="deep"))
-    assert method == "deepinfra:qwen3-reranker-8b"
+    assert method == "hosted:qwen3-reranker-8b"
     assert scores[1] == 0.95
