@@ -81,3 +81,6 @@ mutants/
 # eval runtime output (nightly history)
 /eval/history.jsonl
 .methodology-patterns
+
+# RSS ingest runtime cache (ETag/Last-Modified state)
+data/rss_feed_validators.json

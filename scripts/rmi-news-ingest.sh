@@ -73,20 +73,27 @@ fi
 # Multi-feed mode (2026-08-29): data/rss_feeds.txt carries the 177-feed
 # list (security firms, L1/L2 blogs, regulators, mainstream crypto press).
 # Falls back to the single CryptoPanic feed when the file is absent.
-FEEDS_FILE="${RMI_FEEDS_FILE:-$RAG_DIR/data/rss_feeds.txt}"
+FEEDS_FILE="${RMI_FEEDS_FILE:-$RAG_DIR/config/rss_feeds.txt}"
 FEED_ARGS=(--days "${RMI_NEWS_DAYS:-7}")
 if [ -f "$FEEDS_FILE" ]; then
   FEED_ARGS+=(--feeds-file "$FEEDS_FILE")
 fi
-log "step=ingest_cryptopanic dir=$RAG_DIR feeds_file=$FEEDS_FILE"
+# 2026-10-22: rss_ingest_feeds.py is the multi-feed path (per-feed isolation,
+# ETag/If-Modified-Since conditional GET, content-level dedupe, deterministic
+# category + source_trust). The legacy single-feed ingest stays as fallback.
+INGEST_SCRIPT="scripts/ingest_cryptopanic_news.py"
+if [ -f "$RAG_DIR/scripts/rss_ingest_feeds.py" ] && [ -f "$FEEDS_FILE" ]; then
+  INGEST_SCRIPT="scripts/rss_ingest_feeds.py"
+fi
+log "step=ingest_rss dir=$RAG_DIR feeds_file=$FEEDS_FILE script=$INGEST_SCRIPT"
 if [ -x "$RAG_PYTHON" ]; then
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      "$RAG_PYTHON" scripts/ingest_cryptopanic_news.py "${FEED_ARGS[@]}")
+      "$RAG_PYTHON" "$INGEST_SCRIPT" "${FEED_ARGS[@]}")
 else
   (cd "$RAG_DIR" &&
     POSTGRES_HOST="${POSTGRES_HOST:-127.0.0.1}" \
-      python3 scripts/ingest_cryptopanic_news.py "${FEED_ARGS[@]}")
+      python3 "$INGEST_SCRIPT" "${FEED_ARGS[@]}")
 fi
 
 # ── Step 2: news → embed → Qdrant ───────────────────────────────────

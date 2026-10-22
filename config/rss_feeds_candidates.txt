@@ -1,0 +1,195 @@
+# Candidate feeds probed 2026-10-22 by scripts/rss_feed_health.py.
+# Only 200 + >=1 parsed entry were promoted into config/rss_feeds.txt.
+# Dead/403/paywalled entries are kept here as the excluded record.
+https://www.coindesk.com/arc/outboundfeeds/rss/	CoinDesk RSS
+https://cointelegraph.com/rss	CoinTelegraph
+https://www.theblock.co/rss.xml	The Block
+https://decrypt.co/feed	Decrypt
+https://blockworks.co/feed	Blockworks
+https://www.dlnews.com/arc/outboundfeeds/rss/	DL News
+https://cryptoslate.com/feed/	CryptoSlate
+https://beincrypto.com/feed/	BeInCrypto
+https://thedefiant.io/api/feed	The Defiant
+https://protos.com/feed/	Protos
+https://unchainedcrypto.com/feed/	Unchained
+https://bitcoinmagazine.com/feed	Bitcoin Magazine
+https://bitcoinist.com/feed/	Bitcoinist
+https://dailyhodl.com/feed/	The Daily Hodl
+https://finbold.com/feed/	Finbold
+https://cryptobriefing.com/feed/	Crypto Briefing
+https://coingape.com/feed/	CoinGape
+https://coinjournal.net/feed/	CoinJournal
+https://crypto.news/feed/	Crypto.News
+https://www.newsbtc.com/feed/	NewsBTC
+https://www.cryptopotato.com/feed/	CryptoPotato
+https://ambcrypto.com/feed/	AMB Crypto
+https://u.today/rss	U.Today
+https://zycrypto.com/feed/	ZyCrypto
+https://nulltx.com/feed/	NullTX
+https://coinpedia.org/feed/	Coinpedia
+https://www.coinspeaker.com/feed/	CoinSpeaker
+https://blockonomi.com/feed/	Blockonomi
+https://dailycoin.com/feed/	DailyCoin
+https://cryptoadventure.com/feed/	CryptoAdventure
+https://www.livebitcoinnews.com/feed/	Live Bitcoin News
+https://www.bitcoin.com/feed/	Bitcoin.com
+https://www.thecryptobasic.com/feed/	The Crypto Basic
+https://insidebitcoins.com/feed	InsideBitcoins
+https://cryptopolitan.com/feed/	Cryptopolitan
+https://www.cryptonews.com/rss	CryptoNews
+https://www.trustnodes.com/feed	Trustnodes
+https://messari.io/rss	Messari
+https://blog.kaiko.com/rss.xml	Kaiko Research
+https://insights.glassnode.com/rss/	Glassnode Insights
+https://www.chainalysis.com/blog/feed/	Chainalysis Blog
+https://research.binance.com/rss	Binance Research
+https://www.nansen.ai/rss	Nasen? (probe)
+https://blog.dune.com/rss	Dune Blog
+https://coinmetrics.io/feed/	Coin Metrics
+https://blog.bitquery.io/feed	Bitquery Blog
+https://research.paradigm.xyz/feed	Paradigm Research
+https://a16zcrypto.com/feed/	a16z crypto
+https://www.galaxy.com/feed/	Galaxy Research
+https://www.bitwiseinvestments.com/feed	Bitwise
+https://blog.amberdata.io/rss.xml	Amberdata
+https://llama.defillama.com/rss	DefiLlama Blog
+https://blog.ethereum.org/feed.xml	Ethereum Foundation
+https://research.ethereum.org/feed.xml	ETH Research
+https://ethresear.ch/posts.rss	Ethresear.ch
+https://blog.soliditylang.org/feed.xml	Solidity Blog
+https://rekt.news/rss/	Rekt News
+https://slowmist.medium.com/feed	SlowMist
+https://peckshield.medium.com/feed	PeckShield
+https://certik.medium.com/feed	CertiK
+https://blocksec.com/feed	BlockSec
+https://immunefi.medium.com/feed	Immunefi
+https://blog.trailofbits.com/feed/	Trail of Bits
+https://blog.openzeppelin.com/feed/	OpenZeppelin
+https://halborn.com/feed/	Halborn
+https://www.quantstamp.com/blog/rss.xml	Quantstamp
+https://dedaub.com/blog/feed	Dedaub
+https://blog.hexens.io/feed	Hexens
+https://osec.io/blog/feed	OSEC
+https://thehackernews.com/feeds/posts/default	The Hacker News
+https://www.bleepingcomputer.com/feed/	BleepingComputer
+https://krebsonsecurity.com/feed/	Krebs on Security
+https://www.cisa.gov/cybersecurity-advisories/all.xml	CISA Advisories
+https://solidified.medium.com/feed	Solidified
+https://scsfg.io/feed	Smart Contract Security
+https://blog.kraken.com/feed	Kraken Blog
+https://www.coinbase.com/blog/rss/	Coinbase Blog
+https://blog.bitfinex.com/feed/	Bitfinex Blog
+https://blog.mexc.com/feed/	MEXC Blog
+https://www.gemini.com/blog/rss	Gemini Blog
+https://blog.okx.com/feed	OKX Blog
+https://blog.deribit.com/feed	Deribit Insights
+https://blog.bitstamp.net/feed	Bitstamp Blog
+https://www.binance.com/en/support/announcement/rss	Binance Announcements
+https://www.bybit.com/en/announcements/rss	Bybit Announcements
+https://www.sec.gov/news/pressreleases.rss	SEC Press Releases
+https://www.cftc.gov/rss/pressreleases.xml	CFTC Press Releases
+https://ofac.treasury.gov/recent-actions/rss	OFAC Recent Actions
+https://www.federalreserve.gov/feeds/press_all.xml	Federal Reserve
+https://www.esma.europa.eu/rss.xml	ESMA
+https://www.bis.org/list/press_releases/index.rss	BIS
+https://www.justice.gov/news/rss	DOJ News
+https://www.fca.org.uk/news/rss.xml	FCA News
+https://www.reuters.com/arc/outboundfeeds/rss/?outputType=xml	Reuters (paywall/403 expected)
+https://www.bloomberg.com/feed/podcast/etf-report.xml	Bloomberg (403 expected)
+https://www.ft.com/rss/home	FT (paywall)
+https://www.wsj.com/xml/rss/3_7031.xml	WSJ (403 expected)
+https://www.coindesk.com/feed	CoinDesk legacy (404/redirect)
+https://www.bybit.com/en/announcements/rss	Bybit (dup probe)
+https://news.google.com/rss/search?q=crypto+currency&hl=en-US&gl=US&ceid=US:en	GoogleNews Crypto
+https://news.google.com/rss/search?q=bitcoin&hl=en-US&gl=US&ceid=US:en	GoogleNews Bitcoin
+https://news.google.com/rss/search?q=ethereum&hl=en-US&gl=US&ceid=US:en	GoogleNews Ethereum
+https://news.google.com/rss/search?q=solana&hl=en-US&gl=US&ceid=US:en	GoogleNews Solana
+https://news.google.com/rss/search?q=defi&hl=en-US&gl=US&ceid=US:en	GoogleNews DeFi
+https://news.google.com/rss/search?q=stablecoin&hl=en-US&gl=US&ceid=US:en	GoogleNews Stablecoin
+https://news.google.com/rss/search?q=crypto+hack+exploit&hl=en-US&gl=US&ceid=US:en	GoogleNews Crypto Exploit
+https://news.google.com/rss/search?q=crypto+scam+rug+pull&hl=en-US&gl=US&ceid=US:en	GoogleNews Crypto Scam
+https://news.google.com/rss/search?q=SEC+crypto+regulation&hl=en-US&gl=US&ceid=US:en	GoogleNews Regulation
+https://news.google.com/rss/search?q=crypto+ETF&hl=en-US&gl=US&ceid=US:en	GoogleNews ETF
+https://news.google.com/rss/search?q=web3+security+audit&hl=en-US&gl=US&ceid=US:en	GoogleNews Web3 Security
+https://news.google.com/rss/search?q=onchain+analytics&hl=en-US&gl=US&ceid=US:en	GoogleNews Onchain
+https://www.bing.com/news/search?q=crypto&format=RSS	BingNews Crypto
+https://www.bing.com/news/search?q=bitcoin+hack&format=RSS	BingNews Hack
+https://www.reddit.com/r/CryptoCurrency/.rss	Reddit CryptoCurrency
+https://www.reddit.com/r/ethfinance/.rss	Reddit EthFinance
+https://www.reddit.com/r/solana/.rss	Reddit Solana
+https://www.reddit.com/r/defi/.rss	Reddit DeFi
+https://www.reddit.com/r/CryptoMarkets/.rss	Reddit CryptoMarkets
+https://www.reddit.com/r/Bitcoin/.rss	Reddit Bitcoin
+https://medium.com/feed/tag/crypto	Medium Crypto
+https://medium.com/feed/tag/ethereum	Medium Ethereum
+https://medium.com/feed/tag/defi	Medium DeFi
+https://medium.com/feed/tag/solana	Medium Solana
+https://medium.com/feed/tag/web3	Medium Web3
+https://unchained.substack.com/feed	Unchained Substack
+https://bankless.substack.com/feed	Bankless Substack
+https://news.ycombinator.com/rss	Hacker News
+https://bitcointalk.org/index.php?action=.xml;type=rss	Bitcointalk
+https://www.cnbc.com/id/100003114/device/rss/rss.html	CNBC Markets
+https://feeds.a.dj.com/rss/RSSMarketsMain.xml	WSJ Markets
+https://www.investing.com/rss/news_301.rss	Investing.com Crypto
+https://finance.yahoo.com/news/rssindex	Yahoo Finance
+https://www.fxstreet.com/rss/news	FXStreet
+https://blog.uniswap.org/rss.xml	Uniswap Blog
+https://blog.aave.com/rss	Aave Blog
+https://blog.optimism.io/feed.xml	Optimism
+https://blog.zkSync.io/rss	zkSync
+https://scroll.io/blog/rss.xml	Scroll
+https://www.chainsecurity.com/feed	ChainSecurity
+https://blog.sigmaprime.io/feed.xml	Sigma Prime
+https://www.sherlock.xyz/blog/rss	Sherlock
+https://code4rena.com/blog/rss	Code4rena
+https://www.cyfrin.io/blog/rss.xml	Cyfrin
+https://blog.coinmarketcap.com/feed	CoinMarketCap Blog
+https://www.coingecko.com/en/feed	CoinGecko Feed
+https://blog.gate.io/feed	Gate Blog
+https://www.kucoin.com/blog/rss	KuCoin Blog
+https://www.bitget.com/blog/rss	Bitget Blog
+https://www.finra.org/rss/news	FINRA News
+https://www.federalregister.gov/api/v1/documents.rss?conditions%5Bterm%5D=cryptocurrency	Federal Register Crypto
+https://www.law360.com/rss/articles	Crypto Law360
+https://cointelegraph.com/rss/tag/regulation	CoinTelegraph Regulation
+https://cointelegraph.com/rss/tag/altcoin	CoinTelegraph Altcoin
+https://cointelegraph.com/rss/tag/blockchain	CoinTelegraph Blockchain
+https://cointelegraph.com/rss/tag/ethereum	CoinTelegraph Ethereum
+https://cointelegraph.com/rss/tag/bitcoin	CoinTelegraph Bitcoin
+https://coindesk.com/arc/outboundfeeds/rss/?outputType=xml	CoinDesk XML
+https://www.theblock.co/rss	The Block (alt)
+https://www.dlnews.com/feed	DL News (alt)
+https://decrypt.co/news/feed	Decrypt News
+https://blockworks.co/news/feed	Blockworks News
+https://cryptoquant.com/feed	CryptoQuant
+https://blog.bitmex.com/feed	BitMEX Blog
+https://research.m2.com/feed	M2 Research
+https://www.kenetic.capital/feed	Kenetic
+https://www.coinshares.com/feed	CoinShares
+https://blog.21.co/feed	21.co
+https://www.bitgo.com/rss	BitGo
+https://www.fireblocks.com/feed	Fireblocks
+https://www.anchorage.com/feed	Anchorage
+https://www.circle.com/blog/rss	Circle Blog
+https://www.tether.to/en/feed	Tether
+https://blog.chain.link/feed	Chainlink Blog
+https://blog.solana.com/feed	Solana Blog
+https://www.avax.network/blog/rss	Avalanche Blog
+https://www.near.org/blog/rss	NEAR Blog
+https://blog.cosmos.network/feed	Cosmos Blog
+https://blog.cardano.org/feed	Cardano Blog
+https://blog.ton.org/rss	TON Blog
+https://blog.sui.io/rss	Sui Blog
+https://blog.aptoslabs.com/rss	Aptos Blog
+https://blog.starknet.io/rss	Starknet Blog
+https://blog.matter-labs.io/feed	Matter Labs
+https://blog.polygon.technology/feed	Polygon Blog
+https://blog.base.org/feed	Base Blog
+https://blog.arbitrum.io/feed	Arbitrum Blog
+https://blog.rocketpool.net/feed	Rocket Pool
+https://blog.lido.fi/feed	Lido Blog
+https://blog.eigenlayer.xyz/feed	EigenLayer
+https://blog.pendle.finance/feed	Pendle
+https://blog.curve.fi/feed	Curve
+https://blog.makerdao.com/feed	MakerDAO
