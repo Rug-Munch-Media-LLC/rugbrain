@@ -227,8 +227,11 @@ async def _embed_batch(
     from embed_lane import resolve_lane
 
     _provider, lane_base, lane_headers, lane_model = resolve_lane()
-    base = lane_base if _provider == "deepinfra" else base
-    model = lane_model if _provider == "deepinfra" else model
+    # Any hosted lane supplies its own base/model; only `local` uses the
+    # EMBEDDER_URL/--model passed in by the caller.
+    hosted = _provider != "local"
+    base = lane_base if hosted else base
+    model = lane_model if hosted else model
     # DEEPINFRA_EMBED_URL is written both as a base and as a full endpoint in
     # the fleet's env files; appending blindly produced
     # POST .../v1/embeddings/embeddings -> 404 and silently failed every hosted
@@ -536,7 +539,7 @@ async def run(
                 for chunk_idx, chunk in enumerate(chunks)
             ]
 
-            batch_size = 16
+            batch_size = int(os.getenv("NEWS_TO_RAG_BATCH", "16"))
             for i in range(0, len(work), batch_size):
                 batch = work[i : i + batch_size]
                 texts = [item[2] for item in batch]

@@ -10,6 +10,7 @@ One lane decision for every bulk ingester:
     NOT saturate the CPU-capped local server (2026-09-14 runaway:
     local-only ingests ground for days, starved interactive queries, and
     filled the logs with embed_missing retries).
+  * ``siliconflow`` — hosted ``Qwen/Qwen3-Embedding-8B``, same 4096d space.
   * ``local`` — llama.cpp ``/embeddings`` (``QWEN_EMBED_URL``, :8004).
     Used when no DeepInfra key is configured, or explicitly via
     ``EMBED_PROVIDER=local``.  Intended for light server-dependent work,
@@ -45,6 +46,13 @@ QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
 DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
+# SiliconFlow serves the same Qwen3-Embedding-8B (4096d) vector space as the
+# local and DeepInfra lanes. It is the fallback bulk lane when DeepInfra is
+# credit-gated (402) AND the local server is saturated by other work.
+SILICONFLOW_EMBED_URL = os.getenv(
+    "SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1/embeddings"
+).rstrip("/")
+SILICONFLOW_EMBED_MODEL = os.getenv("SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
 # Canonical dim — qwen3-embedding-8b native, same local and hosted.
 # 4096 = Qwen3-Embedding-8B, the only lane. This default was 2560 (the
 # retired width), and EMBED_DIM is the `want` in embed_dim_mismatch —
@@ -55,6 +63,7 @@ EMBED_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "4
 _TIMEOUT = {
     "deepinfra": float(os.getenv("DEEPINFRA_EMBED_TIMEOUT", "120")),
     "local": float(os.getenv("RAG_EMBED_TIMEOUT", "300")),
+    "siliconflow": float(os.getenv("SILICONFLOW_TIMEOUT", "120")),
 }
 
 
@@ -94,13 +103,27 @@ def resolve_lane() -> tuple[str, str, dict[str, str], str]:
             {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             DEEPINFRA_EMBED_MODEL,
         )
+    if provider == "siliconflow":
+        key = os.getenv("SILICONFLOW_API_KEY", "").strip()
+        if not key:
+            raise RuntimeError(
+                "EMBED_PROVIDER=siliconflow but SILICONFLOW_API_KEY is unset"
+            )
+        return (
+            "siliconflow",
+            SILICONFLOW_EMBED_URL,
+            {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            SILICONFLOW_EMBED_MODEL,
+        )
     if provider == "local":
         headers = {"Content-Type": "application/json"}
         local_key = os.getenv("LLAMA_EMBED_KEY", "").strip()
         if local_key:
             headers["Authorization"] = f"Bearer {local_key}"
         return ("local", QWEN_EMBED_URL, headers, QWEN_EMBED_MODEL_NAME)
-    raise RuntimeError(f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|local)")
+    raise RuntimeError(
+        f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|siliconflow|local)"
+    )
 
 
 async def embed_batch(

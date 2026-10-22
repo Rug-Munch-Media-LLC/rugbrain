@@ -1,5 +1,10 @@
 # RugBrain — Crypto Intelligence RAG Engine
 
+> Crypto-native retrieval-augmented generation over scam reports, token analyses and on-chain evidence.
+
+**License:** [MIT](LICENSE) · **Canonical:** https://git.rugmunch.io/RugMunchMedia/rugbrain
+**Mirrors:** [GitHub](https://github.com/Rug-Munch-Media-LLC) · [GitLab](https://gitlab.com/rug-munch-media-group) · [Codeberg](https://codeberg.org/RugMunchMedia)
+
 > ✅ **CANONICAL (LIVE)** — This repo is the deployed, maintained RAG service
 > (`rugbrain-api:8012`, container `rugbrain-api` on the shared `rmi_network`).
 > All new RAG code, bug fixes, and deploys belong here.
