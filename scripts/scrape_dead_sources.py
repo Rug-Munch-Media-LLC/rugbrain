@@ -36,8 +36,6 @@ import logging
 import os
 import re
 import sys
-import time
-from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -144,6 +142,22 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> str | None:
     return await _flare_get(client, url)
 
 
+async def _fetch_plain(client: httpx.AsyncClient, url: str) -> str | None:
+    """Direct GET only. NEVER falls back to FlareSolverr.
+
+    Sitemaps are machine-readable XML. If one is behind a challenge it is not
+    worth a 20 s bypass, and probing SITEMAP_PATHS x every origin through the
+    bypass was ~90% of all scrape-tier traffic at 0% success.
+    """
+    try:
+        r = await client.get(url, headers={"User-Agent": UA}, follow_redirects=True)
+        if r.status_code == 200 and r.content:
+            return r.text
+    except httpx.HTTPError:
+        pass
+    return None
+
+
 def _locs(xml: str) -> list[str]:
     return [html.unescape(m) for m in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", xml)]
 
@@ -151,8 +165,17 @@ def _locs(xml: str) -> list[str]:
 async def _sitemap_articles(client: httpx.AsyncClient, origin: str, cap: int) -> list[str]:
     """Recent article URLs from the site's sitemap (index followed one level)."""
     found: list[str] = []
-    for path in SITEMAP_PATHS:
-        body = await _fetch(client, origin + path)
+    # robots.txt is the sanctioned way to find the sitemap; try it before
+    # probing a fixed path list.
+    _robots = await _fetch_plain(client, origin + "/robots.txt")
+    _paths = list(SITEMAP_PATHS)
+    if _robots:
+        _paths = [m for m in re.findall(r"(?i)^sitemap:\s*(\S+)", _robots, re.M)][:2] + _paths
+    for path in _paths:
+        if path.startswith("http"):
+            body = await _fetch_plain(client, path)
+        else:
+            body = await _fetch_plain(client, origin + path)
         if not body:
             continue
         locs = _locs(body)
@@ -160,7 +183,7 @@ async def _sitemap_articles(client: httpx.AsyncClient, origin: str, cap: int) ->
         subs = [u for u in locs if u.endswith(".xml")][:4]
         if subs:
             for sub in subs:
-                sub_body = await _fetch(client, sub)
+                sub_body = await _fetch_plain(client, sub)
                 if sub_body:
                     locs.extend(_locs(sub_body))
         for u in locs:
