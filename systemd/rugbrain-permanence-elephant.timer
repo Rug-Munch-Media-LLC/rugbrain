@@ -1,0 +1,12 @@
+# Four firings on Sunday morning, after the 03:00 nightly has written the day.
+# Each firing resumes the shard cursor: 23 shards / ~6 per firing = 4 firings.
+[Unit]
+Description=RugBrain B2 Permanence — weekly elephant slots (rag_documents_8b)
+
+[Timer]
+OnCalendar=Sun *-*-* 06,07,08,09:00
+AccuracySec=2m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,43 @@
+# rugbrain-permanence-elephant.service — the WEEKLY contract for rag_documents_8b
+#
+# WHY THIS EXISTS (2026-10-23, measured):
+#   rag_documents_8b   1,136,363 points @ 24.9 KB/point = 28.3 GB
+#                      1,243 MB per 50,000-point shard, 5.1-9.7 min per shard
+#                      23 shards => ~190 min of export+upload for ONE collection
+#   nightly budget     4 firings x 30 min = 120 min for ALL collections
+# The collection is therefore >1.5x the whole nightly budget: no schedule makes
+# it fit inside its own day. It is excluded from the daily denominator
+# (config/permanence-scope.json) and backed up here, over four dedicated
+# firings. Shard progress accumulates because every entry pins
+# expected_shards and resumes from its last shard cursor.
+#
+# This unit deliberately passes --collection: that is the operator-intent path
+# which bypasses the daily exclusion and keeps the day from being judged
+# against 98 collections.
+
+[Unit]
+Description=RugBrain B2 Permanence — WEEKLY elephant (rag_documents_8b)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rugbrain
+EnvironmentFile=/srv/secrets/b2-permanence.env
+Environment=B2_SHARD_POINTS=50000
+# 50 min of work inside a 60 min slot, which is inside the unit's unchanged
+# 90 min TimeoutStartSec. Raising that timeout is not part of this contract.
+ExecStart=/usr/bin/python3 /srv/work/repos/rugbrain/scripts/b2_permanence.py \
+    --collection rag_documents_8b --shard-points 50000 \
+    --max-seconds 3000 --slot-seconds 3300 --carry-days 0
+StandardOutput=append:/var/log/rmi-rag-permanence.log
+StandardError=append:/var/log/rmi-rag-permanence.log
+TimeoutStartSec=5400
+
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

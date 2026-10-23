@@ -1,0 +1,21 @@
+{
+  "schema": "permanence-scope/1",
+  "daily_excluded": ["rag_documents_8b"],
+  "why": "One full export of rag_documents_8b costs MORE than the whole daily budget, so it can never be part of the 2026-10-xx nightly contract. Measured 2026-10-23: 1,136,363 points at 24.9 KB/point = 28.3 GB; shards land at 1,243 MB each in 5.1-9.7 min (median 8.3) => 23 shards = ~190 min of pure export+upload. The nightly writer gets 4 x 30 min = 120 min TOTAL for all 98 collections. Including it guarantees the day never completes.",
+  "weekly_contract": {
+    "collections": ["rag_documents_8b"],
+    "shards": 23,
+    "shard_points": 50000,
+    "bytes_full": 28300000000,
+    "minutes_full": 190,
+    "slots": "Sun 01:00-05:00 CEST, 4 firings of ~50 min (rugbrain-permanence-elephant.timer)",
+    "completion": "shard progress accumulates across the 4 firings via expected_shards + per-shard resume; the day is done when len(shards) == expected_shards"
+  },
+  "numbers_2026_10_23": {
+    "points_total": 1136363,
+    "points_done": 650000,
+    "shards_done": 11,
+    "shards_expected": 23,
+    "bytes_done": 16951836919
+  }
+}

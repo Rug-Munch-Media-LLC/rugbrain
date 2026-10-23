@@ -97,6 +97,8 @@ from b2_common import (
 from permanence_chunk_plan import estimate_minutes, plan_chunks
 from permanence_chunk_run import run_chunk
 from permanence_shard import export_parquet_shards
+from permanence_scope import daily_scope
+from permanence_shard_contract import pin_expected_shards
 from permanence_shard_resume import entry_is_done, resume_state
 
 logger = logging.getLogger("b2_permanence")
@@ -482,6 +484,11 @@ def snapshot_collection(
         # dropping prior_shards here erased part-0 from the manifest entry and
         # understated bytes_stored on every resumed night.
         shards = prior_shards + list(shards)
+        if not _expected_shards:
+            # A count failure is not evidence that the collection shrank. The
+            # denominator an earlier firing pinned is still the truth, and
+            # dropping it here is how a resumed entry lost its completion test.
+            _expected_shards = int(prior.get("expected_shards") or 0) or None
         if _expected_shards:
             # The manifest merge REPLACES the prior entry with this dict, so
             # recording the denominator on `prior` (the resume state, which the
@@ -562,6 +569,7 @@ def upload_manifest(
     entries: list[dict[str, Any]],
     expected_count: int | None = None,
     missing: dict[str, str] | None = None,
+    exclude_from_daily: bool = True,
     drop: set[str] | None = None,
 ) -> None:
     """Upload manifest.json for the day plus the latest.json pointer.
@@ -659,13 +667,40 @@ def upload_manifest(
         if entry.get("collection"):
             missing_by.pop(str(entry["collection"]), None)
 
+    if exclude_from_daily:
+        # "Out of daily scope" has to mean the day stops owing it, otherwise the
+        # prior entry and its `missing[]` row keep a 97-of-98 day incomplete
+        # forever. A --collection run passes exclude_from_daily=False, so the
+        # weekly contract can still complete the very collection the daily run
+        # drops.
+        out = set(daily_scope([])[1])
+        if out:
+            # Keep any entry already in the day (the weekly run's shards are
+            # real data and must not be erased by the nightly), but stop the
+            # day OWING it: drop its missing[] row and do not let it inflate
+            # the denominator below.
+            cleared = [n for n in out if n in missing_by]
+            for n in out:
+                missing_by.pop(n, None)
+            if cleared:
+                logger.warning(
+                    "daily_scope_cleared_missing date=%s collections=%s",
+                    date_str,
+                    ",".join(sorted(cleared)),
+                )
+
     expected = expected_count if expected_count is not None else prior_expected
     if expected is None:
         expected = len(merged)
     # Never let a narrow run (--collection, a debug chunk) LOWER the day's
     # denominator: that is how a 4-of-85 manifest would advertise itself as
     # complete. Only a larger truth may raise it.
-    expected = max(int(expected), len(merged))
+    # The denominator counts DAILY collections: an out-of-scope entry that
+    # happens to be present (weekly elephant) must not raise what the day owes.
+    out_present = len(
+        [e for e in merged if e.get("collection") in set(daily_scope([])[1])]
+    ) if exclude_from_daily else 0
+    expected = max(int(expected), len(merged) - out_present)
     missing_list = [missing_by[k] for k in sorted(missing_by)]
     # A half-written collection (partial: true) is a manifest ENTRY but not a
     # landed collection. Counting it would let a day holding one shard of the
@@ -691,6 +726,11 @@ def upload_manifest(
         "expected_collections": expected,
         "complete": complete,
         "missing": missing_list,
+        # WHAT THIS DAY IS NOT SUPPOSED TO HOLD. Without it a reader comparing
+        # against the live Qdrant collection list counts one collection too
+        # many forever, and "97 of 97 by design" is indistinguishable from
+        # "97 of 98, one missing".
+        "daily_scope": {"excluded_from_daily": daily_scope([])[1]},
     }
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
         json.dump(manifest, tmp, indent=2)
@@ -1230,6 +1270,17 @@ def main() -> int:
         logger.critical("list_collections_failed: %s", exc)
         return 1
 
+    # DAILY SCOPE (2026-10-23). A --collection run is explicit operator intent
+    # (the weekly elephant contract uses exactly that), so the daily exclusion
+    # applies only to the nightly full-day run. `day_universe` is reduced with
+    # it, otherwise the day would be judged against a collection it is
+    # contractually not exporting and could never read complete.
+    daily_excluded: list[str] = []
+    if not args.collection:
+        before = len(collections)
+        collections, daily_excluded = daily_scope(collections)
+        day_universe -= before - len(collections)
+
     if args.collection:
         requested = set(args.collection)
         missing = requested - set(collections)
@@ -1613,6 +1664,17 @@ def main() -> int:
         return prior
 
     def flush(chunk_entries: list[dict[str, Any]], chunk_failures: dict[str, str]) -> None:
+        # REPAIR ON RESUME: an entry inherited from an earlier day (or written by
+        # a run whose point count failed) gets its denominator pinned here, so a
+        # day that was already partially landed becomes completable without
+        # re-exporting a single shard.
+        for entry in chunk_entries:
+            if entry.get("shards") and not entry.get("expected_shards"):
+                pin_expected_shards(
+                    entry,
+                    points_of(str(entry.get("collection") or "")),
+                    int(args.shard_points or 0),
+                )
         upload_manifest(
             b2_api,
             bucket_name,
@@ -1621,6 +1683,7 @@ def main() -> int:
             expected_count=expected_count,
             missing=chunk_failures,
             drop=stale,
+            exclude_from_daily=not bool(args.collection),
         )
 
     def snap(name: str) -> dict[str, Any]:
@@ -1639,6 +1702,13 @@ def main() -> int:
                 "shards": list(shards_now),
                 "started_at": datetime.now(UTC).isoformat(),
             }
+            # The denominator belongs on EVERY entry that names shards, not only
+            # on the one that reaches the end of the export. The chunk budget
+            # stops the elephant mid-collection every night, so this flush is
+            # the only writer that ever runs for it -- measured 2026-10-23: 0 of
+            # 5 sharded entries carried expected_shards, so none could ever be
+            # judged finished.
+            pin_expected_shards(entry, points_of(name), int(args.shard_points or 0))
             # FEED THE CURSOR BACK INTO THIS PROCESS (2026-10-23). `state` is
             # read from prior_entries once, at the top of snap(); a retry of
             # the same collection therefore restarted at part 0 and re-uploaded

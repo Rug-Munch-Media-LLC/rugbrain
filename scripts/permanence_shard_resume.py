@@ -28,8 +28,22 @@ _EMPTY: dict[str, Any] = {"shards": [], "cursor": None, "points_done": 0}
 
 
 def entry_is_done(entry: dict[str, Any] | None) -> bool:
-    """True when this manifest entry needs no further work."""
-    return bool(entry) and not entry.get("partial")
+    """True when this manifest entry needs no further work.
+
+    `partial` is not the final word. A sharded collection stopped by the chunk
+    budget is partial BY DESIGN, and it is finished the moment its LAST shard
+    lands — the shard list only ever names shards already uploaded to B2.
+    Judging on the flag alone is what made a 1,136,363-point collection whose
+    23 shards had all landed still read "partial" forever: the day could never
+    complete, and the same collection was re-entered every firing.
+    """
+    if not entry:
+        return False
+    if not entry.get("partial"):
+        return True
+    expected = int(entry.get("expected_shards") or 0)
+    shards = entry.get("shards") or []
+    return expected > 0 and len(shards) >= expected
 
 
 def resume_state(entry: dict[str, Any] | None) -> dict[str, Any]:
