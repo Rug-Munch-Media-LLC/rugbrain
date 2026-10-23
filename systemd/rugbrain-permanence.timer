@@ -6,6 +6,10 @@
 # the day is complete every later firing exits in seconds ("nothing to do"),
 # so the extra slots cost nothing.
 #
+# NOTE: one OnCalendar= per slot. A comma list inside a single spec is rejected
+# (`Invalid argument`), which is how the first version of this timer failed to
+# load at all — a timer that cannot parse is a timer that never fires.
+#
 # Footgun that killed this loop for 3 days (2026-09-25..28): a
 # `Requires=rugbrain-permanence.service` on the timer. A oneshot service goes
 # inactive after each run, and a Requires= dependency propagates that
@@ -18,7 +22,15 @@ Description=RugBrain B2 Permanence — chunked Qdrant snapshot to B2
 Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
 
 [Timer]
-OnCalendar=*-*-* 03:00,03:40,04:20,05:00,05:40,06:20,07:00,07:40,08:20
+OnCalendar=*-*-* 03:00:00
+OnCalendar=*-*-* 03:40:00
+OnCalendar=*-*-* 04:20:00
+OnCalendar=*-*-* 05:00:00
+OnCalendar=*-*-* 05:40:00
+OnCalendar=*-*-* 06:20:00
+OnCalendar=*-*-* 07:00:00
+OnCalendar=*-*-* 07:40:00
+OnCalendar=*-*-* 08:20:00
 RandomizedDelaySec=120
 Persistent=true
 
