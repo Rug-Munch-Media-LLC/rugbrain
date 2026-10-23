@@ -49,10 +49,15 @@ EMBED_BUILD_ID = os.getenv("RAG_EMBED_BUILD_ID", "")  # git commit hash or CI bu
 # operator override for a legacy lane.
 BACKEND = os.getenv("RAG_EMBED_BACKEND", "auto").lower()
 
-# QWEN_EMBED_URL is the canonical embedder endpoint (llama.cpp Qwen3-8B).
-QWEN_EMBED_URL = os.getenv(
-    "QWEN_EMBED_URL", os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
-).rstrip("/")
+# QWEN_EMBED_URL is the canonical embedder endpoint: llama.cpp
+# ``llama-embed8b.service`` — Qwen3-Embedding-8B Q8_0 at **4096d** on :8024.
+# Measured on Talos 2026-10-24: :8004 answers **1024d** (that is
+# ``llama-embed.service``, Qwen3-Embedding-0.6B — supermemory's lane), so the
+# old default pointed the corpus chain at the wrong model. The width guard
+# then rejected every 1024d vector (`embed_lane_dim_mismatch want=4096`), which
+# silently reduced the "auto" chain to hosted-only for any process that ran
+# without the compose override (CLI ingest, timers, scripts).
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8024/v1").rstrip("/")
 GATEWAY_EMBED_URL = os.getenv("GATEWAY_EMBED_URL", "http://127.0.0.1:8010")
 QWEN_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b"))
 OPENROUTER_URL = os.getenv("OPENROUTER_EMBED_URL", "https://openrouter.ai/api/v1/embeddings")
