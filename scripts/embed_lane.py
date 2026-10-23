@@ -1,31 +1,15 @@
-#!/usr/bin/env python3
-"""Shared provider-aware batch embedding for RugBrain ingest lanes.
+"""Public bulk-embedding API for the corpus — now a chain, and fail-loud.
 
-One lane decision for every bulk ingester:
+``embed_batch`` walks the lane chain from ``embed_chain`` (local :8024 8B/4096
+first, then the hosted 8B lanes). Every attempt is dimension-checked against
+``embed_contract``: a 1024-d lane can never be used, and a lane that returns
+the wrong width is treated as failed rather than silently stored.
 
-  * ``deepinfra`` (default when a key is configured) — hosted
-    ``Qwen/Qwen3-Embedding-8B`` — the SAME 4096-dim vector space as the
-    local llama.cpp lane, ~80x faster (~23 ms/doc vs ~1947 ms/doc local,
-    benchmarked 2026-08-29).  Bulk ingestion is heavy by nature and must
-    NOT saturate the CPU-capped local server (2026-09-14 runaway:
-    local-only ingests ground for days, starved interactive queries, and
-    filled the logs with embed_missing retries).
-  * ``siliconflow`` — hosted ``Qwen/Qwen3-Embedding-8B``, same 4096d space.
-  * ``local`` — llama.cpp ``/embeddings`` (``QWEN_EMBED_URL``, :8004).
-    Used when no DeepInfra key is configured, or explicitly via
-    ``EMBED_PROVIDER=local``.  Intended for light server-dependent work,
-    never for bulk.
-
-Selection (``EMBED_PROVIDER`` env): ``deepinfra`` | ``local`` | unset
-(``auto``: DeepInfra when a key is available, else local).
-
-Dim policy: canonical corpus dim is 4096 (qwen3-embedding-8b native,
-identical locally and on DeepInfra).  Override with ``QWEN_EMBED_DIMS``
-or ``RAG_EMBED_DIM`` only if a collection is deliberately MRL-truncated.
-
-The API key is read from ``DEEPINFRA_API_KEY`` or, when unset, the file
-at ``DEEPINFRA_KEY_FILE`` (default ``/run/secrets/deepinfra_api_key``;
-the fleet exports ``/srv/secrets/deepinfra_api_key``).  Never logged.
+When EVERY lane fails the call raises ``EmbedLaneExhausted`` (the default;
+``RUG_EMBED_STRICT=0`` restores the old ``[None, ...]`` return for diagnostics
+only). History: returning ``[None, ...]`` on HTTP failure was read by every
+caller as success, so a 402 sweep reported ``upserted=0`` and exited 0 while
+the corpus stood still (2026-10-23, 493 embed_http_fail).
 """
 
 from __future__ import annotations
@@ -34,169 +18,119 @@ import logging
 import os
 
 import httpx
+from embed_chain import (
+    Lane,
+    build_chain,
+    cooling,
+    failure_count,
+    freeze,
+    last_failure,
+    record_failure,
+    reset_failures,
+)
+from embed_contract import CORPUS_DIM, MAX_CHARS, EmbedLaneExhausted, validate_dimensions
 
 logger = logging.getLogger(__name__)
 
-QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1").rstrip("/")
-# 8B is the default model, not only the env default (operator decision
-# 2026-09-28). A path without the env previously fell back to 4B and was
-# refused by the store's dimension guard; the guard was right, the default was
-# the bug. Kept in step with src/rugbrain/embeddings.py.
-QWEN_EMBED_MODEL_NAME = os.getenv("RAG_EMBED_MODEL", "qwen3-embedding-8b")
-DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1").rstrip("/")
-DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
-DEEPINFRA_KEY_FILE = os.getenv("DEEPINFRA_KEY_FILE", "/run/secrets/deepinfra_api_key")
-# SiliconFlow serves the same Qwen3-Embedding-8B (4096d) vector space as the
-# local and DeepInfra lanes. It is the fallback bulk lane when DeepInfra is
-# credit-gated (402) AND the local server is saturated by other work.
-SILICONFLOW_EMBED_URL = os.getenv(
-    "SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1/embeddings"
-).rstrip("/")
-SILICONFLOW_EMBED_MODEL = os.getenv("SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
-# Canonical dim — qwen3-embedding-8b native, same local and hosted.
-# 4096 = Qwen3-Embedding-8B, the only lane. This default was 2560 (the
-# retired width), and EMBED_DIM is the `want` in embed_dim_mismatch —
-# so the embedder (correctly returning 4096) was rejected by every
-# programmatic ingest until this was corrected.
-EMBED_DIM = int(os.getenv("QWEN_EMBED_DIMS") or os.getenv("RAG_EMBED_DIM") or "4096")
+# Compat spellings: older callers and docs import these from here.
+EMBED_DIM = CORPUS_DIM
+QWEN_EMBED_DIM = CORPUS_DIM
+QWEN_EMBED_URL = os.getenv("QWEN_EMBED_URL", "http://127.0.0.1:8024/v1").rstrip("/")
 
-_TIMEOUT = {
-    "deepinfra": float(os.getenv("DEEPINFRA_EMBED_TIMEOUT", "120")),
-    "local": float(os.getenv("RAG_EMBED_TIMEOUT", "300")),
-    "siliconflow": float(os.getenv("SILICONFLOW_TIMEOUT", "120")),
-}
+# Statuses that will not fix themselves inside one sweep: park the lane.
+_PERMANENT = frozenset({401, 402, 403})
+__all__ = [
+    "EMBED_DIM",
+    "EmbedLaneExhausted",
+    "embed_batch",
+    "failure_count",
+    "last_failure",
+    "reset_failures",
+    "resolve_lane",
+]
 
 
-def _deepinfra_key() -> str:
-    """API key from env first, secrets file fallback. Never logged."""
-    key = os.getenv("DEEPINFRA_API_KEY", "").strip()
-    if key:
-        return key
-    try:
-        with open(DEEPINFRA_KEY_FILE, encoding="utf-8") as fh:
-            return fh.read().strip()
-    except OSError:
-        return ""
+def chain() -> list[Lane]:
+    """The lane chain for this process, honouring ``EMBED_PROVIDER`` as a hint."""
+    return build_chain(os.getenv("EMBED_PROVIDER", "").strip().lower() or None)
 
 
 def resolve_lane() -> tuple[str, str, dict[str, str], str]:
-    """Return ``(provider, base_url, headers, model)`` for the bulk lane.
+    """``(provider, base_url, headers, model)`` for the FIRST usable lane.
 
-    Raises RuntimeError when ``EMBED_PROVIDER=deepinfra`` but no key is
-    available — a misconfigured bulk lane must fail loudly instead of
-    silently degrading to the slow local server (that failure mode caused
-    the multi-day ingest grind on 2026-09-14).
+    Kept for callers that only need "where would an embed go"; the real work
+    goes through :func:`embed_batch`, which walks the whole chain.
     """
-    provider = os.getenv("EMBED_PROVIDER", "").strip().lower()
-    key = _deepinfra_key()
-    if not provider:
-        provider = "deepinfra" if key else "local"
-    if provider == "deepinfra":
-        if not key:
-            raise RuntimeError(
-                "EMBED_PROVIDER=deepinfra but no key: set DEEPINFRA_API_KEY or "
-                f"DEEPINFRA_KEY_FILE (current: {DEEPINFRA_KEY_FILE})"
-            )
-        return (
-            "deepinfra",
-            DEEPINFRA_EMBED_URL,
-            {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            DEEPINFRA_EMBED_MODEL,
-        )
-    if provider == "siliconflow":
-        key = os.getenv("SILICONFLOW_API_KEY", "").strip()
-        if not key:
-            raise RuntimeError(
-                "EMBED_PROVIDER=siliconflow but SILICONFLOW_API_KEY is unset"
-            )
-        return (
-            "siliconflow",
-            SILICONFLOW_EMBED_URL,
-            {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            SILICONFLOW_EMBED_MODEL,
-        )
-    if provider == "local":
-        headers = {"Content-Type": "application/json"}
-        local_key = os.getenv("LLAMA_EMBED_KEY", "").strip()
-        if local_key:
-            headers["Authorization"] = f"Bearer {local_key}"
-        return ("local", QWEN_EMBED_URL, headers, QWEN_EMBED_MODEL_NAME)
-    raise RuntimeError(
-        f"EMBED_PROVIDER={provider!r} unknown (use deepinfra|siliconflow|local)"
-    )
+    lane = chain()[0]
+    return (lane.name, lane.url, dict(lane.headers), lane.model)
+
+
+async def _post(lane: Lane, texts: list[str], http: httpx.AsyncClient) -> list[list[float]] | None:
+    """POST one batch to one lane. Records the failure itself, returns None."""
+    payload = {"model": lane.model, "input": [t[:MAX_CHARS] for t in texts]}
+    try:
+        r = await http.post(lane.url, json=payload, headers=lane.headers, timeout=lane.timeout)
+    except Exception as exc:
+        record_failure(lane.name, "transport", f"{type(exc).__name__}: {exc}")
+        return None
+    if r.status_code != 200:
+        record_failure(lane.name, f"http_{r.status_code}", r.text[:200])
+        if r.status_code in _PERMANENT:
+            freeze(lane)
+        return None
+    try:
+        items = sorted(r.json().get("data", []), key=lambda i: i.get("index", 0))
+    except ValueError as exc:
+        record_failure(lane.name, "bad_json", str(exc))
+        return None
+    if len(items) != len(texts):
+        record_failure(lane.name, "shape", f"got={len(items)} want={len(texts)}")
+        return None
+    vectors = validate_dimensions(items, CORPUS_DIM)
+    if vectors is None:
+        record_failure(lane.name, "dim", f"want={CORPUS_DIM}")
+        return None
+    return vectors
 
 
 async def embed_batch(
-    texts: list[str], *, client: httpx.AsyncClient | None = None
+    texts: list[str],
+    *,
+    client: httpx.AsyncClient | None = None,
+    raise_on_failure: bool | None = None,
 ) -> list[list[float] | None]:
-    """Embed *texts* in one request on the resolved bulk lane.
+    """Embed *texts* on the first healthy 4096-d lane.
 
-    Returns one vector per input (None for a failed/malformed entry),
-    aligned with input order.  Never raises for HTTP failures.
+    Raises ``EmbedLaneExhausted`` when no lane produced vectors (default).
+    Set ``RUG_EMBED_STRICT=0`` / ``raise_on_failure=False`` only for dry runs.
     """
     if not texts:
         return []
-    try:
-        provider, base, headers, model = resolve_lane()
-    except RuntimeError as exc:
-        logger.error("embed_lane_misconfigured: %s", exc)
-        return [None] * len(texts)
-    payload = {"model": model, "input": [t[:8000] for t in texts]}
+    lanes = build_chain(os.getenv("EMBED_PROVIDER", "").strip().lower() or None)
     own_client = client is None
     http = client or httpx.AsyncClient()
-    # Do not blindly append "/embeddings".
-    #
-    # DEEPINFRA_EMBED_URL is written two ways across the fleet's env files:
-    #   base form  https://api.deepinfra.com/v1            (the default here)
-    #   full form  https://api.deepinfra.com/v1/embeddings (rugbrain.env:14)
-    # An unconditional f"{base}/embeddings" turned the full form into
-    #   POST https://api.deepinfra.com/v1/embeddings/embeddings  ->  404
-    # which silently failed EVERY hosted embed. Symptom seen 2026-09-28:
-    #   source_stored name=defillama coll=market_data fetched=25 embedded=0
-    #   errors=25, every one an "embed_http_fail lane=deepinfra status=404".
-    # The multi_embedder lane already guards this; this one did not, so the same
-    # env var was correct in one caller and fatal in the other.
-    #
-    # Accepting both forms is the durable fix: the env no longer has to be
-    # written exactly one way for this lane to work.
-    _base = base.rstrip("/")
-    url = _base if _base.endswith("/embeddings") else f"{_base}/embeddings"
     try:
-        r = await http.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=_TIMEOUT[provider],
-        )
-        if r.status_code != 200:
-            logger.warning(
-                "embed_http_fail lane=%s status=%d body=%s",
-                provider,
-                r.status_code,
-                r.text[:200],
-            )
-            return [None] * len(texts)
-        items = sorted(r.json().get("data", []), key=lambda i: i.get("index", 0))
-        if len(items) != len(texts):
-            logger.warning(
-                "embed_shape_mismatch lane=%s got=%d want=%d", provider, len(items), len(texts)
-            )
-            return [None] * len(texts)
-        out: list[list[float] | None] = []
-        for item in items:
-            vec = item.get("embedding", [])
-            if isinstance(vec, list) and len(vec) == EMBED_DIM:
-                out.append([float(x) for x in vec])
-            else:
-                got = len(vec) if isinstance(vec, list) else type(vec).__name__
-                logger.warning(
-                    "embed_dim_mismatch lane=%s got=%s want=%d", provider, got, EMBED_DIM
-                )
-                out.append(None)
-        return out
-    except Exception as exc:
-        logger.warning("embed_fail lane=%s err=%s", provider, str(exc)[:200])
-        return [None] * len(texts)
+        tried: list[str] = []
+        for lane in lanes:
+            if cooling(lane):
+                logger.info("embed_lane_parked lane=%s status=permanent", lane.name)
+                continue
+            tried.append(lane.name)
+            vectors = await _post(lane, texts, http)
+            if vectors is not None:
+                if lane.name != lanes[0].name:
+                    logger.warning("embed_lane_fallback used=%s preferred=%s", lane.name, lanes[0].name)
+                return vectors
     finally:
         if own_client:
             await http.aclose()
+    strict = raise_on_failure
+    if strict is None:
+        strict = os.getenv("RUG_EMBED_STRICT", "1") != "0"
+    record_failure("chain", "exhausted", f"tried={','.join(tried) or 'none'} last={last_failure()}")
+    if strict:
+        raise EmbedLaneExhausted(
+            f"no corpus lane produced vectors (tried={tried or 'none'}, want_dim={CORPUS_DIM}); "
+            f"last={last_failure()}"
+        )
+    return [None] * len(texts)

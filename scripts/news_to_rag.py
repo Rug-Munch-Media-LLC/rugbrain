@@ -214,61 +214,31 @@ async def _upsert_batch(client: httpx.AsyncClient, base: str, points: list[dict[
 
 # ── Qwen3 embed helpers ─────────────────────────────────────────────
 async def _embed_batch(
-    client: httpx.AsyncClient, base: str, model: str, texts: list[str]
+    client: httpx.AsyncClient, _base: str, _model: str, texts: list[str]
 ) -> list[list[float]] | None:
-    """Embed a list of texts on the bulk lane. Returns None on failure.
+    """Embed chunks on the corpus lane chain (see ``scripts/embed_lane.py``).
 
-    DeepInfra-first (same Qwen3-Embedding-8B as the local server, ~80x
-    faster); the passed ``base``/``model`` apply on the local lane. See
-    scripts/embed_lane.py for the provider policy.
+    Delegated, not duplicated: this function used to carry its own copy of the
+    HTTP call, so a lane fix in ``embed_lane`` did not reach the news path and
+    a 401/402 here could not be told apart from a slow run. One chain, one
+    4096-d contract, one failure counter.
+
+    Returns ``None`` when the batch could not be embedded (the caller skips the
+    article). Raises ``EmbedLaneExhausted`` when NO lane produced vectors —
+    that abort is deliberate: it is what makes the refresh job exit non-zero
+    instead of reporting a clean sweep that stored nothing.
     """
     if not texts:
         return []
-    from embed_lane import resolve_lane
+    from embed_lane import embed_batch as _lane_embed_batch
 
-    _provider, lane_base, lane_headers, lane_model = resolve_lane()
-    # Any hosted lane supplies its own base/model; only `local` uses the
-    # EMBEDDER_URL/--model passed in by the caller.
-    hosted = _provider != "local"
-    base = lane_base if hosted else base
-    model = lane_model if hosted else model
-    # DEEPINFRA_EMBED_URL is written both as a base and as a full endpoint in
-    # the fleet's env files; appending blindly produced
-    # POST .../v1/embeddings/embeddings -> 404 and silently failed every hosted
-    # embed (seen 2026-10-22: articles_embedded=0, errors=1665). Same guard as
-    # embed_lane.embed_batch.
-    base = base.rstrip("/")
-    url = base if base.endswith("/embeddings") else f"{base}/embeddings"
-    try:
-        r = await client.post(
-            url,
-            headers=lane_headers,
-            json={"model": model, "input": texts},
-            timeout=httpx.Timeout(300.0),
+    vectors = await _lane_embed_batch(list(texts), client=client)
+    if any(v is None for v in vectors):
+        logger.warning(
+            "_embed_partial none=%d want=%d", sum(v is None for v in vectors), len(texts)
         )
-        if r.status_code != 200:
-            logger.warning("_embed_failed status=%d body=%s", r.status_code, r.text[:200])
-            return None
-        payload = r.json()
-        items = payload.get("data") if isinstance(payload, dict) else payload
-        items = items or []
-        embeddings = []
-        for item in sorted(items, key=lambda i: i.get("index", 0)):
-            emb = item.get("embedding", [])
-            if emb and isinstance(emb[0], list):
-                emb = emb[0]
-            embeddings.append(emb)
-        if not embeddings or len(embeddings) != len(texts):
-            logger.warning("_embed_shape_mismatch got=%d want=%d", len(embeddings), len(texts))
-            return None
-        for vec in embeddings:
-            if len(vec) != EMBED_DIM:
-                logger.warning("_embed_dim got=%d want=%d", len(vec), EMBED_DIM)
-                return None
-        return embeddings
-    except (httpx.HTTPError, httpx.TimeoutException) as e:
-        logger.warning("_embed_error err=%s", e)
         return None
+    return vectors  # type: ignore[return-value]
 
 
 # ── Main pipeline ──────────────────────────────────────────────────────

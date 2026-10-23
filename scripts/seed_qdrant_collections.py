@@ -112,8 +112,16 @@ async def _embed_batch(client: httpx.AsyncClient, texts: list[str]) -> list[list
     if not texts:
         return []
     try:
+        # The local lane is keyed (--api-key ${LLAMA_EMBED_KEY}). Posting without
+        # the bearer header 401s, which is silent data loss: _embed_batch returns
+        # [] and the caller still logs "ok".
+        _headers = {"Content-Type": "application/json"}
+        _key = os.getenv("LLAMA_EMBED_KEY", "").strip()
+        if _key:
+            _headers["Authorization"] = f"Bearer {_key}"
         r = await client.post(
             f"{QWEN_EMBED_URL}/embeddings",
+            headers=_headers,
             json={"model": QWEN_EMBED_MODEL_NAME, "input": [t[:8000] for t in texts]},
             timeout=900.0,
         )
