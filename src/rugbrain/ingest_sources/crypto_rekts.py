@@ -168,12 +168,14 @@ def crypto_rekt_to_doc(item: dict[str, Any]) -> IngestDoc | None:
     funds_lost = item.get("funds_lost") or 0
     try:
         loss_usd = float(funds_lost)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
+        log.debug("crypto_rekts_loss_parse_error err=%s", str(e)[:80])
         loss_usd = 0.0
     funds_returned = item.get("funds_returned") or 0
     try:
         returned_usd = float(funds_returned)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as e:
+        log.debug("crypto_rekts_returned_parse_error err=%s", str(e)[:80])
         returned_usd = 0.0
 
     category = _scam_type_label(item.get("scam_type")) or "unknown"
@@ -262,7 +264,8 @@ def parse_rektdb(text: str) -> list[dict[str, Any]]:
 
     try:
         data = json.loads(text or "")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        log.warning("crypto_rekts_parse_json_error err=%s", str(e)[:160])
         return []
     if isinstance(data, dict):
         items = data.get("items") or []
