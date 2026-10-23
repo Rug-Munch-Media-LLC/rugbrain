@@ -377,9 +377,9 @@ async def test_seen_hash_ring_prevents_re_embedding() -> None:
 
     One of the named suspects. The guarantee that matters is cross-cycle: an
     item whose hash is in the ring is never returned as fresh, so it never
-    reaches the embedder. The within-batch duplicate is NOT collapsed (the
-    dedupe set is built from the previous ring, not incrementally) — a real
-    but minor gap, recorded here rather than silently asserted away.
+    reaches the embedder. Since 2026-10-24 the same hash is also collapsed
+    WITHIN a cycle (incrementally, not from the previous ring) — that is the
+    cross-channel dedupe for one text mirrored by five shill channels.
     """
     from rugbrain.ingest_sources import ingest_cycle
 
@@ -399,6 +399,12 @@ async def test_seen_hash_ring_prevents_re_embedding() -> None:
     second, ring2, _ = ingest_cycle.gate_and_bound(items, seen_hashes=ring, **kwargs)  # type: ignore[arg-type]
     assert second == [], "a re-seen item must never be re-embedded"
     assert ring2 == ring
+
+    # One text mirrored by four channels in a single cycle is one fresh item.
+    mirrored = [{"t": "same"} for _ in range(4)] + [{"t": "other"}]
+    third, _, stats = ingest_cycle.gate_and_bound(mirrored, seen_hashes=[], **kwargs)  # type: ignore[arg-type]
+    assert [i["t"] for i in third] == ["same", "other"]
+    assert stats["cross_channel_duplicates"] == 3
 
 
 async def test_store_documents_skips_known_points_before_embedding() -> None:
