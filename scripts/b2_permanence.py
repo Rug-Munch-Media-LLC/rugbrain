@@ -402,7 +402,9 @@ def snapshot_collection(
                 upload_file(b2_api, bucket_name, part, shard["object_key"])
                 part.unlink(missing_ok=True)
             if on_shard is not None:
-                on_shard(list(new_shards), points_now)
+                # prior_shards first: the manifest entry must describe the whole
+                # collection, not just the part this firing happened to write.
+                on_shard(prior_shards + list(new_shards), points_now)
 
         point_count, shards = export_parquet_shards(
             client,
@@ -419,6 +421,10 @@ def snapshot_collection(
             points_done=int(prior.get("points_done") or 0),
             on_shard=ship,
         )
+        # A resumed collection owns every shard, not only the ones written now:
+        # dropping prior_shards here erased part-0 from the manifest entry and
+        # understated bytes_stored on every resumed night.
+        shards = prior_shards + list(shards)
         suffix = PARQUET_SUFFIX
         object_key = shards[0]["object_key"] if shards else f"{key_prefix}{suffix}"
         bytes_stored = sum(int(s.get("bytes_stored", 0)) for s in shards)
