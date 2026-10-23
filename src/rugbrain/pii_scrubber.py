@@ -36,7 +36,8 @@ async def _presidio_available() -> bool:
         async with httpx.AsyncClient(timeout=2.0) as client:
             r = await client.get(f"{PRESIDIO_URL}/health")
             ok = r.status_code == 200
-    except Exception:
+    except Exception as exc:
+        log.debug("presidio_probe_failed url=%s err=%s", PRESIDIO_URL, exc)
         ok = False
     _PRESIDIO_CACHE["available"] = ok
     _PRESIDIO_CACHE["checked_at"] = now  # type: ignore[assignment]
@@ -99,7 +100,8 @@ async def scrub_batch(texts: list[str], language: str = "en") -> list[str]:
                 data = r.json()
                 return cast(list[str], data.get("results", texts))
             return texts
-    except Exception:
+    except Exception as exc:
+        log.warning("pii_scrub_batch_failed texts=%d err=%s", len(texts), str(exc)[:100])
         return texts
 
 
@@ -131,5 +133,6 @@ async def analyze_text(text: str, language: str = "en") -> list[dict[str, Any]]:
                         e["entity_type"] = et
                 return entities
             return []
-    except Exception:
+    except Exception as exc:
+        log.warning("pii_analyze_failed err=%s", str(exc)[:100])
         return []

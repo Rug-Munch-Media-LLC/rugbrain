@@ -29,7 +29,7 @@ STABLECOINS: dict[str, str] = {
 }
 
 POLL_INTERVAL = int(os.getenv("MARKET_HEALTH_INTERVAL", "600"))  # 10 min
-ETHERSCAN_KEY = os.getenv("ETHERSCAN_API_KEY", "TZBW87IP5KHU1R7F4S3ZZZ5B2IM2RAS1V7")
+ETHERSCAN_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 
 
 async def get_stablecoin_peg() -> dict[str, float]:
@@ -47,8 +47,8 @@ async def get_stablecoin_peg() -> dict[str, float]:
                     "USDC": data.get("usd-coin", {}).get("usd", 1.0),
                     "USDT": data.get("tether", {}).get("usd", 1.0),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("stablecoin_peg_fetch_failed err=%s", str(exc)[:120])
     return {"DAI": 1.0, "USDC": 1.0, "USDT": 1.0}
 
 
@@ -73,13 +73,16 @@ async def get_funding_rates() -> list[dict[str, Any]]:
                                 ).isoformat(),
                             }
                         )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("funding_rate_fetch_failed symbol=%s err=%s", symbol, str(exc)[:120])
     return rates
 
 
 async def get_gas_price() -> dict[str, Any]:
     """Get current ETH gas price."""
+    if not ETHERSCAN_KEY:
+        logger.debug("gas_price_skipped_no_key")
+        return {"safe_gwei": 0, "propose_gwei": 0, "fast_gwei": 0}
     url = f"https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={ETHERSCAN_KEY}"
     try:
         async with httpx.AsyncClient(timeout=5) as c:
@@ -91,8 +94,8 @@ async def get_gas_price() -> dict[str, Any]:
                     "propose_gwei": int(data.get("ProposeGasPrice", 0)),
                     "fast_gwei": int(data.get("FastGasPrice", 0)),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("gas_price_fetch_failed err=%s", str(exc)[:120])
     return {"safe_gwei": 0, "propose_gwei": 0, "fast_gwei": 0}
 
 
