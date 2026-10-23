@@ -471,18 +471,36 @@ def main() -> int:
             if args.collection and coll_name not in args.collection:
                 continue
             fmt = str(entry.get("format") or "")
+            # 2026-10-23: a sharded collection is ONE manifest entry with
+            # several objects. Restoring only `object_key` (shard 0) would
+            # silently restore a third of the collection and report success --
+            # the same class of bug as a truncated manifest. Restore every
+            # shard, in order, before importing.
+            shard_keys = [
+                str(s.get("object_key"))
+                for s in (entry.get("shards") or [])
+                if isinstance(s, dict) and s.get("object_key")
+            ]
             object_key = str(entry.get("object_key") or "")
             if not object_key:
                 suffix = PARQUET_SUFFIX if fmt == "parquet" else COMPRESSED_SUFFIX
                 object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{coll_name}{suffix}"
-            logger.info("restoring collection=%s key=%s", coll_name, object_key)
+            object_keys = shard_keys or [object_key]
+            logger.info(
+                "restoring collection=%s keys=%d first=%s",
+                coll_name,
+                len(object_keys),
+                object_keys[0],
+            )
 
             try:
-                decoded = decode_snapshot(b2_api, bucket_name, object_key, dest_dir)
-                if object_key.endswith(PARQUET_SUFFIX) or fmt == "parquet":
-                    points = parse_parquet(decoded)
-                else:
-                    points = parse_ndjson(decoded)
+                points: list[PointStruct] = []
+                for key in object_keys:
+                    decoded = decode_snapshot(b2_api, bucket_name, key, dest_dir)
+                    if key.endswith(PARQUET_SUFFIX) or fmt == "parquet":
+                        points.extend(parse_parquet(decoded))
+                    else:
+                        points.extend(parse_ndjson(decoded))
                 if args.dry_run:
                     logger.info("dry-run decoded %d points for %s", len(points), coll_name)
                     restored_total += len(points)
