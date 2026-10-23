@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import logging
 import os
 import re
@@ -119,6 +120,10 @@ DEFAULT_PAYLOAD_ONLY_COLLECTIONS = ("codebase_reference_v2",)
 ZSTD_LEVEL = int(os.environ.get("CC_ZSTD_LEVEL", "6"))
 
 SNAPSHOT_PREFIX = "snapshots"
+
+# The smallest unit of work worth starting. Below this the estimate is noise
+# and the item is cheap enough to attempt anyway.
+MIN_ESTIMATE_S = 20.0
 # 2026-10-15: was 1000. The nightly run OOM-killed at 4G with 1000-row
 # Arrow tables across ~60 collections; 400 keeps per-batch tables small
 # (paired with ARROW_DEFAULT_MEMORY_POOL=system in 62-arrow-pool.conf).
@@ -334,6 +339,20 @@ def export_collection_ndjson(
 # ── Snapshot pipeline ─────────────────────────────────────────────────
 
 
+def collection_points(client: qdrant_client.QdrantClient, name: str) -> int:
+    """Live point count, or 0 when Qdrant cannot answer.
+
+    0 means "unknown", never "empty": an unknown size must never make a
+    collection look free to export.
+    """
+    try:
+        info = client.get_collection(collection_name=name)
+        return int(getattr(info, "points_count", 0) or 0)
+    except Exception as exc:  # noqa: BLE001 - an unknown size is not an error
+        logger.warning("collection_size_unknown collection=%s err=%s", name, exc)
+        return 0
+
+
 def _is_oversized(client: qdrant_client.QdrantClient, name: str, shard_points: int) -> bool:
     """True only for a collection big enough to need sharding.
 
@@ -364,6 +383,7 @@ def snapshot_collection(
     resume: dict[str, Any] | None = None,
     on_shard: Any = None,
     deadline: float | None = None,
+    est_seconds: float = 0.0,
 ) -> dict[str, Any]:
     """Export, compress (parquet/NDJSON) and upload one collection.
 
@@ -396,7 +416,17 @@ def snapshot_collection(
     # codebase_reference_v2_8b is 3.72M points, so every firing either paid the
     # whole export or lost it on the unit timeout. Sharding it gives ~10
     # resumable parts, which is the only way a day containing it can finish.
-    if fmt == "parquet" and shard_points and _is_oversized(client, name, shard_points):
+    # SHARD WHEN IT CANNOT FINISH, not only when it is big (2026-10-23). A
+    # single parquet object is not resumable, so a collection whose estimate
+    # exceeds what is left of the slot has exactly two outcomes: overrun the
+    # slot (losing the next timer firing, which is what a 43.3-min chunk did
+    # at 15:00 today) or waste the export. Sharding turns "cannot fit" into
+    # "lands one shard and resumes at its cursor next firing".
+    left = (deadline - time.monotonic()) if deadline is not None else 0.0
+    must_shard = bool(shard_points) and est_seconds > max(left, 0.0)
+    if fmt == "parquet" and shard_points and (
+        must_shard or _is_oversized(client, name, shard_points)
+    ):
         key_prefix = f"{SNAPSHOT_PREFIX}/{date_str}/{name}"
         prior = resume or {}
         prior_shards = list(prior.get("shards") or [])
@@ -1016,6 +1046,27 @@ def build_parser() -> argparse.ArgumentParser:
         "deliberately below the unit's 90min timeout so it exits cleanly)",
     )
     p.add_argument(
+        "--slot-seconds",
+        type=int,
+        default=int(os.environ.get("B2_SLOT_SECONDS", "2100")),
+        help="HARD wall clock for starting new work (default 2100 = 35min, "
+        "5min inside the 40min timer slot so a chunk can never take the next "
+        "slot down with it). Distinct from --max-seconds, which is when an "
+        "in-flight collection stops scrolling and lands what it has",
+    )
+    p.add_argument(
+        "--carry-days",
+        type=int,
+        default=int(os.environ.get("B2_CARRY_DAYS", "3")),
+        help="How many previous dated manifests to carry COMPLETED collections "
+        "forward from, so an unfinished day does not restart at 0/85",
+    )
+    p.add_argument(
+        "--no-carry",
+        action="store_true",
+        help="Do not inherit completed collections from previous dates",
+    )
+    p.add_argument(
         "--no-resume",
         action="store_true",
         help="Re-export collections already present in today's manifest "
@@ -1352,6 +1403,40 @@ def main() -> int:
                 for n, e in sorted(partial_today.items())
             ),
         )
+    # ── Date rollover: CARRY FORWARD (2026-10-23) ────────────────────
+    # The manifest is keyed by UTC date, so a day that does not finish used to
+    # strand its work: 2026-10-23 reached 79/85 and 2026-10-24 would have begun
+    # at 0/85 and re-exported all 79. A collection whose object is already in
+    # B2 does not stop being backed up at midnight. Today's done-set is
+    # therefore the UNION of today and the previous `--carry-days` manifests;
+    # each inherited entry records `carried_from` = the date it really landed.
+    # The older manifest stays immutable (it is the record of that day);
+    # today's manifest is the day that closes the gap, and `complete` is
+    # computed over the union. Without this the date key turns every partial
+    # day into permanent lost work.
+    carried: dict[str, dict[str, Any]] = {}
+    carry_from: list[str] = []
+    if not args.no_resume and not args.no_carry:
+        recent = [d for d in snapshot_dates_on_remote(b2_api, bucket_name) if d < date_str]
+        for prior_date in reversed(recent[-max(int(args.carry_days), 0) :]):
+            for name, entry in todays_manifest_entries(b2_api, bucket_name, prior_date).items():
+                if name in prior_entries or name in carried or not entry_is_done(entry):
+                    continue
+                inherited = dict(entry)
+                inherited["carried_from"] = prior_date
+                carried[name] = inherited
+            if carried:
+                carry_from.append(prior_date)
+        if carried:
+            prior_entries.update(carried)
+            logger.info(
+                "day_carry_forward date=%s from=%s carried=%d (a partial day does "
+                "not restart at 0)",
+                date_str,
+                ",".join(carry_from),
+                len(carried),
+            )
+
     if plan and args.auto_chunk:
         # CHEAPEST CHUNK FIRST (2026-10-23). This used to be `next(...)`: the
         # plan is first-fit-DECREASING, so chunk 0 is always the elephant
@@ -1361,9 +1446,18 @@ def main() -> int:
         # collections waited behind it. Selecting the least expensive
         # incomplete chunk makes progress monotonic and gates the day on the
         # cheap work, leaving the elephant for last (and for its own slots).
+        # Rank by what the chunk still OWES, not by its whole planned cost:
+        # a 30-min chunk holding one 1-min collection left is 1 min of work,
+        # and charging it 30 min made the runner prefer a 16-min chunk over a
+        # 1-min one. Cheapest-by-remaining is what actually keeps momentum.
+        def owed(chunk: Any) -> float:
+            return math.fsum(
+                estimate_minutes(n) for n in chunk.collections if n not in done_today
+            )
+
         first_open = min(
-            (c for c in plan if not set(c.collections) <= done_today),
-            key=lambda c: (c.est_minutes, c.index),
+            (c for c in plan if owed(c) > 0),
+            key=lambda c: (owed(c), c.index),
             default=None,
         )
         if first_open is None:
@@ -1375,12 +1469,28 @@ def main() -> int:
             return 0
         collections = list(first_open.collections)
         logger.info(
-            "chunk_auto_selected index=%d/%d est=%.1fmin collections=%d",
+            "chunk_auto_selected index=%d/%d owed=%.1fmin planned=%.1fmin "
+            "collections=%d open=%d",
             first_open.index,
             len(plan) - 1,
+            owed(first_open),
             first_open.est_minutes,
             len(first_open.collections),
+            sum(1 for n in first_open.collections if n not in done_today),
         )
+        if owed(first_open) > args.max_seconds / 60:
+            # DEDICATED ELEPHANT SLOT. This chunk cannot finish in one firing;
+            # it is chosen only because nothing cheaper is left, and it will
+            # land whole shards and resume. It is never mixed into a cheap
+            # chunk, and it is always LAST (fewest cheap collections first).
+            logger.warning(
+                "chunk_elephant_slot index=%d owed=%.1fmin budget=%.1fmin "
+                "collections=%s (shard-bounded, resumes at cursor)",
+                first_open.index,
+                owed(first_open),
+                args.max_seconds / 60,
+                ",".join(first_open.collections),
+            )
     if done_today:
         skipped = [c for c in collections if c in done_today]
         collections = [c for c in collections if c not in done_today]
@@ -1396,6 +1506,33 @@ def main() -> int:
         return 0
 
     expected_count = day_total
+
+    live_points: dict[str, int] = {}
+
+    def points_of(name: str) -> int:
+        if name not in live_points:
+            live_points[name] = collection_points(client, name)
+        return live_points[name]
+
+    def next_unit_seconds(name: str) -> float:
+        """Seconds the next RESUMABLE unit of *name* needs.
+
+        One shard when the collection cannot finish (or is already partial),
+        the whole remaining collection otherwise. The elephant is judged by
+        the shard it would write, never by its 115-minute total -- that
+        distinction is what lets an elephant slot make durable progress
+        instead of being skipped as unaffordable.
+        """
+        prior = max(estimate_minutes(name) * 60.0, MIN_ESTIMATE_S)
+        live = points_of(name)
+        state = resume_state(prior_entries.get(name))
+        done = int(state.get("points_done") or 0)
+        if live > 0 and done > 0:
+            prior = max(prior * (1.0 - min(done / live, 1.0)), MIN_ESTIMATE_S)
+        if args.shard_points and live > 0:
+            rate = max(estimate_minutes(name) * 60.0, MIN_ESTIMATE_S) / live
+            return min(prior, max(rate * args.shard_points, MIN_ESTIMATE_S))
+        return prior
 
     def flush(chunk_entries: list[dict[str, Any]], chunk_failures: dict[str, str]) -> None:
         upload_manifest(
@@ -1457,6 +1594,14 @@ def main() -> int:
             deadline=deadline_monotonic,
         )
 
+    if carried:
+        # Persist the inherited entries NOW, so today's manifest already covers
+        # them even if this firing lands nothing else.
+        try:
+            flush(list(carried.values()), {})
+        except Exception as exc:  # noqa: BLE001 - progress, not correctness
+            logger.warning("carry_flush_failed err=%s", exc)
+
     deadline_monotonic = time.monotonic() + float(args.max_seconds)
     with tempfile.TemporaryDirectory(prefix="b2-permanence-") as workdir_str:
         workdir = Path(workdir_str)
@@ -1465,6 +1610,18 @@ def main() -> int:
             snapshot_fn=snap,
             flush_fn=flush,
             budget_seconds=float(args.max_seconds),
+            estimate_fn=next_unit_seconds,
+            hard_seconds=float(args.slot_seconds),
+        )
+    if result.skipped:
+        # The slot was refused, not spent: nothing affordable fitted. Exiting 0
+        # keeps the timer healthy; the log line is the operator's signal that
+        # the per-shard size or the slot length is wrong.
+        logger.error(
+            "chunk_no_progress_slot_skipped remaining=%d hard=%.1fmin budget=%.1fmin",
+            len(collections),
+            args.slot_seconds / 60,
+            args.max_seconds / 60,
         )
 
     # Final flush records deferred work as owed, so a short run is visible in

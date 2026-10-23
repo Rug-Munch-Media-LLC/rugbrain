@@ -31,24 +31,30 @@ from typing import Iterable
 # from this table cost <= 0.1 min in every observed run; DEFAULT_MIN is
 # deliberately above that so unknowns can never be silently free.
 MEASURED_MIN: dict[str, float] = {
-    "rag_documents_8b": 60.0,  # 114.6 min measured whole; ~60/shard after sharding
-    "news_v2_8b": 27.7,
-    "cbrv2_8b_hnswdisk_pilot": 21.9,
-    "threat_intel_v2_8b__sparsemig": 18.0,
+    # rag_documents_8b is the 114.6 min / 29.8 GB WHOLE-collection measurement
+    # (2026-10-20 manifest). It is deliberately NOT the post-shard 60 min that
+    # used to sit here: the estimate must be a RATE (114.6 min / 1,136,447 pts
+    # = 6.0 ms/pt), because the shard budget check multiplies that rate by
+    # B2_SHARD_POINTS to decide whether one shard fits the slot. The old 60 min
+    # under-estimated a 100k shard by half (predicted 5.3 min, measured 10.9).
+    "rag_documents_8b": 114.6,
+    # 2026-10-23 manifest, measured start->finish with sharding on:
+    "threat_intel_v2_8b__sparsemig": 23.7,
     "threat_intel_v2_8b_hybrid": 16.5,
+    "codebase_reference_v2_8b": 13.6,  # payload-only: 3.7M pts, 1.6 GB
+    "news_v2_8b": 13.4,
     "scam_intel_v2_8b": 12.8,
-    "codebase_reference_v2_8b": 12.7,
-    "scan_intel_8b_hybrid": 6.6,
+    "scan_intel_8b_hybrid": 6.7,
     "scan_intel_8b": 5.2,
+    "known_scams_8b_hybrid": 5.2,
     "wallet_profiles_8b_hybrid": 3.5,
+    "defi_exploits_8b_hybrid": 3.5,
+    "known_scams_8b": 3.2,
+    "live_threats_8b_hybrid": 2.4,
     "wallet_profiles_8b": 2.2,
-    "known_scams_8b_hybrid": 2.5,
-    "defi_exploits_8b_hybrid": 1.6,
+    "defi_exploits_8b": 2.2,
     "social_intel_8b_hybrid": 1.5,
-    "known_scams_8b": 1.5,
-    "live_threats_8b_hybrid": 1.1,
     "social_intel_8b": 1.0,
-    "defi_exploits_8b": 0.9,
 }
 DEFAULT_MIN = 0.3
 # A chunk may not exceed the budget by more than this factor. One oversized

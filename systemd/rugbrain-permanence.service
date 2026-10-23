@@ -28,8 +28,24 @@ WorkingDirectory=/srv/work/repos/rugbrain
 EnvironmentFile=/srv/secrets/b2-permanence.env
 # Chunk sizing (override in the EnvironmentFile, not here).
 Environment=B2_CHUNK_COUNT=4
-Environment=B2_CHUNK_SECONDS=4800
-Environment=B2_SHARD_POINTS=400000
+# SOFT budget: when an in-flight collection stops scrolling and lands what it
+# has. 1800 s = 30 min, inside a 40 min timer slot with 10 min to spare.
+Environment=B2_CHUNK_SECONDS=1800
+# HARD budget: the last moment a NEW unit (collection or retry) may start.
+# 2100 s = 35 min, 5 min inside the slot, so a chunk can never overrun its slot
+# and take the next timer firing down with it (measured 2026-10-23: 43.3 min in
+# a 40 min slot lost the 15:40 firing outright).
+Environment=B2_SLOT_SECONDS=2100
+# A partial day must not restart at 0/85 at UTC midnight: inherit completed
+# collections from the last N dated manifests (recorded as carried_from).
+Environment=B2_CARRY_DAYS=3
+# LEVER FOR PER-SHARD COST. Measured 2026-10-23 with sharding on:
+#   100,000 pts of 4096-dim == 2,470-2,501 MB and 10.9-12.6 min per shard
+#                              (threat_intel_v2_8b__sparsemig, news_v2_8b)
+#   => 50,000 pts == ~1.25 GB and ~5-6 min, so ONE shard plus its close,
+#   sha256 and upload fits inside the 150 s tail reserve plus the soft budget,
+#   and a yield at the deadline costs <6 min of overrun.
+Environment=B2_SHARD_POINTS=50000
 # Payload-only collections (vectors omitted): the 8B twin inherits the rule.
 Environment=B2_PAYLOAD_ONLY_COLLECTIONS=codebase_reference_v2
 ExecStart=/srv/work/repos/rugbrain/scripts/b2-permanence-run.sh

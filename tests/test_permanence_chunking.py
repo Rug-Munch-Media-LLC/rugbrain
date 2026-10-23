@@ -28,7 +28,12 @@ def test_plan_keeps_every_multi_item_chunk_within_budget() -> None:
     for chunk in plan:
         if len(chunk.collections) > 1:
             assert chunk.est_minutes <= 80, f"over-budget chunk: {chunk}"
-    assert max(c.est_minutes for c in plan) <= 80
+    # A single collection that cannot be split MAY exceed the budget -- that is
+    # an elephant slot, and it lands shards. What must never happen is a
+    # MULTI-item chunk over budget. (2026-10-23: rag_documents_8b measured
+    # 114.6 min whole; the old 60-min prior hid that.)
+    assert max(c.est_minutes for c in plan if len(c.collections) == 1) <= 120
+    assert all(c.est_minutes <= 80 for c in plan if len(c.collections) > 1)
 
 
 def test_plan_is_deterministic_and_covers_every_collection() -> None:
@@ -102,3 +107,63 @@ def test_run_chunk_records_a_failure_and_continues() -> None:
     assert "503" in result.failed["broken"]
     assert seen[-1], "the failure must reach the manifest flush"
     assert not result.ok
+
+
+def test_run_chunk_refuses_a_slot_it_cannot_finish() -> None:
+    """A slot that can add nothing must not start (measured 2026-10-23: every
+    overrun lost the next 40-min firing and deferred the work behind it)."""
+    calls: list[str] = []
+    result = run_chunk(
+        ["a", "b"],
+        snapshot_fn=lambda n: calls.append(n) or {"collection": n, "point_count": 1},
+        flush_fn=lambda entries, failed: None,
+        budget_seconds=1800,
+        hard_seconds=1800,
+        estimate_fn=lambda n: 3600,
+    )
+    assert result.skipped, "an unaffordable slot must be refused, not spent"
+    assert calls == [], "snapshot_fn must never be called for an unaffordable item"
+    assert result.deferred == ["a", "b"]
+
+
+def test_run_chunk_judges_the_elephant_by_its_shard_not_its_total() -> None:
+    """One 5-min shard fits a 30-min slot even when the collection needs 115."""
+    done: list[str] = []
+    result = run_chunk(
+        ["rag_documents_8b"],
+        snapshot_fn=lambda n: done.append(n) or {"collection": n, "point_count": 50000},
+        flush_fn=lambda entries, failed: None,
+        budget_seconds=1800,
+        hard_seconds=2100,
+        estimate_fn=lambda n: 302.0,
+    )
+    assert done == ["rag_documents_8b"], "a shard-sized unit must not be skipped"
+    assert result.done == ["rag_documents_8b"]
+
+
+def test_run_chunk_abandons_a_retry_that_cannot_finish() -> None:
+    """The retry is a unit too: its backoff plus its re-export must fit."""
+    def boom(name: str) -> dict:
+        raise RuntimeError("503 service_unavailable no tomes available")
+
+    result = run_chunk(
+        ["a"],
+        snapshot_fn=boom,
+        flush_fn=lambda entries, failed: None,
+        budget_seconds=180,
+        hard_seconds=200,
+        estimate_fn=lambda n: 40,
+    )
+    assert "a" in result.failed
+    assert "retry abandoned" in result.failed["a"]
+    assert result.elapsed_s < 30, "an unaffordable retry must not sleep first"
+
+
+def test_slice_counts_the_tail_of_an_in_flight_unit() -> None:
+    """can_start reserves the close+sha256+upload tail, so a yield is affordable."""
+    from permanence_budget import Slice
+
+    idle = Slice(1800, 2100)
+    assert idle.can_start(302.0), "a 5-min shard fits a fresh 35-min slot"
+    spent = Slice(1800, 2100, started=idle.started - 2000)
+    assert not spent.can_start(302.0), "no shard may start with 100 s of slot left"
