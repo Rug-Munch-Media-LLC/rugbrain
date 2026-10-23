@@ -403,6 +403,7 @@ def snapshot_collection(
     started = datetime.now(UTC)
     shards: list[dict[str, Any]] = []
     yielded: dict[str, bool] = {"hit": False}
+    expected_shards_meta: int | None = None
 
     def _stop() -> bool:
         """True once this invocation's wall-clock budget is spent."""
@@ -482,7 +483,11 @@ def snapshot_collection(
         # understated bytes_stored on every resumed night.
         shards = prior_shards + list(shards)
         if _expected_shards:
-            prior["expected_shards"] = _expected_shards
+            # The manifest merge REPLACES the prior entry with this dict, so
+            # recording the denominator on `prior` (the resume state, which the
+            # merge discards) was a no-op: after ee5198e, sharded entries still
+            # carried expected_shards=None. Carry it on the entry itself.
+            expected_shards_meta = _expected_shards
         suffix = PARQUET_SUFFIX
         object_key = shards[0]["object_key"] if shards else f"{key_prefix}{suffix}"
         bytes_stored = sum(int(s.get("bytes_stored", 0)) for s in shards)
@@ -534,6 +539,8 @@ def snapshot_collection(
         entry["deferred"] = True
     if shards:
         entry["shards"] = shards
+    if expected_shards_meta:
+        entry["expected_shards"] = expected_shards_meta
     if with_vectors:
         entry["vectors_included"] = True
     logger.info(
