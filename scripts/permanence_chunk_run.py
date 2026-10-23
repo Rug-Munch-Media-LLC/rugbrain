@@ -113,6 +113,19 @@ def run_chunk(
         for attempt in range(RETRY_ATTEMPTS + 1):
             try:
                 entry = snapshot_fn(name)
+                if entry.get("deferred"):
+                    # Shard budget yield: shards are in B2, the collection is
+                    # partial. Owed work — never counted as done.
+                    result.deferred.append(name)
+                    result.points += int(entry.get("point_count", 0) or 0)
+                    logger.warning(
+                        "chunk_yielded collection=%s shards_in_b2=%d points=%d",
+                        name,
+                        len(entry.get("shards") or []),
+                        int(entry.get("point_count", 0) or 0),
+                    )
+                    error = ""
+                    break
                 entries.append(entry)
                 result.done.append(name)
                 result.points += int(entry.get("point_count", 0) or 0)
