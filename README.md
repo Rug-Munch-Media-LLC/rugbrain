@@ -5,7 +5,9 @@
 **License:** [MIT](LICENSE) · **Canonical:** https://git.rugmunch.io/RugMunchMedia/rugbrain
 **Mirrors:** [GitHub](https://github.com/Rug-Munch-Media-LLC) · [GitLab](https://gitlab.com/rug-munch-media-group) · [Codeberg](https://codeberg.org/RugMunchMedia)
 
-> ✅ **CANONICAL (LIVE)** — This repo is the deployed, maintained RAG service
+> **Platform:** 21 networks (20 EVM-family chains incl. Tron, plus Solana) · ~422k labels · 283M indexed transfers (+628M internal) · 50+ security modules.
+
+> ✅ **CANONICAL (BETA)** — This repo is the deployed, maintained RAG service
 > (`rugbrain-api:8012`, container `rugbrain-api` on the shared `rmi_network`).
 > All new RAG code, bug fixes, and deploys belong here.
 >
@@ -22,7 +24,7 @@ serves them back through semantic, hybrid, and entity-aware search. Powers
 the scanner's **Known Scam Patterns** check, the bot's `/research` and
 `/investigate` commands, and the frontend's AI chat / wallet forensics.
 
-**Status:** LIVE / canonical. Embedding: Qwen3-Embedding-8B (2560-dim) —
+**Status:** Beta / canonical. Embedding: Qwen3-Embedding-8B (2560-dim) —
 DeepInfra hosted (`EMBED_PROVIDER=deepinfra`, massive-scale lane) with local
 llama.cpp (`:8004`) as the same-model fallback (`EMBED_PROVIDER=local`). 40+
 Qdrant collections remain live (see
