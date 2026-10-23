@@ -53,6 +53,7 @@ def export_parquet_shards(
     first_index: int = 0,
     points_done: int = 0,
     on_shard: Any = None,
+    should_stop: Any = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Scroll *name* into parquet shards of ~*shard_points* points each.
 
@@ -126,6 +127,19 @@ def export_parquet_shards(
     offset: Any = start_offset
     try:
         while True:
+            if should_stop is not None and should_stop():
+                # A batch boundary is the only safe place to yield: the shard
+                # closed below starts on a scroll cursor, so the next firing
+                # resumes here instead of restarting the collection. Without
+                # this the elephant (rag_documents_8b, ~192 min) outlived every
+                # 30-min chunk and the day could never complete.
+                logger.info(
+                    "shard_budget_yield collection=%s shards=%d points=%d",
+                    name,
+                    len(shards),
+                    total,
+                )
+                break
             batch = min(remaining if remaining is not None else scroll_batch, scroll_batch)
             points, next_offset = client.scroll(
                 collection_name=name,

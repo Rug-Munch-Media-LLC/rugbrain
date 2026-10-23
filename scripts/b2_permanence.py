@@ -66,6 +66,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -362,6 +363,7 @@ def snapshot_collection(
     shard_points: int = 0,
     resume: dict[str, Any] | None = None,
     on_shard: Any = None,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
     """Export, compress (parquet/NDJSON) and upload one collection.
 
@@ -380,10 +382,21 @@ def snapshot_collection(
 
     started = datetime.now(UTC)
     shards: list[dict[str, Any]] = []
+    yielded: dict[str, bool] = {"hit": False}
 
-    if fmt == "parquet" and shard_points and with_vectors and _is_oversized(
-        client, name, shard_points
-    ):
+    def _stop() -> bool:
+        """True once this invocation's wall-clock budget is spent."""
+        if deadline is None or time.monotonic() < deadline:
+            return False
+        yielded["hit"] = True
+        return True
+
+    # `with_vectors` is NOT part of this gate (2026-10-23). A payload-only
+    # collection was exported as ONE object, and an object cannot be resumed:
+    # codebase_reference_v2_8b is 3.72M points, so every firing either paid the
+    # whole export or lost it on the unit timeout. Sharding it gives ~10
+    # resumable parts, which is the only way a day containing it can finish.
+    if fmt == "parquet" and shard_points and _is_oversized(client, name, shard_points):
         key_prefix = f"{SNAPSHOT_PREFIX}/{date_str}/{name}"
         prior = resume or {}
         prior_shards = list(prior.get("shards") or [])
@@ -420,6 +433,7 @@ def snapshot_collection(
             first_index=len(prior_shards),
             points_done=int(prior.get("points_done") or 0),
             on_shard=ship,
+            should_stop=_stop,
         )
         # A resumed collection owns every shard, not only the ones written now:
         # dropping prior_shards here erased part-0 from the manifest entry and
@@ -468,6 +482,12 @@ def snapshot_collection(
         "started_at": started.isoformat(),
         "finished_at": finished.isoformat(),
     }
+    if yielded["hit"]:
+        # Honest shape: the shards in B2 are real, the collection is NOT done.
+        # `partial` keeps entry_is_done() false; `deferred` makes the chunk
+        # runner owe it next firing instead of counting it as success.
+        entry["partial"] = True
+        entry["deferred"] = True
     if shards:
         entry["shards"] = shards
     if with_vectors:
@@ -644,7 +664,10 @@ def upload_manifest(
                 date_str,
                 landed,
                 expected,
-                len(missing_list),
+                # The GAP, not just the collections this firing named: the log
+                # said missing=1 on a day that owed 21 (2026-10-23), which is
+                # exactly the number an operator reads first.
+                max(len(missing_list), max(expected - landed, 0)),
             )
     finally:
         tmp_path.unlink(missing_ok=True)
@@ -1431,8 +1454,10 @@ def main() -> int:
             shard_points=args.shard_points,
             resume=state,
             on_shard=partial_shards,
+            deadline=deadline_monotonic,
         )
 
+    deadline_monotonic = time.monotonic() + float(args.max_seconds)
     with tempfile.TemporaryDirectory(prefix="b2-permanence-") as workdir_str:
         workdir = Path(workdir_str)
         result = run_chunk(
@@ -1482,11 +1507,12 @@ def main() -> int:
         result.points,
         result.elapsed_s / 60,
     )
-    # Deferred work is not a failure of this chunk, but the DAY is unfinished:
-    # exit non-zero so systemd (and any human reading `systemctl status`) sees
-    # that the day still owes collections. The timer keeps firing and the next
-    # chunk resumes.
-    return 0 if result.ok else 1
+    # Deferred work is the DESIGNED outcome of a chunked run: the day owes
+    # collections, the manifest says so, and the next firing resumes at the
+    # exact shard. Exiting non-zero here marked every honest partial chunk a
+    # FAILED unit (8 of them in 26h on 2026-10-23), which is monitoring noise
+    # pointing at the wrong thing. Only a real failure is exit 1.
+    return 1 if result.failed else 0
 
 
 if __name__ == "__main__":
