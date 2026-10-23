@@ -498,7 +498,8 @@ async def run(
             # dropped as noise while their rows stayed rag_embedding_id NULL.
             "category "
             "FROM news_items "
-            "WHERE (rag_embedding_id IS NULL OR rag_embedding_id = news_id)"
+            "WHERE (rag_embedding_id IS NULL OR rag_embedding_id = news_id) "
+            "AND NOT COALESCE(rag_excluded, false)"
             + shard_sql
             + _ORDER_CLAUSES["desc" if newest_first else "asc"]
             + " LIMIT $1"
@@ -574,6 +575,11 @@ async def run(
                 news_id = article["news_id"]
                 if is_noise_article(article):
                     stats["skipped_noise"] = stats.get("skipped_noise", 0) + 1
+                    await conn.execute(
+                        "UPDATE news_items SET rag_excluded=true, "
+                        "rag_exclusion_reason='noise_filter' WHERE news_id=$1",
+                        news_id,
+                    )
                     continue
                 text = "\n".join(
                     filter(
