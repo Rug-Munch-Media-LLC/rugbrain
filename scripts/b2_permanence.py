@@ -1330,9 +1330,18 @@ def main() -> int:
             ),
         )
     if plan and args.auto_chunk:
-        first_open = next(
-            (c.index for c in plan if not set(c.collections) <= done_today),
-            None,
+        # CHEAPEST CHUNK FIRST (2026-10-23). This used to be `next(...)`: the
+        # plan is first-fit-DECREASING, so chunk 0 is always the elephant
+        # (rag_documents_8b, ~60 min est / 192 min measured). Picking it first
+        # meant every firing spent its whole budget on the one collection that
+        # cannot fit, and the day sat at 4/85 for hours while 84 small
+        # collections waited behind it. Selecting the least expensive
+        # incomplete chunk makes progress monotonic and gates the day on the
+        # cheap work, leaving the elephant for last (and for its own slots).
+        first_open = min(
+            (c for c in plan if not set(c.collections) <= done_today),
+            key=lambda c: (c.est_minutes, c.index),
+            default=None,
         )
         if first_open is None:
             logger.info(
@@ -1341,8 +1350,14 @@ def main() -> int:
                 len(done_today),
             )
             return 0
-        collections = list(plan[first_open].collections)
-        logger.info("chunk_auto_selected index=%d/%d", first_open, len(plan) - 1)
+        collections = list(first_open.collections)
+        logger.info(
+            "chunk_auto_selected index=%d/%d est=%.1fmin collections=%d",
+            first_open.index,
+            len(plan) - 1,
+            first_open.est_minutes,
+            len(first_open.collections),
+        )
     if done_today:
         skipped = [c for c in collections if c in done_today]
         collections = [c for c in collections if c not in done_today]
@@ -1385,6 +1400,12 @@ def main() -> int:
                 "shards": list(shards_now),
                 "started_at": datetime.now(UTC).isoformat(),
             }
+            # FEED THE CURSOR BACK INTO THIS PROCESS (2026-10-23). `state` is
+            # read from prior_entries once, at the top of snap(); a retry of
+            # the same collection therefore restarted at part 0 and re-uploaded
+            # 5 GB (observed twice today: part-0 at 11:05 and again at 13:23).
+            # Writing the entry back makes a retry resume at the next shard.
+            prior_entries[name] = entry
             try:
                 upload_manifest(
                     b2_api,
