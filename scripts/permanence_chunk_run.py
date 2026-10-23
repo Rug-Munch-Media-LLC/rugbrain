@@ -72,7 +72,9 @@ class ChunkResult:
 def _backoff(attempt: int) -> float:
     """Exponential backoff with jitter — never a thundering herd on recovery."""
     delay = RETRY_BASE_SECONDS * (2**attempt)
-    return min(delay + random.uniform(0, RETRY_BASE_SECONDS), RETRY_MAX_SECONDS)
+    # Jitter only — not a cryptographic use of randomness.
+    jitter = random.uniform(0, RETRY_BASE_SECONDS)  # noqa: S311
+    return min(delay + jitter, RETRY_MAX_SECONDS)
 
 
 def run_chunk(

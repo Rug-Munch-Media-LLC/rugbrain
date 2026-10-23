@@ -449,6 +449,18 @@ def snapshot_collection(
                 # collection, not just the part this firing happened to write.
                 on_shard(prior_shards + list(new_shards), points_now)
 
+        # How many shards this collection needs in total. Without it a sharded
+        # entry is permanently `partial`, so a day holding one shard of the
+        # elephant can never reach complete -- it stays False forever even when
+        # every shard has landed.
+        _expected_shards = None
+        try:
+            _total = int(client.count(name, exact=True).count)
+            if shard_points and shard_points > 0:
+                _expected_shards = max(1, -(-_total // int(shard_points)))
+        except Exception:  # a count failure must not abort the export
+            _expected_shards = None
+
         point_count, shards = export_parquet_shards(
             client,
             name,
@@ -469,6 +481,8 @@ def snapshot_collection(
         # dropping prior_shards here erased part-0 from the manifest entry and
         # understated bytes_stored on every resumed night.
         shards = prior_shards + list(shards)
+        if _expected_shards:
+            prior["expected_shards"] = _expected_shards
         suffix = PARQUET_SUFFIX
         object_key = shards[0]["object_key"] if shards else f"{key_prefix}{suffix}"
         bytes_stored = sum(int(s.get("bytes_stored", 0)) for s in shards)
