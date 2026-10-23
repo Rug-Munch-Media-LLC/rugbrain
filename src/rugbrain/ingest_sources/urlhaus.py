@@ -72,7 +72,8 @@ def parse_csv_rows(text: str) -> list[list[str]]:
     lines = [ln for ln in (text or "").splitlines() if ln and not ln.startswith("#")]
     try:
         return [row for row in csv.reader(io.StringIO("\n".join(lines))) if row]
-    except Exception:
+    except Exception as e:  # pragma: no cover - defensive
+        log.warning("urlhaus_parse_csv_error err=%s", str(e)[:160])
         return []
 
 
