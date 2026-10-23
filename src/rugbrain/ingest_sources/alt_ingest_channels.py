@@ -19,6 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
+from rugbrain.ingest_sources.news_desk_channels import NEWS_DESK_HANDLES
+
 #: Pinned copy of the bot's ``RMI_TG_NEWS_CHANNELS`` fallback list, in the bot's
 #: own order so a diff against the bot's config is line-for-line.
 PINNED_CHANNELS: Final[tuple[str, ...]] = (
@@ -178,6 +180,15 @@ def _extra_channels() -> list[str]:
 
 
 #: the bot's pinned core (source of truth) + the alt account's vetted footprint
-ALT_INGEST_CHANNELS = tuple(PINNED_CHANNELS) + tuple(
+_ALT_INGEST_BASE = tuple(PINNED_CHANNELS) + tuple(
     c for c in _extra_channels() if c not in PINNED_CHANNELS
+)
+
+#: …plus the curated news-desk layer. Those newsrooms were missing from BOTH
+#: lists above (both grew from the operator's account, not from journalism), so
+#: they are appended rather than assumed present. Case-insensitive membership:
+#: the pinned list is CamelCase while the desk list is lowercased.
+_BASE_LOWER = frozenset(h.lower() for h in _ALT_INGEST_BASE)
+ALT_INGEST_CHANNELS = _ALT_INGEST_BASE + tuple(
+    c for c in NEWS_DESK_HANDLES if c not in _BASE_LOWER
 )
