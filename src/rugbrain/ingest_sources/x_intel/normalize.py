@@ -1,13 +1,26 @@
 """Normalization — hostile provider payloads → one clean tweet/profile shape.
 
-Ported from rugmunchbot ``getxapi.normalize_tweet``. Tolerates flat
-``{id, text, ...}`` payloads and nested ``tweet``/``user`` objects; returns
-None for rows without a tweet id + text.
+Attribution is the point: a timeline row is a container, so a retweet's wrapper
+user is NOT the author and a long post's ``text`` is often a truncated preview.
+Retweets are re-attributed to the original author (``via_handle`` names the
+wrapper) and thread/quote linkage comes from ``normalize_thread``. Ported from
+rugmunchbot ``getxapi.normalize_tweet``; None for rows without id + text.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from rugbrain.ingest_sources.x_intel.normalize_thread import (
+    full_text,
+    retweet_origin,
+    thread_fields,
+)
+
+#: Stored body cap. The embedder window is 8k chars and the chunker is 1.5k, so
+#: this only guards a pathological payload — returning a 500-char stub for a
+#: long post was silently discarding the part that carries the finding.
+MAX_TEXT_CHARS: int = 4000
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -17,7 +30,7 @@ def _as_dict(value: Any) -> dict[str, Any]:
 def _first(d: dict[str, Any], *keys: str, default: Any = None) -> Any:
     for k in keys:
         v = d.get(k)
-        if v is not None:
+        if v is not None and v != "":
             return v
     return default
 
@@ -27,6 +40,21 @@ def _as_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _handle_of(d: dict[str, Any]) -> str:
+    """Author handle from an ``author``/``user`` object or a flat field."""
+    author = _as_dict(d.get("author"))
+    user = _as_dict(d.get("user"))
+    return (
+        str(
+            _first(author, "username", "screen_name", "handle", default="")
+            or _first(user, "username", "screen_name", "handle", default="")
+            or _first(d, "username", "screen_name", "handle", default="")
+        )
+        .strip()
+        .lstrip("@")
+    )
 
 
 def _tweet_url(handle: str, tweet_id: str) -> str:
@@ -39,35 +67,45 @@ def _tweet_url(handle: str, tweet_id: str) -> str:
 def normalize_tweet(raw: Any, *, source: str = "getxapi") -> dict[str, Any] | None:
     """Normalize one raw tweet payload into the shared tweet shape.
 
-    Output: ``{tweet_id, text, handle, author_name, created_at,
-    retweet_count, like_count, reply_count, quote_count, url, source}``.
+    Output: the tweet shape plus ``is_retweet`` / ``via_handle`` / thread and
+    quote linkage. A retweet is stored as the ORIGINAL post (author, id, url,
+    text) with ``via_handle`` naming the retweeter — never as the retweeter's
+    own post.
     """
     if not isinstance(raw, dict):
         return None
     nested = raw.get("tweet")
     tweet: dict[str, Any] = nested if isinstance(nested, dict) else raw
     tweet_id = str(_first(tweet, "id", "tweet_id", "id_str", "rest_id", default="") or "").strip()
-    text = str(
-        _first(tweet, "text", "full_text", "tweet_text", "content", default="") or ""
-    ).strip()
+    # A retweet row often carries no body of its own: resolve the origin first.
+    origin = retweet_origin(tweet)
+    origin_text = ""
+    if isinstance(origin, dict):
+        origin_text = str(origin.get("_rt_text") or "").strip() or full_text(origin)
+    text = full_text(tweet) or origin_text
     if not text or not tweet_id:
         return None
 
-    author = _as_dict(tweet.get("author"))
-    user = _as_dict(tweet.get("user"))
-    handle = (
-        str(
-            _first(author, "username", "screen_name", "handle", default="")
-            or _first(user, "username", "screen_name", "handle", default="")
-            or _first(tweet, "username", "screen_name", "handle", default="")
-        )
-        .strip()
-        .lstrip("@")
-    )
+    handle = _handle_of(tweet)
+    via_handle = ""
+    is_retweet = False
+    if isinstance(origin, dict):
+        is_retweet = True
+        origin_id = str(
+            _first(origin, "id", "tweet_id", "id_str", "rest_id", default="") or ""
+        ).strip()
+        origin_handle = str(origin.get("_rt_handle") or "").strip() or _handle_of(origin)
+        if origin_handle:
+            via_handle, handle = handle, origin_handle
+        if origin_id:  # full origin object: the permalink is the original's
+            tweet_id = origin_id
+        if origin_text:
+            text = origin_text
+
     author_name = (
         str(
-            _first(author, "name", "display_name", "full_name", default="")
-            or _first(user, "name", "display_name", default="")
+            _first(_as_dict(tweet.get("author")), "name", "display_name", "full_name", default="")
+            or _first(_as_dict(tweet.get("user")), "name", "display_name", default="")
             or _first(tweet, "name", "display_name", default="")
         ).strip()
         or handle
@@ -88,7 +126,7 @@ def normalize_tweet(raw: Any, *, source: str = "getxapi") -> dict[str, Any] | No
 
     return {
         "tweet_id": tweet_id,
-        "text": text[:500],
+        "text": text[:MAX_TEXT_CHARS],
         "handle": handle,
         "author_name": author_name,
         "created_at": created,
@@ -100,6 +138,9 @@ def normalize_tweet(raw: Any, *, source: str = "getxapi") -> dict[str, Any] | No
         "quote_count": _as_int(_first(metrics, "quote_count", "quotes")),
         "url": _tweet_url(handle, tweet_id),
         "source": source,
+        "is_retweet": is_retweet,
+        "via_handle": via_handle,
+        **thread_fields(tweet),
     }
 
 
@@ -154,4 +195,4 @@ def normalize_profile(raw: Any, *, source: str = "getxapi") -> dict[str, Any] | 
     }
 
 
-__all__ = ["normalize_profile", "normalize_tweet", "parse_tweets_payload"]
+__all__ = ["MAX_TEXT_CHARS", "normalize_profile", "normalize_tweet", "parse_tweets_payload"]

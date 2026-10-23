@@ -3,21 +3,21 @@
 ``run_cycle`` orchestrates: GetXAPI timelines for TIER 1/2 (budget-gated,
 round-robin), free Pry profile scrapes for TIER 3/4, then Redis-seen dedupe and
 a Qdrant upsert (``storage``). Fail-open: every *transient* stage degrades to
-zero counts. The Pry lane is the exception — an x402 402 is structural and
-propagates as ``PryLaneUnavailable`` so the runner exits nonzero instead of
-reporting a green empty cycle.
+zero counts WITH a reason (``pipeline_report.finalize``). The Pry lane is the
+exception — an x402 402 is structural and propagates as ``PryLaneUnavailable``
+so the runner exits nonzero instead of reporting a green empty cycle.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from rugbrain.ingest_sources.x_intel.dedupe import dedupe_seen
-from rugbrain.ingest_sources.x_intel.pry_lane import PryLaneUnavailable
+from rugbrain.ingest_sources.x_intel.pipeline_report import finalize
+from rugbrain.ingest_sources.x_intel.pry_fetch import fetch_pry_tweets
 from rugbrain.ingest_sources.x_intel.routing import route_account, should_use_getxapi
 from rugbrain.ingest_sources.x_intel.storage import store_docs
 
@@ -26,8 +26,8 @@ logger = logging.getLogger("rugbrain.x_intel")
 #: DI seams: account selection, and the Pry fetch (tweets, dead-lane flag).
 SelectFn = Callable[[], Awaitable[tuple[list[str], list[str]]]]
 FetchPryFn = Callable[[list[str]], Awaitable[tuple[list[dict[str, Any]], bool]]]
-#: ``pry_lane.ScrapeFn`` — (url, transport) → parsed data dict or None.
-ScrapeProfileFn = Callable[..., Awaitable[dict[str, Any] | None]]
+#: Historical private name kept as a re-export for existing importers/tests.
+_fetch_pry_tweets = fetch_pry_tweets
 
 
 async def _fetch_getxapi_tweets(handles: list[str], count: int) -> list[dict[str, Any]]:
@@ -53,42 +53,6 @@ async def _fetch_getxapi_tweets(handles: list[str], count: int) -> list[dict[str
                         tweet["url"] = f"https://x.com/{handle}/status/{tid}"
                 out.append(tweet)
     return out
-
-
-async def _fetch_pry_tweets(
-    handles: list[str], scrape: ScrapeProfileFn | None = None
-) -> tuple[list[dict[str, Any]], bool]:
-    """Pull recent tweets for *handles* via free Pry profile scrapes.
-
-    Returns ``(tweets, dead)``; ``dead`` is True when the lane came back
-    payment-gated (402) for every handle — nothing scraped *and* the cause is
-    actionable. Transient per-handle errors still fail-open. ``scrape`` is the
-    DI seam; default is the real Pry lane.
-    """
-    from rugbrain.ingest_sources.x_intel.pry_lane import scrape_profile
-
-    fetch = scrape or scrape_profile
-    out: list[dict[str, Any]] = []
-    sem = asyncio.Semaphore(3)
-    dead = 0
-
-    async def one(handle: str) -> bool:
-        nonlocal dead
-        async with sem:
-            try:
-                profile = await fetch(handle)
-            except PryLaneUnavailable:
-                dead += 1
-                return True
-            except Exception as exc:
-                logger.debug("xintel:pry_profile_failed handle=%s err=%s", handle, str(exc)[:120])
-                return False
-            if profile:
-                out.extend(profile.get("recent_tweets") or [])
-        return False
-
-    await asyncio.gather(*(one(h) for h in handles))
-    return out, bool(handles) and dead == len(handles)
 
 
 async def _select_accounts() -> tuple[list[str], list[str]]:
@@ -148,9 +112,9 @@ async def _dedupe(tweets: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 async def run_cycle(
-    select: SelectFn = _select_accounts, pry_fetch: FetchPryFn = _fetch_pry_tweets
+    select: SelectFn = _select_accounts, pry_fetch: FetchPryFn = fetch_pry_tweets
 ) -> dict[str, Any]:
-    """One cycle. Returns a counts summary.
+    """One cycle. Returns a counts summary plus the reason for any degradation.
 
     Raises ``PryLaneUnavailable`` when the Pry lane is payment-gated (402) and
     scraped nothing; anything else degrades to zero counts.
@@ -160,6 +124,9 @@ async def run_cycle(
         "fetched": 0,
         "unique": 0,
         "ingested": 0,
+        "failed": 0,
+        "skipped": 0,
+        "reason": "",
         "getxapi_handles": 0,
         "pry_handles": 0,
     }
@@ -190,34 +157,16 @@ async def run_cycle(
         docs = await _dedupe(tweets)
         summary["unique"] = len(docs)
         if docs:
-            summary["ingested"] = await store_docs(docs)
+            stored = await store_docs(docs)
+            summary["ingested"] = stored.get("inserted", 0)
+            summary["failed"] = stored.get("failed", 0)
+            summary["skipped"] = stored.get("skipped", 0)
+            summary["store_reason"] = stored.get("reason", "")
     except Exception as exc:
         logger.warning("xintel:cycle_failed err=%s", str(exc)[:200])
         summary["error"] = str(exc)[:200]
     summary["seconds"] = round(time.time() - started, 1)
-    return await _finalize(summary, pry_lane_dead)
-
-
-async def _finalize(summary: dict[str, Any], pry_lane_dead: bool) -> dict[str, Any]:
-    """Log the cycle, mark a dead Pry lane, and raise so the runner exits nonzero."""
-    if pry_lane_dead:
-        summary["pry_lane_dead"] = True
-        logger.error(
-            "xintel:pry_lane_dead pry_handles=%s fetched=%s action=check_PRY_API_KEY_and_x402_credits",
-            summary["pry_handles"],
-            summary["fetched"],
-        )
-    logger.info(
-        "xintel_cycle_done fetched=%s unique=%s ingested=%s",
-        summary["fetched"],
-        summary["unique"],
-        summary["ingested"],
-    )
-    if pry_lane_dead:
-        raise PryLaneUnavailable(
-            f"pry lane payment-gated (402) for all {summary['pry_handles']} handles"
-        )
-    return summary
+    return finalize(summary, pry_lane_dead)
 
 
 __all__ = ["run_cycle"]

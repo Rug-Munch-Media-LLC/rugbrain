@@ -103,6 +103,24 @@ def map_collection(collection: str | None) -> str | None:
     return resolved
 
 
+def provenance_condition(collection: str) -> dict[str, Any]:
+    """Filter matching a consolidated point stamped with the base OR its lane twin.
+
+    ``payload.collection`` is written by the ingest path, which resolves the
+    target through the lane table, so historical points carry the RESOLVED name
+    (``news_v2_8b``) while readers ask for the canonical base (``news_v2``). An
+    exact base match therefore hid an entire family: 1,780 X social-intel points
+    were embedded at 4096 and unreachable from every content-selection read
+    (measured 2026-10-24, ``RAG_UNIFIED_READS=1``). Accepting both names repairs
+    those points without a re-embedding migration; new writes stamp the base.
+    """
+    names = [collection]
+    twin = map_collection(collection)
+    if twin and twin != collection:
+        names.append(twin)
+    return {"should": [{"key": "collection", "match": {"value": n}} for n in names]}
+
+
 def unified_route(collection: str | None) -> tuple[str | None, dict[str, Any] | None]:
     """Map a consolidated collection to (rag_documents, provenance filter).
 
@@ -110,7 +128,7 @@ def unified_route(collection: str | None) -> tuple[str | None, dict[str, Any] | 
     disabled or the name is not consolidated.
     """
     if UNIFIED_READS and collection in CONSOLIDATED_SOURCES:
-        return UNIFIED_COLLECTION, {"key": "collection", "match": {"value": collection}}
+        return UNIFIED_COLLECTION, provenance_condition(collection)
     return map_collection(collection), None
 
 
@@ -119,5 +137,6 @@ __all__ = [
     "UNIFIED_COLLECTION",
     "UNIFIED_READS",
     "map_collection",
+    "provenance_condition",
     "unified_route",
 ]
