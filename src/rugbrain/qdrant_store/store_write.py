@@ -65,16 +65,16 @@ class WriteMixin(_types.StoreSurface):
     ) -> bool:
         """Insert a document into *collection*.
 
-        When the target collection is configured with named vectors
-        (named dense, or dense + ``bm25`` sparse hybrid), the dense
-        vector is stored under the ``dense`` name. For hybrid collections
-        (created by scripts/migrate_to_sparse.py) a BM25 sparse vector is
-        computed from *content* and stored alongside the dense vector so
-        hybrid (RRF) search can use it. Legacy collections with a bare
-        ``{"size": ...}`` config are written unchanged.
+        Named-vector collections (named dense, or dense + ``bm25`` hybrid) store
+        the dense vector under its configured name; hybrid collections also get
+        a BM25 sparse vector computed from *content* so RRF search can use it.
+        Legacy bare ``{"size": ...}`` collections are written unchanged.
         """
         import rugbrain.qdrant_store as _pkg
 
+        # The DECLARED name is the provenance readers filter on, captured before
+        # any canonicalisation rewrites it to the lane twin.
+        declared = collection
         collection = _pkg._map_collection(collection) or "default"
         # Write gate: refuse writes to non-owned collections in readonly mode.
         # Ownership is evaluated on the CANONICAL name — neither the ``_8b``
@@ -99,6 +99,9 @@ class WriteMixin(_types.StoreSurface):
         # look like a successful ingest.
         from rugbrain.qdrant_store.write_lane import write_lane_for_dim
 
+        # Stamping the RESOLVED name here hid every lane-written point from
+        # unified reads: 1,780 X points carried ``collection: news_v2_8b`` while
+        # ``RAG_UNIFIED_READS=1`` filtered ``collection == news_v2``.
         collection = write_lane_for_dim(collection, len(embedding))
 
         client = await self._get_client()
@@ -140,7 +143,8 @@ class WriteMixin(_types.StoreSurface):
                         "source": source,
                         "severity": severity,
                         "chain": chain,
-                        "collection": collection,
+                        "collection": declared or collection,
+                        "lane_collection": collection,
                     },
                 }
             ]

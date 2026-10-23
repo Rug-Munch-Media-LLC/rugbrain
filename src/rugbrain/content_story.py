@@ -35,25 +35,41 @@ _FIELDS: dict[str, Any] = {
 
 
 def normalise(result: dict[str, Any], collection: str) -> dict[str, Any]:
-    """Flatten one Qdrant search result into a story dict."""
+    """Flatten one Qdrant search result into a story dict.
+
+    ``category`` falls back to ``content_type`` because the sentiment/tweet
+    datasets label their rows that way, and an empty category made a 298k-point
+    family look like one unnamed bucket.
+    """
     md = result.get("metadata") or {}
+    content = result.get("content") or md.get("text") or md.get("title", "")
     return {
         "id": result.get("id", ""),
         "title": md.get("title", _FIELDS["title"]),
-        "content": result.get("content", ""),
+        "content": content,
         "severity": (md.get("severity") or _FIELDS["severity"]).lower(),
-        "category": (md.get("category") or md.get("kind") or "").lower(),
+        "category": (md.get("category") or md.get("content_type") or md.get("kind") or "").lower(),
         "source": result.get("source", ""),
         "url": md.get("url", ""),
         "importance": float(md.get("importance") or 0.0),
         "kind": md.get("kind", _FIELDS["kind"]),
         "collection": collection,
         "ts": md.get("ts") or result.get("ts"),
+        "tweet_id": md.get("tweet_id") or "",
     }
 
 
 def dedupe_key(result: dict[str, Any]) -> str:
-    """Content fingerprint used to collapse near-duplicate hits."""
+    """Content fingerprint used to collapse near-duplicate hits.
+
+    A known tweet id IS the identity: the same post appears with and without an
+    author (``x.com/i/status/…`` vs ``x.com/handle/status/…``), so keying on the
+    body prefix let both copies through. Fall back to the body when no id.
+    """
+    md = result.get("metadata") or {}
+    tweet_id = str(md.get("tweet_id") or "").strip()
+    if tweet_id:
+        return f"tweet:{tweet_id}"
     return (result.get("content") or "")[:120]
 
 
