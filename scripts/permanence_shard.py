@@ -49,17 +49,30 @@ def export_parquet_shards(
     shard_points: int = 400_000,
     scroll_batch: int = 400,
     level: int = 6,
+    start_offset: Any = None,
+    first_index: int = 0,
+    points_done: int = 0,
+    on_shard: Any = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Scroll *name* into parquet shards of ~*shard_points* points each.
 
     Returns ``(total_points, shards)``; each shard dict is
-    ``{object_key, point_count, bytes_stored, sha256}``.
+    ``{object_key, point_count, bytes_stored, sha256, resume_cursor}``.
+
+    SHARD-LEVEL RESUME (2026-10-23). A shard boundary is always a SCROLL BATCH
+    boundary, so ``resume_cursor`` is a point id the scroll can restart from and
+    replay is exact -- no duplicated point, no dropped point. Callers pass the
+    last recorded cursor back as ``start_offset`` with ``first_index`` =
+    len(prior shards) and ``points_done`` = their point total; part numbering
+    then continues instead of restarting at 00000. Without this a kill mid-shard
+    discarded the whole collection, which is why a 195.7-minute day could never
+    fit an 80-minute chunk: the elephant restarted from zero every firing.
     """
     import pyarrow.parquet as pq
 
     base_dir.mkdir(parents=True, exist_ok=True)
     shards: list[dict[str, Any]] = []
-    total = 0
+    total = points_done
     remaining = limit
 
     writer: Any = None
@@ -73,13 +86,16 @@ def export_parquet_shards(
             return
         writer.close()
         writer = None
-        index = len(shards)
+        index = first_index + len(shards)
         shards.append(
             {
                 "object_key": f"{key_prefix}.part-{index:05d}{suffix}",
                 "point_count": shard_rows,
                 "bytes_stored": shard_path.stat().st_size,
                 "sha256": sha256_file(shard_path),
+                # The scroll position the NEXT shard starts at. None on the
+                # final close (offset is None) = the collection is finished.
+                "resume_cursor": offset,
             }
         )
         logger.info(
@@ -96,7 +112,7 @@ def export_parquet_shards(
 
     def open_shard() -> None:
         nonlocal writer, shard_path
-        shard_path = base_dir / f"{name}.part-{len(shards):05d}{suffix}"
+        shard_path = base_dir / f"{name}.part-{first_index + len(shards):05d}{suffix}"
         writer = pq.ParquetWriter(
             shard_path, parquet_schema(), compression="zstd", compression_level=level
         )
@@ -107,7 +123,7 @@ def export_parquet_shards(
             writer.write_table(table_from_rows(buffer))
         buffer = []
 
-    offset: Any = None
+    offset: Any = start_offset
     try:
         while True:
             batch = min(remaining if remaining is not None else scroll_batch, scroll_batch)
@@ -118,12 +134,16 @@ def export_parquet_shards(
                 with_payload=True,
                 with_vectors=with_vectors,
             )
+            # Close at the BATCH boundary, never mid-batch: a shard that
+            # starts at a batch start is resumable from a point id, a shard
+            # that starts mid-batch is not. Cost is <= scroll_batch points of
+            # overshoot per shard, which is the price of an exact resume.
+            if writer is not None and shard_rows >= shard_points:
+                drain()
+                close_shard()
+                if on_shard is not None:
+                    on_shard(shards, total)
             for point in points:
-                if writer is not None and shard_rows >= shard_points:
-                    # Drain BEFORE closing, or the last <ROW_BUFFER rows of
-                    # this shard are counted in shard_rows but never written.
-                    drain()
-                    close_shard()
                 if writer is None:
                     open_shard()
                 buffer.append(point_to_row(point, with_vectors=with_vectors))
@@ -141,5 +161,7 @@ def export_parquet_shards(
     finally:
         drain()
         close_shard()
+        if on_shard is not None:
+            on_shard(shards, total)
 
     return total, shards

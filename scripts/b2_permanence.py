@@ -95,6 +95,7 @@ from b2_common import (
 from permanence_chunk_plan import estimate_minutes, plan_chunks
 from permanence_chunk_run import run_chunk
 from permanence_shard import export_parquet_shards
+from permanence_shard_resume import entry_is_done, resume_state
 
 logger = logging.getLogger("b2_permanence")
 
@@ -359,6 +360,8 @@ def snapshot_collection(
     with_vectors: bool,
     fmt: str = "parquet",
     shard_points: int = 0,
+    resume: dict[str, Any] | None = None,
+    on_shard: Any = None,
 ) -> dict[str, Any]:
     """Export, compress (parquet/NDJSON) and upload one collection.
 
@@ -382,6 +385,25 @@ def snapshot_collection(
         client, name, shard_points
     ):
         key_prefix = f"{SNAPSHOT_PREFIX}/{date_str}/{name}"
+        prior = resume or {}
+        prior_shards = list(prior.get("shards") or [])
+
+        def ship(new_shards: list[dict[str, Any]], points_now: int) -> None:
+            """Upload every shard still on disk, then report shard progress.
+
+            Called at each shard boundary, so the manifest names the shards
+            ALREADY in B2 before the next one is written. A kill therefore
+            costs one shard, not the whole collection.
+            """
+            for shard in new_shards:
+                part = base / shard["object_key"].rsplit("/", 1)[-1]
+                if not part.exists():
+                    continue  # uploaded on an earlier firing
+                upload_file(b2_api, bucket_name, part, shard["object_key"])
+                part.unlink(missing_ok=True)
+            if on_shard is not None:
+                on_shard(list(new_shards), points_now)
+
         point_count, shards = export_parquet_shards(
             client,
             name,
@@ -392,13 +414,11 @@ def snapshot_collection(
             with_vectors=with_vectors,
             shard_points=shard_points,
             level=ZSTD_LEVEL,
+            start_offset=prior.get("cursor"),
+            first_index=len(prior_shards),
+            points_done=int(prior.get("points_done") or 0),
+            on_shard=ship,
         )
-        for shard in shards:
-            # Re-export each shard from disk to B2 one at a time: staging is
-            # shard-sized, so /tmp never holds the whole collection again.
-            part = base / shard["object_key"].rsplit("/", 1)[-1]
-            upload_file(b2_api, bucket_name, part, shard["object_key"])
-            part.unlink(missing_ok=True)
         suffix = PARQUET_SUFFIX
         object_key = shards[0]["object_key"] if shards else f"{key_prefix}{suffix}"
         bytes_stored = sum(int(s.get("bytes_stored", 0)) for s in shards)
@@ -566,7 +586,11 @@ def upload_manifest(
     # complete. Only a larger truth may raise it.
     expected = max(int(expected), len(merged), prior_expected or 0)
     missing_list = [missing_by[k] for k in sorted(missing_by)]
-    complete = len(merged) >= expected and not missing_list
+    # A half-written collection (partial: true) is a manifest ENTRY but not a
+    # landed collection. Counting it would let a day holding one shard of the
+    # elephant advertise 85/85 -- the same class of lie as the 4-of-85 stamp.
+    landed = sum(1 for e in merged if not e.get("partial"))
+    complete = landed >= expected and not missing_list
 
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
@@ -612,7 +636,7 @@ def upload_manifest(
                 "manifest_partial date=%s have=%d expected=%d missing=%d "
                 "(latest.json NOT advanced)",
                 date_str,
-                len(merged),
+                landed,
                 expected,
                 len(missing_list),
             )
@@ -621,7 +645,7 @@ def upload_manifest(
     logger.info(
         "manifest_uploaded date=%s collections=%d expected=%d complete=%s",
         date_str,
-        len(merged),
+        landed,
         expected,
         complete,
     )
@@ -634,6 +658,20 @@ def todays_done_collections(b2_api: B2Api, bucket_name: str, date_str: str) -> s
     day), so any read failure yields the empty set and the chunk re-exports
     from the start. Re-exporting is safe: it overwrites the same object keys.
     """
+    # A partial entry is NOT done: its shards are in B2 but it still owes the
+    # rest of the collection, so it stays in the run and resumes from its own
+    # recorded cursor (see permanence_shard_resume).
+    return {
+        name
+        for name, entry in todays_manifest_entries(b2_api, bucket_name, date_str).items()
+        if entry_is_done(entry)
+    }
+
+
+def todays_manifest_entries(
+    b2_api: B2Api, bucket_name: str, date_str: str
+) -> dict[str, dict[str, Any]]:
+    """Every entry in today's manifest by collection — complete AND partial."""
     manifest_key = f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}"
     try:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as pt:
@@ -644,11 +682,11 @@ def todays_done_collections(b2_api: B2Api, bucket_name: str, date_str: str) -> s
         finally:
             path.unlink(missing_ok=True)
     except Exception:
-        return set()
+        return {}
     if not isinstance(prior, dict):
-        return set()
+        return {}
     return {
-        str(entry["collection"])
+        str(entry["collection"]): entry
         for entry in prior.get("collections") or []
         if isinstance(entry, dict) and entry.get("collection")
     }
@@ -1015,6 +1053,19 @@ def _fmt_size(n: int) -> str:
     return f"{n:.1f}TB"
 
 
+def canonical_denominator(names: list[str], suffix: str = "_8b") -> int:
+    """How many collections a normal day backs up, by the prefer-twin rule.
+
+    Mirrors the selection below: a `_8b` collection is canonical; a base
+    collection is canonical only when it has no `_8b` twin. Used ONLY as the
+    manifest's `expected_collections` denominator, so the number a partial-day
+    alert compares against is the size of a full day rather than the size of
+    whatever subset this particular invocation happened to be asked for.
+    """
+    known = set(names)
+    return sum(1 for n in names if n.endswith(suffix) or (n + suffix) not in known)
+
+
 def main() -> int:
     args = build_parser().parse_args()
     logging.basicConfig(
@@ -1056,6 +1107,12 @@ def main() -> int:
 
     try:
         collections = list_collections(client)
+        # The day's TRUE denominator. Captured from the RAW list and reduced by
+        # the canonical (prefer-twin) rule below, so neither a --collection
+        # proof run nor a chunk selection can lower it: that is exactly how the
+        # 2026-10-23 day advertised expected=4 while 85 collections existed.
+        raw_names = list(collections)
+        day_universe = len(raw_names)
     except Exception as exc:
         logger.critical("list_collections_failed: %s", exc)
         return 1
@@ -1148,6 +1205,12 @@ def main() -> int:
             len(collections),
         )
 
+    # The denominator a day is measured against: the canonical set, never the
+    # requested subset.
+    if os.getenv("B2_PREFER_TWIN", "1") == "1":
+        day_universe = canonical_denominator(raw_names)
+    logger.info("day_denominator expected_collections=%d", day_universe)
+
     if not collections:
         logger.warning("no collections to snapshot")
         return 0
@@ -1188,9 +1251,12 @@ def main() -> int:
         )
     else:
         plan = []
-    # Expected is the whole day, not this chunk: a chunk that lands 12 of 85
-    # must not report itself as 12/12 complete.
-    day_total = sum(len(c.collections) for c in plan) if plan else len(collections)
+    # Expected is the whole DAY: not this chunk, not this filter, not this
+    # proof run. `len(collections)` was the old answer and it is wrong the
+    # moment anything narrows the selection -- a 4-collection proof run at
+    # 08:05 stamped expected_collections=4 on a day with 85 live collections,
+    # and RugbrainPermanenceDayPartial then compared 4 against 4 and went blind.
+    day_total = max(day_universe, sum(len(c.collections) for c in plan))
 
     logger.info("=== B2 permanence sync started ===")
     logger.info(
@@ -1242,7 +1308,21 @@ def main() -> int:
     # already landed, so a rerun -- from any chunk, after any kill -- does not
     # re-export or duplicate. Idempotent by construction: the same object key is
     # overwritten and the manifest merge replaces that collection's entry.
-    done_today = set() if args.no_resume else todays_done_collections(b2_api, bucket_name, date_str)
+    # One manifest read feeds both the done-set and the per-shard resume state.
+    prior_entries = (
+        {} if args.no_resume
+        else todays_manifest_entries(b2_api, bucket_name, date_str)
+    )
+    done_today = {n for n, e in prior_entries.items() if entry_is_done(e)}
+    partial_today = {n: e for n, e in prior_entries.items() if not entry_is_done(e)}
+    if partial_today:
+        logger.info(
+            "shard_resume available collections=%s",
+            ",".join(
+                f"{n}({len(e.get('shards') or [])}shards/" f"{sum(int(x.get('point_count', 0) or 0) for x in e.get('shards') or [])}pts)"
+                for n, e in sorted(partial_today.items())
+            ),
+        )
     if plan and args.auto_chunk:
         first_open = next(
             (c.index for c in plan if not set(c.collections) <= done_today),
@@ -1284,6 +1364,33 @@ def main() -> int:
         )
 
     def snap(name: str) -> dict[str, Any]:
+        state = resume_state(prior_entries.get(name))
+
+        def partial_shards(shards_now: list[dict[str, Any]], points_now: int) -> None:
+            """Persist shard progress to the manifest as each shard lands."""
+            entry: dict[str, Any] = {
+                "collection": name,
+                "format": fmt,
+                "partial": True,
+                "point_count": points_now,
+                "bytes_stored": sum(
+                    int(x.get("bytes_stored", 0) or 0) for x in shards_now
+                ),
+                "shards": list(shards_now),
+                "started_at": datetime.now(UTC).isoformat(),
+            }
+            try:
+                upload_manifest(
+                    b2_api,
+                    bucket_name,
+                    date_str,
+                    [entry],
+                    expected_count=expected_count,
+                    missing={},
+                )
+            except Exception as exc:  # noqa: BLE001 - progress, not correctness
+                logger.warning("shard_flush_failed collection=%s err=%s", name, exc)
+
         return snapshot_collection(
             client,
             b2_api,
@@ -1295,6 +1402,8 @@ def main() -> int:
             collection_has_vectors(name, with_vectors, payload_only_collections),
             fmt,
             shard_points=args.shard_points,
+            resume=state,
+            on_shard=partial_shards,
         )
 
     with tempfile.TemporaryDirectory(prefix="b2-permanence-") as workdir_str:
