@@ -85,11 +85,23 @@ def gate_and_bound(
     Shared by the userbot and the t.me/s web path so both get the same policy
     and the same ring bound. The earlier code kept the ring unbounded, which is
     how it saturated at 20,000 and began re-admitting old items every cycle.
+
+    Dedupe is per-cycle as well as per-ring. Building ``known`` from the
+    previous ring only meant the same text mirrored by five shill channels in
+    one cycle passed five times and cost five vector calls; the hash is
+    content-only (no channel in it), so collapsing on it IS the dedupe across
+    channels.
     """
     from rugbrain.ingest_sources.ingest_quality import gate_items
 
     known = set(seen_hashes)
-    fresh = [item for item in items if get_hash(item) not in known]
+    fresh: list[Any] = []
+    for item in items:
+        item_hash = get_hash(item)
+        if item_hash in known:
+            continue
+        known.add(item_hash)
+        fresh.append(item)
     bounded = list(deque(seen_hashes, maxlen=max_seen))
     bounded.extend(h for h in (get_hash(i) for i in fresh) if h not in set(bounded))
     pre_gate = len(fresh)
@@ -97,5 +109,9 @@ def gate_and_bound(
     return (
         kept,
         bounded[-max_seen:],
-        {"gated_out": pre_gate - len(kept), "gate": verdicts},
+        {
+            "gated_out": pre_gate - len(kept),
+            "cross_channel_duplicates": len(items) - len(fresh),
+            "gate": verdicts,
+        },
     )
