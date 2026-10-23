@@ -61,8 +61,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import logging
+import math
 import os
 import re
 import sys
@@ -348,7 +348,7 @@ def collection_points(client: qdrant_client.QdrantClient, name: str) -> int:
     try:
         info = client.get_collection(collection_name=name)
         return int(getattr(info, "points_count", 0) or 0)
-    except Exception as exc:  # noqa: BLE001 - an unknown size is not an error
+    except Exception as exc:
         logger.warning("collection_size_unknown collection=%s err=%s", name, exc)
         return 0
 
@@ -364,7 +364,7 @@ def _is_oversized(client: qdrant_client.QdrantClient, name: str, shard_points: i
     try:
         info = client.get_collection(collection_name=name)
         return int(getattr(info, "points_count", 0) or 0) > shard_points
-    except Exception as exc:  # noqa: BLE001 - never shard on an unknown size
+    except Exception as exc:
         logger.warning("shard_size_unknown collection=%s err=%s", name, exc)
         return False
 
@@ -541,6 +541,7 @@ def upload_manifest(
     entries: list[dict[str, Any]],
     expected_count: int | None = None,
     missing: dict[str, str] | None = None,
+    drop: set[str] | None = None,
 ) -> None:
     """Upload manifest.json for the day plus the latest.json pointer.
 
@@ -604,6 +605,9 @@ def upload_manifest(
     except Exception as exc:  # a missing/unreadable prior manifest is fine
         logger.info("manifest_merge no_prior_manifest key=%s (%s)", manifest_key, exc)
 
+    for name in drop or ():
+        by_collection.pop(str(name), None)
+        prior_missing.pop(str(name), None)
     for e in entries:
         name = e.get("collection")
         if name:
@@ -640,7 +644,7 @@ def upload_manifest(
     # Never let a narrow run (--collection, a debug chunk) LOWER the day's
     # denominator: that is how a 4-of-85 manifest would advertise itself as
     # complete. Only a larger truth may raise it.
-    expected = max(int(expected), len(merged), prior_expected or 0)
+    expected = max(int(expected), len(merged))
     missing_list = [missing_by[k] for k in sorted(missing_by)]
     # A half-written collection (partial: true) is a manifest ENTRY but not a
     # landed collection. Counting it would let a day holding one shard of the
@@ -1057,9 +1061,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--carry-days",
         type=int,
-        default=int(os.environ.get("B2_CARRY_DAYS", "3")),
+        default=int(os.environ.get("B2_CARRY_DAYS", "0")),
         help="How many previous dated manifests to carry COMPLETED collections "
-        "forward from, so an unfinished day does not restart at 0/85",
+        "forward from (default 0 = OFF). See PARTIAL-DAY CONTRACT: a dated "
+        "snapshot must be self-contained, so inheriting yesterday's objects "
+        "silently raises the RPO. Enable only to trade RPO for transfer",
+    )
+    p.add_argument(
+        "--date",
+        default=None,
+        help="Finish a SPECIFIC open day (YYYY-MM-DD) instead of today. An "
+        "operator tool for a day left partial; the timer never passes it",
     )
     p.add_argument(
         "--no-carry",
@@ -1295,7 +1307,7 @@ def main() -> int:
         logger.warning("no collections to snapshot")
         return 0
 
-    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    date_str = args.date or datetime.now(UTC).strftime("%Y-%m-%d")
 
     # ── Chunking (2026-10-23) ─────────────────────────────────────────
     # The whole day does not fit one 6h unit with margin (85 collections,
@@ -1418,9 +1430,14 @@ def main() -> int:
     carry_from: list[str] = []
     if not args.no_resume and not args.no_carry:
         recent = [d for d in snapshot_dates_on_remote(b2_api, bucket_name) if d < date_str]
+        live_universe = set(raw_names)
         for prior_date in reversed(recent[-max(int(args.carry_days), 0) :]):
             for name, entry in todays_manifest_entries(b2_api, bucket_name, prior_date).items():
                 if name in prior_entries or name in carried or not entry_is_done(entry):
+                    continue
+                if name not in live_universe:
+                    # A collection deleted from Qdrant must not be inherited:
+                    # it would inflate `landed` toward a complete that is false.
                     continue
                 inherited = dict(entry)
                 inherited["carried_from"] = prior_date
@@ -1436,6 +1453,34 @@ def main() -> int:
                 ",".join(carry_from),
                 len(carried),
             )
+
+    # A carried entry naming a collection that no longer exists in Qdrant must
+    # be DROPPED, not merged: it raises `expected` (85 -> 86 on 2026-10-23 via
+    # cbrv2_8b_hnswdisk_pilot) and a day can then never report complete.
+    stale = {n for n in prior_entries if n not in set(raw_names)}
+    if not args.carry_days:
+        # SELF-CONTAINED DAY. An entry inherited from another date is not this
+        # day's backup, even though it is non-partial: 2026-10-23's manifest was
+        # caught holding three 2026-10-20 entries (codebase_reference_v2_8b,
+        # threat_intel_v2_8b_hybrid, wallet_profiles_8b) with NO object under
+        # snapshots/2026-10-23/ at all, i.e. `complete` would have been a lie
+        # and a restore would have silently served 3-day-old data. Drop them so
+        # they are re-exported today.
+        inherited = {n for n, e in prior_entries.items() if e.get("carried_from")}
+        if inherited:
+            logger.warning(
+                "manifest_not_self_contained reexporting=%s", ",".join(sorted(inherited))
+            )
+        stale |= inherited
+        for n in inherited:
+            prior_entries.pop(n, None)
+        if inherited:
+            # Recompute: done_today was built from the pre-drop map, and an
+            # inherited entry must NOT excuse today's export.
+            done_today = {n for n, e in prior_entries.items() if entry_is_done(e)}
+            partial_today = {n: e for n, e in prior_entries.items() if not entry_is_done(e)}
+    if stale:
+        logger.warning("manifest_stale_entries dropped=%s", ",".join(sorted(stale)))
 
     if plan and args.auto_chunk:
         # CHEAPEST CHUNK FIRST (2026-10-23). This used to be `next(...)`: the
@@ -1466,6 +1511,18 @@ def main() -> int:
                 date_str,
                 len(done_today),
             )
+            if stale:
+                # Repair the day in place: without this the stale name keeps
+                # `expected` at 86 and a complete day can never say so.
+                upload_manifest(
+                    b2_api,
+                    bucket_name,
+                    date_str,
+                    [],
+                    expected_count=day_total,
+                    missing={},
+                    drop=stale,
+                )
             return 0
         collections = list(first_open.collections)
         logger.info(
@@ -1542,6 +1599,7 @@ def main() -> int:
             chunk_entries,
             expected_count=expected_count,
             missing=chunk_failures,
+            drop=stale,
         )
 
     def snap(name: str) -> dict[str, Any]:
@@ -1575,7 +1633,7 @@ def main() -> int:
                     expected_count=expected_count,
                     missing={},
                 )
-            except Exception as exc:  # noqa: BLE001 - progress, not correctness
+            except Exception as exc:
                 logger.warning("shard_flush_failed collection=%s err=%s", name, exc)
 
         return snapshot_collection(
@@ -1599,7 +1657,7 @@ def main() -> int:
         # them even if this firing lands nothing else.
         try:
             flush(list(carried.values()), {})
-        except Exception as exc:  # noqa: BLE001 - progress, not correctness
+        except Exception as exc:
             logger.warning("carry_flush_failed err=%s", exc)
 
     deadline_monotonic = time.monotonic() + float(args.max_seconds)

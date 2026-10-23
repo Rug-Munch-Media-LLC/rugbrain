@@ -38,7 +38,7 @@ Environment=B2_CHUNK_SECONDS=1800
 Environment=B2_SLOT_SECONDS=2100
 # A partial day must not restart at 0/85 at UTC midnight: inherit completed
 # collections from the last N dated manifests (recorded as carried_from).
-Environment=B2_CARRY_DAYS=3
+Environment=B2_CARRY_DAYS=0
 # LEVER FOR PER-SHARD COST. Measured 2026-10-23 with sharding on:
 #   100,000 pts of 4096-dim == 2,470-2,501 MB and 10.9-12.6 min per shard
 #                              (threat_intel_v2_8b__sparsemig, news_v2_8b)

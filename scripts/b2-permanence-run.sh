@@ -29,7 +29,7 @@ ARGS=(
 	--chunk-count "${B2_CHUNK_COUNT:-4}"
 	--max-seconds "${B2_CHUNK_SECONDS:-1800}"
 	--slot-seconds "${B2_SLOT_SECONDS:-2100}"
-	--carry-days "${B2_CARRY_DAYS:-3}"
+	--carry-days "${B2_CARRY_DAYS:-0}"
 	--shard-points "${B2_SHARD_POINTS:-50000}"
 )
 if [ "${B2_PRUNE_LIVE:-0}" = "1" ]; then

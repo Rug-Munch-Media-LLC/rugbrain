@@ -24,8 +24,8 @@ from __future__ import annotations
 import logging
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from permanence_budget import Slice
 
@@ -99,7 +99,7 @@ def run_chunk(
     def cost(name: str) -> float:
         try:
             return float(estimate_fn(name)) if estimate_fn else 0.0
-        except Exception as exc:  # noqa: BLE001 - an estimate never blocks work
+        except Exception as exc:
             logger.warning("chunk_estimate_failed collection=%s err=%s", name, exc)
             return 0.0
 
@@ -152,7 +152,7 @@ def run_chunk(
                 result.shards += len(entry.get("shards") or [])
                 error = ""
                 break
-            except Exception as exc:  # noqa: BLE001 - classified by retry policy
+            except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 if attempt >= RETRY_ATTEMPTS:
                     break
@@ -180,7 +180,7 @@ def run_chunk(
         # Flush after every collection: a kill can never lose the whole day.
         try:
             flush_fn(entries, result.failed)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("manifest_flush_failed after=%s err=%s", name, exc)
 
     result.elapsed_s = budget.elapsed()
