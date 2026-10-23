@@ -66,7 +66,6 @@ import os
 import re
 import sys
 import tempfile
-import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -93,6 +92,9 @@ from b2_common import (
     stream_parquet,
     upload_file,
 )
+from permanence_chunk_plan import estimate_minutes, plan_chunks
+from permanence_chunk_run import run_chunk
+from permanence_shard import export_parquet_shards
 
 logger = logging.getLogger("b2_permanence")
 
@@ -330,6 +332,22 @@ def export_collection_ndjson(
 # ── Snapshot pipeline ─────────────────────────────────────────────────
 
 
+def _is_oversized(client: qdrant_client.QdrantClient, name: str, shard_points: int) -> bool:
+    """True only for a collection big enough to need sharding.
+
+    Sharding every vector collection would rename every object key to
+    ``<name>.part-00000.parquet`` and break readers that expect
+    ``<name>.parquet`` -- two production defects to buy nothing on a
+    31-point collection. So the threshold is the collection's own point count.
+    """
+    try:
+        info = client.get_collection(collection_name=name)
+        return int(getattr(info, "points_count", 0) or 0) > shard_points
+    except Exception as exc:  # noqa: BLE001 - never shard on an unknown size
+        logger.warning("shard_size_unknown collection=%s err=%s", name, exc)
+        return False
+
+
 def snapshot_collection(
     client: qdrant_client.QdrantClient,
     b2_api: B2Api,
@@ -340,6 +358,7 @@ def snapshot_collection(
     limit: int | None,
     with_vectors: bool,
     fmt: str = "parquet",
+    shard_points: int = 0,
 ) -> dict[str, Any]:
     """Export, compress (parquet/NDJSON) and upload one collection.
 
@@ -347,20 +366,54 @@ def snapshot_collection(
     or ``ndjson`` (legacy — zstd). No client-side encryption is applied:
     B2 SSE-B2 (AES256) encrypts every object at rest.
 
+    ``shard_points`` > 0 splits a vector-bearing collection into multiple
+    parquet objects of that many points each (see permanence_shard). One
+    collection stays one manifest entry; the entry gains ``shards``.
+
     Returns the manifest entry for this collection.
     """
     base = workdir / name
     base.mkdir(parents=True, exist_ok=True)
 
     started = datetime.now(UTC)
+    shards: list[dict[str, Any]] = []
 
-    if fmt == "parquet":
+    if fmt == "parquet" and shard_points and with_vectors and _is_oversized(
+        client, name, shard_points
+    ):
+        key_prefix = f"{SNAPSHOT_PREFIX}/{date_str}/{name}"
+        point_count, shards = export_parquet_shards(
+            client,
+            name,
+            base,
+            key_prefix,
+            PARQUET_SUFFIX,
+            limit=limit,
+            with_vectors=with_vectors,
+            shard_points=shard_points,
+            level=ZSTD_LEVEL,
+        )
+        for shard in shards:
+            # Re-export each shard from disk to B2 one at a time: staging is
+            # shard-sized, so /tmp never holds the whole collection again.
+            part = base / shard["object_key"].rsplit("/", 1)[-1]
+            upload_file(b2_api, bucket_name, part, shard["object_key"])
+            part.unlink(missing_ok=True)
+        suffix = PARQUET_SUFFIX
+        object_key = shards[0]["object_key"] if shards else f"{key_prefix}{suffix}"
+        bytes_stored = sum(int(s.get("bytes_stored", 0)) for s in shards)
+        digest = f"sha256-multipart:{len(shards)}"
+    elif fmt == "parquet":
         parquet_path = base / f"{name}{PARQUET_SUFFIX}"
         point_count = export_collection_parquet(
             client, name, parquet_path, limit=limit, with_vectors=with_vectors
         )
         upload_path = parquet_path
         suffix = PARQUET_SUFFIX
+        object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{name}{suffix}"
+        upload_file(b2_api, bucket_name, upload_path, object_key)
+        bytes_stored = upload_path.stat().st_size
+        digest = sha256_file(upload_path)
     else:
         ndjson_path = base / f"{name}{NDJSON_SUFFIX}"
         zst_path = base / f"{name}{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
@@ -370,9 +423,10 @@ def snapshot_collection(
         compress_file(ndjson_path, zst_path, level=ZSTD_LEVEL)
         upload_path = zst_path
         suffix = f"{NDJSON_SUFFIX}{COMPRESSED_SUFFIX}"
-
-    object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{name}{suffix}"
-    upload_file(b2_api, bucket_name, upload_path, object_key)
+        object_key = f"{SNAPSHOT_PREFIX}/{date_str}/{name}{suffix}"
+        upload_file(b2_api, bucket_name, upload_path, object_key)
+        bytes_stored = upload_path.stat().st_size
+        digest = sha256_file(upload_path)
 
     finished = datetime.now(UTC)
     entry: dict[str, Any] = {
@@ -380,29 +434,37 @@ def snapshot_collection(
         "format": fmt,
         "object_key": object_key,
         "point_count": point_count,
-        "bytes_raw": upload_path.stat().st_size if fmt == "parquet" else ndjson_path.stat().st_size,
-        "bytes_stored": upload_path.stat().st_size,
+        "bytes_raw": bytes_stored,
+        "bytes_stored": bytes_stored,
         "compression": f"zstd-{ZSTD_LEVEL}" if fmt == "ndjson" else f"parquet-zstd-{ZSTD_LEVEL}",
         "encrypted": False,  # SSE-B2 encrypts at rest; no client-side encryption
-        "sha256": sha256_file(upload_path),
+        "sha256": digest,
         "started_at": started.isoformat(),
         "finished_at": finished.isoformat(),
     }
+    if shards:
+        entry["shards"] = shards
     if with_vectors:
         entry["vectors_included"] = True
     logger.info(
-        "snapshot_ok collection=%s format=%s points=%d stored=%s key=%s",
+        "snapshot_ok collection=%s format=%s points=%d stored=%s key=%s shards=%d",
         name,
         fmt,
         point_count,
-        _fmt_size(upload_path.stat().st_size),
+        _fmt_size(bytes_stored),
         object_key,
+        len(shards),
     )
     return entry
 
 
 def upload_manifest(
-    b2_api: B2Api, bucket_name: str, date_str: str, entries: list[dict[str, Any]]
+    b2_api: B2Api,
+    bucket_name: str,
+    date_str: str,
+    entries: list[dict[str, Any]],
+    expected_count: int | None = None,
+    missing: dict[str, str] | None = None,
 ) -> None:
     """Upload manifest.json for the day plus the latest.json pointer.
 
@@ -425,9 +487,20 @@ def upload_manifest(
     collection replaces its own entry (the newer sha256/point count is the
     truth); a collection absent from this run keeps its previous entry. That
     makes partial and repeated runs composable instead of destructive.
+
+    PARTIAL vs COMPLETE (2026-10-23). Merging made a day look finished when it
+    was not: a manifest with 77 of 85 collections verified as "usable" because
+    the only completeness test was a static `>= 40` floor. The manifest now
+    carries the truth of the run that produced it --
+    ``expected_collections``, ``complete`` and ``missing[]`` -- so a reader can
+    distinguish "85 of 85" from "77 of 85, 8 still owed" without guessing.
+    ``missing`` is merged like ``collections``: a collection that later succeeds
+    is dropped from ``missing`` rather than left to contradict its own entry.
     """
     manifest_key = f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}"
     by_collection: dict[str, dict[str, Any]] = {}
+    prior_missing: dict[str, dict[str, Any]] = {}
+    prior_expected: int | None = None
     prior_count = 0
     try:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as pt:
@@ -446,6 +519,12 @@ def upload_manifest(
                 for e in prior_entries:
                     if isinstance(e, dict) and e.get("collection"):
                         by_collection[str(e["collection"])] = e
+            if isinstance(prior.get("missing"), list):
+                for m in prior["missing"]:
+                    if isinstance(m, dict) and m.get("collection"):
+                        prior_missing[str(m["collection"])] = m
+            if isinstance(prior.get("expected_collections"), int):
+                prior_expected = prior["expected_collections"]
     except Exception as exc:  # a missing/unreadable prior manifest is fine
         logger.info("manifest_merge no_prior_manifest key=%s (%s)", manifest_key, exc)
 
@@ -465,6 +544,30 @@ def upload_manifest(
             len(merged),
         )
 
+    missing_by: dict[str, dict[str, Any]] = dict(prior_missing)
+    for name, error in (missing or {}).items():
+        missing_by[name] = {
+            "collection": name,
+            "error": error,
+            "at": datetime.now(UTC).isoformat(),
+        }
+    # A collection that landed IN THIS RUN is not missing, whatever an earlier
+    # flush said. Prior-day entries must not clear it: a deferral would erase
+    # its own evidence and the day would look complete while owing work.
+    for entry in entries:
+        if entry.get("collection"):
+            missing_by.pop(str(entry["collection"]), None)
+
+    expected = expected_count if expected_count is not None else prior_expected
+    if expected is None:
+        expected = len(merged)
+    # Never let a narrow run (--collection, a debug chunk) LOWER the day's
+    # denominator: that is how a 4-of-85 manifest would advertise itself as
+    # complete. Only a larger truth may raise it.
+    expected = max(int(expected), len(merged), prior_expected or 0)
+    missing_list = [missing_by[k] for k in sorted(missing_by)]
+    complete = len(merged) >= expected and not missing_list
+
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
@@ -480,20 +583,75 @@ def upload_manifest(
         "formats": sorted({str(e.get("format", "ndjson")) for e in merged}),
         "collections": merged,
         "total_points": sum(int(e.get("point_count", 0)) for e in merged),
+        "expected_collections": expected,
+        "complete": complete,
+        "missing": missing_list,
     }
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
         json.dump(manifest, tmp, indent=2)
         tmp_path = Path(tmp.name)
     try:
         upload_file(b2_api, bucket_name, tmp_path, f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}")
-        # latest.json pointer (uploaded last so restore can trust it)
-        latest = {"date": date_str, "manifest": f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}"}
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(latest, f, indent=2)
-        upload_file(b2_api, bucket_name, tmp_path, f"{SNAPSHOT_PREFIX}/{LATEST_NAME}")
+        # latest.json is the pointer restore resolves FIRST, so it must never
+        # name a day that is still owing collections. From 2026-10-23 the
+        # manifest is flushed after every collection; advancing the pointer on
+        # each flush would advertise a partial day as the newest good one. So
+        # the pointer only moves when the day is complete -- and if the day
+        # never completes, the pointer stays on the last complete day and the
+        # staleness alert fires on B2 truth.
+        if complete:
+            latest = {
+                "date": date_str,
+                "manifest": f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}",
+            }
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(latest, f, indent=2)
+            upload_file(b2_api, bucket_name, tmp_path, f"{SNAPSHOT_PREFIX}/{LATEST_NAME}")
+        else:
+            logger.warning(
+                "manifest_partial date=%s have=%d expected=%d missing=%d "
+                "(latest.json NOT advanced)",
+                date_str,
+                len(merged),
+                expected,
+                len(missing_list),
+            )
     finally:
         tmp_path.unlink(missing_ok=True)
-    logger.info("manifest_uploaded date=%s collections=%d", date_str, len(entries))
+    logger.info(
+        "manifest_uploaded date=%s collections=%d expected=%d complete=%s",
+        date_str,
+        len(merged),
+        expected,
+        complete,
+    )
+
+
+def todays_done_collections(b2_api: B2Api, bucket_name: str, date_str: str) -> set[str]:
+    """Collections already recorded in today's manifest — the resume cursor.
+
+    Absence of a manifest is not an error (it is the normal first run of a
+    day), so any read failure yields the empty set and the chunk re-exports
+    from the start. Re-exporting is safe: it overwrites the same object keys.
+    """
+    manifest_key = f"{SNAPSHOT_PREFIX}/{date_str}/{MANIFEST_NAME}"
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as pt:
+            path = Path(pt.name)
+        try:
+            download_file(b2_api, bucket_name, manifest_key, path)
+            prior = json.loads(path.read_text(encoding="utf-8"))
+        finally:
+            path.unlink(missing_ok=True)
+    except Exception:
+        return set()
+    if not isinstance(prior, dict):
+        return set()
+    return {
+        str(entry["collection"])
+        for entry in prior.get("collections") or []
+        if isinstance(entry, dict) and entry.get("collection")
+    }
 
 
 # ── Retention / prune ──────────────────────────────────────────────
@@ -766,6 +924,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="Max points to export per collection (testing)",
     )
     p.add_argument(
+        "--chunk-count",
+        type=int,
+        default=None,
+        help="Split the day into this many time-bounded chunks (see permanence_chunk_plan)",
+    )
+    p.add_argument(
+        "--chunk-index",
+        type=int,
+        default=None,
+        help="Run only this chunk (0-based). Requires --chunk-count",
+    )
+    p.add_argument(
+        "--auto-chunk",
+        action="store_true",
+        help="With --chunk-count: run the first chunk still owing collections "
+        "for today, so repeated timer firings complete the day",
+    )
+    p.add_argument(
+        "--max-seconds",
+        type=int,
+        default=4800,
+        help="Wall-clock budget for this invocation (default 4800 = 80min, "
+        "deliberately below the unit's 90min timeout so it exits cleanly)",
+    )
+    p.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="Re-export collections already present in today's manifest "
+        "(default: skip them — resumption is idempotent)",
+    )
+    p.add_argument(
+        "--shard-points",
+        type=int,
+        default=400_000,
+        help="Split a vector collection larger than this many points into "
+        "multiple parquet objects (0 disables sharding)",
+    )
+    p.add_argument(
         "--no-vectors", action="store_true", help="Skip vectors in export (payload only)"
     )
     p.add_argument("--qdrant-url", default=None, help="Qdrant URL override")
@@ -957,6 +1153,45 @@ def main() -> int:
         return 0
 
     date_str = datetime.now(UTC).strftime("%Y-%m-%d")
+
+    # ── Chunking (2026-10-23) ─────────────────────────────────────────
+    # The whole day does not fit one 6h unit with margin (85 collections,
+    # 5.99h measured, SIGTERM'd at 78). Split it into time-bounded chunks so
+    # each invocation exits on its own terms and the next one resumes.
+    if args.chunk_count:
+        # The flag means CHUNK COUNT, so derive the budget from the measured
+        # total: N chunks that also respect the wall-clock ceiling. Without the
+        # ceiling a chunk could outlive its unit timeout; without the count the
+        # day would split into 40 tiny chunks.
+        total_est = sum(estimate_minutes(c) for c in collections)
+        budget = min(args.max_seconds / 60, max(total_est / args.chunk_count, 1.0))
+        plan = plan_chunks(collections, budget_minutes=budget)
+        index = args.chunk_index
+        if args.auto_chunk or index is None:
+            index = 0  # refined after the manifest is read (resume filter below)
+        if not 0 <= index < len(plan):
+            logger.critical("chunk_index_out_of_range index=%s chunks=%d", index, len(plan))
+            return 2
+        logger.info(
+            "chunk_plan chunks=%d total_est=%.1fmin budget=%.0fmin sizes=%s",
+            len(plan),
+            sum(c.est_minutes for c in plan),
+            args.max_seconds / 60,
+            ",".join(f"{c.index}:{len(c.collections)}/{c.est_minutes:.0f}m" for c in plan),
+        )
+        collections = list(plan[index].collections)
+        logger.info(
+            "chunk_selected index=%d/%d collections=%d",
+            index,
+            len(plan) - 1,
+            len(collections),
+        )
+    else:
+        plan = []
+    # Expected is the whole day, not this chunk: a chunk that lands 12 of 85
+    # must not report itself as 12/12 complete.
+    day_total = sum(len(c.collections) for c in plan) if plan else len(collections)
+
     logger.info("=== B2 permanence sync started ===")
     logger.info(
         "bucket=%s date=%s collections=%d format=%s vectors=%s",
@@ -1003,60 +1238,94 @@ def main() -> int:
         logger.critical("b2_auth_failed: %s", exc)
         return 2
 
-    entries: list[dict[str, Any]] = []
-    failures = 0
+    # Resume + auto-chunk: today's manifest is the source of truth for what is
+    # already landed, so a rerun -- from any chunk, after any kill -- does not
+    # re-export or duplicate. Idempotent by construction: the same object key is
+    # overwritten and the manifest merge replaces that collection's entry.
+    done_today = set() if args.no_resume else todays_done_collections(b2_api, bucket_name, date_str)
+    if plan and args.auto_chunk:
+        first_open = next(
+            (c.index for c in plan if not set(c.collections) <= done_today),
+            None,
+        )
+        if first_open is None:
+            logger.info(
+                "day_already_complete date=%s collections=%d — nothing to do",
+                date_str,
+                len(done_today),
+            )
+            return 0
+        collections = list(plan[first_open].collections)
+        logger.info("chunk_auto_selected index=%d/%d", first_open, len(plan) - 1)
+    if done_today:
+        skipped = [c for c in collections if c in done_today]
+        collections = [c for c in collections if c not in done_today]
+        logger.info(
+            "resume date=%s already_done=%d skipped_in_this_chunk=%d remaining=%d",
+            date_str,
+            len(done_today),
+            len(skipped),
+            len(collections),
+        )
+    if not collections:
+        logger.info("=== nothing left to snapshot for %s (resume) ===", date_str)
+        return 0
+
+    expected_count = day_total
+
+    def flush(chunk_entries: list[dict[str, Any]], chunk_failures: dict[str, str]) -> None:
+        upload_manifest(
+            b2_api,
+            bucket_name,
+            date_str,
+            chunk_entries,
+            expected_count=expected_count,
+            missing=chunk_failures,
+        )
+
+    def snap(name: str) -> dict[str, Any]:
+        return snapshot_collection(
+            client,
+            b2_api,
+            bucket_name,
+            date_str,
+            name,
+            workdir,
+            args.limit,
+            collection_has_vectors(name, with_vectors, payload_only_collections),
+            fmt,
+            shard_points=args.shard_points,
+        )
+
     with tempfile.TemporaryDirectory(prefix="b2-permanence-") as workdir_str:
         workdir = Path(workdir_str)
-        for idx, name in enumerate(collections, 1):
-            logger.info("[%d/%d] collection=%s", idx, len(collections), name)
-            try:
-                entries.append(
-                    snapshot_collection(
-                        client,
-                        b2_api,
-                        bucket_name,
-                        date_str,
-                        name,
-                        workdir,
-                        args.limit,
-                        collection_has_vectors(name, with_vectors, payload_only_collections),
-                        fmt,
-                    )
-                )
-            except Exception as exc:
-                failures += 1
-                logger.error("snapshot_failed collection=%s err=%s", name, exc)
-                # Retry once after a short backoff — big collections can
-                # transiently disconnect from Qdrant mid-snapshot.
-                try:
-                    logger.info("snapshot_retry collection=%s", name)
-                    time.sleep(5)
-                    snapshot_collection(
-                        client,
-                        b2_api,
-                        bucket_name,
-                        date_str,
-                        name,
-                        workdir,
-                        args.limit,
-                        collection_has_vectors(name, with_vectors, payload_only_collections),
-                        fmt,
-                    )
-                    failures -= 1
-                    logger.info("snapshot_retry_ok collection=%s", name)
-                except Exception as retry_exc:
-                    logger.error("snapshot_retry_failed collection=%s err=%s", name, retry_exc)
+        result = run_chunk(
+            collections,
+            snapshot_fn=snap,
+            flush_fn=flush,
+            budget_seconds=float(args.max_seconds),
+        )
 
+    # Final flush records deferred work as owed, so a short run is visible in
+    # the manifest rather than passing as a complete day.
+    deferred_missing = {n: "deferred: chunk budget exhausted (next chunk)" for n in result.deferred}
     try:
-        if entries:
-            upload_manifest(b2_api, bucket_name, date_str, entries)
+        upload_manifest(
+            b2_api,
+            bucket_name,
+            date_str,
+            [],
+            expected_count=expected_count,
+            missing={**result.failed, **deferred_missing},
+        )
     except Exception as exc:
-        failures += 1
         logger.error("manifest_failed: %s", exc)
 
     # Retention pruning — gated: only runs with --prune; dry-run unless
     # --prune-live AND NOT --dry-run (--dry-run already returned above).
-    if args.prune:
+    # Never prune from a partial day: retention counts dated dirs, and a
+    # half-written day would be counted as a retained day.
+    if args.prune and not result.deferred and not result.failed:
         try:
             prune_snapshots(
                 b2_api,
@@ -1067,18 +1336,21 @@ def main() -> int:
                 keep_monthly=args.keep_monthly,
             )
         except Exception as exc:
-            failures += 1
             logger.error("prune_failed: %s", exc)
 
-    total_points = sum(int(e.get("point_count", 0)) for e in entries)
     logger.info(
-        "=== B2 permanence sync complete: %d ok, %d failed, %d points, %s total ===",
-        len(entries),
-        failures,
-        total_points,
-        _fmt_size(sum(int(e.get("bytes_stored", 0)) for e in entries)),
+        "=== B2 permanence sync complete: %d ok, %d failed, %d deferred, %d points, %.1fmin ===",
+        len(result.done),
+        len(result.failed),
+        len(result.deferred),
+        result.points,
+        result.elapsed_s / 60,
     )
-    return 0 if failures == 0 else 1
+    # Deferred work is not a failure of this chunk, but the DAY is unfinished:
+    # exit non-zero so systemd (and any human reading `systemctl status`) sees
+    # that the day still owes collections. The timer keeps firing and the next
+    # chunk resumes.
+    return 0 if result.ok else 1
 
 
 if __name__ == "__main__":

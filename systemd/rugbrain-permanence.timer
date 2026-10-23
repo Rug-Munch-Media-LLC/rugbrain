@@ -1,0 +1,26 @@
+# rugbrain-permanence.timer — nightly chunked permanence sync
+#
+# 2026-10-23: the day no longer fits one firing. The timer fires at 03:00 and
+# then every 40 min through 08:20; each firing runs ONE chunk (90 min service
+# timeout, 80 min in-process budget) and resumes from today's manifest. Once
+# the day is complete every later firing exits in seconds ("nothing to do"),
+# so the extra slots cost nothing.
+#
+# Footgun that killed this loop for 3 days (2026-09-25..28): a
+# `Requires=rugbrain-permanence.service` on the timer. A oneshot service goes
+# inactive after each run, and a Requires= dependency propagates that
+# deactivation BACK UP to the timer and stops it for good. A timer reading
+# "active" is not proof of a working loop — `Triggers=` is set by systemd and
+# needs no Requires/Wants/BindsTo/PartOf.
+
+[Unit]
+Description=RugBrain B2 Permanence — chunked Qdrant snapshot to B2
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+
+[Timer]
+OnCalendar=*-*-* 03:00,03:40,04:20,05:00,05:40,06:20,07:00,07:40,08:20
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

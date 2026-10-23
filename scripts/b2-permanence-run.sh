@@ -1,26 +1,30 @@
 #!/bin/bash
-# b2-permanence-run.sh — systemd wrapper for b2_permanence.py that wires the
-# retention prune into the nightly rmi-rag-permanence.timer (03:00).
+# b2-permanence-run.sh — systemd entrypoint for the CHUNKED permanence run.
 #
-# Retention policy (BACKUP-POLICY.md, RAG permanence): keep 30 daily /
-# 4 weekly / 12 monthly dated snapshots. The prune pass runs every night;
-# LIVE deletion is gated behind B2_PRUNE_LIVE=1 (operator opt-in, read from
-# the unit's EnvironmentFile). Default (unset/0) = dry-run prune only —
-# it lists what WOULD be deleted and deletes nothing.
+# Why chunks: the whole day did not fit one 6h unit. Measured 2026-10-23: 77 of
+# 85 collections in 5.99h, then `TimeoutStartSec` fired and SIGTERM'd the run at
+# [78/85] — the fourth consecutive night. The unit timeout is NOT raised; the
+# work is sized to fit it instead. Each invocation runs ONE chunk (default
+# budget 80 min against a 90 min unit timeout), resumes from today's manifest,
+# and the timer fires the next chunk a few times through the morning.
 #
-# Opt in to live pruning: add `B2_PRUNE_LIVE=1` to b2-permanence.env, then:
-#   systemctl restart rmi-rag-permanence.service
-#
-# Self-locating so this script can be deployed from the public repo without
-# hardcoding internal paths (see systemd/rmi-rag-permanence.service).
+# Retention policy (BACKUP-POLICY.md, RAG permanence): keep 30 daily / 4 weekly
+# / 12 monthly dated snapshots. LIVE deletion is gated behind B2_PRUNE_LIVE=1
+# (operator opt-in, from the unit's EnvironmentFile). Default = dry-run.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-ARGS=(--prune)
+ARGS=(
+	--prune
+	--auto-chunk
+	--chunk-count "${B2_CHUNK_COUNT:-4}"
+	--max-seconds "${B2_CHUNK_SECONDS:-4800}"
+	--shard-points "${B2_SHARD_POINTS:-400000}"
+)
 if [ "${B2_PRUNE_LIVE:-0}" = "1" ]; then
-  ARGS+=(--prune-live)
+	ARGS+=(--prune-live)
 fi
 
 exec /usr/bin/python3 "${SCRIPT_DIR}/b2_permanence.py" "${ARGS[@]}"

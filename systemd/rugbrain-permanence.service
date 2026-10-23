@@ -1,0 +1,45 @@
+# rugbrain-permanence.service — Nightly Qdrant Snapshot → B2 (CHUNKED)
+#
+# 2026-10-23: replaced a single whole-day invocation with one time-bounded
+# chunk per firing. The old unit carried the whole 85-collection run under
+# TimeoutStartSec=21600 and was SIGTERM'd at [78/85] four nights running
+# (2026-10-20..23), leaving objects in B2 and NO manifest for the day.
+#
+# The timeout is now 90 min — LOWERED, not raised. The run is sized to fit:
+# --max-seconds 4800 (80 min) leaves 10 min of margin, so the process exits on
+# its own terms instead of being killed mid-upload. The wrapper's --auto-chunk
+# picks the first chunk still owing collections for today, so successive timer
+# firings complete the day; a finished day exits in seconds.
+#
+# Progress survives a kill regardless: the manifest is flushed after every
+# collection, and `latest.json` only advances when the day is complete.
+
+[Unit]
+Description=RugBrain B2 Permanence — Nightly Qdrant Snapshot to B2
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/srv/work/repos/rugbrain
+EnvironmentFile=/srv/secrets/b2-permanence.env
+# Chunk sizing (override in the EnvironmentFile, not here).
+Environment=B2_CHUNK_COUNT=4
+Environment=B2_CHUNK_SECONDS=4800
+Environment=B2_SHARD_POINTS=400000
+ExecStart=/srv/work/repos/rugbrain/scripts/b2-permanence-run.sh
+StandardOutput=append:/var/log/rmi-rag-permanence.log
+StandardError=append:/var/log/rmi-rag-permanence.log
+# 90 min: one chunk (80 min budget) plus margin. NOT the old 6 h.
+TimeoutStartSec=5400
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
