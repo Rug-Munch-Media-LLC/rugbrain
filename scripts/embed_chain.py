@@ -31,7 +31,7 @@ COOLDOWN_S = float(os.getenv("RUG_EMBED_COOLDOWN_S", "600"))
 FAILURE_FILE = os.getenv(
     "RUG_EMBED_FAILURE_FILE", "/var/log/rugbrain/embed-lane-failures.jsonl"
 )
-DEFAULT_ORDER = ("local", "deepinfra", "siliconflow")
+DEFAULT_ORDER = ("siliconflow", "deepinfra", "local")
 
 
 @dataclass(frozen=True, slots=True)
