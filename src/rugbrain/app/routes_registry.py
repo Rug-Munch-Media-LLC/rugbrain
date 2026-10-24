@@ -16,6 +16,7 @@ from rugbrain.metrics import metrics_router
 from rugbrain.news_feed import news_feed_router
 from rugbrain.routes.content import router as content_router
 from rugbrain.routes.core import embed_text as embed_text_route
+from rugbrain.routes.daily_rug import router as daily_rug_router
 from rugbrain.routes.search_federated import router as federated_router
 from rugbrain.routes.ta import router as ta_router
 from rugbrain.scanner_feedback import scanner_feedback_router
@@ -34,6 +35,7 @@ def include_all_routers(app: FastAPI) -> None:
     app.include_router(news_feed_router)  # /api/v1/news/feed, /story, /trending, /topics
     app.include_router(health_router)  # /api/v1/health/full — aggregated dashboard
     app.include_router(content_router)  # /api/v1/content/* — distribution drafts
+    app.include_router(daily_rug_router)  # /api/v1/content/daily-rug — publish + read
     app.include_router(federated_router)  # /api/v1/search/federated — multi-backend
     app.include_router(ta_router)  # /api/v1/ta/* — technical-analysis signals
     # Compatibility alias for older workers that call POST /embed directly.
