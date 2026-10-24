@@ -43,6 +43,7 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "hacks_v2",
         "news_v2",
         "research_v2",
+        "gmgn_docs",
         "wallet_v2",
         "scanner_v2",
         # Live scanner output. Was absent: the twin did not exist, so the write
