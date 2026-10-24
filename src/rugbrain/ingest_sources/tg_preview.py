@@ -66,7 +66,10 @@ def parse_preview_page(html: str, channel: str) -> list[dict[str, Any]]:
             dt = None
         out.append(
             {
-                "channel": m.group("channel") or channel,
+                # Telegram handles are case-insensitive; `data-post` carries
+                # the canonical case, the sweep list does not. Normalise once here
+                # so `source` ("t.me/<handle>") matches the channel inventory.
+                "channel": (m.group("channel") or channel).lower(),
                 "msg_id": int(m.group("msg_id")),
                 "text": text,
                 "ts": (dt or datetime.now(UTC)).isoformat(),
