@@ -106,6 +106,12 @@ from rugbrain.rugbrain_mcp.tools_search import (
 from rugbrain.rugbrain_mcp.tools_search import (
     rugbrain_search_multi as rugbrain_search_multi,
 )
+from rugbrain.rugbrain_mcp.tools_zeroday import (
+    rugbrain_bounty_scope as rugbrain_bounty_scope,
+)
+from rugbrain.rugbrain_mcp.tools_zeroday import (
+    rugbrain_zeroday as rugbrain_zeroday,
+)
 
 __all__ = [
     "API_KEY",
@@ -124,6 +130,7 @@ __all__ = [
     "mcp",
     "rugbrain_alerts",
     "rugbrain_analyze",
+    "rugbrain_bounty_scope",
     "rugbrain_health",
     "rugbrain_market_brief",
     "rugbrain_news",
@@ -135,6 +142,7 @@ __all__ = [
     "rugbrain_social_sentiment",
     "rugbrain_vector_landscape",
     "rugbrain_wallet_profile",
+    "rugbrain_zeroday",
     "tools_intel",
     "tools_market",
     "tools_search",
