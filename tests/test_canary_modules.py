@@ -8,9 +8,53 @@ provider module — fails here rather than in production.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+
+# ── env seams (one place per contract) ─────────────────────────────────
+
+
+@pytest.fixture
+def canary_env(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Set/clear the 8B canary env contract in one place."""
+
+    def install(enabled: str | None = None, collections: str | None = None) -> None:
+        for name, value in (
+            ("RAG_8B_CANARY_ENABLED", enabled),
+            ("RAG_8B_CANARY_COLLECTIONS", collections),
+        ):
+            if value is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, value)
+
+    return install
+
+
+@pytest.fixture
+def deepinfra_env(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Set/clear the DeepInfra credential env contract in one place."""
+
+    def install(
+        api_key: str | None = None,
+        key_file: str | None = None,
+        key_paths: tuple[str, ...] | None = None,
+    ) -> None:
+        for name, value in (
+            ("DEEPINFRA_API_KEY", api_key),
+            ("DEEPINFRA_KEY_FILE", key_file),
+        ):
+            if value is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, value)
+        if key_paths is not None:
+            monkeypatch.setattr(embedding, "KEY_FILE_PATHS", key_paths)
+
+    return install
+
 
 import rugbrain.canary_config as config
 import rugbrain.canary_embedding as embedding
@@ -37,36 +81,32 @@ def test_facade_bindings_are_the_module_objects() -> None:
 # ── config gate ─────────────────────────────────────────────────────────
 
 
-def test_config_collections_are_empty_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RAG_8B_CANARY_ENABLED", raising=False)
-    monkeypatch.setenv("RAG_8B_CANARY_COLLECTIONS", "known_scams")
+def test_config_collections_are_empty_when_disabled(canary_env: Callable[..., None]) -> None:
+    canary_env(collections="known_scams")
     assert config.canary_collections() == frozenset()
     assert config.canary_enabled() is False
 
 
 def test_config_rejects_an_unallowlisted_configured_collection(
-    monkeypatch: pytest.MonkeyPatch,
+    canary_env: Callable[..., None],
 ) -> None:
-    monkeypatch.setenv("RAG_8B_CANARY_ENABLED", "1")
-    monkeypatch.setenv("RAG_8B_CANARY_COLLECTIONS", "known_scams,not_a_public_collection")
+    canary_env(enabled="1", collections="known_scams,not_a_public_collection")
     with pytest.raises(config.CanaryConfigError):
         config.canary_collections()
 
 
 def test_config_target_is_none_for_a_configured_but_unchecked_collection(
-    monkeypatch: pytest.MonkeyPatch,
+    canary_env: Callable[..., None],
 ) -> None:
-    monkeypatch.setenv("RAG_8B_CANARY_ENABLED", "true")
-    monkeypatch.setenv("RAG_8B_CANARY_COLLECTIONS", "known_scams")
+    canary_env(enabled="true", collections="known_scams")
     assert config.canary_target_for("defi_exploits") is None
     assert config.canary_target_for("known_scams") == "known_scams_8b"
 
 
 def test_config_target_requires_an_explicit_collection_list(
-    monkeypatch: pytest.MonkeyPatch,
+    canary_env: Callable[..., None],
 ) -> None:
-    monkeypatch.setenv("RAG_8B_CANARY_ENABLED", "1")
-    monkeypatch.delenv("RAG_8B_CANARY_COLLECTIONS", raising=False)
+    canary_env(enabled="1")
     with pytest.raises(config.CanaryConfigError):
         config.canary_target_for("known_scams")
 
@@ -101,32 +141,28 @@ def test_validate_returns_a_copied_float_list() -> None:
 # ── credential resolution ───────────────────────────────────────────────
 
 
-def test_api_key_prefers_the_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_api_key_prefers_the_environment(deepinfra_env: Callable[..., None], tmp_path: Path) -> None:
     keyfile = tmp_path / "key"
     keyfile.write_text("from-file", encoding="utf-8")
-    monkeypatch.setenv("DEEPINFRA_API_KEY", "from-env")
-    monkeypatch.setenv("DEEPINFRA_KEY_FILE", str(keyfile))
+    deepinfra_env(api_key="from-env", key_file=str(keyfile))
     assert embedding._api_key() == "from-env"
 
 
 def test_api_key_falls_back_to_the_configured_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    deepinfra_env: Callable[..., None], tmp_path: Path
 ) -> None:
     keyfile = tmp_path / "key"
     keyfile.write_text("from-file\n", encoding="utf-8")
-    monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
-    monkeypatch.setenv("DEEPINFRA_KEY_FILE", str(keyfile))
+    deepinfra_env(key_file=str(keyfile))
     assert embedding._api_key() == "from-file"
 
 
 def test_api_key_unavailable_raises_rather_than_returning_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    deepinfra_env: Callable[..., None], tmp_path: Path
 ) -> None:
     # Point the fallback at an empty dir so neither the env var nor any
     # well-known key path can resolve: it must raise, not return None.
-    monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
-    monkeypatch.setenv("DEEPINFRA_KEY_FILE", str(tmp_path / "absent"))
-    monkeypatch.setattr(embedding, "KEY_FILE_PATHS", (str(tmp_path / "absent"),))
+    deepinfra_env(key_file=str(tmp_path / "absent"), key_paths=(str(tmp_path / "absent"),))
     with pytest.raises(config.CanaryUnavailable):
         embedding._api_key()
 
