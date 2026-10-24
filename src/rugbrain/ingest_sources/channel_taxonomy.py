@@ -51,6 +51,8 @@ BRANDS: dict[str, str] = {
     "slowmist": "security",
     "immunefi": "security",
     "openpost": "news",
+    "watcherguru": "news",
+    "news_crypto": "news",
     "nansen": "data",
     "glassnode": "data",
     "arkham": "data",
