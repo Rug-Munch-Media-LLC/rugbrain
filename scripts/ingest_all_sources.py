@@ -41,7 +41,8 @@ from rugbrain.qdrant_store import QdrantVectorStore
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
-from ingest_common import chunk_text, embed_many
+from devdocs_chunk import chunks_for_doc
+from ingest_common import embed_many
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_all_sources")
@@ -75,14 +76,14 @@ async def _store_docs(
         coll = _route_collection(source_name, default_collection, d.metadata)
         by_collection[coll].append((d.doc_id, d.content, dict(d.metadata), d.source or source_name))
 
-    # Per-collection attempt/success accounting. A collection asked to take N
+    # Per-collection attempt/success accounting: a collection asked for N
     # documents and accepting NONE is not a per-document problem, it is being
     # refused wholesale — overwhelmingly a dimension/schema mismatch where the
     # store's guard correctly fails closed:
     #   qdrant_insert_blocked collection=privacy_protocol requested_dim=<wrong>
     #                                            configured_dims=[4096]
-    # Counting that as N ordinary errors was correct but INVISIBLE: errors was a
-    # number nobody keyed on, so the run exited 0 having written nothing.
+    # Counting that as N ordinary errors was correct but invisible:
+    # number nobody keyed on, and the run exited 0 having written nothing.
     attempted_by_collection: dict[str, int] = defaultdict(int)
     embedded_by_collection: dict[str, int] = defaultdict(int)
 
@@ -104,7 +105,7 @@ async def _store_docs(
             continue
         chunks: list[tuple[str, str, dict[str, Any], str, str]] = []
         for doc_id, content, metadata, source in pending:
-            for i, ch in enumerate(chunk_text(content)):
+            for i, ch in enumerate(chunks_for_doc(content, metadata)):
                 chunks.append((f"{doc_id}:c{i}" if i else doc_id, ch, metadata, source, doc_id))
         try:
             vectors = await embed_many(client, [c[1] for c in chunks])

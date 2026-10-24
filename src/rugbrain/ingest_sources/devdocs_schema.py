@@ -38,6 +38,12 @@ LICENCE_PSF: Final[str] = "PSF-2.0"
 LICENCE_BSD3: Final[str] = "BSD-3-Clause"
 LICENCE_GPL3: Final[str] = "GPL-3.0-only"
 LICENCE_CC_BY: Final[str] = "CC-BY-4.0"
+#: GFDL, as published with the GNU manuals (the Bash reference manual).
+LICENCE_GFDL13: Final[str] = "GFDL-1.3-or-later"
+#: Open-core: MIT for the tree, with a commercial carve-out (``enterprise/``).
+LICENCE_OPEN_CORE_EE: Final[str] = "MIT core + EE carve-out"
+#: Vendor documentation terms — usable internally, NOT redistributable.
+LICENCE_PROPRIETARY_DOCS: Final[str] = "Proprietary-docs"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,9 +71,12 @@ __all__ = [
     "LICENCE_APACHE2",
     "LICENCE_BSD3",
     "LICENCE_CC_BY",
+    "LICENCE_GFDL13",
     "LICENCE_GPL3",
     "LICENCE_MIT",
     "LICENCE_MIT_OR_APACHE2",
+    "LICENCE_OPEN_CORE_EE",
+    "LICENCE_PROPRIETARY_DOCS",
     "LICENCE_PSF",
     "DocSite",
 ]
