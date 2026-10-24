@@ -47,17 +47,28 @@ from rugbrain.ingest_sources.devdocs_specs_aiplatform import PLATFORM_SITES
 from rugbrain.ingest_sources.devdocs_specs_devtools import DEVTOOL_SITES
 from rugbrain.ingest_sources.devdocs_specs_languages import BLOG_SITES, LANGUAGE_SITES
 from rugbrain.ingest_sources.devdocs_specs_languages_extra import LANGUAGE_EXTRA_SITES
+from rugbrain.ingest_sources.devdocs_specs_oss_stack import OSS_STACK_SITES
 from rugbrain.ingest_sources.devdocs_specs_protocols import PROTOCOL_SITES
 
 #: Every declared family, in fetch order. The one tuple every consumer reads.
 DOC_SITES: Final[tuple[DocSite, ...]] = (
-    PROTOCOL_SITES + LANGUAGE_SITES + LANGUAGE_EXTRA_SITES + DEVTOOL_SITES + PLATFORM_SITES
+    PROTOCOL_SITES
+    + LANGUAGE_SITES
+    + LANGUAGE_EXTRA_SITES
+    + DEVTOOL_SITES
+    + PLATFORM_SITES
+    + OSS_STACK_SITES
     + BLOG_SITES
 )
 
 #: Non-RSS families (specs + language docs), fetched page by page by ``devdocs``.
 STATIC_SITES: Final[tuple[DocSite, ...]] = (
-    PROTOCOL_SITES + LANGUAGE_SITES + LANGUAGE_EXTRA_SITES + DEVTOOL_SITES + PLATFORM_SITES
+    PROTOCOL_SITES
+    + LANGUAGE_SITES
+    + LANGUAGE_EXTRA_SITES
+    + DEVTOOL_SITES
+    + PLATFORM_SITES
+    + OSS_STACK_SITES
 )
 
 #: RSS-backed families, one document per feed item, fetched by ``eng_blogs``.
@@ -79,6 +90,7 @@ __all__ = [
     "LICENCE_MIT",
     "LICENCE_MIT_OR_APACHE2",
     "LICENCE_PSF",
+    "OSS_STACK_SITES",
     "PLATFORM_SITES",
     "PROTOCOL_SITES",
     "STATIC_SITES",
