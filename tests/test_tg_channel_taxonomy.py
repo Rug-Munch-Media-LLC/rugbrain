@@ -57,6 +57,9 @@ EMITTABLE = frozenset(CATEGORY_WEIGHT) & frozenset(CATEGORY_ALIASES.values())
         ("Perps Signals", "perpsignals", "market"),
         ("Blockchain News", "blockchainnews", "news"),
         ("The Daily Press", "dailypress", "news"),
+        ("WatcherGuru", "watcherguru", "news"),
+        ("WatcherGuru Chat", "watcherguruchat", "news"),
+        ("News Crypto", "news_crypto", "news"),
         # ── brands win over ticker words ───────────────────────────────
         ("screamAI", "screamai", "data"),
     ],
