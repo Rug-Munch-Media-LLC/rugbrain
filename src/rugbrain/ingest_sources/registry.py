@@ -88,6 +88,16 @@ from rugbrain.ingest_sources.opensanctions import OpenSanctionsSource
 from rugbrain.ingest_sources.openzeppelin import OpenZeppelinSource
 from rugbrain.ingest_sources.ossf_malicious import OSSFMaliciousPackagesSource
 from rugbrain.ingest_sources.phishdestroy import PhishDestroySource
+from rugbrain.ingest_sources.players_docs import (
+    ArbitrumDocsSource,
+    BaseDocsSource,
+    DefiLlamaDocsSource,
+)
+from rugbrain.ingest_sources.players_research import (
+    A16ZCryptoSource,
+    ChainalysisInsightsSource,
+    FlashbotsWritingsSource,
+)
 from rugbrain.ingest_sources.privacy import TornadoSource
 from rugbrain.ingest_sources.rekt import RektSource
 from rugbrain.ingest_sources.safe import SafeSource
@@ -155,6 +165,12 @@ SOURCES: tuple[Source, ...] = (
     FortaMaliciousContractsSource(),
     CRPWarnerRugEventsSource(),
     VulnerabilitySeveritySource(),
+    A16ZCryptoSource(),
+    FlashbotsWritingsSource(),
+    ChainalysisInsightsSource(),
+    BaseDocsSource(),
+    ArbitrumDocsSource(),
+    DefiLlamaDocsSource(),
 )
 
 #: Semantic doc_type → source names (for quick lookup / filtering).

@@ -123,6 +123,56 @@ TERMS: dict[str, SourceTerms] = {
             "ALLOW_UNLICENSED_CORPORA=1; lead decision still open."
         ),
     ),
+        # 2026-10-25: big-player research + chain docs. All research_only: internal
+    # retrieval yes, redistribution no, verbatim text only (no rewriting).
+    "a16zcrypto": SourceTerms(
+        source_id="a16zcrypto",
+        license="Copyright a16z crypto - site content, no reuse licence declared",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="Feed summaries stored verbatim; internal research only.",
+    ),
+    "flashbots_writings": SourceTerms(
+        source_id="flashbots_writings",
+        license="Copyright Flashbots - site content, no reuse licence declared",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="writings.flashbots.net feed text only, internal use.",
+    ),
+    "chainalysis_insights": SourceTerms(
+        source_id="chainalysis_insights",
+        license="Copyright Chainalysis - site content, no reuse licence declared",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="Blog feed summaries only; never presented as our analysis.",
+    ),
+    "base_docs": SourceTerms(
+        source_id="base_docs",
+        license="Copyright Coinbase/Base - docs site, no reuse licence declared",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="Docs pages quoted verbatim; internal retrieval only.",
+    ),
+    "arbitrum_docs": SourceTerms(
+        source_id="arbitrum_docs",
+        license="UNDECLARED - OffchainLabs/arbitrum-docs has no SPDX licence file",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="REVIEW: no SPDX found; public technical docs quoted verbatim, research only.",
+    ),
+    "defillama_docs": SourceTerms(
+        source_id="defillama_docs",
+        license="Copyright DefiLlama - docs site, no reuse licence declared",
+        permitted_use=RESEARCH_ONLY,
+        chunkable=True,
+        redistribute=False,
+        note="TVL methodology + adapter docs, verbatim; internal use.",
+    ),
 }
 
 
