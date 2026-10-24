@@ -747,9 +747,15 @@ def upload_manifest(
     # complete. Only a larger truth may raise it.
     # The denominator counts DAILY collections: an out-of-scope entry that
     # happens to be present (weekly elephant) must not raise what the day owes.
-    out_present = len(
-        [e for e in merged if e.get("collection") in set(daily_scope([])[1])]
-    ) if exclude_from_daily else 0
+    # The excluded set is a property of the COLLECTION, not of the flag this
+    # caller passed. A --collection (weekly elephant) run used to compute
+    # out_present=0, so on a completed 85-entry day its extra entry set
+    # expected=max(85, 86)=86 and the day could never be complete again. The
+    # elephant fires on Sunday morning precisely AFTER the nightly has written
+    # that day, so the shipped weekly contract would have corrupted every
+    # Sunday. Same subtraction on both paths.
+    scope_out = set(daily_scope([])[1])
+    out_present = sum(1 for e in merged if e.get("collection") in scope_out)
     expected = max(int(expected), len(merged) - out_present)
     missing_list = [missing_by[k] for k in sorted(missing_by)]
     # A half-written collection (partial: true) is a manifest ENTRY but not a
@@ -761,13 +767,15 @@ def upload_manifest(
     # 96 landed daily + 1 landed elephant summed to 97 against expected 97 and
     # the day advertised complete=True. Landed and expected must be counted in
     # the SAME universe, and a partial is never landed.
-    excluded_scope = set(daily_scope([])[1]) if exclude_from_daily else set()
     landed = sum(
         1
         for e in merged
-        if not e.get("partial") and e.get("collection") not in excluded_scope
+        if not e.get("partial") and e.get("collection") not in scope_out
     )
-    complete = landed >= expected and not missing_list
+    # A deferred out-of-scope collection is still recorded in missing[], but it
+    # cannot gate the DAILY contract: the elephant owes weeks, not a day.
+    daily_missing = [m for m in missing_list if m.get("collection") not in scope_out]
+    complete = landed >= expected and not daily_missing
 
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
