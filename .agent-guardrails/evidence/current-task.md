@@ -63,3 +63,26 @@ RugBrain public crypto-intelligence audience boundary, canonical 2560-dimensiona
 - Live opt-in ASGI canary probe: HTTP 200, source collection preserved, 3 results, target/provider leakage false. Live default-off probe: HTTP 200 with canonical behavior preserved.
 - `git diff --check` — passed.
 - `npx agent-guardrails check --base-ref HEAD~1` with all three required `--commands-run` entries — passed with 0 errors and 2 pre-existing continuity warnings; no production 8B activation or service restart performed.
+
+## Task: canonical content style + Daily Rug long-form lane (2026-10-24)
+
+### Scope
+Editorial style contract, free-model prompt pack and the Daily Rug generator.
+No change to retrieval, ingest or publication routing.
+
+### Commands and results
+- `python3 -m pytest tests/test_content_style.py tests/test_daily_rug.py tests/test_content_engine.py tests/test_content_gate.py tests/test_content_candidates_pool.py tests/test_factcheck.py -q` — 102 passed.
+- `python3 -m ruff check` on all touched source and test files — passed.
+- `python3 -m mypy` on the new modules — no errors in the touched files (31 pre-existing errors reported in imported modules).
+- `python3 scripts/check-structure.py --repo .` — no findings in new files; `content_engine.py` 341 -> 338 lines (shrank).
+- `python3 scripts/check-antipatterns.py --repo .` — no findings in touched files.
+
+### Changes
+- `config/content_style.json` is the single style source; `config/content_prompts.json` the single prompt source.
+- `rugbrain.content_style`, `.content_style_normalise`, `.content_style_lint`, `.content_prompts`.
+- `rugbrain.daily_rug` plus evidence, refs, render, meta and validate modules.
+- `content_engine.py` now renders its Telegram writer prompt from the canonical pack.
+
+### Residual risk
+- Repo-wide `check-monkeypatch.py` and pre-existing structure ratchets fail on files untouched by this task (baseline drift at branch point).
+- `search_multi_collection` defaults are exercised through an injected search function in tests; no live Qdrant call was made.

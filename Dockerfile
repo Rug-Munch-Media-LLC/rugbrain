@@ -26,6 +26,8 @@ RUN pip install --upgrade pip --quiet && pip install --no-cache-dir -r requireme
 
 COPY src/ src/
 COPY scripts/ scripts/
+# Editorial config: canonical content style + prompt pack (read at runtime).
+COPY config/ config/
 COPY pyproject.toml .
 
 RUN pip install --no-cache-dir -e .

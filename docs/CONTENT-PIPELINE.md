@@ -1,5 +1,9 @@
 # Content pipeline — one order, every source
 
+Editorial rules for every surface (voice, spacing, numbers, citations,
+length budgets) live in `docs/CONTENT-STYLE.md`; the machine-readable source is
+`config/content_style.json`.
+
 Canonical flow. There is no per-channel path and no privileged source: every
 writer produces documents that enter the **same** candidate pool, and the same
 story arriving through several channels is published **once**.

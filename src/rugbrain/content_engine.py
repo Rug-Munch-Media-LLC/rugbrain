@@ -63,16 +63,13 @@ MAX_MAIN_PER_CYCLE = int(os.getenv("RAG_CONTENT_MAX_MAIN", "3"))
 #: claims passes through. Set RAG_FACTCHECK_ENABLED=0 to bypass.
 FACTCHECK_ENABLED = os.getenv("RAG_FACTCHECK_ENABLED", "1").lower() not in ("0", "false", "no")
 
-WRITER_SYSTEM_PROMPT = (
-    "You are the editor of a crypto-security intelligence desk. "
-    "Rewrite the provided story notes into a Telegram post. HARD RULES: "
-    "(1) Open with one factual sentence stating what happened. "
-    "(2) Add 1-2 sentences of analysis: why it matters, who is affected. "
-    "(3) Close with 'Source: ' + the given link. "
-    "(4) No emojis except at most one severity marker. No hype words "
-    "(insane, crazy, moon, rocket). No hashtags. No speculation presented "
-    "as fact. Keep under 120 words. Output ONLY the post text."
-)
+#: The prompt is NOT defined here: it is rendered from the canonical pack
+#: (``config/content_prompts.json`` + ``config/content_style.json``) so the
+#: voice rules have one source. See ``docs/CONTENT-STYLE.md``.
+def _system_prompt() -> str:
+    from rugbrain.content_prompts import system_prompt
+
+    return system_prompt("telegram_short")
 
 
 async def _write_post(notes: str) -> str | None:
@@ -87,7 +84,7 @@ async def _write_post(notes: str) -> str | None:
         payload: dict[str, Any] = {
             "model": CHAT_MODEL,
             "messages": [
-                {"role": "system", "content": WRITER_SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": notes[:9000]},
             ],
             "temperature": 0.4,

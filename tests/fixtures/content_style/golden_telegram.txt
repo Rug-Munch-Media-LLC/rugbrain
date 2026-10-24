@@ -1,0 +1,10 @@
+Bridge loses $5M in a single transaction
+
+The brief draws on 4 sources from 4 publishers.
+
+- A bridge on Ethereum lost $5M in a single transaction after an operator key was compromised [1].
+- The team paused withdrawals within an hour and confirmed the loss in a status update [2].
+- A post mortem published the next day attributes the drain to a leaked deployer key [3].
+
+Read the full brief: https://rugmunch.io/story/daily-rug-2026-10-24-bridge-key-compromise-drain
+Check any token before you sign: https://rugmunch.io/scan
