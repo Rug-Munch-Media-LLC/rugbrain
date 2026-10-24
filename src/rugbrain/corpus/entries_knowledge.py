@@ -120,6 +120,22 @@ _KNOWLEDGE: Final[tuple[CorpusDeclaration, ...]] = (
         retired=()
     ),
     _d(
+        "gmgn-docs",
+        "gmgn_docs",
+        cid="gmgn_docs",
+        language=L.DOCS,
+        domain=D.KNOWLEDGE,
+        url="https://docs.gmgn.ai/index/gmgn-agent-api",
+        licence="publisher-terms (GMGN docs; internal use, not product-cleared)",
+        cadence=WEEKLY,
+        last_verified=None,
+        notes="GMGN Agent API + skill-hub docs + GMGNAI/gmgn-skills docs copy, "
+        "snapshotted by scripts/fetch_gmgn_docs.py and ingested by "
+        "scripts/ingest_gmgn_docs.py. Created 2026-10-25 at the canonical lane.",
+        observed=None,
+        retired=(),
+    ),
+    _d(
         "youtube-videos",
         "youtube_videos",
         cid="youtube_videos",
