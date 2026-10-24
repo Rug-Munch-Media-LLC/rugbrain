@@ -73,6 +73,32 @@ _MCP: Final[tuple[DocSite, ...]] = (
         cap=3,
     ),
     DocSite(
+        name="mcp_sdk_python",
+        family="mcp",
+        url="https://github.com/modelcontextprotocol/python-sdk",
+        licence=LICENCE_MIT,
+        doc_type="sdk_docs",
+        collection=DOCS_COLLECTION,
+        urls=(
+            "https://raw.githubusercontent.com/modelcontextprotocol/python-sdk/main/README.md",
+            "https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle",
+            "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports",
+        ),
+        cap=3,
+    ),
+    DocSite(
+        name="mcp_sdk_typescript",
+        family="mcp",
+        url="https://github.com/modelcontextprotocol/typescript-sdk",
+        licence=LICENCE_MIT,
+        doc_type="sdk_docs",
+        collection=DOCS_COLLECTION,
+        urls=(
+            "https://raw.githubusercontent.com/modelcontextprotocol/typescript-sdk/main/README.md",
+        ),
+        cap=1,
+    ),
+    DocSite(
         name="mcp_servers",
         family="mcp",
         url="https://github.com/modelcontextprotocol/servers",
