@@ -1605,7 +1605,18 @@ def main() -> int:
     # A carried entry naming a collection that no longer exists in Qdrant must
     # be DROPPED, not merged: it raises `expected` (85 -> 86 on 2026-10-23 via
     # cbrv2_8b_hnswdisk_pilot) and a day can then never report complete.
-    stale = {n for n in prior_entries if n not in set(raw_names)}
+    # An out-of-scope entry is NOT stale. rag_documents_8b is filtered out of
+    # raw_names by the _8b twin rule, so the nightly classified the weekly
+    # elephant as a deleted collection and DROPPED its shard cursor. The
+    # elephant fires Sunday 06/07/08/09 while the daily timer fires 06:20,
+    # 07:00, 07:40, 08:20 -- every one of those erasures reset the weekly
+    # contract to part-0, so its 23 shards could never accumulate. Measured
+    # 2026-10-24: one real elephant shard landed (1,243.7 MB) and the next
+    # daily run removed the entry that named it.
+    weekly_scope = set(daily_scope([])[1])
+    stale = {
+        n for n in prior_entries if n not in set(raw_names) and n not in weekly_scope
+    }
     if not args.carry_days:
         # SELF-CONTAINED DAY. An entry inherited from another date is not this
         # day's backup, even though it is non-partial: 2026-10-23's manifest was
