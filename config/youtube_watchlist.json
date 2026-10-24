@@ -1,0 +1,118 @@
+{
+	"version": 1,
+	"description": "Public-data watchlist for youtube-scam-watch. Handles mirror the verified list in src/rugbrain/youtube_ingester.py (YT_CHANNELS, verified 2026-08-18). No subscriber counts are seeded: subs stay null until a dated, sourced read exists.",
+	"channels": [
+		{
+			"name": "Coin Bureau",
+			"handle": "@CoinBureau",
+			"channel_url": "https://www.youtube.com/@CoinBureau",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Altcoin Daily",
+			"handle": "@AltcoinDaily",
+			"channel_url": "https://www.youtube.com/@AltcoinDaily",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "CoinDesk",
+			"handle": "@CoinDesk",
+			"channel_url": "https://www.youtube.com/@CoinDesk",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Cointelegraph",
+			"handle": "@Cointelegraph",
+			"channel_url": "https://www.youtube.com/@Cointelegraph",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "The Block",
+			"handle": "@TheBlock",
+			"channel_url": "https://www.youtube.com/@TheBlock",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "99Bitcoins",
+			"handle": "@99Bitcoins",
+			"channel_url": "https://www.youtube.com/@99Bitcoins",
+			"category": "education",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Altcoin Buzz",
+			"handle": "@AltcoinBuzz",
+			"channel_url": "https://www.youtube.com/@AltcoinBuzz",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "CoinGecko",
+			"handle": "@CoinGecko",
+			"channel_url": "https://www.youtube.com/@CoinGecko",
+			"category": "data",
+			"cadence": "biweekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Bankless",
+			"handle": "@Bankless",
+			"channel_url": "https://www.youtube.com/@Bankless",
+			"category": "web3",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Benjamin Cowen",
+			"handle": "@benjaminjcowen",
+			"channel_url": "https://www.youtube.com/@benjaminjcowen",
+			"category": "trading",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Crypto Banter",
+			"handle": "@CryptoBanterGroup",
+			"channel_url": "https://www.youtube.com/@CryptoBanterGroup",
+			"category": "trading",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Crypto Casey",
+			"handle": "@CryptoCasey",
+			"channel_url": "https://www.youtube.com/@CryptoCasey",
+			"category": "education",
+			"cadence": "biweekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "Crypto Zombie",
+			"handle": "@CryptoZombie",
+			"channel_url": "https://www.youtube.com/@CryptoZombie",
+			"category": "news",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		},
+		{
+			"name": "More Crypto Online",
+			"handle": "@morecryptoonline",
+			"channel_url": "https://www.youtube.com/@morecryptoonline",
+			"category": "trading",
+			"cadence": "weekly",
+			"notes": "baseline monitoring; no assessment"
+		}
+	]
+}
