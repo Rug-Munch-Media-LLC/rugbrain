@@ -44,6 +44,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from rugbrain.whale_flow_text import _haystack, _text
+
 __all__ = [
     "EXCHANGE_HINTS",
     "MIXER_HINTS",
@@ -98,23 +100,6 @@ WHALE_HINTS: tuple[str, ...] = (
 _FLOW_ENTITY_TYPES = frozenset({"malicious", "exploiter", "mixer", "exchange"})
 
 
-def _text(value: Any) -> str:
-    return "" if value is None else str(value).strip()
-
-
-def _haystack(row: dict[str, Any]) -> str:
-    """Lowercased label + name + entity_type, the fields a classifier reads."""
-    meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-    parts = [
-        _text(row.get("label")),
-        _text(row.get("name")),
-        _text(row.get("entity_type")),
-        _text(meta.get("label")),
-        _text(meta.get("name")),
-        _text(meta.get("entity_type")),
-        _text(row.get("content")),
-    ]
-    return " ".join(parts).lower()
 
 
 def classify_address(row: dict[str, Any]) -> str:

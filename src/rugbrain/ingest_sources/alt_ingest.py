@@ -15,6 +15,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from rugbrain.ingest_sources.alt_dialogs import dialog_entities
 from rugbrain.ingest_sources.alt_ingest_channels import resolve_channel_list
 from rugbrain.ingest_sources.alt_ingest_client import (
     AltIngestCredentialError,
@@ -108,23 +109,6 @@ async def fetch_channel(
     return docs
 
 
-async def dialog_entities(client: Any) -> dict[str, Any]:
-    """username -> entity for every channel the ALT account is already in.
-
-    iter_dialogs() needs no username resolution, so the sweep reads joined
-    channels without touching the ResolveUsername rate limit at all. Channels
-    the account is NOT in still fall back to get_entity (and its errors).
-    """
-    out: dict[str, Any] = {}
-    try:
-        async for d in client.iter_dialogs():
-            if d.is_channel:
-                username = getattr(d.entity, "username", None)
-                if username:
-                    out[username.lower()] = d.entity
-    except Exception as exc:  # noqa: BLE001 — degrade to per-handle resolution
-        logger.warning("dialog_scan_failed err=%s", str(exc)[:120])
-    return out
 
 
 
@@ -146,7 +130,7 @@ async def collect_payloads(
     return {"docs": docs, "summary": summary}
 
 
-__all__.extend(["collect_payloads", "fetch_channel", "dialog_entities"])
+__all__.extend(["collect_payloads", "dialog_entities", "fetch_channel"])
 
 
 async def run_mirror(

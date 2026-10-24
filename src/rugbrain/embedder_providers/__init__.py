@@ -2,4 +2,6 @@
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from rugbrain.embedder_providers.hosted import _call, _key, _order
+
+__all__ = ["_call", "_key", "_order"]
