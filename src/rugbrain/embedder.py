@@ -23,8 +23,17 @@ import os
 import httpx
 
 from rugbrain.dim_policy import default_dim_for_model
-from rugbrain.embedder_config import _PROVIDERS, MODEL, logger
+from rugbrain.embedder_config import _PROVIDERS, DEFAULT_ORDER, MODEL, logger
 from rugbrain.embedder_providers import _call, _key, _order
+from rugbrain.embeddings_pkg.config import RAGUnavailableError
+
+__all__ = [
+    "DEFAULT_ORDER",
+    "HostedEmbedder",
+    "RAGUnavailableError",
+    "get_embedder",
+    "hosted_embed",
+]
 
 
 async def hosted_embed(
@@ -64,15 +73,11 @@ class HostedEmbedder:
     """Hosted embedding chain adapter (same interface as old DeepInfraEmbedder)."""
 
     def __init__(self) -> None:
-        from rugbrain.dim_policy import default_dim_for_model
-
         self.dim = default_dim_for_model(MODEL)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         result = await hosted_embed(texts)
         if result is None:
-            from rugbrain.embeddings_pkg.config import RAGUnavailableError
-
             raise RAGUnavailableError(
                 f"all hosted embedding providers exhausted (chain={_order()})"
             )
