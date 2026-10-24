@@ -5,6 +5,7 @@ description = "RugBrain (formerly RugSense / RMI RAG) — crypto intelligence RA
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.9",  # scripts.dual_tier.model_gateway imports it directly
+    "defusedxml>=0.7.1",
     "duckdb>=1.1.0",
     "fastapi>=0.115.0",
     "fastembed>=0.8.0",
