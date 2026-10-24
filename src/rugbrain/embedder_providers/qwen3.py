@@ -23,6 +23,9 @@ from rugbrain.embedder_providers.qwen3_transport import (
 from rugbrain.embedder_providers.qwen3_transport import (
     post_llamacpp as _post_llamacpp,
 )
+from rugbrain.embedder_providers.qwen3_transport import (
+    post_siliconflow as _post_siliconflow,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +55,13 @@ DEEPINFRA_EMBED_URL = os.getenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.co
 # Canonical lane. Env still wins, so an operator can retarget without a code
 # change — but the DEFAULT is the 8B model, not the retired 4B one.
 DEEPINFRA_EMBED_MODEL = os.getenv("DEEPINFRA_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
+SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY", "").strip()
+if not SILICONFLOW_API_KEY:
+    try:
+        with open("/srv/secrets/siliconflow_api_key", encoding="utf-8") as _sf:
+            SILICONFLOW_API_KEY = _sf.read().strip()
+    except OSError:
+        pass
 
 
 def _embed_url() -> str:
@@ -89,19 +99,21 @@ class Qwen3Embedder:
     def __init__(self, embed_url: str | None = None, provider: str | None = None):
         self.url = embed_url or os.getenv("QWEN_EMBED_URL", self.EMBED_URL)
         self.provider = (provider or os.getenv("EMBED_PROVIDER") or "").strip().lower()
-        self.api_key = DEEPINFRA_API_KEY
+        self.api_key = (
+            SILICONFLOW_API_KEY if self.provider == "siliconflow" else DEEPINFRA_API_KEY
+        )
         if embed_url is not None:
             # Explicit endpoint pinned (legacy speed tiers) — local lane only.
             self.provider = "local"
         if not self.provider:
             # Auto: hosted DeepInfra when keyed, else local llama.cpp fallback.
-            self.provider = "deepinfra" if self.api_key else "local"
+            self.provider = "siliconflow" if SILICONFLOW_API_KEY else ("deepinfra" if self.api_key else "local")
         if self.provider == "deepinfra" and not self.api_key:
             raise RuntimeError(
                 "EMBED_PROVIDER=deepinfra requires DEEPINFRA_API_KEY "
                 "(env, via .env.rag / gopass). Set EMBED_PROVIDER=local for llama.cpp."
             )
-        if self.provider not in ("deepinfra", "local"):
+        if self.provider not in ("deepinfra", "local", "siliconflow"):
             raise RuntimeError(f"EMBED_PROVIDER={self.provider!r} unknown (use deepinfra|local)")
 
     @property
@@ -120,6 +132,8 @@ class Qwen3Embedder:
         return default_dim_for_model(self.MODEL)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.provider == "siliconflow":
+            return await _post_siliconflow(self, texts)
         if self.provider == "deepinfra":
             return await self._embed_deepinfra(texts)
         return await self._embed_llamacpp(texts)
