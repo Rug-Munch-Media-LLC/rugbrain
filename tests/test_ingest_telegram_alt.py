@@ -9,10 +9,40 @@ that must never regress — without needing credentials or network.
 from __future__ import annotations
 
 import importlib as _il
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
+
+ALT_ENV_SUFFIXES = (
+    "API_ID",
+    "API_HASH",
+    "SESSION_STRING",
+    "SESSION_FILE",
+    "STATE_FILE",
+)
+
+
+@pytest.fixture
+def alt_env(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """The single seam for the alt-ingest env contract.
+
+    Clears every credential/state variable, then installs the values the test
+    passes. Tests never touch ``monkeypatch`` themselves, so the env contract
+    lives in exactly one place instead of being re-typed per test.
+    """
+
+    def install(**values: str) -> None:
+        for suffix in ALT_ENV_SUFFIXES:
+            name = f"RAG_TG_ALT_INGEST_{suffix}"
+            if suffix in values:
+                monkeypatch.setenv(name, values[suffix])
+            else:
+                monkeypatch.delenv(name, raising=False)
+
+    return install
+
 
 telegram_mirror = _il.import_module("rugbrain.ingest_sources.alt_ingest")
 mirror_channels = _il.import_module("rugbrain.ingest_sources.alt_ingest_channels")
@@ -131,14 +161,8 @@ def test_resolve_channel_list_explicit_override() -> None:
 # ── credentials ─────────────────────────────────────────────────────────────
 
 
-def test_credentials_missing_report_names_not_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (
-        "RAG_TG_ALT_INGEST_API_ID",
-        "RAG_TG_ALT_INGEST_API_HASH",
-        "RAG_TG_ALT_INGEST_SESSION_STRING",
-        "RAG_TG_ALT_INGEST_SESSION_FILE",
-    ):
-        monkeypatch.delenv(name, raising=False)
+def test_credentials_missing_report_names_not_values(alt_env: Callable[..., None]) -> None:
+    alt_env()
     ok, missing = mirror_client.alt_ingest_credentials_present()
     assert ok is False
     assert "RAG_TG_ALT_INGEST_API_ID" in missing
@@ -147,27 +171,20 @@ def test_credentials_missing_report_names_not_values(monkeypatch: pytest.MonkeyP
     assert all(name.startswith("RAG_TG_ALT_INGEST") for name in missing)
 
 
-def test_credentials_present_with_session_string(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
+def test_credentials_present_with_session_string(alt_env: Callable[..., None]) -> None:
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s")
     assert mirror_client.alt_ingest_credentials_present()[0] is True
 
 
-def test_credentials_present_with_session_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_FILE", "/fake/session/file.path")
+def test_credentials_present_with_session_file(alt_env: Callable[..., None]) -> None:
+    alt_env(API_ID="1", API_HASH="h", SESSION_FILE="/fake/session/file.path")
     ok, _ = mirror_client.alt_ingest_credentials_present()
     assert ok is True
 
 
-def test_build_client_refuses_bot_token_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_client_refuses_bot_token_shape(alt_env: Callable[..., None]) -> None:
     """A missing second-account credential must fail loud, never silently."""
-    monkeypatch.delenv("RAG_TG_ALT_INGEST_API_ID", raising=False)
-    monkeypatch.delenv("RAG_TG_ALT_INGEST_API_HASH", raising=False)
-    monkeypatch.delenv("RAG_TG_ALT_INGEST_SESSION_STRING", raising=False)
-    monkeypatch.delenv("RAG_TG_ALT_INGEST_SESSION_FILE", raising=False)
+    alt_env()
     with pytest.raises(mirror_client.AltIngestCredentialError):
         mirror_client.build_alt_ingest_client()
 
@@ -259,11 +276,8 @@ def test_state_survives_corrupt_file(tmp_path: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_mirror_dedupe_and_insert(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+async def test_run_mirror_dedupe_and_insert(tmp_path: Any, alt_env: Callable[..., None]) -> None:
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
 
     client = FakeClient(_msgs(4, "Market update") + _msgs(2, "copy paste", start=100))
     # third channel: identical copy-paste text → content-hash duplicate
@@ -285,12 +299,9 @@ async def test_run_mirror_dedupe_and_insert(tmp_path: Any, monkeypatch: pytest.M
 
 @pytest.mark.asyncio
 async def test_run_mirror_dry_run_embeds_nothing(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Any, alt_env: Callable[..., None]
 ) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
 
     embedder = FakeEmbedder()
     store = FakeStore()
@@ -308,13 +319,10 @@ async def test_run_mirror_dry_run_embeds_nothing(
 
 @pytest.mark.asyncio
 async def test_run_mirror_skips_already_stored_points(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Any, alt_env: Callable[..., None]
 ) -> None:
     """Gate 1: existing points are skipped WITHOUT an embed call."""
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
 
     msgs = _msgs(2, "stored story")
     docs = [
@@ -342,13 +350,10 @@ async def test_run_mirror_skips_already_stored_points(
 
 @pytest.mark.asyncio
 async def test_run_mirror_only_fetches_new_messages(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Any, alt_env: Callable[..., None]
 ) -> None:
     """A re-run must pass the watermark so nothing is re-fetched."""
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
 
     client = FakeClient(_msgs(3, "first sweep"))
     await telegram_mirror.run_mirror(
@@ -369,12 +374,9 @@ async def test_run_mirror_only_fetches_new_messages(
 
 @pytest.mark.asyncio
 async def test_run_mirror_wrong_dim_is_a_failure_not_a_drop(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Any, alt_env: Callable[..., None]
 ) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
     store = FakeStore()
     summary = await telegram_mirror.run_mirror(
         ["cointelegraph"],
@@ -388,25 +390,17 @@ async def test_run_mirror_wrong_dim_is_a_failure_not_a_drop(
 
 
 @pytest.mark.asyncio
-async def test_run_mirror_blocked_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (
-        "RAG_TG_ALT_INGEST_API_ID",
-        "RAG_TG_ALT_INGEST_API_HASH",
-        "RAG_TG_ALT_INGEST_SESSION_STRING",
-    ):
-        monkeypatch.delenv(name, raising=False)
+async def test_run_mirror_blocked_without_credentials(alt_env: Callable[..., None]) -> None:
+    alt_env()
     with pytest.raises(mirror_client.AltIngestCredentialError):
         await telegram_mirror.run_mirror(["cointelegraph"])
 
 
 @pytest.mark.asyncio
 async def test_run_mirror_channel_failure_does_not_abort(
-    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Any, alt_env: Callable[..., None]
 ) -> None:
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_ID", "1")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_API_HASH", "h")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_SESSION_STRING", "s")
-    monkeypatch.setenv("RAG_TG_ALT_INGEST_STATE_FILE", str(tmp_path / "state.json"))
+    alt_env(API_ID="1", API_HASH="h", SESSION_STRING="s", STATE_FILE=str(tmp_path / "state.json"))
 
     class HalfBrokenClient(FakeClient):
         async def get_entity(self, handle: str) -> FakeEntity:  # type: ignore[override]

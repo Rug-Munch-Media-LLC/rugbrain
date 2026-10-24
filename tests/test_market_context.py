@@ -280,13 +280,18 @@ def _dexscreener_transport(pair_created_at: int | None) -> httpx.MockTransport:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("created_ms", "expected"),
+    ("age_ms", "expected"),
     [
-        (int(time.time() * 1000) - 24 * 3600 * 1000, "new"),  # 24h old → new
-        (1_600_000_000_000, "established"),  # ~Sep 2020 → established
+        (24 * 3600 * 1000, "new"),  # 24h old -> new
+        (None, "established"),  # ~Sep 2020 -> established
     ],
+    ids=["24h-new", "2020-established"],
 )
-async def test_fetch_deployer_freshness_classification(created_ms: int, expected: str) -> Any:
+async def test_fetch_deployer_freshness_classification(age_ms: int | None, expected: str) -> Any:
+    # Age is resolved INSIDE the test: a wall-clock value in the parametrize id
+    # makes collection non-deterministic, which breaks pytest-xdist (nodes
+    # collect different ids) and makes reruns non-reproducible.
+    created_ms = 1_600_000_000_000 if age_ms is None else int(time.time() * 1000) - age_ms
     transport = _dexscreener_transport(created_ms)
     with patch(
         "httpx.AsyncClient",
