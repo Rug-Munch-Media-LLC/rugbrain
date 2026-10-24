@@ -8,13 +8,12 @@ fence-aware packer (an open code fence is never cut, however long it is).
 
 from __future__ import annotations
 
-import importlib.util
+import sys
 from pathlib import Path
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ingest_security_knowledge.py"
-_spec = importlib.util.spec_from_file_location("ingest_security_knowledge", _SCRIPT)
-mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(mod)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from rugbrain.ingest_sources import audit_chunking as mod
 
 _REPORT = """# Audit report: Vault
 
