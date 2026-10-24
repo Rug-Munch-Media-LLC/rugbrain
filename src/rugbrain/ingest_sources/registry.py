@@ -44,6 +44,10 @@ carrying a semantic ``doc_type``:
     ``opensanctions`` — regulation/enforcement + sanctions wallets
   * ``samczsun_blog`` + ``trailofbits_blog_rss`` / ``zellic_blog_rss`` /
     ``immunefi_blog_rss`` / ``neodyme_blog_rss`` — research corpora (research)
+  * ``devdocs_static``         — x402/MCP specs + Python/Rust/Go/Solidity docs
+    (language_docs / protocol_spec / sdk_docs)
+  * ``eng_blogs``              — Solana/Base/Flashbots/Paradigm/a16z crypto
+    (engineering_blog)
   * ``ossf_malicious_packages`` / ``cisa_kev`` — vulnerability registries
     (vulnerability_pattern)
 """
@@ -62,8 +66,10 @@ from rugbrain.ingest_sources.crypto_rekts import CryptoRektsSource
 from rugbrain.ingest_sources.defihacklabs import DeFiHackLabsSource
 from rugbrain.ingest_sources.defillama import DeFiLlamaSource
 from rugbrain.ingest_sources.deflabx import DeFiLabXSolRPDSource
+from rugbrain.ingest_sources.devdocs import DevDocsSource
 from rugbrain.ingest_sources.eips import BIPsSource, EIPsSource
 from rugbrain.ingest_sources.emperor_cftc import EmperorMewCFTCSource
+from rugbrain.ingest_sources.eng_blogs import EngineeringBlogsSource
 from rugbrain.ingest_sources.feeds import (
     CFTCPressReleasesSource,
     ImmunefiBlogSource,
@@ -154,6 +160,8 @@ SOURCES: tuple[Source, ...] = (
     ScytheRadarDatasetsSource(),
     FortaMaliciousContractsSource(),
     CRPWarnerRugEventsSource(),
+    DevDocsSource(),
+    EngineeringBlogsSource(),
     VulnerabilitySeveritySource(),
 )
 
