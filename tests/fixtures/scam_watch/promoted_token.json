@@ -1,0 +1,40 @@
+{
+	"note": "Synthetic fixture. The address is a well-known EVM contract used as a placeholder; the video and channel are invented. No accusation is implied.",
+	"channel": {
+		"name": "Example Crypto Show",
+		"handle": "@ExampleCryptoShow",
+		"channel_url": "https://www.youtube.com/@ExampleCryptoShow"
+	},
+	"video": {
+		"video_id": "dQw4w9WgXcQ",
+		"title": "PRESALE LIVE: guaranteed 100x with 0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+		"description": "Join telegram and use the link below. Contract address 0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+		"pinned_comment": "First 100 buyers get whitelist access",
+		"published_at": "2026-10-25T10:00:00+00:00",
+		"has_paid_promo_label": false,
+		"token_launched_at": "2026-10-24T22:00:00+00:00",
+		"holder_top10_pct": 0.58,
+		"honeypot": false,
+		"buy_tax_pct": 4.0,
+		"sell_tax_pct": 18.0,
+		"deployer_linked_to": ["wallet:0x000000000000000000000000000000000000dEaD"]
+	},
+	"evidence": [
+		{
+			"kind": "onchain",
+			"url": "https://rugmunch.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+			"source": "rugmunch-data",
+			"captured_at": "2026-10-25T11:10:00+00:00",
+			"claim": "top-10 holders 58% of supply; sell tax 18%",
+			"confidence": 0.9
+		},
+		{
+			"kind": "platform",
+			"url": "https://solscan.io/account/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+			"source": "solscan",
+			"captured_at": "2026-10-25T11:12:00+00:00",
+			"claim": "contract visible and trading; no paid-promo disclosure in video metadata",
+			"confidence": 0.85
+		}
+	]
+}
