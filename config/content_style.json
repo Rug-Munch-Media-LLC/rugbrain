@@ -1,0 +1,199 @@
+{
+  "schema_version": "1.0",
+  "owner": "Rug Munch Media LLC",
+  "updated": "2026-10-24",
+  "canonical": true,
+  "voice": {
+    "register": "direct, knowledgeable, non-hype",
+    "person": "third person",
+    "desk": "the Rug Munch research desk",
+    "arc": [
+      "state what happened",
+      "explain why it matters",
+      "name who is affected",
+      "link the evidence"
+    ],
+    "banned_phrases": [
+      "to the moon",
+      "guaranteed",
+      "100x",
+      "insane",
+      "crazy",
+      "rocket",
+      "skyrocket",
+      "game-changer",
+      "revolutionary",
+      "could potentially",
+      "in the ever-evolving landscape",
+      "it is important to note",
+      "this changes everything"
+    ],
+    "banned_patterns": [
+      "\\bwill (reach|hit|moon|pump)\\b",
+      "\\bprice (prediction|target)\\b",
+      "\\btarget price\\b",
+      "\\bnext \\d+x\\b"
+    ],
+    "forbidden_claims": [
+      "price prediction",
+      "return forecast",
+      "financial advice",
+      "unattributed allegation"
+    ],
+    "max_exclamation_marks": 0,
+    "first_person_singular": false
+  },
+  "tense": {
+    "default": "past",
+    "rules": {
+      "headline": "present simple for standing facts, past for the event",
+      "body": "past for what happened, present for how the mechanism works",
+      "analysis": "present",
+      "metadata": "not applicable"
+    }
+  },
+  "capitalization": {
+    "headline": "sentence case",
+    "body": "sentence case",
+    "tickers": "$BTC, $ETH, $SOL \u2014 dollar prefix, uppercase, every reference",
+    "protocol_names": "as the project writes them on its own site",
+    "severity_labels": [
+      "RUG",
+      "SCAM",
+      "EXPLOIT",
+      "NEWS",
+      "MARKET",
+      "REGULATORY"
+    ],
+    "labels_source": "rugbrain.formatting.lexicon",
+    "addresses": "lowercase hex, truncated 0x1234\u2026abcd",
+    "all_caps_body": "forbidden outside severity labels and tickers",
+    "acronyms_allowed": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "USDT",
+      "USDC",
+      "DAI",
+      "DEX",
+      "CEX",
+      "TVL",
+      "RPC",
+      "API",
+      "EVM",
+      "NFT",
+      "DAO",
+      "KYC",
+      "AML",
+      "SEC",
+      "CFTC",
+      "APR",
+      "APY",
+      "MEV",
+      "TVL",
+      "LST",
+      "LRT",
+      "AMM",
+      "CEX",
+      "DEX",
+      "PDA",
+      "SPL",
+      "OFAC",
+      "UTC",
+      "USD",
+      "ISO",
+      "URL",
+      "HTTP"
+    ]
+  },
+  "emoji": {
+    "allowed": [
+      "\ud83d\udea8",
+      "\u26a0\ufe0f",
+      "\ud83d\udd0d",
+      "\ud83d\udcca",
+      "\ud83d\udee1\ufe0f",
+      "\ud83e\uddf5",
+      "\ud83d\udccc"
+    ],
+    "max_per_post": 1,
+    "placement": "headline line only, as a severity marker",
+    "body": "no emoji in body paragraphs",
+    "custom_emoji": "only through rugbrain.formatting.emoji.set_emoji_ids",
+    "unknown_emoji": "reject"
+  },
+  "spacing": {
+    "paragraph_separator": "\n\n",
+    "blank_lines_between_paragraphs": 1,
+    "max_consecutive_newlines": 2,
+    "double_spaces": false,
+    "trailing_whitespace": false,
+    "tabs": false,
+    "list_marker": "- ",
+    "heading": "## ",
+    "dash": "em dash with a single space on each side",
+    "quotes": "straight quotes, not typographic"
+  },
+  "numbers": {
+    "crypto_amounts": "figures with unit: 5 BTC, 100 SOL",
+    "percent": "figure plus % with no space: 5%",
+    "percent_spelled_out": "forbidden",
+    "usd": "$ sign, comma thousands, two decimals when cents matter: $1,250.00",
+    "large_usd": "$1.2M and $3.4B above 1,000,000",
+    "token_price": "four significant figures: $0.004821",
+    "addresses": "truncate to 0x1234\u2026abcd, never a bare 40-char string in prose",
+    "dates": "Month Day, Year: October 24, 2026",
+    "times": "24-hour clock with UTC: 14:05 UTC",
+    "metadata_dates": "ISO-8601 (2026-10-24T14:05:00Z)",
+    "forbid_approximate_quantities": true
+  },
+  "citations": {
+    "inline": "[n] immediately after the claim it supports",
+    "list_heading": "Sources",
+    "entry": "[n] Title \u2014 Publisher, Month Day, Year. URL",
+    "min_sources": 2,
+    "require_url": true,
+    "require_retrieved_at": true,
+    "source_priority": {
+      "primary": "block explorer, DEX pool data, verified contract source, protocol docs",
+      "secondary": "exchange announcement, regulator filing, audit report",
+      "tertiary": "news article",
+      "not_sole_source": "a single social post"
+    },
+    "uncorroborated": "omit the claim, or mark it [REVIEW] in drafts"
+  },
+  "disclaimers": {
+    "daily_rug": "Rug Munch Media is an on-chain research desk. This is analysis, not financial advice. Every figure links to its source.",
+    "alert": "Not financial advice. Verify before you sign.",
+    "required": true
+  },
+  "length_budgets": {
+    "telegram_short": 1024,
+    "telegram_thread": 3900,
+    "feed_longform": 12000,
+    "x_post": 280,
+    "alert": 900,
+    "daily_rug_min": 2500,
+    "daily_rug_max": 9000,
+    "headline_chars": 70,
+    "dek_chars": 200,
+    "sections_min": 4,
+    "sections_max": 8,
+    "telegram_hard_limit": 4096
+  },
+  "slug": {
+    "pattern": "daily-rug-YYYY-MM-DD-<topic>",
+    "max_chars": 80,
+    "base_url": "https://rugmunch.io/story/"
+  },
+  "open_graph": {
+    "site_name": "Rug Munch",
+    "type": "article",
+    "image": "https://rugmunch.io/og/daily-rug.png",
+    "image_alt": "Rug Munch Daily Rug"
+  },
+  "cta": {
+    "label": "Check any token before you sign",
+    "url": "https://rugmunch.io/scan"
+  }
+}

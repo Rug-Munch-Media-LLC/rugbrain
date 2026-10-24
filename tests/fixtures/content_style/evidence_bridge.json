@@ -1,0 +1,46 @@
+[
+  {
+    "content": "A bridge on Ethereum lost $5M in a single transaction after an operator key was compromised.",
+    "metadata": {
+      "title": "Bridge loses $5M in a single transaction",
+      "url": "https://explorer.example/tx/0xabc",
+      "published": "2026-10-24",
+      "publisher": "explorer.example"
+    },
+    "collection": "news_v2",
+    "score": 0.92
+  },
+  {
+    "content": "The team paused withdrawals within an hour and confirmed the loss in a status update.",
+    "metadata": {
+      "title": "Withdrawals paused after bridge loss",
+      "url": "https://protocol.example/status/17",
+      "published": "2026-10-24",
+      "publisher": "protocol.example"
+    },
+    "collection": "research_v2",
+    "score": 0.84
+  },
+  {
+    "content": "A post mortem published the next day attributes the drain to a leaked deployer key.",
+    "metadata": {
+      "title": "Post mortem attributes drain to leaked deployer key",
+      "url": "https://postmortem.example/bridge",
+      "published": "2026-10-25",
+      "publisher": "postmortem.example"
+    },
+    "collection": "news_articles",
+    "score": 0.78
+  },
+  {
+    "content": "Users reported failed withdrawals for roughly two hours before the pause landed.",
+    "metadata": {
+      "title": "Users report failed withdrawals",
+      "url": "https://forum.example/thread/991",
+      "published": "2026-10-24",
+      "publisher": "forum.example"
+    },
+    "collection": "social_intel",
+    "score": 0.61
+  }
+]
