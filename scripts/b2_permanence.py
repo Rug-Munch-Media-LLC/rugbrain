@@ -100,6 +100,7 @@ from permanence_shard import export_parquet_shards
 from permanence_scope import daily_scope
 from permanence_shard_contract import pin_expected_shards
 from permanence_shard_resume import entry_is_done, resume_state
+from permanence_skip import carry_if_unchanged, record_export
 
 logger = logging.getLogger("b2_permanence")
 
@@ -402,6 +403,13 @@ def snapshot_collection(
     base = workdir / name
     base.mkdir(parents=True, exist_ok=True)
 
+    # Cross-day gate (2026-10-24): an unchanged collection keeps its previous
+    # object instead of re-uploading. codebase_reference_v2 alone was ~35 GiB
+    # every night, and per-date prefixes made the existing resume blind to it.
+    carried = carry_if_unchanged(client, name) if fmt == "parquet" else None
+    if carried is not None:
+        return carried
+
     started = datetime.now(UTC)
     shards: list[dict[str, Any]] = []
     yielded: dict[str, bool] = {"hit": False}
@@ -559,6 +567,8 @@ def snapshot_collection(
         object_key,
         len(shards),
     )
+    if not entry.get("partial"):
+        record_export(name, entry, client)
     return entry
 
 
