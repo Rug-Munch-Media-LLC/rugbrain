@@ -154,3 +154,21 @@ https://cointelegraph.com/rss/tag/bitcoin	CoinTelegraph Bitcoin
 https://coindesk.com/arc/outboundfeeds/rss/?outputType=xml	CoinDesk XML
 https://www.fireblocks.com/feed	Fireblocks
 https://blog.sui.io/rss	Sui Blog
+
+# ── content-sources batch (config/content_sources.json, verified 2026-10-25) ──
+https://therecord.media/feed	The Record (Recorded Future News)
+https://www.trmlabs.com/post/rss.xml	TRM Labs
+https://cyberscoop.com/feed/	CyberScoop
+https://unit42.paloaltonetworks.com/feed/	Palo Alto Unit 42
+https://www.microsoft.com/en-us/security/blog/feed/	Microsoft Security Blog
+https://securelist.com/feed/	Kaspersky Securelist
+https://www.crowdstrike.com/blog/feed/	CrowdStrike Blog
+https://www.eff.org/rss/updates.xml	Electronic Frontier Foundation
+https://www.helius.dev/blog/rss.xml	Helius
+https://ark-invest.com/feed	ARK Invest
+https://www.placeholder.vc/blog/rss.xml	Placeholder VC
+https://medium.com/feed/coinmonks	Coinmonks (Medium)
+https://medium.com/feed/the-capital	The Capital (Medium)
+https://medium.com/feed/blockchain-review	Blockchain Review (Medium)
+https://medium.com/feed/@coingecko	CoinGecko (Medium)
+https://paragraph.xyz/@paragraph/rss	Paragraph Explore
