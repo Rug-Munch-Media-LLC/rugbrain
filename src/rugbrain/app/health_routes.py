@@ -10,10 +10,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from rugbrain.app import probes
 from rugbrain.app.health_state import STATE
+from rugbrain.embeddings import RAGUnavailableError
+from rugbrain.embeddings_pkg.lane_health import embed_lane_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -102,3 +104,18 @@ async def ready() -> dict[str, str]:
         "status": "ready" if current["status"] == "ok" else "degraded",
         "app": "rugbrain",
     }
+
+
+@router.get("/health/embed-lane", tags=["system"])
+async def embed_lane_health() -> dict[str, Any]:
+    """GET /health/embed-lane — which lane is embedding, and is it really 4096d?
+    Fails loudly (503) when the chain is exhausted or the lane answers with an
+    empty or wrong-width (e.g. 1024d) vector — the supermemory 0.6B drift.
+    """
+    try:
+        return await embed_lane_snapshot()
+    except RAGUnavailableError as exc:
+        logger.error("embed_lane_health_fail %s", exc)
+        raise HTTPException(
+            status_code=503, detail=f"embed lane unavailable: {exc}"
+        ) from exc
