@@ -41,6 +41,10 @@ HIGH_VALUE_FOLLOWERS: int = int(os.getenv("XINTEL_HIGH_VALUE_FOLLOWERS", "50000"
 
 # ── Cycle sizing ─────────────────────────────────────────────────────────
 MAX_ACCOUNTS_PER_CYCLE: int = int(os.getenv("XINTEL_MAX_ACCOUNTS_PER_CYCLE", "3"))
+
+#: Registry (top-500 X accounts) handles per cycle on the free Pry lane. The
+#: paid lane's small per-cycle cap guards budget; registry handles are free.
+REGISTRY_PER_CYCLE: int = int(os.getenv("XINTEL_REGISTRY_PER_CYCLE", "6"))
 TWEETS_PER_ACCOUNT: int = int(os.getenv("XINTEL_TWEETS_PER_ACCOUNT", "10"))
 MIN_TWEET_CHARS: int = int(os.getenv("XINTEL_MIN_TWEET_CHARS", "8"))
 RAG_COLLECTION: str = os.getenv("XINTEL_RAG_COLLECTION", "news_v2")
@@ -176,6 +180,7 @@ __all__ = [
     "MIN_TWEET_CHARS",
     "PACING_DAILY_LIMIT",
     "RAG_COLLECTION",
+    "REGISTRY_PER_CYCLE",
     "TIER1_ACCOUNTS",
     "TIER2_ACCOUNTS",
     "TIER3_4_KEYWORD_QUERIES",

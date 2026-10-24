@@ -64,23 +64,39 @@ async def _select_accounts() -> tuple[list[str], list[str]]:
     from rugbrain.compat import get_redis_async
     from rugbrain.ingest_sources.x_intel.config import (
         MAX_ACCOUNTS_PER_CYCLE,
+        REGISTRY_PER_CYCLE,
         TIER1_ACCOUNTS,
         TIER2_ACCOUNTS,
     )
 
     tier12 = list(TIER1_ACCOUNTS) + list(TIER2_ACCOUNTS)
+    # The registry (top-500 X accounts) rides the SAME pipeline: its handles
+    # join the free Pry lane with their own rotation key, so no separate
+    # ingestion path ever appears.
+    from rugbrain.ingest_sources.x_intel import registry
+
+    registry_pool = registry.registry_handles()
     try:
         r = await get_redis_async()
         offset = int(await r.incr("xintel:rotation_offset") or 0)
+        reg_offset = int(await r.incr("xintel:registry_offset") or 0)
     except Exception as exc:
         logger.debug("xintel:rotation_redis_failed err=%s", str(exc)[:120])
-        offset = 0
+        offset, reg_offset = 0, 0
     batch = (
         [
             tier12[(offset + i) % len(tier12)]
             for i in range(min(MAX_ACCOUNTS_PER_CYCLE, len(tier12)))
         ]
         if tier12
+        else []
+    )
+    reg_batch = (
+        [
+            registry_pool[(reg_offset + i) % len(registry_pool)]
+            for i in range(min(REGISTRY_PER_CYCLE, len(registry_pool)))
+        ]
+        if len(registry_pool)
         else []
     )
     # Lane decision for the whole batch. While pacing is active or the
@@ -97,10 +113,13 @@ async def _select_accounts() -> tuple[list[str], list[str]]:
             logger.debug("xintel:budget_check_failed err=%s", str(exc)[:120])
             use_gx = True
     if not use_gx:
-        logger.info("xintel:lane=pry (budget/pacing) handles=%d", len(batch))
-        return [], list(batch)
+        logger.info(
+            "xintel:lane=pry (budget/pacing) tier12=%d registry=%d", len(batch), len(reg_batch)
+        )
+        return [], list(batch) + reg_batch
     gx = [h for h in batch if route_account(h) == "getxapi"]
-    pry = [h for h in batch if route_account(h) == "pry"]
+    # Registry handles only ride the registry rotation — never the paid lane.
+    pry = [h for h in batch if route_account(h) == "pry"] + reg_batch
     return gx, pry
 
 
