@@ -24,6 +24,8 @@ ALLOWLIST = {
     "tests/test_dim_drift.py",
     "src/rugbrain/dim_policy.py",
     "src/rugbrain/dim_drift.py",
+    "src/rugbrain/dim_drift_nodes.py",
+    "src/rugbrain/dim_drift_shapes.py",
     "src/rugbrain/qdrant_store/lane_resolver.py",
 }
 SCAN_SUFFIXES = {".py", ".yml", ".yaml", ".md", ".example"}
