@@ -7,11 +7,25 @@ functions over plain dicts — no I/O, no clients.
 The ``id``, ``category`` and ``ts`` fields are load-bearing for headline
 styling: ``id`` keys the deterministic emoji rotation (see
 :mod:`rugbrain.formatting.emoji`) and ``ts`` feeds the bot's recency gate.
+
+Every source family writes a slightly different payload shape, and the
+normalisation stage is where they become one shape:
+
+===============  ==========================  ==============================
+collection       timestamp field             link field
+===============  ==========================  ==============================
+news_v2          ``ts`` (ISO, or tweet fmt)  ``url``
+social_intel     ``ts`` (ISO)                ``url``
+research_v2      ``published`` (ISO)         ``source_url``
+news_articles    ``published`` (RFC 2822)    ``url``
+===============  ==========================  ==============================
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+from rugbrain.content_time import to_iso8601
 
 #: Sort rank per severity — lower sorts earlier within equal importance.
 SEVERITY_RANK: dict[str, int] = {
@@ -21,7 +35,7 @@ SEVERITY_RANK: dict[str, int] = {
     "low": 3,
 }
 
-#: Field defaults for a Qdrant news_v2 result.
+#: Field defaults for a normalised story.
 _FIELDS: dict[str, Any] = {
     "title": "",
     "severity": "medium",
@@ -33,6 +47,19 @@ _FIELDS: dict[str, Any] = {
     "ts": None,
 }
 
+#: Title used when the payload carries none — RSS research docs open with the
+#: headline as their first line, and an empty headline renders an empty post.
+TITLE_CHARS = 140
+
+
+def _title(md: dict[str, Any], content: str) -> str:
+    """Payload title, else the first line of the body."""
+    title = str(md.get("title") or "").strip()
+    if title:
+        return title
+    first = str(content or "").strip().split("\n", 1)[0].strip().rstrip(".")
+    return first[:TITLE_CHARS]
+
 
 def normalise(result: dict[str, Any], collection: str) -> dict[str, Any]:
     """Flatten one Qdrant search result into a story dict.
@@ -40,21 +67,26 @@ def normalise(result: dict[str, Any], collection: str) -> dict[str, Any]:
     ``category`` falls back to ``content_type`` because the sentiment/tweet
     datasets label their rows that way, and an empty category made a 298k-point
     family look like one unnamed bucket.
+
+    ``ts`` falls back to ``published`` and is normalised to ISO-8601 by
+    :func:`rugbrain.content_time.to_iso8601`: the X lane stores the raw tweet
+    dialect and the recency gate fails closed on it, so without this stage
+    every X post was silently unpublishable.
     """
     md = result.get("metadata") or {}
     content = result.get("content") or md.get("text") or md.get("title", "")
     return {
         "id": result.get("id", ""),
-        "title": md.get("title", _FIELDS["title"]),
+        "title": _title(md, content),
         "content": content,
         "severity": (md.get("severity") or _FIELDS["severity"]).lower(),
         "category": (md.get("category") or md.get("content_type") or md.get("kind") or "").lower(),
         "source": result.get("source", ""),
-        "url": md.get("url", ""),
+        "url": md.get("url") or md.get("source_url") or "",
         "importance": float(md.get("importance") or 0.0),
         "kind": md.get("kind", _FIELDS["kind"]),
         "collection": collection,
-        "ts": md.get("ts") or result.get("ts"),
+        "ts": to_iso8601(md.get("ts") or md.get("published") or result.get("ts")),
         "tweet_id": md.get("tweet_id") or "",
     }
 
@@ -65,6 +97,10 @@ def dedupe_key(result: dict[str, Any]) -> str:
     A known tweet id IS the identity: the same post appears with and without an
     author (``x.com/i/status/…`` vs ``x.com/handle/status/…``), so keying on the
     body prefix let both copies through. Fall back to the body when no id.
+
+    This is the CHEAP key, exact by construction. Cross-channel syndication is
+    collapsed by :func:`rugbrain.content_dedupe.collapse` after normalisation —
+    two channels pasting the same wire story have different bodies here.
     """
     md = result.get("metadata") or {}
     tweet_id = str(md.get("tweet_id") or "").strip()
