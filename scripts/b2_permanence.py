@@ -562,6 +562,54 @@ def snapshot_collection(
     return entry
 
 
+def _merge_shard_progress(
+    prior: dict[str, Any] | None, incoming: dict[str, Any]
+) -> dict[str, Any]:
+    """Never lose shards already in B2; derive `partial` from the arithmetic.
+
+    MEASURED DEFECT (2026-10-24, three consecutive firings): rag_documents
+    landed 8 shards at 03:00, 10 at 03:40 and 3 at 04:20 -- each run restarted
+    at part-00000 and the manifest entry was REPLACED by the newer, smaller
+    shard list. The day's count therefore never advanced, every firing
+    re-exported ~10 x 611 MB, and the collection could never complete.
+
+    The rule is monotonic by construction:
+      * shards are unioned by object_key (a re-export of the same part cannot
+        shrink the list, and a genuinely new part is added);
+      * expected_shards is the max of both sides (never lowered);
+      * `partial` is derived from len(shards) vs expected_shards, so a caller
+        that forgets the flag can no longer advertise a half-exported
+        collection as done.
+    """
+    if not incoming:
+        return incoming
+    prior_shards = list((prior or {}).get("shards") or [])
+    incoming_shards = list(incoming.get("shards") or [])
+    if not prior_shards and not incoming_shards:
+        return incoming
+    merged: dict[str, dict[str, Any]] = {}
+    for shard in prior_shards + incoming_shards:
+        key = shard.get("object_key") if isinstance(shard, dict) else None
+        if key:
+            merged[str(key)] = shard
+    expected = max(
+        int((prior or {}).get("expected_shards") or 0),
+        int(incoming.get("expected_shards") or 0),
+    )
+    out = dict(incoming)
+    out["shards"] = [merged[k] for k in sorted(merged)]
+    out["point_count"] = sum(int(s.get("point_count", 0) or 0) for s in out["shards"])
+    out["bytes_stored"] = sum(int(s.get("bytes_stored", 0) or 0) for s in out["shards"])
+    if expected:
+        out["expected_shards"] = expected
+    if expected and len(out["shards"]) >= expected:
+        out.pop("partial", None)
+        out.pop("deferred", None)
+    else:
+        out["partial"] = True
+    return out
+
+
 def upload_manifest(
     b2_api: B2Api,
     bucket_name: str,
@@ -639,8 +687,10 @@ def upload_manifest(
         prior_missing.pop(str(name), None)
     for e in entries:
         name = e.get("collection")
-        if name:
-            by_collection[str(name)] = e
+        if not name:
+            continue
+        e = _merge_shard_progress(by_collection.get(str(name)), e)
+        by_collection[str(name)] = e
 
     merged = [by_collection[k] for k in sorted(by_collection)]
     if prior_count:
@@ -705,7 +755,18 @@ def upload_manifest(
     # A half-written collection (partial: true) is a manifest ENTRY but not a
     # landed collection. Counting it would let a day holding one shard of the
     # elephant advertise 85/85 -- the same class of lie as the 4-of-85 stamp.
-    landed = sum(1 for e in merged if not e.get("partial"))
+    # 2026-10-24 -- THE SAME LIE, ONE LAYER DOWN: `landed` was counted over
+    # EVERY entry while `expected` had already subtracted the out-of-scope
+    # weekly elephant. With rag_documents partial and rag_documents_8b landed,
+    # 96 landed daily + 1 landed elephant summed to 97 against expected 97 and
+    # the day advertised complete=True. Landed and expected must be counted in
+    # the SAME universe, and a partial is never landed.
+    excluded_scope = set(daily_scope([])[1]) if exclude_from_daily else set()
+    landed = sum(
+        1
+        for e in merged
+        if not e.get("partial") and e.get("collection") not in excluded_scope
+    )
     complete = landed >= expected and not missing_list
 
     manifest = {
@@ -1503,7 +1564,14 @@ def main() -> int:
     if not args.no_resume and not args.no_carry:
         recent = [d for d in snapshot_dates_on_remote(b2_api, bucket_name) if d < date_str]
         live_universe = set(raw_names)
-        for prior_date in reversed(recent[-max(int(args.carry_days), 0) :]):
+        # `recent[-0:]` is `recent[0:]`: --carry-days 0 (the nightly default)
+        # inherited EVERY dated manifest back to 2026-09-*, then the
+        # self-contained-day rule immediately dropped those entries as stale.
+        # Measured 2026-10-24 03:00/03:40/04:20: 29 manifests downloaded per
+        # firing, ~50 entries carried, ~50 dropped, zero durable progress.
+        # No carry means no carry: slice only when the count is positive.
+        carry_window = [d for d in recent[-int(args.carry_days) :]] if int(args.carry_days) > 0 else []
+        for prior_date in reversed(carry_window):
             for name, entry in todays_manifest_entries(b2_api, bucket_name, prior_date).items():
                 if name in prior_entries or name in carried or not entry_is_done(entry):
                     continue
