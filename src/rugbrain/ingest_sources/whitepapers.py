@@ -6,10 +6,10 @@ archive of Bitcoin/Ethereum/DeFi whitepapers as markdown and PDF.
 Document strategy:
 
   * ``.md`` whitepapers → full text, doc_type ``whitepaper``.
-  * ``.pdf`` whitepapers → index stub doc (title + repo URL + note). PDF text
-    extraction requires an optional PDF library (not in core deps), so the
-    stub keeps the document discoverable in retrieval while flagging
-    ``metadata.pending_extraction`` for a follow-up pipeline.
+  * ``.pdf`` whitepapers → full text through ``document_to_ingest_doc``:
+    Docling when ``DOCLING_ENABLED`` + ``DOCLING_URL`` are set, markitdown
+    otherwise. An unreadable PDF keeps the index stub
+    (``metadata.pending_extraction``) so the document stays discoverable.
 
 doc_type: ``whitepaper``.
 """
@@ -23,7 +23,15 @@ import re
 import httpx
 
 from rugbrain.ingest_sources.base import IngestDoc, Source
-from rugbrain.ingest_sources.github import fetch_raw, list_repo_files, max_size, pick_files
+from rugbrain.ingest_sources.docling_config import DoclingSettings
+from rugbrain.ingest_sources.docling_ingest import DocumentRequest, document_to_ingest_doc
+from rugbrain.ingest_sources.github import (
+    GITHUB_RAW,
+    fetch_raw,
+    list_repo_files,
+    max_size,
+    pick_files,
+)
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +105,43 @@ def pdf_to_stub(rel_path: str, size: int) -> IngestDoc:
     )
 
 
+async def _pdf_doc(
+    client: httpx.AsyncClient,
+    rel_path: str,
+    size: int,
+    settings: DoclingSettings | None = None,
+) -> IngestDoc:
+    """Extract a PDF whitepaper (Docling/markitdown) or keep the index stub."""
+    source_url = f"https://github.com/{REPO}/blob/{REF}/{rel_path}"
+    try:
+        resp = await client.get(f"{GITHUB_RAW}/{REPO}/{REF}/{rel_path}", timeout=60.0)
+    except (httpx.HTTPError, OSError) as exc:
+        log.warning("whitepaper_pdf_failed path=%s err=%s", rel_path, type(exc).__name__)
+        return pdf_to_stub(rel_path, size)
+    if resp.status_code != 200:
+        log.warning("whitepaper_pdf_failed path=%s status=%d", rel_path, resp.status_code)
+        return pdf_to_stub(rel_path, size)
+    doc = await document_to_ingest_doc(
+        DocumentRequest(
+            source="crypto_whitepapers",
+            doc_id=f"whitepapers:pdf:{rel_path}:{_content_hash(rel_path)}",
+            filename=rel_path,
+            data=resp.content,
+            content_type="application/pdf",
+            title=_title_from_path(rel_path),
+            url=source_url,
+            doc_type=DOC_TYPE,
+            collection=DEFAULT_COLLECTION,
+            extra={"format": "pdf", "rel_path": rel_path, "source_url": source_url},
+            settings=settings,
+            client=client,
+        )
+    )
+    if len(doc.content.split()) < 20:
+        return pdf_to_stub(rel_path, size)
+    return doc
+
+
 class WhitepapersSource(Source):
     """GitHub crypto whitepapers archive (KiwisLabs/crypto-whitepapers)."""
 
@@ -130,7 +175,7 @@ class WhitepapersSource(Source):
             pdf_entries = pdf_entries[: limit - len(docs)]
         for e in pdf_entries:
             path = str(e.get("path", ""))
-            docs.append(pdf_to_stub(path, int(e.get("size") or 0)))
+            docs.append(await _pdf_doc(client, path, int(e.get("size") or 0)))
             if limit and len(docs) >= limit:
                 break
         return docs
