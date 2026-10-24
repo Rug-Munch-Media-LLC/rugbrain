@@ -125,9 +125,13 @@ async def openrouter_embed(text: str, dim: int = EMBEDDING_DIM) -> list[float] |
                     headers={"Authorization": f"Bearer {key}"},
                     json={"model": OPENROUTER_MODEL, "input": text[:MAX_CHARS]},
                 )
-                if r.status_code == 429:
+                if r.status_code in (401, 402, 403, 404, 429):
+                    # 402/404 are per-account states (no credits, no endpoint):
+                    # rotate exactly like a 429 so one dead account cannot
+                    # shadow a funded backup key.
                     log.warning(
-                        "openrouter_rate_limited key_tail=%s trying_next=%s",
+                        "openrouter_key_unusable status=%s key_tail=%s trying_next=%s",
+                        r.status_code,
                         key[-4:],
                         i + 1 < len(ordered),
                     )
