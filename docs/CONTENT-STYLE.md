@@ -160,3 +160,22 @@ problems = lint_text(text, "telegram_short", source_count=len(sources))
 
 Empty list means publishable. Non-empty means block: the gate never rewrites
 meaning, and it never downgrades a rule to make a draft pass.
+
+## Publishing a Daily Rug brief
+
+One path, `rugbrain.daily_rug_publish.publish_daily_rug(topic, ...)`:
+
+1. `generate_daily_rug` draws cited evidence from RugBrain RAG.
+2. Thin evidence returns `insufficient_evidence` with the failing count — nothing is written.
+3. Copy the style gate still objects to returns `needs_review` — nothing is published.
+4. An `ok` brief is upserted by slug (`FileStoryStore`, `RUGBRAIN_STORY_DIR`,
+   default `data/stories/`): the same topic on the same day updates the record and
+   bumps `revision`, so a slug collision never mints a second URL.
+5. The envelope carries the canonical `https://rugmunch.io/story/<slug>` URL and a
+   Telegram teaser (title, dek, three sourced bullets, canonical link) under the
+   4,096-char hard limit.
+
+Surfaces: `POST /api/v1/content/daily-rug` (`{topic, date?}`) publishes;
+`GET /api/v1/content/daily-rug/{slug}` reads the stored story; the CLI is
+`python3 scripts/publish_daily_rug.py "<topic>" [--date YYYY-MM-DD]`
+(exit 0 published, 1 refused). The store is the seam for a Ghost/HTTP publisher.
