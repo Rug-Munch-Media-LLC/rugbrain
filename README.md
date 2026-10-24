@@ -1,175 +1,94 @@
-# RugBrain — Crypto Intelligence RAG Engine
+# rugbrain
 
-> Crypto-native retrieval-augmented generation over scam reports, token analyses and on-chain evidence.
+The retrieval engine behind our crypto intelligence answers: it ingests alerts,
+articles and market data, embeds them, and serves hybrid (vector + lexical)
+retrieval with reranking to whatever is asking — API, agent, or dashboard.
 
-**License:** [MIT](LICENSE) · **Canonical:** https://git.rugmunch.io/RugMunchMedia/rugbrain
-**Mirrors:** [GitHub](https://github.com/Rug-Munch-Media-LLC) · [GitLab](https://gitlab.com/rug-munch-media-group) · [Codeberg](https://codeberg.org/RugMunchMedia)
+**Status:** beta — ingest and retrieval run continuously, the HTTP surface still
+changes between releases. **Licence:** MIT, see [LICENSE](LICENSE).
 
-> **Platform:** 21 networks (20 EVM-family chains incl. Tron, plus Solana) · ~422k labels · 283M indexed transfers (+628M internal) · 50+ security modules.
+Canonical: https://git.rugmunch.io/RugMunchMedia/rugbrain
 
-> ✅ **CANONICAL (BETA)** — This repo is the deployed, maintained RAG service
-> (`rugbrain-api:8012`, container `rugbrain-api` on the shared `rmi_network`).
-> All new RAG code, bug fixes, and deploys belong here.
->
-> The older **`rmi-rag`** repo is **ARCHIVED / DEPRECATED** — it shares ~274
-> byte-identical files with this repo and must not receive new code, deploys,
-> or issues (see that repo's `DEPRECATION.md` / this repo's `DEPRECATION.md`
-> notice). Do not "sync" files between the two — that perpetuates the
-> duplication this consolidation ends.
+## Quickstart
 
-RugBrain (formerly RugSense / RMI RAG) is the RAG layer for Rug Munch
-Intelligence. It embeds scam patterns, news/social intel, wallet/entity
-intelligence, and **real-time crypto security incidents** into vectors and
-serves them back through semantic, hybrid, and entity-aware search. Powers
-the scanner's **Known Scam Patterns** check, the bot's `/research` and
-`/investigate` commands, and the frontend's AI chat / wallet forensics.
-
-**Status:** Beta / canonical. Embedding: Qwen3-Embedding-8B (2560-dim) —
-DeepInfra hosted (`EMBED_PROVIDER=deepinfra`, massive-scale lane) with local
-llama.cpp (`:8004`) as the same-model fallback (`EMBED_PROVIDER=local`). 40+
-Qdrant collections remain live (see
-[docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) for the live
-inventory; [TODO.md](TODO.md) for honest current gaps).
-
-## What it serves
-
-| Domain | Content | Search entry point |
-|--------|---------|--------------------|
-| Scam Intelligence | Known scam patterns, historical hacks, scanner findings | `/api/v1/rag/v2/scam-check`, `/api/v1/search` |
-| Market Awareness | News, CT rundown, market brief, social sentiment | rmi-backend `/api/v1/rag/v2/search` |
-| Entity Intelligence | Wallet labels, entity profiles, cross-chain identities | `/api/v1/rag/investigate`, three-pillar search |
-| Security Alerts | Live exploit/rug-pull incidents (Qdrant `security_alerts`) | `src/rugbrain/alerts.py` poller → NATS/Redis + ClickHouse |
-
-## Real-time security alert ingestion
-
-`src/rugbrain/alerts.py` polls free security-intel sources every 5 minutes
-(CoinGecko new listings, DeFiLlama hacks, Rekt News, CertiK/PeckShield/Beosin
-via Nitter RSS or SearXNG) and, for each new incident:
-
-1. embeds the incident description (Qwen3-Embedding-8B, 2560-dim — DeepInfra
-   hosted when `EMBED_PROVIDER=deepinfra`, else local llama.cpp)
-2. stores it in Qdrant `security_alerts`
-3. pushes to NATS `alerts.crypto.security` (Redis pub/sub fallback)
-4. logs to ClickHouse `rag_security_alerts` for historical tracking
+Python 3.11+, Qdrant, Redis, Postgres.
 
 ```bash
-python -m rugbrain.alerts --once    # single pass (cron friendly)
-python -m rugbrain.alerts           # long-running poller
-```
-
-Optional extras (graceful degradation when absent): `nats-py`,
-`clickhouse-connect` (`pip install -e '.[alerts]'`).
-
-## Market awareness
-
-`src/rugbrain/market_awareness.py` tracks the current landscape via the free
-DataBus-style APIs (CoinGecko, DeFiLlama, DexScreener, Fear & Greed) and
-returns:
-
-```json
-{
-  "trending_scams": [...],
-  "recent_exploits": [...],
-  "market_sentiment": "fearful|neutral|greedy"
-}
-```
-
-`score_awareness(query)` / `boosted_risk(query)` feed this awareness into RAG
-scoring for new token scans, so a token matching a recently exploited
-protocol or a trending scam is immediately flagged.
-
-## Architecture
-
-- **Embedding:** Qwen3-Embedding-8B (2560-dim) — DeepInfra hosted primary
-  (`EMBED_PROVIDER=deepinfra`) with local llama.cpp `:8004` same-model
-  fallback (`EMBED_PROVIDER=local`). No hash fallback — fails loud (HTTP 503).
-- **Vector store:** Qdrant (Cosine, 2560-dim), collections created on demand.
-- **Warm store:** Redis — documents, index sets, semantic cache, ingest queues.
-- **Retrieval:** three-pillar search (dense + sparse/BM25-SPLADE + entity)
-  fused with Reciprocal Rank Fusion; optional MMR dedup + cross-encoder rerank.
-- **Ingestion:** scanner → Redis queues → subscriber/poller → embed → Qdrant;
-  nightly news/social ingest; idempotent seed scripts.
-- **Backup:** nightly Qdrant→B2 parquet snapshots (`rmi-rag-permanence` bucket).
-  The corpus is served from the server (hot set); B2 is backup/DR only — see
-  [docs/DATA-PLACEMENT.md](docs/DATA-PLACEMENT.md).
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full document (components,
-API reference, data flows, operations, roadmap).
-
-## Scope
-
-- Qdrant collection definitions and payload schema
-- Embedding model configs (qwen3-embedding-8b primary) and chunking strategies
-- Ingestion scripts (threats, scams, news, wallet labels)
-- Three-pillar retrieval engine, RRF fusion, scam-check API
-- B2 backup/restore (the `permanence` module name means "the B2 backup job")
-
-## Quick Start
-
-```bash
-# Clone the repo
-git clone https://github.com/RugMunchMedia/rugbrain.git
+git clone https://git.rugmunch.io/RugMunchMedia/rugbrain.git
 cd rugbrain
-
-# Install dependencies
-pip install -e .
-
-# Run the seeder (requires Qdrant + Redis + llama.cpp Qwen3 embedder running)
-python scripts/seed_all.py --dry-run   # preview first
-python scripts/seed_all.py              # seed everything
-
-# Run the ingest one-shot (same thing, inside the container)
-docker compose run --rm rag-ingest
-
-# Start the API server (FastAPI on :8012)
-python -m rugbrain
-# or: docker compose up -d rag-api
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env      # QDRANT_URL, REDIS_PASSWORD, RMI_RAG_API_KEY
+uvicorn rugbrain.main:app --reload --port 8012
 ```
 
-Requires a running Qdrant instance (`QDRANT_URL`), Redis (`REDIS_HOST`),
-and llama.cpp Qwen3 embedder with `qwen3-embedding-8b` loaded (`QWEN_EMBED_URL`). See `.env.example`.
+Compose runs the whole loop (API, ingest worker, Presidio, dashboard) and
+requires the Redis password in the environment:
 
-## Adding a data source
+```bash
+export REDIS_PASSWORD='...'
+docker compose up -d
+```
 
-New ingest sources follow the `Source` interface in
-`src/rugbrain/ingest_sources/base.py` — see
-**[docs/ADDING-A-SOURCE.md](docs/ADDING-A-SOURCE.md)** for the full
-step-by-step (interface, `*_v2` collection naming, registration, tests).
+Ingest is a separate process from serving. Nothing is retrievable until an ingest
+run has happened; a fresh Qdrant collection answers with an empty result set, not
+an error.
 
-## API docs
+## What it does
 
-Interactive: `http://localhost:8012/docs` once the server is up.
-Consumer-facing reference: [README-RAG-API.md](README-RAG-API.md).
+- **Ingest.** Pulls from configured feeds (alerts, articles, market data), chunks,
+  embeds, and writes to Qdrant with metadata that survives retrieval.
+- **Hybrid retrieval.** Vector search plus a lexical arm, then a reranker, because
+  a cosine hit alone is not good enough for entity and address lookups.
+- **Grounded answers.** Answers cite the chunks they used; when the corpus has
+  nothing, the service says so instead of improvising.
+- **PII scrubbing.** Presidio runs as its own service in the compose stack so
+  scraped text is cleaned before it is embedded.
+- **Health and evals.** `health_routes.py` for liveness; `eval/` holds the
+  retrieval evaluation set used before changing chunking or models.
 
-> ⚠️ README-RAG-API.md is partially stale — it still documents
-> nomic-embed-text as primary; the canonical embedder is now qwen3-embedding-8b (2560-dim).
+## How it is put together
 
-## Repo status
+```
+src/rugbrain/
+  main.py  app/          FastAPI app, auth, health
+  app_chunking/          chunkers per source type
+  ingest                 feed pullers and pipeline
+  retrieval              vector + lexical + rerank
+  alerts/                alert ingestion and webhooks
+```
 
-| Area | Status |
-|------|--------|
-| API service (port 8012) | LIVE (`/health`, `/ready`, search, scam-check) |
-| Collections in Qdrant | 40+ live, `*_v2` names (`threat_intel_v2`, `scam_intel_v2`, `research_v2`, …) — see [docs/COLLECTION_REGISTRY.md](docs/COLLECTION_REGISTRY.md) |
-| Programmatic sources | 25+ `Source` implementations in `src/rugbrain/ingest_sources/` — see [docs/ADDING-A-SOURCE.md](docs/ADDING-A-SOURCE.md) |
-| `/investigate`, `/confidence` | Routed in `src/rugbrain/endpoints.py` (`/api/v1/rag/…`) |
-| Qdrant nightly backup → B2 | ✅ uploading to `rmi-rag-permanence` (b2sdk) — backup/DR, not a serving path |
-| Tests | 880+ collected; run `pytest` before pushing — see [TODO.md](TODO.md) |
+Compose services: `rag-api`, `rag-ingest`, `presidio`, `dashboard`,
+`model-gateway`.
 
-Source of truth for gaps: [TODO.md](TODO.md).
+## Configuration
 
-## Open-Core Model
+| Variable | Purpose |
+|---|---|
+| `RMI_RAG_API_KEY` | caller credential; requests without it are rejected |
+| `QDRANT_URL`, `QDRANT_API_KEY` | vector store |
+| `REDIS_PASSWORD` | cache and queue; required by compose |
+| `RAG_EMBED_MODEL`, `RAG_EMBED_DIM` | embedding model and its dimension — must match the collection |
+| `QWEN_EMBED_URL`, `GATEWAY_EMBED_URL` | embedding lanes, local and gateway |
+| `RERANKER_URL`, `RERANKER_TIMEOUT` | rerank lane and timeout |
+| `RMI_BACKEND_URL` | upstream intelligence API for enrichment |
+| `SEARXNG_URL` | web fallback for sources outside the corpus |
+| `FEAR_GREED_URL`, `FEAR_INDEX_POLL_SECONDS` | market sentiment feed and poll interval |
+| `LOG_LEVEL` | logging verbosity |
 
-This repo is open source (MIT). The code here demonstrates RAG patterns for
-crypto intelligence. The RugMunch managed platform at rugmunch.io includes
-proprietary enhancements.
+Changing `RAG_EMBED_DIM` against an existing collection silently returns garbage
+neighbours. Recreate the collection when you change the model or dimension.
 
-See [OPEN-CORE.md](OPEN-CORE.md) for details.
+## Known limits
 
-## Standards
+- Embedding dimension is fixed per collection. There is no automatic migration.
+- Retrieval quality depends on ingest freshness; the API cannot tell you a source
+  stopped being crawled.
+- CPU reranking is slow. Expect seconds, not milliseconds, on a large candidate
+  set.
+- `README.STALE-CLONE.md` marks a fork that must not be used as the source of
+  truth.
 
-This repo follows Rug Munch Media standards:
-https://github.com/RugMunchMedia/standards
+## Licence
 
-## FAQ
-
-See [docs/FAQ.md](docs/FAQ.md) for frequently asked questions.
+MIT.
