@@ -62,14 +62,15 @@ def _lane_env(monkeypatch, tmp_path):
     monkeypatch.setenv("DEEPINFRA_EMBED_URL", "https://api.deepinfra.com/v1/embeddings")
     monkeypatch.setenv("RUG_EMBED_FAILURE_FILE", str(tmp_path / "failures.jsonl"))
     monkeypatch.delenv("EMBED_PROVIDER", raising=False)
-    monkeypatch.delenv("SILICONFLOW_API_KEY", raising=False)
+    monkeypatch.setenv("SILICONFLOW_API_KEY", "sf-key")
+    monkeypatch.setenv("SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1/embeddings")
     monkeypatch.delenv("RUG_EMBED_STRICT", raising=False)
     embed_chain.reset_failures()
     embed_chain._cooldown.clear()
 
 
 def test_chain_is_local_first_then_hosted():
-    assert [lane.name for lane in embed_chain.build_chain()] == ["local", "deepinfra"]
+    assert [lane.name for lane in embed_chain.build_chain()] == ["siliconflow", "deepinfra", "local"]
 
 
 def test_chain_prefers_embedded_provider_but_keeps_fallbacks():
@@ -81,6 +82,7 @@ def test_chain_prefers_embedded_provider_but_keeps_fallbacks():
 def test_1024_lane_is_refused_outright(monkeypatch):
     monkeypatch.setenv("QWEN_EMBED_URL", "http://127.0.0.1:8004/v1")
     monkeypatch.delenv("DEEPINFRA_API_KEY")
+    monkeypatch.delenv("SILICONFLOW_API_KEY")
     with pytest.raises(embed_chain.EmbedLaneExhausted):
         embed_chain.build_chain()
 
