@@ -57,6 +57,7 @@ from __future__ import annotations
 from rugbrain.ingest_sources.base import Source
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
 from rugbrain.ingest_sources.blocksecteam_phishing import BlockSecPhishingContractsSource
+from rugbrain.ingest_sources.bot_launchpad_docs import BotLaunchpadDocsSource
 from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroSource
 from rugbrain.ingest_sources.chainabuse import ChainabuseSource
 from rugbrain.ingest_sources.cisa_kev import CISAKevSource
@@ -127,6 +128,7 @@ SOURCES: tuple[Source, ...] = (
     OpenZeppelinSource(),
     RektSource(),
     WhitepapersSource(),
+    BotLaunchpadDocsSource(),
     DeFiLlamaSource(),
     MarketHealthSource(),
     LayerZeroSource(),
