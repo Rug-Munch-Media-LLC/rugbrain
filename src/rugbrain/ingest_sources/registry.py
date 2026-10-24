@@ -16,6 +16,7 @@ Each source implements ``Source.fetch() -> list[IngestDoc]`` (see ``base.py``)
 and normalizes upstream GitHub/API content into ``IngestDoc`` records
 carrying a semantic ``doc_type``:
 
+  * ``public_audit_findings``  — finding-level contest/firm corpora (audit_finding)
   * ``defihacklabs``           — real DeFi exploit PoCs      (exploit_poc)
   * ``swc_registry``           — SWC weakness taxonomy       (vulnerability_pattern)
   * ``eips`` / ``bips``        — protocol standards          (standard)
@@ -54,6 +55,7 @@ carrying a semantic ``doc_type``:
 
 from __future__ import annotations
 
+from rugbrain.ingest_sources.audit_findings import PublicAuditFindingsSource
 from rugbrain.ingest_sources.base import Source
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
 from rugbrain.ingest_sources.blocksecteam_phishing import BlockSecPhishingContractsSource
@@ -181,6 +183,7 @@ SOURCES: tuple[Source, ...] = (
     BaseDocsSource(),
     ArbitrumDocsSource(),
     DefiLlamaDocsSource(),
+    PublicAuditFindingsSource(),
 )
 
 #: Semantic doc_type → source names (for quick lookup / filtering).
