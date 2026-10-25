@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import httpx
 
@@ -16,6 +17,17 @@ LAST_FAILURE: dict[str, str] = {}
 
 
 def _key(provider: str) -> str:
+    # FILE-FIRST: the secrets file is canonical; an env var may be stale and
+    # must never shadow a working key (2026-10-25: stale env key caused every
+    # lane to report the provider as dead while the file key worked).
+    _cfg = _PROVIDERS.get(provider)
+    if _cfg and len(_cfg) > 3 and _cfg[3]:
+        try:
+            _v = Path(_cfg[3]).read_text().strip()
+            if _v:
+                return _v
+        except OSError:
+            pass
     """Credential for a provider: env first, then the spooled key file."""
     if provider == "local":
         return local_key()
