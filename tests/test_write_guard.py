@@ -1,0 +1,27 @@
+"""A retired 2560-d slot must refuse writes even when the widths agree."""
+
+import asyncio
+from types import SimpleNamespace
+
+from rugbrain.qdrant_store.write_guard import slot_accepts
+
+
+class _Client:
+    def __init__(self, size: int) -> None:
+        self._size = size
+
+    async def get_collection(self, _name):
+        params = {"vectors": {"size": self._size, "distance": "Cosine"}}
+        return SimpleNamespace(config={"params": params})
+
+
+def test_retired_2560_slot_refused():
+    assert asyncio.run(slot_accepts(_Client(2560), "scan_intel", 2560)) is False
+
+
+def test_canonical_4096_slot_accepted():
+    assert asyncio.run(slot_accepts(_Client(4096), "scan_intel_8b", 4096)) is True
+
+
+def test_foreign_width_refused():
+    assert asyncio.run(slot_accepts(_Client(4096), "c", 2560)) is False
