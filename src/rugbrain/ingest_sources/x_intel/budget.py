@@ -35,9 +35,7 @@ _WARN_CALLS = 100
 _CRIT_CALLS = 130
 _CRIT_SPEND = 4.18  # 90% of $4.65
 
-_warned_calls = False
-_crit_calls = False
-_crit_spend = False
+_warned_calls = _crit_calls = _crit_spend = False
 
 
 def _today() -> str:
@@ -139,7 +137,7 @@ class BudgetTracker:
                 pacing_until = float(await r.get("xintel:pacing_until") or 0.0)
             except Exception as exc:
                 logger.debug("suppressed %s: %s", type(exc).__name__, exc)
-                ingest_health.note("ingest.x_intel.redis_read_failed", err=type(exc).__name__)
+                ingest_health.IngestHealth.failure("x_intel", "redis_read_failed", exc)
         budget_remaining = max(0.0, GETXAPI_TOTAL_BUDGET - spend)
         calls_remaining = max(0, GETXAPI_DAILY_CALL_LIMIT - calls)
         budget_calls = (
@@ -169,6 +167,7 @@ class BudgetTracker:
         if spend > _CRIT_SPEND and not _crit_spend:
             _crit_spend = True
             logger.critical("xintel_budget:budget_nearly_exhausted spend=%.4f", spend)
+
     async def _check_pacing(self) -> None:
         """Engage Pry-only pacing when hourly > 50 or daily > 400."""
         usage, now, until = await self.get_daily_usage(), time.time(), 0.0

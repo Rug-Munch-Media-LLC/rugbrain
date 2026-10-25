@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,7 +19,13 @@ REQUIRED_CHAINS = {"solana", "ethereum", "bsc", "base", "arbitrum", "polygon"}
 
 
 def _row(addr, source="dexscreener", chain="solana", **signals):
-    return {"source": source, "chain": chain, "token_address": addr, "symbol": addr[:4].upper(), "signals": signals}
+    return {
+        "source": source,
+        "chain": chain,
+        "token_address": addr,
+        "symbol": addr[:4].upper(),
+        "signals": signals,
+    }
 
 
 def _fuse(rows, **kwargs):
@@ -28,24 +36,62 @@ def _canned(ranked=None, paid_only=None):
     async def _inner(chain, limit=10):
         return {
             "chain": chain,
-            "ranked": ranked if ranked is not None else [
-                {"rank": 1, "chain": chain, "token_address": "So111", "symbol": "AAA", "score": 0.5,
-                 "evidence": [{"source": "dexscreener", "signal": "volume_24h", "value": 6500000.0, "paid": False},
-                              {"source": "dexscreener", "signal": "promotion_paid", "value": 500.0, "paid": True}],
-                 "paid": True, "paid_only": False,
-                 "disclosed_promotions": [{"source": "dexscreener", "kind": "dexscreener_boost", "amount_usd": 500.0, "paid": True}]}
+            "ranked": ranked
+            if ranked is not None
+            else [
+                {
+                    "rank": 1,
+                    "chain": chain,
+                    "token_address": "So111",
+                    "symbol": "AAA",
+                    "score": 0.5,
+                    "evidence": [
+                        {
+                            "source": "dexscreener",
+                            "signal": "volume_24h",
+                            "value": 6500000.0,
+                            "paid": False,
+                        },
+                        {
+                            "source": "dexscreener",
+                            "signal": "promotion_paid",
+                            "value": 500.0,
+                            "paid": True,
+                        },
+                    ],
+                    "paid": True,
+                    "paid_only": False,
+                    "disclosed_promotions": [
+                        {
+                            "source": "dexscreener",
+                            "kind": "dexscreener_boost",
+                            "amount_usd": 500.0,
+                            "paid": True,
+                        }
+                    ],
+                }
             ],
             "paid_only_excluded": paid_only or [],
             "missing_sources": {"gmgn": "not wired", "discovery_scope": "dexscreener sample"},
         }
+
     return _inner
+
+
+def _config_row(name):
+    rows = json.loads(
+        (Path(__file__).resolve().parents[1] / "config" / "chains.json").read_text(encoding="utf-8")
+    )
+    return {row["name"]: row for row in rows["chains"]}[name]
 
 
 def test_registry_covers_required_chains():
     assert set(CHAINS) >= REQUIRED_CHAINS
     for spec in CHAINS.values():
-        assert spec.native_token and spec.candidate_source and spec.quote_asset
+        assert spec.native_token and spec.candidate_source
         assert spec.data_source == "dexscreener"
+        # quote_asset is config-only: absent stays UNKNOWN, never guessed.
+        assert spec.quote_asset == _config_row(spec.name).get("quote_asset")
 
 
 def test_alias_resolution():
@@ -101,7 +147,9 @@ def test_momentum_rewards_negative_movers():
 def test_risk_penalty_lowers_score():
     rows = [_row("RiskToken1", volume_24h=5000.0, liquidity=90000.0)]
     clean = _fuse(list(rows))["ranked"][0]["score"]
-    penalised = _fuse([*rows, _row("RiskToken1", source="scanner", risk_penalty=0.9)])["ranked"][0]["score"]
+    penalised = _fuse([*rows, _row("RiskToken1", source="scanner", risk_penalty=0.9)])["ranked"][0][
+        "score"
+    ]
     assert penalised < clean
 
 
