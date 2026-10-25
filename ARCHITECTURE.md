@@ -1,3 +1,16 @@
+> **SUPERSEDED — 2026-10-25.** This file describes the system as of **2026-07-31** and no
+> longer matches the code. It is kept for history only.
+>
+> Current documents, in order:
+> 1. [`docs/ARCHITECTURE-2026.md`](docs/ARCHITECTURE-2026.md) — as-built architecture (2026-08-16).
+> 2. [`ARCHITECTURE-V2.md`](ARCHITECTURE-V2.md) — consolidation blueprint + as-built record (2026-08-01); its phase-status list drifts, but §3 file disposition and the embedding/rerank/lane contract still hold.
+> 3. [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md) — what changed since (audience boundary, knowledge_boundary.py, projections).
+>
+> Reading order for everything: [`docs/INDEX.md`](docs/INDEX.md).
+>
+> Confirmed stale here: the "two RAGs" status quo, the pre-hybrid collection set, and any
+> lane/port table that predates the llama.cpp cutover.
+
 # RugBrain — Architecture
 
 **Status:** canonical

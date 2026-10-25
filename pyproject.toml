@@ -55,8 +55,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: cross-service integration tests (require external services running)",
+    "unit: pure in-process test, no network and no env access (default bucket)",
+    "integration: cross-service test or test that reads env vars/credentials",
+    "live: test that can reach the network or a live service (excluded from default CI)",
+    "slow: node id measured above 1s in the baseline run (tests/_slow_nodes.json)",
 ]
+addopts = "-m 'not live and not slow'"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 # Prepend the in-tree src/ so tests always exercise THIS checkout. Without it a
