@@ -1,0 +1,7 @@
+# Frozen legacy debt: ingest_sources modules importing Qdrant directly.
+# SHRINK-ONLY. Remove a line when the module moves onto shared.store.
+alt_ingest_store.py
+registry_facts.py
+telegram_userbot.py
+telegram_web.py
+x_intel/storage.py
