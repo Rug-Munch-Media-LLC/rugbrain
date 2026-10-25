@@ -1,0 +1,1 @@
+{"raw": "Repository: odysseus-dev/odysseus\nPath: src/tools/cookbook.py\nURL: https://github.com/odysseus-dev/odysseus/blob/dev/src/tools/cookbook.py\nLicense: AGPL-3.0\n\n--- Snippet 1 (Line 90) ---\n    async with httpx.AsyncClient(timeout=10) as client:\n        r = await client.get(f\"{_INTERNAL_BASE}/api/cookbook/state\", headers=_internal_headers())\n"}
