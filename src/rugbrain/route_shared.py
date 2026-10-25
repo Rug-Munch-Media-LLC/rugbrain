@@ -4,7 +4,9 @@ Extracted from ``rugbrain.endpoints`` so route modules no longer import the
 router-assembly module (``endpoints -> routes -> endpoints`` cycle).
 """
 
+import logging
 import os
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
