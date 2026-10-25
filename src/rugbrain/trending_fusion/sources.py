@@ -8,6 +8,7 @@ import time
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from rugbrain.trending_fusion.discovery import gather_rows
 from rugbrain.trending_fusion.fuse import fuse, load_weights
 
 SEARCH_URL = "https://api.dexscreener.com/latest/dex/search?q={q}"
@@ -191,8 +192,11 @@ async def trending_fused(
                     "signals": {"risk_penalty": max(0.0, min(100.0, float(risk)) / 100.0)},
                 }
             )
+    extra = await gather_rows(chain)
+    rows.extend(extra["rows"])
+    missing.update(extra["missing"])
     missing["discovery_scope"] = (
-        f"DexScreener-only candidate sample ({len(addresses)} addresses from latest profiles + boosts)"
+        f"dexscreener {len(addresses)} addresses from latest profiles + boosts; {extra['scope']}"
     )
     result = fuse(rows, weights=load_weights(), limit=limit, missing_sources=missing)
     result["chain"] = chain
