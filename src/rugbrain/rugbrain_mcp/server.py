@@ -16,6 +16,7 @@ Does not deprecate context-crypto's query_rugbrain yet — plan:
 
 from __future__ import annotations
 
+import rugbrain.rugbrain_mcp.tools_delegate as tools_delegate
 import rugbrain.rugbrain_mcp.tools_layers as tools_layers
 from rugbrain.rugbrain_mcp import (
     market_helpers as market_helpers,
@@ -161,6 +162,7 @@ __all__ = [
     "rugbrain_zeroday",
     "symbol_info",
     "tools_intel",
+    "tools_delegate",
     "tools_layers",
     "tools_market",
     "tools_search",
