@@ -114,11 +114,11 @@ services:
       - HF_HOME=/opt/hf-cache
       # local 4B llama.cpp lane RETIRED 2026-10-11 — DeepInfra 8B canonical only
       # Tiered embed lane (2026-09-21): HF-opportunistic -> DeepInfra -> local.
-      # Embedding provider (qwen3-embedding-8b, 2560d): EMBED_PROVIDER=local
+      # Embedding provider: EMBED_PROVIDER=deepinfra (local llama.cpp lane RETIRED)
       # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-8B,
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
-      - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
+      - EMBED_PROVIDER=${EMBED_PROVIDER:-deepinfra}
       # 2026-10-22: this line used to default DEEPINFRA_EMBED_URL to the dead
       # local :8025 listener, so the hosted lane silently POSTed into a socket
       # that accepts and never answers (45 s hang, then fall-through). It now

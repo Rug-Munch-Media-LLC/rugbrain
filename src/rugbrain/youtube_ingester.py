@@ -22,6 +22,8 @@ from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
 
+from rugbrain import ingest_health
+
 logger = logging.getLogger(__name__)
 
 # ── 250+ Crypto YouTube Channels ─────────────────────────────────────────
@@ -559,8 +561,8 @@ async def process_video(video: dict[str, Any], channel_name: str, category: str)
         from rugbrain.pii_scrubber import scrub_text
 
         content = await scrub_text(content)
-    except Exception:
-        pass
+    except Exception as exc:
+        ingest_health.note("ingest.pii_scrub_failed", err=type(exc).__name__)
 
     # Elevate severity for scam_watch channels
     is_scam_watch = category == "scam_watch"

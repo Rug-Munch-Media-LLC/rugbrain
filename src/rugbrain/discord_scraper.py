@@ -21,6 +21,8 @@ from typing import Any, cast
 
 import httpx
 
+from rugbrain import ingest_health
+
 logger = logging.getLogger(__name__)
 
 # ── Tracked Discord Channels ─────────────────────────────────────────────
@@ -189,8 +191,8 @@ async def process_discord_message(
         from rugbrain.pii_scrubber import scrub_text
 
         content = await scrub_text(content)
-    except Exception:
-        pass
+    except Exception as exc:
+        ingest_health.note("ingest.pii_scrub_failed", err=type(exc).__name__)
 
     # Index into Qdrant
     try:

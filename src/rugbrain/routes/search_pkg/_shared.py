@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 
-from rugbrain import endpoints as _ep
+from rugbrain.route_shared import endpoints_proxy as _ep
 from rugbrain.knowledge_boundary import (
     CollectionNotPublic,
     require_public_collection,

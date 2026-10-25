@@ -30,6 +30,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import ingest_health
+
 logger = logging.getLogger("rugbrain.tg_discover")
 
 CHANNELS_FILE = os.getenv("RAG_TGWEB_CHANNELS", "/var/lib/rugbrain/tg_channels.txt")
@@ -143,6 +145,7 @@ async def join_and_register(client: Any, username: str, state: dict[str, Any]) -
             existing = {ln.strip() for ln in f if ln.strip()}
     except OSError as exc:
         logger.debug("suppressed %s: %s", type(exc).__name__, exc)
+        ingest_health.note("ingest.scam_channels.read_failed", err=type(exc).__name__)
     if username not in existing:
         with open(CHANNELS_FILE, "a") as f:  # noqa: ASYNC230 — tiny local config append
             f.write(username + "\n")

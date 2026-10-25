@@ -14,7 +14,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from rugbrain.endpoints import RATE_LIMITS, _check_rate_limit
+from rugbrain.route_shared import RATE_LIMITS, _check_rate_limit
 
 logger = logging.getLogger(__name__)
 
