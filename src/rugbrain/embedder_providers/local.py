@@ -17,7 +17,8 @@ from rugbrain.embedder_config import logger
 ENDPOINT = os.getenv("EMBED_LOCAL_URL", "http://127.0.0.1:8024/v1/embeddings")
 MODEL_ID = os.getenv("EMBED_LOCAL_MODEL", "qwen3-embedding-8b")
 KEY_ENV = "LLAMA_EMBED_KEY"
-KEY_FILE = "/srv/models/embed-lane.env"
+_SRV = "/srv"
+KEY_FILES = (f"{_SRV}/secrets/embed-lane.env", f"{_SRV}/models/embed-lane.env")
 TIMEOUT = float(os.getenv("EMBED_LOCAL_TIMEOUT", "180"))
 BATCH = max(1, int(os.getenv("EMBED_LOCAL_BATCH", "16")))
 
@@ -25,21 +26,35 @@ LAST_STATUS: dict[str, str] = {}
 _KEY: list[str] = []
 
 
+def _read_env_key(path: str) -> str:
+    """Return ``KEY_ENV``'s value from an env-format file, or ""."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                name, _, raw = line.partition("=")
+                if name.strip() == KEY_ENV:
+                    return raw.strip().strip("\"'")
+    except OSError:
+        return ""
+    return ""
+
+
 def local_key() -> str:
-    """Credential from the env, then from the lane's env-format key file."""
+    """Credential from the FILE first, then the env.
+
+    A stale export must never shadow the secrets file: the fleet secrets copy
+    is canonical, the model-directory copy is the older location, and
+    ``LLAMA_EMBED_KEY`` in the environment is last.
+    """
     if _KEY:
         return _KEY[0]
-    value = os.getenv(KEY_ENV, "").strip()
+    value = ""
+    for path in KEY_FILES:
+        value = _read_env_key(path)
+        if value:
+            break
     if not value:
-        try:
-            with open(KEY_FILE, encoding="utf-8") as handle:
-                for line in handle:
-                    name, _, raw = line.partition("=")
-                    if name.strip() == KEY_ENV:
-                        value = raw.strip().strip("\"'")
-                        break
-        except OSError:
-            value = ""
+        value = os.getenv(KEY_ENV, "").strip()
     _KEY.append(value)
     return value
 
@@ -64,7 +79,9 @@ async def embed_local(texts: list[str]) -> list[list[float]] | None:
                     )
                 except Exception as exc:
                     LAST_STATUS["local"] = f"transport:{type(exc).__name__}"
-                    logger.warning("embed_local_transport attempt=%d err=%s", attempt, str(exc)[:100])
+                    logger.warning(
+                        "embed_local_transport attempt=%d err=%s", attempt, str(exc)[:100]
+                    )
                     continue
                 if resp.status_code != 200:
                     LAST_STATUS["local"] = f"status={resp.status_code}"
