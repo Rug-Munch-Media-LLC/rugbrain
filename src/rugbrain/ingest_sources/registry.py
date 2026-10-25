@@ -56,6 +56,7 @@ carrying a semantic ``doc_type``:
 from __future__ import annotations
 
 from rugbrain.ingest_sources.audit_findings import PublicAuditFindingsSource
+from rugbrain.ingest_sources.analytics_docs import AnalyticsDocsSource
 from rugbrain.ingest_sources.base import Source
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
 from rugbrain.ingest_sources.blocksecteam_phishing import BlockSecPhishingContractsSource
@@ -123,6 +124,7 @@ from rugbrain.ingest_sources.zk import CircomSource, SnarkJSSource
 
 #: All registered source instances.
 SOURCES: tuple[Source, ...] = (
+    AnalyticsDocsSource(),
     DeFiHackLabsSource(),
     SWCSource(),
     EIPsSource(),

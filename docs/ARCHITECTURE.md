@@ -1,3 +1,15 @@
+> **SUPERSEDED — 2026-10-25.** Do not cite this file for facts. Specific claims that the
+> code contradicts:
+>
+> | Claim here | Reality |
+> |---|---|
+> | Embedding fallback is `OpenAI text-embedding-3-small` | Fallbacks are the same-family Qwen3 lanes (llama.cpp / DeepInfra); no OpenAI embedder is wired. |
+> | Collections `threat_intel`, `known_scams`, `wallet_profiles`, `news_articles`, `rmi_news`, `rmi_community`, `rmi_agent_memory` | Retrieval serves the `_v2` / `_8b` names — `threat_intel_v2`, `scam_intel_v2`, `wallet_v2`, `news_v2`, `social_intel`, `scam_patterns_8b` (see `src/rugbrain/rugbrain_mcp/tools_search.py`, `tools_market.py`). |
+> | `p50 45ms / p99 180ms / 500 QPS / 60% cache hit` | No benchmark artifact in the repo backs these numbers; `ARCHITECTURE-V2.md` §0.1 records multi-second cold-embedder latency instead. Treat as unsourced. |
+> | "20 total" collections as the inventory | Live inventory is `docs/COLLECTION_REGISTRY.md`. |
+>
+> Current: [`ARCHITECTURE-2026.md`](ARCHITECTURE-2026.md) → [`../ARCHITECTURE-V2.md`](../ARCHITECTURE-V2.md). Index: [`INDEX.md`](INDEX.md).
+
 # RAG Architecture
 
 ## Data Flow

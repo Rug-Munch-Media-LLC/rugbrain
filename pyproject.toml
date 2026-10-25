@@ -5,6 +5,7 @@ description = "RugBrain (formerly RugSense / RMI RAG) — crypto intelligence RA
 requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.9",  # scripts.dual_tier.model_gateway imports it directly
+    "defusedxml>=0.7.1",
     "duckdb>=1.1.0",
     "fastapi>=0.115.0",
     "fastembed>=0.8.0",
@@ -54,8 +55,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: cross-service integration tests (require external services running)",
+    "unit: pure in-process test, no network and no env access (default bucket)",
+    "integration: cross-service test or test that reads env vars/credentials",
+    "live: test that can reach the network or a live service (excluded from default CI)",
+    "slow: node id measured above 1s in the baseline run (tests/_slow_nodes.json)",
 ]
+addopts = "-m 'not live and not slow'"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 # Prepend the in-tree src/ so tests always exercise THIS checkout. Without it a
