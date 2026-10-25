@@ -5,8 +5,12 @@ router-assembly module (``endpoints -> routes -> endpoints`` cycle).
 """
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_TOKEN_ADDRESS_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
 RATE_LIMITS = {
     "free": 5,
