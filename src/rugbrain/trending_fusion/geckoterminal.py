@@ -24,8 +24,9 @@ Organic feed only: no paid marker is produced here.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 NETWORKS = {
     "solana": "solana",
@@ -64,8 +65,8 @@ def _age(pool_created_at: Any) -> float:
     except ValueError:
         return 0.5
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    hours = max((datetime.now(timezone.utc) - created).total_seconds() / 3600.0, 0.0)
+        created = created.replace(tzinfo=UTC)
+    hours = max((datetime.now(UTC) - created).total_seconds() / 3600.0, 0.0)
     return 1.0 / (1.0 + hours / 24.0)
 
 
