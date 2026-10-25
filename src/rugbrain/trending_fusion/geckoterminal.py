@@ -24,19 +24,15 @@ Organic feed only: no paid marker is produced here.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
-NETWORKS = {
-    "solana": "solana",
-    "ethereum": "eth",
-    "bsc": "bsc",
-    "base": "base",
-    "arbitrum": "arbitrum",
-    "polygon": "polygon_pos",
-    "optimism": "optimism",
-    "avalanche": "avalanche",
-}
+from rugbrain.trending_fusion.chains import gt_networks, resolve_chain
+
+#: Chain -> slug is DERIVED from config/chains.json (chains.gt_networks), never
+#: a second hardcoded list. Import happens after the config loader is defined.
+NETWORKS: dict[str, str] = gt_networks()
 URL = "https://api.geckoterminal.com/api/v2/networks/{network}/trending_pools?include=base_token&page=1"
 Fetcher = Callable[[str], Awaitable[Any]]
 
@@ -46,8 +42,9 @@ class UnknownNetwork(ValueError):
 
 
 def resolve_network(chain: str) -> str | None:
-    """Map a canonical chain name to its verified GeckoTerminal slug."""
-    return NETWORKS.get((chain or "").strip().lower())
+    """Map a canonical chain name/alias to its configured GeckoTerminal slug."""
+    spec = resolve_chain(chain)
+    return spec.gt_slug if spec is not None else None
 
 
 def _num(value: Any) -> float | None:
@@ -64,8 +61,8 @@ def _age(pool_created_at: Any) -> float:
     except ValueError:
         return 0.5
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    hours = max((datetime.now(timezone.utc) - created).total_seconds() / 3600.0, 0.0)
+        created = created.replace(tzinfo=UTC)
+    hours = max((datetime.now(UTC) - created).total_seconds() / 3600.0, 0.0)
     return 1.0 / (1.0 + hours / 24.0)
 
 
@@ -95,7 +92,9 @@ def _symbols(payload: dict[str, Any]) -> dict[str, str]:
             continue
         attrs = item.get("attributes") or {}
         ident = str(item.get("id") or "")
-        address = str(attrs.get("address") or (ident.split("_", 1)[1] if "_" in ident else ident)).lower()
+        address = str(
+            attrs.get("address") or (ident.split("_", 1)[1] if "_" in ident else ident)
+        ).lower()
         if address:
             out[address] = attrs.get("symbol") or ""
     return out
@@ -123,15 +122,30 @@ def rows_from_payload(payload: dict[str, Any], chain: str) -> list[dict[str, Any
         address = _base_address(pool)
         if not address:
             continue
-        slot = agg.setdefault(address, {"symbol": symbols.get(address, ""), "signals": {}, "h24": 0.0})
+        slot = agg.setdefault(
+            address, {"symbol": symbols.get(address, ""), "signals": {}, "h24": 0.0}
+        )
         for name, value in _pool_signals(pool.get("attributes") or {}).items():
             current = slot["signals"].get(name, 0.0)
-            slot["signals"][name] = current + value if name in {"volume_24h", "liquidity", "growth"} else max(current, value)
-        slot["h24"] += _num(((pool.get("attributes") or {}).get("volume_usd") or {}).get("h24")) or 0.0
+            slot["signals"][name] = (
+                current + value
+                if name in {"volume_24h", "liquidity", "growth"}
+                else max(current, value)
+            )
+        slot["h24"] += (
+            _num(((pool.get("attributes") or {}).get("volume_usd") or {}).get("h24")) or 0.0
+        )
     rows = [
-        {"source": "geckoterminal", "chain": chain, "token_address": address,
-         "symbol": slot["symbol"], "signals": slot["signals"], "paid": False}
-        for address, slot in agg.items() if slot["h24"] > 0
+        {
+            "source": "geckoterminal",
+            "chain": chain,
+            "token_address": address,
+            "symbol": slot["symbol"],
+            "signals": slot["signals"],
+            "paid": False,
+        }
+        for address, slot in agg.items()
+        if slot["h24"] > 0
     ]
     rows.sort(key=lambda row: (-row["signals"]["volume_24h"], row["token_address"]))
     return rows
@@ -140,7 +154,9 @@ def rows_from_payload(payload: dict[str, Any], chain: str) -> list[dict[str, Any
 async def _get_json(url: str) -> Any:
     import httpx
 
-    async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "rugbrain-trending/1.0"}) as client:
+    async with httpx.AsyncClient(
+        timeout=20.0, headers={"User-Agent": "rugbrain-trending/1.0"}
+    ) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.json()

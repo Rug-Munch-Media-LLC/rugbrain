@@ -1,48 +1,279 @@
 {
-  "version": "2026-10-25",
-  "authority": "lite-chain-indexer lite_indexer/chain_registry.py -> 'ENABLEMENT (2026-10-23): all 19 EVM presets + solana + tron = 21 chains run in the live daemon (compose --chains) = strategies.SUPPORTED_CHAINS'",
-  "chains": [
-    {"name": "ethereum", "aliases": ["eth", "ether"], "caip2": "eip155:1", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/eth/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "base", "aliases": ["base-mainnet"], "caip2": "eip155:8453", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/base/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "bsc", "aliases": ["bnb", "binance", "binance-smart-chain"], "caip2": "eip155:56", "native": "BNB",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/bsc/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "polygon", "aliases": ["matic", "polygon-pos", "polygon_pos"], "caip2": "eip155:137", "native": "POL",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/polygon_pos/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "arbitrum", "aliases": ["arb", "arbitrum-one", "arbitrum_one"], "caip2": "eip155:42161", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/arbitrum/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "optimism", "aliases": ["op", "optimism-mainnet"], "caip2": "eip155:10", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/optimism/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "avalanche", "aliases": ["avax", "avax-mainnet"], "caip2": "eip155:43114", "native": "AVAX",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/avalanche/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "fantom", "aliases": ["ftm", "opera"], "caip2": "eip155:250", "native": "FTM",
-     "discovery_source": {"kind": "own_index", "url_or_table": "clickhouse wallet_memory.dex_events (chain='fantom')", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "linea", "aliases": ["linea-mainnet"], "caip2": "eip155:59144", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/linea/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "scroll", "aliases": ["scroll-mainnet"], "caip2": "eip155:534352", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/scroll/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "zksync", "aliases": ["zk-sync", "zksync-era"], "caip2": "eip155:324", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/zksync/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "mantle", "aliases": ["mantle-mainnet"], "caip2": "eip155:5000", "native": "MNT",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/mantle/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "gnosis", "aliases": ["xdai", "gnosis-chain"], "caip2": "eip155:100", "native": "xDAI",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/gnosis/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "celo", "aliases": ["celo-mainnet"], "caip2": "eip155:42220", "native": "CELO",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/celo/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "blast", "aliases": ["blast-mainnet"], "caip2": "eip155:81457", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/blast/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "fraxtal", "aliases": ["frax"], "caip2": "eip155:252", "native": "FRAX",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/fraxtal/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "metis", "aliases": ["metis-andromeda"], "caip2": "eip155:1088", "native": "METIS",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/metis/trending_pools", "verified_at": null}, "supported": true, "gap": null},
-    {"name": "robinhood", "aliases": ["robinhood-chain"], "caip2": "eip155:4663", "native": "ETH",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/robinhood/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "hyperliquid", "aliases": ["hype"], "caip2": "eip155:999", "native": "HYPE",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/hyperliquid/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "solana", "aliases": ["sol"], "caip2": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "native": "SOL",
-     "discovery_source": {"kind": "geckoterminal", "url_or_table": "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools", "verified_at": "2026-10-25"}, "supported": true, "gap": null},
-    {"name": "tron", "aliases": ["trx"], "caip2": "tron:0x2b6653dc", "native": "TRX",
-     "discovery_source": {"kind": "own_index", "url_or_table": "clickhouse wallet_memory.dex_events (chain='tron')", "verified_at": "2026-10-25"}, "supported": true, "gap": null}
-  ]
+	"version": "2026-10-25",
+	"authority": "lite-chain-indexer lite_indexer/chain_registry.py -> 'ENABLEMENT (2026-10-23): all 19 EVM presets + solana + tron = 21 chains run in the live daemon (compose --chains) = strategies.SUPPORTED_CHAINS'",
+	"chains": [
+		{
+			"name": "ethereum",
+			"aliases": ["eth", "ether"],
+			"caip2": "eip155:1",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/eth/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "base",
+			"aliases": ["base-mainnet"],
+			"caip2": "eip155:8453",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/base/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "bsc",
+			"aliases": ["bnb", "binance", "binance-smart-chain"],
+			"caip2": "eip155:56",
+			"native": "BNB",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/bsc/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "polygon",
+			"aliases": ["matic", "polygon-pos", "polygon_pos"],
+			"caip2": "eip155:137",
+			"native": "POL",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/polygon_pos/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "arbitrum",
+			"aliases": ["arb", "arbitrum-one", "arbitrum_one"],
+			"caip2": "eip155:42161",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/arbitrum/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "optimism",
+			"aliases": ["op", "optimism-mainnet"],
+			"caip2": "eip155:10",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/optimism/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "avalanche",
+			"aliases": ["avax", "avax-mainnet"],
+			"caip2": "eip155:43114",
+			"native": "AVAX",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/avalanche/trending_pools",
+				"verified_at": null
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "fantom",
+			"aliases": ["ftm", "opera"],
+			"caip2": "eip155:250",
+			"native": "FTM",
+			"discovery_source": {
+				"kind": "own_index",
+				"url_or_table": "clickhouse wallet_memory.dex_events (chain='fantom') -- 260728 rows at 2026-10-25",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "linea",
+			"aliases": ["linea-mainnet"],
+			"caip2": "eip155:59144",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/linea/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "scroll",
+			"aliases": ["scroll-mainnet"],
+			"caip2": "eip155:534352",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/scroll/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "zksync",
+			"aliases": ["zk-sync", "zksync-era"],
+			"caip2": "eip155:324",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/zksync/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "mantle",
+			"aliases": ["mantle-mainnet"],
+			"caip2": "eip155:5000",
+			"native": "MNT",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/mantle/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "gnosis",
+			"aliases": ["xdai", "gnosis-chain"],
+			"caip2": "eip155:100",
+			"native": "xDAI",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/gnosis/trending_pools",
+				"verified_at": null
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "celo",
+			"aliases": ["celo-mainnet"],
+			"caip2": "eip155:42220",
+			"native": "CELO",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/celo/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "blast",
+			"aliases": ["blast-mainnet"],
+			"caip2": "eip155:81457",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/blast/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "fraxtal",
+			"aliases": ["frax"],
+			"caip2": "eip155:252",
+			"native": "FRAX",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/fraxtal/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "metis",
+			"aliases": ["metis-andromeda"],
+			"caip2": "eip155:1088",
+			"native": "METIS",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/metis/trending_pools",
+				"verified_at": null
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "robinhood",
+			"aliases": ["robinhood-chain"],
+			"caip2": "eip155:4663",
+			"native": "ETH",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/robinhood/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "hyperliquid",
+			"aliases": ["hype"],
+			"caip2": "eip155:999",
+			"native": "HYPE",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/hyperliquid/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "solana",
+			"aliases": ["sol"],
+			"caip2": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+			"native": "SOL",
+			"discovery_source": {
+				"kind": "geckoterminal",
+				"url_or_table": "https://api.geckoterminal.com/api/v2/networks/solana/trending_pools",
+				"verified_at": "2026-10-25"
+			},
+			"supported": true,
+			"gap": null
+		},
+		{
+			"name": "tron",
+			"aliases": ["trx"],
+			"caip2": "tron:0x2b6653dc",
+			"native": "TRX",
+			"discovery_source": {
+				"kind": "own_index",
+				"url_or_table": "clickhouse wallet_memory.dex_events (chain='tron')",
+				"verified_at": null
+			},
+			"supported": true,
+			"gap": "wallet_memory.dex_events has 0 rows for chain='tron' (probe 2026-10-25) and GeckoTerminal has no tron network -- own-index only, not rankable until rows land"
+		}
+	]
 }

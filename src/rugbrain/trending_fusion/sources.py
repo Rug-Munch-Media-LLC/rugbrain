@@ -8,7 +8,8 @@ import time
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from rugbrain.trending_fusion.discovery import gather_rows
+from rugbrain.trending_fusion.chains import require_chain
+from rugbrain.trending_fusion.discovery import gather_rows, sources_for
 from rugbrain.trending_fusion.fuse import fuse, load_weights
 
 SEARCH_URL = "https://api.dexscreener.com/latest/dex/search?q={q}"
@@ -27,7 +28,9 @@ UNWIRED = {
 async def _get_json(url: str) -> Any:
     import httpx
 
-    async with httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "rugbrain-trending/1.0"}) as client:
+    async with httpx.AsyncClient(
+        timeout=20.0, headers={"User-Agent": "rugbrain-trending/1.0"}
+    ) as client:
         response = await client.get(url)
         response.raise_for_status()
         return response.json()
@@ -49,8 +52,17 @@ def _pair_rows(pairs: Iterable[dict[str, Any]], chain: str) -> list[dict[str, An
             continue
         slot = agg.setdefault(
             address,
-            {"symbol": "", "h1": 0.0, "h6": 0.0, "h24": 0.0, "liq": 0.0,
-             "buys": 0.0, "sells": 0.0, "change": None, "created": None},
+            {
+                "symbol": "",
+                "h1": 0.0,
+                "h6": 0.0,
+                "h24": 0.0,
+                "liq": 0.0,
+                "buys": 0.0,
+                "sells": 0.0,
+                "change": None,
+                "created": None,
+            },
         )
         slot["symbol"] = slot["symbol"] or (pair.get("baseToken") or {}).get("symbol") or ""
         volume = pair.get("volume") or {}
@@ -128,7 +140,6 @@ def _boost_rows(payload: Any, chain: str) -> list[dict[str, Any]]:
     return rows
 
 
-
 def _candidate_addresses(profiles: Any, boosts: Any, chain: str) -> list[str]:
     """Union of recently profiled and paid-boosted tokens for this chain."""
     items = []
@@ -160,7 +171,16 @@ async def trending_fused(
     DexTools discovery are not wired, so this is a DexScreener sample, not the
     whole Solana market - stated in ``missing_sources``.
     """
+    spec = require_chain(chain)
+    chain = spec.name
     missing = dict(UNWIRED)
+    if not spec.verified:
+        missing["chain_unverified"] = (
+            f"{spec.name}: discovery_source.verified_at={spec.verified_at!r} - unverified, "
+            "ranked rows from this chain are not live-verified"
+        )
+    if spec.gap:
+        missing["chain_gap"] = f"{spec.name}: {spec.gap}"
     profiles: Any = []
     boosts: Any = []
     try:
@@ -192,7 +212,7 @@ async def trending_fused(
                     "signals": {"risk_penalty": max(0.0, min(100.0, float(risk)) / 100.0)},
                 }
             )
-    extra = await gather_rows(chain)
+    extra = await gather_rows(chain, sources_for(chain))
     rows.extend(extra["rows"])
     missing.update(extra["missing"])
     missing["discovery_scope"] = (
@@ -200,4 +220,6 @@ async def trending_fused(
     )
     result = fuse(rows, weights=load_weights(), limit=limit, missing_sources=missing)
     result["chain"] = chain
+    result["verified"] = spec.verified
+    result["gap"] = spec.gap
     return result
