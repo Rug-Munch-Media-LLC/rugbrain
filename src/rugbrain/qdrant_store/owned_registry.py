@@ -44,6 +44,8 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         "news_v2",
         "research_v2",
         "gmgn_docs",
+        # GambleFi / crypto-gaming docs (scripts/ingest_gamblefi_docs.py).
+        "gamblefi_docs",
         "wallet_v2",
         "scanner_v2",
         # Live scanner output. Was absent: the twin did not exist, so the write
