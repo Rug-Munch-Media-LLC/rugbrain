@@ -136,7 +136,12 @@ async def collect(client: httpx.AsyncClient, spec: RepoDocsSource, limit: int | 
     tree = await list_repo_files(client, spec.repo, spec.ref)
     stats["listed"] = len(tree)
     if not tree:
-        stats["error"] = "empty_tree_or_ref_not_found"
+        from rugbrain.ingest_sources.fetch_state import take_fetch_error
+
+        recorded = take_fetch_error()
+        stats["error"] = (
+            recorded.reason if recorded is not None else "empty_tree_or_ref_not_found"
+        )
         return [], stats
     licence, licence_path = ("", "")
     if spec.licence == "read_from_repo":

@@ -12,6 +12,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
+from rugbrain.qdrant_store.client_contract import require_qdrant_http_client
 from rugbrain.qdrant_store.collection_schema import dense_vector_dimensions
 from rugbrain.qdrant_store.create_policy import (
     RetiredWidthCreationRefused,
@@ -31,7 +34,7 @@ CREATE_IF_MISSING_DEFAULT = "refuse"
 async def _ensure_collection(
     collection: str,
     vector_size: int,
-    client: Any,
+    client: httpx.AsyncClient,
     *,
     create_if_missing: bool | str = CREATE_IF_MISSING_DEFAULT,
 ) -> bool:
@@ -59,6 +62,7 @@ async def _ensure_collection(
     default) so a missing canary target fails closed instead of being
     materialized as an empty shadow collection.
     """
+    client = require_qdrant_http_client(client, where="collection_lifecycle._ensure_collection")
     if vector_size <= 0:
         logger.error(
             "qdrant_collection_invalid_dim collection=%s requested_dim=%d",

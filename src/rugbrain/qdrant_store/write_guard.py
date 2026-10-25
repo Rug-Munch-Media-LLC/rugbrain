@@ -10,13 +10,20 @@ Two refusals, both loud, both before any point is sent:
 
 Named/multi-slot (hybrid) collections are not judged here; slot naming belongs
 to ``store_write._resolve_vector_field``.
+
+writefix46: the probe used to call ``client.get_collection()`` -- the
+``qdrant-client`` Python API -- on an ``httpx.AsyncClient`` (and, in the mirrored
+reproduction, a ``qdrant_client`` object reached ``client.put`` here). The store
+speaks Qdrant REST; this module now does too, and the boundary is typed.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
+import httpx
+
+from rugbrain.qdrant_store.client_contract import require_qdrant_http_client
 from rugbrain.vector_schema_guard import (
     SchemaMismatch,
     declared_schemas,
@@ -28,12 +35,19 @@ logger = logging.getLogger("rugbrain.qdrant_store.write_guard")
 CANONICAL_LANE_DIM = 4096  # Qwen3-Embedding-8B; fleet corpus lane
 
 
-async def slot_accepts(client: Any, collection: str, lane_dim: int) -> bool:
+async def slot_accepts(client: httpx.AsyncClient, collection: str, lane_dim: int) -> bool:
     """True when *collection* may receive a *lane_dim*-d vector."""
+    client = require_qdrant_http_client(client, where="write_guard.slot_accepts")
+    response = await client.get(f"/collections/{collection}")
+    if response.status_code != 200:
+        # _ensure_collection already established existence/compatibility; a
+        # probe that cannot read the slot must not silently authorise a write.
+        logger.warning(
+            "qdrant_slot_probe_failed collection=%s status=%d", collection, response.status_code
+        )
+        return False
+    body = {"result": response.json().get("result", {}) or {}}
     try:
-        info = await client.get_collection(collection)
-        raw = info.model_dump() if hasattr(info, "model_dump") else info.__dict__
-        body = {"result": raw}
         slots = declared_schemas(body)
         if len(slots) != 1:
             return True
