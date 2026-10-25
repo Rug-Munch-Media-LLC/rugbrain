@@ -4,24 +4,18 @@ Automated content-distribution core (2026-08-24 directive):
 
     RAG stories (embedded, deduped, importance-reranked)
         → per-channel selection rules
-        → GOOD WRITING pass (analysis + recap + link; strict no-slop prompt
-          over the local llama.cpp chat model, template fallback that is
-          still clean prose)
+        → GOOD WRITING pass (:mod:`rugbrain.content_writer`)
         → FACT-CHECK GATE (editorial standards #21, #12, #15)
-        → structured drafts consumed by the bot publisher, which posts to
-          Telegram and mirrors @cryptorugmuncher posts to feed.rugmunch.io
+        → structured drafts consumed by the bot publisher
 
 Channel routing rules:
-    main    (@cryptorugmuncher)  top 1–3 stories of the cycle, full analysis,
-                                  mirrored to the feed blog
+    main    (@cryptorugmuncher)  top 1–3 stories of the cycle, mirrored to the feed
     alerts  (@rmialerts)         critical/high severity only
     news    (@rmicryptonews)     solid news-value items, tighter format
-    scans   (@rmiscans)          real scanner output with reasoning + ref links
+    scans   (@rmiscans)          real scanner output (:mod:`rugbrain.content_scans`)
 
-Quality bar (enforced in prompts AND fallback templates):
-    - No hype words. Every post: what happened → why it matters → source.
-    - Scanner posts include actual verdict fields + deep-dive URL.
-    - Headline presentation lives in :mod:`rugbrain.formatting`.
+Quality bar: no hype words. Every post: what happened → why it matters → source.
+Headline presentation lives in :mod:`rugbrain.formatting`.
 """
 
 from __future__ import annotations
@@ -33,128 +27,28 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
-
 from rugbrain import content_candidates
+from rugbrain.content_scans import SCANNER_BASE, select_scans
+from rugbrain.content_writer import _compose, _template_post
 from rugbrain.factcheck_gate import fact_check_gate
 from rugbrain.formatting.headline import style_for_site, style_headline
 
 logger = logging.getLogger("rugbrain.content")
 
-CHAT_URL = os.getenv("RAG_CHAT_URL", "http://127.0.0.1:8009/v1/chat/completions")
-# MUST match the alias served at CHAT_URL. :8009 (llama.service chat profile)
-# serves the alias "chat"; "qwythos-9b" is the :8014 long-form alias. Pairing
-# the :8009 URL with the :8014 name makes llama-server return an EMPTY
-# completion with model=None - no error, just silence - which is why the bot
-# produced blank posts. Both are the SAME Qwythos-9B process, two profiles.
-CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "chat")
-CHAT_TIMEOUT = float(os.getenv("RAG_CHAT_TIMEOUT", "45"))
+__all__ = [
+    "SCANNER_BASE",
+    "generate_channel_drafts",
+    "select_scans",
+]
 
 _drafts_cache: dict[str, Any] = {"ts": 0.0, "data": None}
 DRAFTS_CACHE_TTL = int(os.getenv("RAG_DRAFTS_CACHE_TTL", "1800"))  # 30 min
-
-SCANNER_BASE = os.getenv("RMI_SCANNER_BASE_URL", "https://rugmunch.io/scan")
-
 MAX_MAIN_PER_CYCLE = int(os.getenv("RAG_CONTENT_MAX_MAIN", "3"))
-
 #: Fact-check gate on the draft path (editorial standards #21, #12, #15).
 #: Default ON for drafts: a draft whose verifiable claims are all
 #: uncorroborated is blocked (writer="rejected"); a draft with no verifiable
 #: claims passes through. Set RAG_FACTCHECK_ENABLED=0 to bypass.
 FACTCHECK_ENABLED = os.getenv("RAG_FACTCHECK_ENABLED", "1").lower() not in ("0", "false", "no")
-
-#: The prompt is NOT defined here: it is rendered from the canonical pack
-#: (``config/content_prompts.json`` + ``config/content_style.json``) so the
-#: voice rules have one source. See ``docs/CONTENT-STYLE.md``.
-def _system_prompt() -> str:
-    from rugbrain.content_prompts import system_prompt
-
-    return system_prompt("telegram_short")
-
-
-async def _write_post(notes: str) -> str | None:
-    try:
-        # 2026-08-25: optional Bearer auth so RAG_CHAT_URL can point at a
-        # hosted OpenAI-compatible provider (OpenRouter/DeepSeek) while the
-        # local llama.cpp writer is CPU-starved. Unset = local writer,
-        # behavior unchanged. Switch back by removing RAG_CHAT_* from
-        # .env.rag and recreating the container.
-        api_key = os.getenv("RAG_CHAT_API_KEY", "")
-        headers = None
-        payload: dict[str, Any] = {
-            "model": CHAT_MODEL,
-            "messages": [
-                {"role": "system", "content": _system_prompt()},
-                {"role": "user", "content": notes[:9000]},
-            ],
-            "temperature": 0.4,
-            "max_tokens": 320,
-        }
-        if api_key:
-            # Hosted-provider mode: Bearer auth + explicit UA (gateways
-            # behind Cloudflare historically block python-httpx UAs).
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "User-Agent": "opencode/1.0",
-            }
-            # 2026-10-15: the CoT-suppression field is a DeepInfra/llama.cpp
-            # extension — Groq and Gemini reject it (400 "property 'reasoning'
-            # is unsupported"). Opt-in only; the Groq Qwen lane runs without it.
-            if os.getenv("RAG_CHAT_REASONING_TOGGLE", "").lower() in ("1", "true", "yes"):
-                payload["reasoning"] = {"enabled": False}
-            payload["max_tokens"] = 700
-        async with httpx.AsyncClient(timeout=CHAT_TIMEOUT) as c:
-            r = await c.post(
-                CHAT_URL,
-                headers=headers,
-                json=payload,
-            )
-            if r.status_code != 200:
-                return None
-            content = r.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-            text = (content or "").strip()
-            if "</think>" in text:
-                text = text.split("</think>", 1)[1].strip()
-            return text or None
-    except Exception as e:
-        logger.debug("writer_unavailable err=%s", str(e)[:100])
-        return None
-
-
-def _template_post(story: dict[str, Any]) -> str:
-    src = story.get("source", "telegram")
-    url = story.get("url") or ""
-    # Category label + rotating emoji + credibility cue, HTML-safe for the
-    # bot's parse_mode=HTML (see rugbrain.formatting).
-    head = story.get("headline") or style_headline(story)
-    title = (story.get("title") or story.get("content", "")[:90]).strip()
-    body = (story.get("content") or "").strip()
-    if len(body) > 260:
-        body = body[:257].rsplit(" ", 1)[0] + "…"
-    lines = [head, "", body] if body and body.lower() != title.lower() else [head]
-    lines.append("")
-    lines.append(f"Source: {src}" + (f" · {url}" if url else ""))
-    return "\n".join(lines)
-
-
-async def _compose(story: dict[str, Any]) -> tuple[str, str]:
-    """Write one post. Returns ``(text, writer)`` where writer is "llm" or
-    "template" (2026-08-25 WO-3: the bot's quality gate drops template
-    output — a dead writer must degrade to silence, never to slop).
-
-    Then runs the fact-check gate (editorial standards #21, #12, #15).
-    If the gate fails, unverifiable claims are stripped. If all claims
-    fail, the draft is rejected (returns empty text, "rejected").
-    """
-    notes = (
-        f"Story notes:\n{story.get('content', '')[:3000]}\n\n"
-        f"Severity: {story.get('severity', 'medium')}\n"
-        f"Source link: {story.get('url') or '(none provided)'}"
-    )
-    written = await _write_post(notes)
-    if written:
-        return written, "llm"
-    return _template_post(story), "template"
 
 
 async def _compose_with_factcheck(story: dict[str, Any]) -> tuple[str, str]:
@@ -205,57 +99,6 @@ def _story_age_hours(story: dict[str, Any]) -> float | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return (datetime.now(UTC) - parsed).total_seconds() / 3600.0
-
-
-async def select_scans(limit: int = 3) -> list[dict[str, Any]]:
-    """Scans-of-interest drafts from REAL scanner feedback docs."""
-    from rugbrain.qdrant_store import get_qdrant_store
-
-    store = await get_qdrant_store()
-    drafts: list[dict[str, Any]] = []
-    try:
-        points, _ = await store.scroll("scanner_feedback", limit=limit * 4)
-    except Exception as e:
-        logger.debug("scan_scroll_failed err=%s", str(e)[:80])
-        return []
-
-    picked = 0
-    for p in points:
-        payload = p.get("payload", {}) or {}
-        md = payload.get("metadata", {}) or {}
-        token = md.get("token_address") or md.get("token") or ""
-        chain = md.get("chain", "")
-        risk = md.get("risk_score")
-        if not token or risk is None:
-            continue
-        reasons = md.get("reasons") or md.get("red_flags") or []
-        reason_lines = "\n".join(
-            f"  • {r}" for r in (reasons if isinstance(reasons, list) else [str(reasons)])[:4]
-        )
-        ref_link = (
-            f"{SCANNER_BASE}?token={token}&chain={chain}"
-            if chain
-            else f"{SCANNER_BASE}?token={token}"
-        )
-        text = (
-            f"[SCAN] {chain.upper() if chain else 'token'} · {token[:10]}…{token[-6:]}\n"
-            f"\nRisk score: {risk}/100 ({md.get('risk_level', 'n/a')})"
-            + (f"\nWhy:\n{reason_lines}" if reason_lines else "")
-            + f"\n\nFull scan output: {ref_link}"
-        )
-        drafts.append(
-            {
-                "text": text,
-                "story_ref": f"scanner_feedback:{token[:12]}",
-                "mirror": False,
-                "kind": "scan",
-                "ref_link": ref_link,
-            }
-        )
-        picked += 1
-        if picked >= limit:
-            break
-    return drafts
 
 
 async def generate_channel_drafts(cycle_id: str | None = None) -> dict[str, list[dict[str, Any]]]:
