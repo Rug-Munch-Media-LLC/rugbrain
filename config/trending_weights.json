@@ -1,0 +1,31 @@
+{
+  "version": "2026-10-25.2",
+  "owner": "trending-fusion",
+  "notes": "Every signal is rank-normalised INSIDE its own source before fusion, so a venue with large raw magnitudes cannot outvote the others. Negative weights are penalties (paid placement, scanner risk); paid placement is always disclosed and never counts as demand. The same weights apply to every chain in chains.py.",
+  "signals": {
+    "volume_24h": {"weight": 0.22, "sources": ["dexscreener"], "rationale": "Deepest cross-venue proof that real money is trading the pair today; volume is the hardest number to rent for 24h."},
+    "volume_accel": {"weight": 0.18, "sources": ["dexscreener"], "rationale": "6h volume annualised against the 24h rate separates a live move from a large incumbent that always trades."},
+    "liquidity": {"weight": 0.14, "sources": ["dexscreener"], "rationale": "Exit-ability: thin pools manufacture volume ranks that nobody can actually sell into."},
+    "holder_growth": {"weight": 0.12, "sources": ["gmgn"], "rationale": "New holders per hour is organic distribution; airdrop or whale concentration does not produce it."},
+    "scanner_score": {"weight": 0.16, "sources": ["scanner"], "rationale": "Our own risk-weighted scanner is the only signal no venue can sell, so it carries the largest single weight."},
+    "social_mentions": {"weight": 0.10, "sources": ["social"], "rationale": "Narrative demand from the RAG corpus; capped low because shill campaigns inflate mentions cheaply."},
+    "bonding_progress": {"weight": 0.08, "sources": ["gmgn"], "rationale": "Launch-stage attention on GMGN bonding curves, scored low because it is pre-liquidity and venue-specific."},
+    "buy_pressure": {"weight": 0.10, "sources": ["dexscreener"], "rationale": "Buy/sell trade ratio is the cheapest read on whether flow is one-sided demand or sell-side distribution."},
+    "growth": {"weight": 0.08, "sources": ["dexscreener"], "rationale": "24h trade count measures breadth of participation; a handful of wash trades cannot fake thousands of fills."},
+    "momentum_24h": {"weight": 0.12, "sources": ["dexscreener"], "rationale": "Absolute 24h price change: attention follows volatility in BOTH directions, so dumps rank as loudly as pumps."},
+    "age": {"weight": 0.05, "sources": ["dexscreener"], "rationale": "Fresh pairs carry discovery attention; weighted low because age alone is not demand and unknown age scores neutral."},
+    "risk_penalty": {"weight": -0.2, "sources": ["scanner"], "rationale": "PENALTY: scanner risk score (0 safe - 100 rug) is subtracted so a fast-moving token with honeypot mechanics cannot outrank a clean one."},
+    "promotion_paid": {"weight": -0.15, "sources": ["dexscreener", "gmgn", "dextools"], "rationale": "PENALTY: paid placement is rented attention, not demand; negative weight plus a mandatory 'paid' label on every such evidence row."}
+  },
+  "paid_kinds": {
+    "dexscreener_boost": "DexScreener paid token boost (totalAmount is USD spent)",
+    "gmgn_paid": "GMGN paid trending slot",
+    "dextools_promo": "DexTools promotional placement"
+  },
+  "unwired_sources": {
+    "gmgn": "no stable public endpoint in this repo yet - holder_growth and bonding_progress are unavailable",
+    "dextools": "promo feed needs a paid API key - paid DexTools placements are not collected yet",
+    "scanner": "in-house scanner is not called from this path yet - scanner_score/risk_penalty unavailable",
+    "social": "corpus social_mentions only available when the RAG store is queried"
+  }
+}

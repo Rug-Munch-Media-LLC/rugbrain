@@ -1,4 +1,8 @@
-"""Trending shill-scam detection — velocity methodology over RAG corpus.
+"""News/corpus shill-velocity signal only — NOT market trending.
+
+The market-trending engine is ``rugbrain.trending_fusion`` (DexScreener evidence,
+fused weights, paid disclosure). This module never scores market data: it scores
+ACCELERATING mentions across independent news/social sources in the RAG corpus.
 
 The "guaranteed" signal (2026-08-24): a token being shilled shows up as
 ACCELERATING mentions across independent sources within short windows.
@@ -28,7 +32,7 @@ import time
 from collections import defaultdict
 from typing import Any
 
-logger = logging.getLogger("rugbrain.trending")
+logger = logging.getLogger("rugbrain.corpus_trending")
 
 TICKER_RE = re.compile(r"\$[A-Za-z][A-Za-z0-9]{1,15}\b")
 CA_RE = re.compile(r"\b(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})\b")
@@ -43,7 +47,7 @@ def _epoch_of(doc: dict[str, Any]) -> float:
         return time.time()
 
 
-def score_trending(docs: list[dict[str, Any]], now: float | None = None) -> list[dict[str, Any]]:
+def score_corpus_trending(docs: list[dict[str, Any]], now: float | None = None) -> list[dict[str, Any]]:
     """Velocity-score tokens across the provided doc list."""
     now = now or time.time()
     # token -> {source_set, hourly_counts{bucket: n}, sample, cas}
@@ -123,9 +127,9 @@ async def collect_recent_docs(hours: int = 6, per_collection: int = 200) -> list
     return docs
 
 
-async def trending_report() -> dict[str, Any]:
+async def corpus_trending_report() -> dict[str, Any]:
     docs = await collect_recent_docs()
-    tiers = score_trending(docs)
+    tiers = score_corpus_trending(docs)
     return {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "docs_analyzed": len(docs),
