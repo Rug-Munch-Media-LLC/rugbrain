@@ -32,17 +32,29 @@ def _vec(dim: int = DIM) -> list[float]:
 
 
 class _Resp:
-    def __init__(self, status: int = 200, vectors: list[list[float]] | None = None, text: str = "") -> None:
+    def __init__(
+        self,
+        status: int = 200,
+        vectors: list[list[float]] | None = None,
+        text: str = "",
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.status_code = status
         self._vectors = vectors or []
         self.text = text
+        self.headers = headers or {}
 
     def json(self) -> dict:
         return {"data": [{"index": i, "embedding": v} for i, v in enumerate(self._vectors)]}
 
 
 class _Client:
-    """Fake httpx client: one queued response per call, records URLs."""
+    """Fake httpx client: one queued response per attempt, records URLs.
+
+    Retries are intended (embed_lane retries a retryable status up to 4 times),
+    so the LAST queued response is reused once the queue drains — a per-attempt
+    budget would otherwise need every retry spelled out in each test.
+    """
 
     def __init__(self, responses: list[_Resp]) -> None:
         self._responses = list(responses)
@@ -50,7 +62,19 @@ class _Client:
 
     async def post(self, url: str, **kwargs: object) -> _Resp:
         self.urls.append(url)
-        return self._responses.pop(0)
+        if len(self._responses) > 1:
+            return self._responses.pop(0)
+        return self._responses[0]
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep(monkeypatch):
+    """No-op the retry backoff: the schedule is not under test, only the outcome."""
+
+    async def _noop(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(embed_lane.asyncio, "sleep", _noop)
 
 
 @pytest.fixture(autouse=True)

@@ -58,6 +58,7 @@ markers = [
     "unit: pure in-process test, no network and no env access (default bucket)",
     "integration: cross-service test or test that reads env vars/credentials",
     "live: test that can reach the network or a live service (excluded from default CI)",
+    "network: explicit alias for live — module performs real network I/O",
     "slow: node id measured above 1s in the baseline run (tests/_slow_nodes.json)",
 ]
 addopts = "-m 'not live and not slow'"
