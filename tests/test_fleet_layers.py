@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 import json
-import socket
 from typing import Any, ClassVar
 
 import pytest
-
-import importlib
 
 cmod = importlib.import_module("rugbrain.fleet_layers.compress")
 smod = importlib.import_module("rugbrain.fleet_layers.serena")
@@ -40,7 +38,7 @@ def test_zoekt_success_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_zoekt_timeout_is_typed_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(url: str, **_: Any):
-        raise socket.timeout("timed out")
+        raise TimeoutError("timed out")
 
     monkeypatch.setattr(zmod, "_http_json", _boom)
     out = zmod.zoekt_search("x")
@@ -88,7 +86,7 @@ def test_serena_success_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_serena_timeout_is_typed_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     def _boom(session: str | None, payload: dict[str, Any], timeout: float = 8.0):
-        raise socket.timeout("timed out")
+        raise TimeoutError("timed out")
 
     monkeypatch.setattr(smod, "_rpc", _boom)
     out = smod.serena_symbols("/repo", "Symbol")

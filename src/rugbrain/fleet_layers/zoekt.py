@@ -40,9 +40,9 @@ def _http_json(
     hdrs.update(headers or {})
     if data is not None:
         hdrs["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST" if data else "GET")
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST" if data else "GET")  # noqa: S310 — internal loopback URL
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — internal loopback URL
             return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers or {}), exc.read() or b""
@@ -61,7 +61,9 @@ def _files_from(body: dict[str, Any], *, files_only: bool) -> list[dict[str, Any
     for fm in (body.get("result") or {}).get("FileMatches") or []:
         row: dict[str, Any] = {"file": fm.get("FileName"), "repo": fm.get("Repository")}
         if not files_only:
+            # zoekt v1 emits LineMatches (Line); newer builds emit ChunkMatches (Content).
             chunks = [c.get("Content", "") for c in (fm.get("ChunkMatches") or [])]
+            chunks += [ln.get("Line", "") for ln in (fm.get("LineMatches") or [])]
             row["matches"] = len(chunks)
             row["content"] = "\n".join(chunks)[:2000]
         rows.append(row)

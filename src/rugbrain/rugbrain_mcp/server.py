@@ -16,6 +16,7 @@ Does not deprecate context-crypto's query_rugbrain yet — plan:
 
 from __future__ import annotations
 
+import rugbrain.rugbrain_mcp.tools_layers as tools_layers
 from rugbrain.rugbrain_mcp import (
     market_helpers as market_helpers,
 )
@@ -95,6 +96,15 @@ from rugbrain.rugbrain_mcp.tools_intel import (
 from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_wallet_profile as rugbrain_wallet_profile,
 )
+from rugbrain.rugbrain_mcp.tools_layers import (
+    compress_text as compress_text,
+)
+from rugbrain.rugbrain_mcp.tools_layers import (
+    exact_search as exact_search,
+)
+from rugbrain.rugbrain_mcp.tools_layers import (
+    symbol_info as symbol_info,
+)
 from rugbrain.rugbrain_mcp.tools_market import (
     rugbrain_market_brief as rugbrain_market_brief,
 )
@@ -129,6 +139,8 @@ __all__ = [
     "_call_search_multi",
     "_extract_results",
     "_source_of",
+    "compress_text",
+    "exact_search",
     "log",
     "market_helpers",
     "mcp",
@@ -147,7 +159,9 @@ __all__ = [
     "rugbrain_vector_landscape",
     "rugbrain_wallet_profile",
     "rugbrain_zeroday",
+    "symbol_info",
     "tools_intel",
+    "tools_layers",
     "tools_market",
     "tools_search",
     "tools_ta",
