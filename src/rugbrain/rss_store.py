@@ -6,7 +6,7 @@ row shape has exactly one definition. Every function here is pure except
 
 Idempotency: rows carry both ``news_id`` (legacy URL hash, matches the id the
 previous single-feed ingest wrote, so ``news_to_rag.py`` keeps picking them up)
-and ``content_hash`` (normalised title + guid|link). The URL check catches the
+and ``content_hash`` (normalised title + story identity via ``story_key``). The URL check catches the
 same link re-crawled; the content check catches the same story reposted by an
 aggregator under its own URL.
 """
@@ -24,6 +24,7 @@ from rugbrain.rss_classify import classify
 from rugbrain.rss_extract import clean_item
 from rugbrain.rss_feed import fetch_feed, newest_epoch
 from rugbrain.rss_feed_status import conditional_headers, record_status, remember_validators
+from rugbrain.story_key import story_key
 
 PREFIX = "cryptopanic"  # legacy id namespace — do not rename, RAG joins on it
 INSERT = """
@@ -81,7 +82,7 @@ def _row(source: str, item: dict[str, Any], pub: float) -> tuple[Any, ...]:
         tickers,
         category,
         trust,
-        content_hash(title, item.get("guid", ""), link),
+        story_key(title, extracted["body"] or desc, link or item.get("guid", "")),
         extracted["body_source"],
         extracted["truncated"],
     )

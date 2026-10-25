@@ -12,12 +12,15 @@ existing chunker, embedder, dedup, rerank and store need no parallel path.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any
 
 from rugbrain.ingest_sources.content_sources.sentiment import analyze_item
 from rugbrain.ingest_sources.content_sources.spec import SourceSpec
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["NEWS_COLLECTION", "to_news_item"]
 
@@ -33,8 +36,8 @@ def _rfc822(value: str) -> str:
         return ""
     try:
         return format_datetime(parsedate_to_datetime(raw), usegmt=True)
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        logger.debug("suppressed %s: %s", type(exc).__name__, exc)
     try:
         return format_datetime(datetime.fromisoformat(raw.replace("Z", "+00:00")), usegmt=True)
     except ValueError:

@@ -11,6 +11,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 log = logging.getLogger(__name__)
 POLL = int(os.getenv("CONTENT_DIGEST_INTERVAL", "1800"))
 SW: dict[str, int] = {
@@ -333,8 +335,8 @@ async def g_me() -> list[dict[str, Any]]:  # youtube + podcast + newsletter
                             url=v.get("url", ""),
                         )
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("suppressed %s: %s", type(exc).__name__, exc)
     p: list[dict[str, str]] | None
     try:
         from rugbrain.podcast_ingester import (

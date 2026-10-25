@@ -141,8 +141,8 @@ async def join_and_register(client: Any, username: str, state: dict[str, Any]) -
     try:
         with open(CHANNELS_FILE) as f:  # noqa: ASYNC230 — tiny local config read
             existing = {ln.strip() for ln in f if ln.strip()}
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.debug("suppressed %s: %s", type(exc).__name__, exc)
     if username not in existing:
         with open(CHANNELS_FILE, "a") as f:  # noqa: ASYNC230 — tiny local config append
             f.write(username + "\n")
