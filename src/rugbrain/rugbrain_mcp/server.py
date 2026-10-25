@@ -28,6 +28,9 @@ from rugbrain.rugbrain_mcp import (
 from rugbrain.rugbrain_mcp import (
     tools_search as tools_search,
 )
+from rugbrain.rugbrain_mcp import (
+    tools_route as tools_route,
+)
 from rugbrain.rugbrain_mcp.app import (
     API_KEY as API_KEY,
 )
