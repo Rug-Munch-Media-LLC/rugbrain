@@ -30,6 +30,7 @@ from rugbrain.rugbrain_mcp import (
 )
 from rugbrain.rugbrain_mcp import (
     tools_route as tools_route,
+    tools_ta as tools_ta,
 )
 from rugbrain.rugbrain_mcp.app import (
     API_KEY as API_KEY,
@@ -149,6 +150,7 @@ __all__ = [
     "tools_intel",
     "tools_market",
     "tools_search",
+    "tools_ta",
 ]
 
 

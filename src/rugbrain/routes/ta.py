@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from rugbrain.ta import indicators as ind
 from rugbrain.ta.reader import CandleReadError, PairRef, fetch_candles, table_stats
 from rugbrain.ta.signals import evaluate, trend_state
 
@@ -71,6 +72,51 @@ async def ta_signals(
         "trend": trend_state(closes) if closes else "flat",
         "signal_count": len(signals),
         "signals": [_signal_to_dict(s) for s in signals],
+    }
+
+
+def _latest(series: Any) -> float | None:
+    """Last finite value of an indicator series, or None for a short window."""
+    try:
+        values = list(series)
+    except TypeError:
+        values = list(getattr(series, "values", []))
+    if not values:
+        return None
+    last = float(values[-1])
+    return None if last != last else round(last, 6)
+
+
+@router.get("/api/v1/ta/indicators")
+async def ta_indicators(
+    chain: str = Query(..., description="Chain id, e.g. 'solana' or 'ethereum'."),
+    pair: str = Query(..., description="DEX pair / pool address."),
+    hours: int = Query(DEFAULT_HOURS, ge=24, le=MAX_HOURS, description="Lookback window in hours."),
+) -> dict[str, Any]:
+    """Numeric indicator snapshot for one DEX pair at the latest candle."""
+    ref = PairRef(chain=chain, pair_address=pair)
+    try:
+        series = fetch_candles(ref, hours=hours)
+    except CandleReadError as exc:
+        logger.warning("ta_indicators_read_failed pair=%s err=%s", ref, str(exc)[:120])
+        raise HTTPException(status_code=503, detail="OHLCV store unavailable") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    closes = series.closes()
+    if not closes:
+        raise HTTPException(status_code=503, detail="OHLCV store returned no candles")
+    return {
+        "pair": str(ref),
+        "candles": len(series),
+        "window_hours": hours,
+        "close": round(float(closes[-1]), 6),
+        "sma20": _latest(ind.sma(closes, 20)),
+        "ema20": _latest(ind.ema(closes, 20)),
+        "rsi14": _latest(ind.rsi(closes, 14)),
+        "volatility": _latest(ind.volatility(closes, 20)),
+        "drawdown": _latest(ind.drawdown(closes)),
+        "max_drawdown": round(ind.max_drawdown(closes), 6),
     }
 
 
