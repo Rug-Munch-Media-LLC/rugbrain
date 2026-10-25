@@ -156,3 +156,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     mcp.run()
+
+from rugbrain.rugbrain_mcp import tools_corpus  # noqa: E402,F401 - registers corpus_map/corpus_ask
