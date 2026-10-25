@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
 from _parts_ingest_scam_knowledge.p1 import _detect_attack_vector, _detect_chain
 from _parts_ingest_scam_knowledge.p3 import _extract_description
+
 
 def _web3hacks_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any]]:
     """Parse Cyfrin ``sc-exploits-minimized`` Foundry PoCs (src/*.sol).
@@ -125,6 +126,6 @@ async def _immunefi_docs(limit: int | None) -> list[dict[str, Any]]:
 
 
 __all__ = [
-    "_web3hacks_docs",
     "_immunefi_docs",
+    "_web3hacks_docs",
 ]

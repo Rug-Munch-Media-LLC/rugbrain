@@ -15,8 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from permanence_chunk_plan import plan_chunks  # noqa: E402
-from permanence_chunk_run import run_chunk  # noqa: E402
+from permanence_chunk_plan import plan_chunks
+from permanence_chunk_run import run_chunk
 
 
 def test_plan_keeps_every_multi_item_chunk_within_budget() -> None:

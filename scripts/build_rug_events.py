@@ -55,15 +55,14 @@ for _key, _value in (
 ):
     os.environ[_key] = _value
 
-from rugbrain.rug_events.embedding import (  # noqa: E402
-    CORPUS_DIM,
-    LANE_ENV,
-    DimMismatch,
-    embed_sync,
-)
 from rugbrain.rug_events.build_events import project_collection  # noqa: E402
 from rugbrain.rug_events.builder import apply_indexes, ensure_collection  # noqa: E402
 from rugbrain.rug_events.deployers import serial_ruggers  # noqa: E402
+from rugbrain.rug_events.embedding import (  # noqa: E402
+    CORPUS_DIM,
+    LANE_ENV,
+    embed_sync,
+)
 from rugbrain.rug_events.qdrant_io import (  # noqa: E402
     DEFAULT_URL,
     collection_info,
@@ -75,14 +74,14 @@ from rugbrain.rug_events.schema import COLLECTION  # noqa: E402
 # The prologue above and LANE_ENV must agree; a mismatch means the script pins
 # a lane the module does not know about, which is the failure this file exists
 # to prevent repeating.
-assert LANE_ENV == dict(
+assert dict(
     _LANE_PROLOGUE := {
         "DEEPINFRA_EMBED_URL": os.environ["DEEPINFRA_EMBED_URL"],
         "DEEPINFRA_EMBED_MODEL": os.environ["DEEPINFRA_EMBED_MODEL"],
         "RAG_EMBED_MODEL": os.environ["RAG_EMBED_MODEL"],
         "QWEN_EMBED_DIMS": os.environ["QWEN_EMBED_DIMS"],
     }
-), f"embed lane prologue drifted from LANE_ENV: {_LANE_PROLOGUE} != {LANE_ENV}"
+) == LANE_ENV, f"embed lane prologue drifted from LANE_ENV: {_LANE_PROLOGUE} != {LANE_ENV}"
 
 BATCH = 128
 

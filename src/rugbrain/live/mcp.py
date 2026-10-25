@@ -74,7 +74,7 @@ async def mcp_call(
                 )
                 resp.raise_for_status()
                 payload = parse_response(resp.text)
-    except Exception as exc:  # noqa: BLE001 - classified below
+    except Exception as exc:
         raise classify(provider, exc) from exc
     if "error" in payload:
         raise ProviderError(provider, "mcp_error", str(payload["error"])[:180])

@@ -23,9 +23,7 @@ through THIS module object at call time).
 """
 
 import logging
-import os
 import re
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
@@ -37,9 +35,6 @@ from rugbrain.route_shared import (  # noqa: F401 — back-compat re-export
     _check_rate_limit,
     _is_token_address,
 )
-
-
-
 
 router = APIRouter(prefix="/api/v1", tags=["rag-optimization"])
 

@@ -82,7 +82,7 @@ def proof_block(tag: str, limit: int = 2) -> list[dict]:
     for q, coll in QUERIES:
         try:
             hits = search(coll, embed([q])[0], limit)
-        except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+        except Exception as exc:
             rows.append({"q": q, "collection": coll, "error": str(exc)[:120]})
             print(json.dumps(rows[-1]))
             continue

@@ -176,7 +176,7 @@ async def main(
         metadatas = [doc[2] for doc in batch]
 
         logger.info("Embedding batch %d/%d (%d texts)", i // batch_size + 1, (len(docs_to_embed) + batch_size - 1) // batch_size, len(texts))
-        
+
         try:
             vectors = await embedder.embed(texts)
             for doc_id, vec, meta in zip(doc_ids, vectors, metadatas):

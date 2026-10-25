@@ -398,7 +398,7 @@ def render(report: Report) -> str:
     if not report.offenders:
         add("    none")
     for f in report.offenders:
-        add(f"    {f.name:32} width={str(f.width):>5}  points={f.points:>9}")
+        add(f"    {f.name:32} width={f.width!s:>5}  points={f.points:>9}")
 
     add("")
     add(f"[2] MUST-FILL TWINS ({len(MUST_FILL)} bases that may be deleted ONLY on PASS)")
@@ -413,14 +413,14 @@ def render(report: Report) -> str:
     add("")
     add(f"[3] EMPTY OFF-DIM SHELLS -- safe to delete now ({len(report.empty_bases)})")
     for f in report.empty_bases:
-        add(f"    {f.name:32} width={str(f.width):>5}  points=0")
+        add(f"    {f.name:32} width={f.width!s:>5}  points=0")
     if not report.empty_bases:
         add("    none")
 
     add("")
     add(f"[4] OFF-DIM WITH REAL DATA -- deletion is DATA LOSS ({len(report.stale_bases)})")
     for f in report.stale_bases:
-        add(f"    {f.name:32} width={str(f.width):>5}  points={f.points:>9}")
+        add(f"    {f.name:32} width={f.width!s:>5}  points={f.points:>9}")
 
     add("")
     add(f"[5] READ-BACK PROBE ({len(report.probes)} canonical collections)")

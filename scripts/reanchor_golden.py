@@ -53,7 +53,7 @@ def _uses_named_vectors(collection: str) -> bool:
         with urllib.request.urlopen(f"{QDRANT}/collections/{collection}", timeout=30) as resp:  # noqa: S310
             vectors = json.load(resp)["result"]["config"]["params"].get("vectors") or {}
         return isinstance(vectors, dict) and "size" not in vectors
-    except Exception:  # noqa: BLE001 — fall back to unnamed
+    except Exception:
         return False
 
 

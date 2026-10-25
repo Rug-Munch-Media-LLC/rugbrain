@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
-from _parts_b2_permanence.p1 import collection_has_vectors, collection_info, filter_collections, list_collections, resolve_payload_only_collections, resolve_qdrant_client
+from _parts_b2_permanence._h1 import *  # noqa: F403
+from _parts_b2_permanence.p1 import (
+    collection_has_vectors,
+    collection_info,
+    filter_collections,
+    list_collections,
+    resolve_payload_only_collections,
+    resolve_qdrant_client,
+)
 from _parts_b2_permanence.p2 import collection_points
 from _parts_b2_permanence.p3 import snapshot_collection
 from _parts_b2_permanence.p5 import upload_manifest
 from _parts_b2_permanence.p6 import snapshot_dates_on_remote, todays_manifest_entries
 from _parts_b2_permanence.p7 import prune_snapshots
 from _parts_b2_permanence.p8 import build_parser, canonical_denominator
+
 
 def main() -> int:
     args = build_parser().parse_args()

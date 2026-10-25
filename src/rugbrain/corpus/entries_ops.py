@@ -19,7 +19,6 @@ from rugbrain.corpus.schema import (
     LICENCE_PERMISSIVE,
     CorpusDeclaration,
 )
-from rugbrain.qdrant_store.lane_table import PRESERVED_LANE_DIM
 
 _NEWS_MARKET: Final[tuple[CorpusDeclaration, ...]] = (
     _d(

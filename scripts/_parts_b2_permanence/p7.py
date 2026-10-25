@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
-from _parts_b2_permanence.p6 import parse_snapshot_date, retention_keep_set, snapshot_dates_on_remote
+from _parts_b2_permanence._h1 import *  # noqa: F403
+from _parts_b2_permanence.p6 import (
+    parse_snapshot_date,
+    retention_keep_set,
+    snapshot_dates_on_remote,
+)
+
 
 def prune_snapshots(
     b2_api: B2Api,

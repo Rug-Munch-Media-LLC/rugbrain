@@ -28,11 +28,10 @@ import httpx
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 
-from eliminate_4b import qdrant_io as q  # noqa: E402
-from eliminate_4b.embed import deepinfra_key  # noqa: E402
-from eliminate_4b.fill import fill  # noqa: E402
-from eliminate_4b.plan import TARGETS, Target, plan  # noqa: E402
-from eliminate_4b.report import print_eta, print_table  # noqa: E402
+from eliminate_4b.embed import deepinfra_key
+from eliminate_4b.fill import fill
+from eliminate_4b.plan import TARGETS, Target, plan
+from eliminate_4b.report import print_eta, print_table
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("eliminate_4b")

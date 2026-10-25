@@ -5,10 +5,10 @@ from __future__ import annotations
 import inspect
 
 import httpx
-
-from rugbrain.qdrant_store import QdrantVectorStore
 from regs_ingest.config import COLLECTION, KEY_FILE, QDRANT_URL, SF_EMBED_URL, SF_MODEL
 from regs_ingest.normalise import canonical_url
+
+from rugbrain.qdrant_store import QdrantVectorStore
 
 
 class SiliconFlowEmbedder:

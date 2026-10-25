@@ -24,17 +24,24 @@ import httpx
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
-from rugbrain.ingest_common import store_documents  # noqa: E402
+from regs_ingest.archives import archive_items
+from regs_ingest.config import COLLECTION, FEEDS, PROBE_QUERIES, UA
+from regs_ingest.feeds import cftc_items, load_seed, paged_items, rss_items
+from regs_ingest.normalise import (
+    dedupe_text,
+    dedupe_urls,
+    fetch_page,
+    to_documents,
+)
+from regs_ingest.store import (
+    SiliconFlowEmbedder,
+    build_store,
+    count_points,
+    existing_keys,
+    probe,
+)
 
-from regs_ingest.config import COLLECTION, FEEDS, PROBE_QUERIES, UA  # noqa: E402
-from regs_ingest.archives import archive_items  # noqa: E402
-from regs_ingest.feeds import cftc_items, load_seed, paged_items, rss_items  # noqa: E402
-from regs_ingest.normalise import (  # noqa: E402
-    dedupe_text, dedupe_urls, fetch_page, to_documents,
-)
-from regs_ingest.store import (  # noqa: E402
-    SiliconFlowEmbedder, build_store, count_points, existing_keys, probe,
-)
+from rugbrain.ingest_common import store_documents
 
 
 async def collect(client, args, report) -> list[dict]:

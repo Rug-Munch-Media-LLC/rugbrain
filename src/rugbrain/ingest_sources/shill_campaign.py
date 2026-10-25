@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Final, Iterable
+from datetime import datetime
+from typing import Final
 
 WINDOW_SECONDS: Final = 24 * 3600
 MIN_CHANNELS: Final = 3

@@ -107,7 +107,7 @@ def print_report(results: list[dict[str, Any]], totals: dict[str, Any]) -> None:
     print("-" * len(head))
     for row in results:
         print(
-            f"{row['handle']:<18} {row['class']:<10} {str(row.get('user_id', '-')):<21} "
+            f"{row['handle']:<18} {row['class']:<10} {row.get('user_id', '-')!s:<21} "
             f"{row.get('followers', 0):>9} {row.get('fetched', 0):>4} "
             f"{row.get('inserted', 0):>4} {row.get('duplicate', 0):>4}  "
             f"{row['status']}{(' ' + row['error']) if row.get('error') else ''}"

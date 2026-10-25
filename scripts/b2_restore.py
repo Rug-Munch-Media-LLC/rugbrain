@@ -36,7 +36,6 @@ Environment:
 """
 
 from __future__ import annotations
-from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import json
@@ -51,6 +50,8 @@ from typing import Any
 import qdrant_client
 from b2sdk.v2 import B2Api
 from qdrant_client.models import Distance, PointStruct, VectorParams
+
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

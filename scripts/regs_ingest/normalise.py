@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
+from regs_ingest.config import COLLECTION, LICENCE, UA
 
 from rugbrain.ingest_common import CrawlDocument
-from regs_ingest.config import COLLECTION, LICENCE, UA
 
 WS = re.compile(r"\s+")
 NONWORD = re.compile(r"[^0-9a-zA-Z]+")
@@ -80,7 +80,7 @@ def dedupe_text(items: list[dict]) -> tuple[list[dict], int]:
 
 
 def to_documents(items: list[dict]) -> list[CrawlDocument]:
-    fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fetched_at = datetime.now(UTC).isoformat(timespec="seconds")
     docs = []
     for it in items:
         body = (it.get("body") or it.get("summary") or "").strip()

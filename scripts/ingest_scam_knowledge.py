@@ -49,18 +49,18 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:  # works run directly or as scripts.*
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _parts_ingest_scam_knowledge.p1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p2 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p3 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p4 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p5 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p6 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p7 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p8 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p9 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p10 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p2 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p3 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p4 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p5 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p6 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p7 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p8 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p9 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p10 import *  # noqa: F403
 
 if __name__ == "__main__":
     main()

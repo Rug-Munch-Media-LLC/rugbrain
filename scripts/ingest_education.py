@@ -31,10 +31,10 @@ sys_path_scripts = os.path.dirname(os.path.abspath(__file__))
 if sys_path_scripts not in sys.path:
     sys.path.insert(0, sys_path_scripts)
 
+import uuid
+
 from rugbrain.embedder import get_embedder
 from rugbrain.qdrant_store import QdrantVectorStore
-import hashlib
-import uuid
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("ingest_education")

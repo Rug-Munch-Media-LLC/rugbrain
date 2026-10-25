@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import pytest
-import respx
-import httpx
-
 # Import the module under test
 import sys
-sys.path.insert(0, "scripts")
-from ingest_scamsniffer import _domain_docs, _address_docs, run  # type: ignore
 
+import httpx
+import pytest
+import respx
+
+sys.path.insert(0, "scripts")
+from ingest_scamsniffer import _address_docs, _domain_docs, run  # type: ignore
 
 # ── Sample JSON data ─────────────────────────────────────────────────────
 SAMPLE_DOMAINS = [

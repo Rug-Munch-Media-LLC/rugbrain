@@ -13,7 +13,7 @@ try:
     from rugbrain.search.engine.constants import CODING_COLLECTIONS, SCAM_COLLECTIONS
 
     _DECLARED = True
-except Exception:  # noqa: BLE001 - optional dependency of this read-only view
+except Exception:
     CODING_COLLECTIONS = ()
     SCAM_COLLECTIONS = ()
     _DECLARED = False

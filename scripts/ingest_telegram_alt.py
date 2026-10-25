@@ -22,13 +22,17 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
-from rugbrain.ingest_sources.alt_ingest_channels import ALT_INGEST_CHANNELS as MIRROR_CHANNELS
 from rugbrain.ingest_sources.alt_ingest import (
     LIMIT_PER_CHANNEL,
-    AltIngestCredentialError as AltIngestCredentialError,
-    alt_ingest_credentials_present as mirror_credentials_present,
     run_mirror,
 )
+from rugbrain.ingest_sources.alt_ingest import (
+    AltIngestCredentialError as AltIngestCredentialError,
+)
+from rugbrain.ingest_sources.alt_ingest import (
+    alt_ingest_credentials_present as mirror_credentials_present,
+)
+from rugbrain.ingest_sources.alt_ingest_channels import ALT_INGEST_CHANNELS as MIRROR_CHANNELS
 
 
 async def _rerank_verify(sample: str) -> float | None:

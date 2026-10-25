@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p1 import _chunk_text, _date_to_ts, _detect_attack_vector, _detect_chain, _normalize_date, _parse_amount_lost
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p1 import (
+    _chunk_text,
+    _date_to_ts,
+    _detect_attack_vector,
+    _detect_chain,
+    _normalize_date,
+    _parse_amount_lost,
+)
 from _parts_ingest_scam_knowledge.p3 import _extract_description, _parse_defihacklabs_incidents
+
 
 def _defihacklabs_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any]]:
     """Build one doc per PoC chunk, merging incident metadata in.

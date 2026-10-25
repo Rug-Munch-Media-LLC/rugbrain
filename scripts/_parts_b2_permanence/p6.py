@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+
 
 def todays_done_collections(b2_api: B2Api, bucket_name: str, date_str: str) -> set[str]:
     """Collections already recorded in today's manifest — the resume cursor.
@@ -121,9 +122,9 @@ def retention_keep_set(
 
 
 __all__ = [
+    "parse_snapshot_date",
+    "retention_keep_set",
+    "snapshot_dates_on_remote",
     "todays_done_collections",
     "todays_manifest_entries",
-    "parse_snapshot_date",
-    "snapshot_dates_on_remote",
-    "retention_keep_set",
 ]

@@ -44,7 +44,7 @@ def _resolve_collection(name: str) -> str:
     try:
         _get(f"/collections/{name}_8b")
         return f"{name}_8b"
-    except Exception:  # noqa: BLE001 — a missing twin is the expected fallback path
+    except Exception:
         return name
 
 

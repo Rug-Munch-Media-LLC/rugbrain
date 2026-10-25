@@ -8,7 +8,7 @@ so we never invent a parameter name. Re-run after a server changes shape.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +39,7 @@ def main() -> int:
     schemas = json.loads(FIXTURE.read_text()).get("schemas", {})
     for layer in table["layers"].values():
         resolve(layer, schemas)
-    table["generated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    table["generated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     SRC.write_text(json.dumps(table, indent=1, sort_keys=False) + "\n", encoding="utf-8")
     bad = {k: v["call"]["unresolved_args"] for k, v in table["layers"].items() if v["call"]["unresolved_args"]}
     print("unresolved intents:", bad or "none")

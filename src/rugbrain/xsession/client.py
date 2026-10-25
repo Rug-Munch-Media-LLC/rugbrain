@@ -39,7 +39,7 @@ class XSessionClient:
         #: last-seen rate-limit state per operation, for the run report
         self.rate: dict[str, dict[str, int]] = {}
 
-    async def __aenter__(self) -> "XSessionClient":
+    async def __aenter__(self) -> XSessionClient:
         self._http = httpx.AsyncClient(timeout=httpx.Timeout(25.0, connect=8.0))
         return self
 
@@ -90,7 +90,7 @@ class XSessionClient:
         try:
             self._cookies = load_session_cookies(self._cookie_path)
             return True
-        except Exception as exc:  # noqa: BLE001 - jar may be gone; fall through to guest
+        except Exception as exc:
             logger.warning("cookie reload failed: %s", type(exc).__name__)
         if self._http is not None:
             headers = await activate_guest(self._http, self._cookies.get("ct0", ""))

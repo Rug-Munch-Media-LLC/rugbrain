@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
 from _parts_ingest_scam_knowledge.p1 import _normalize_severity
 from _parts_ingest_scam_knowledge.p2 import _content_hash, _point_id
+
 
 def _build_point(
     source: str,
@@ -42,8 +43,8 @@ def _clone_repo(url: str, name: str, subdirs: tuple[str, ...] | None = None) -> 
     logger.info("cloning %s → %s (shallow)", url, target)
     tmp = Path(tempfile.mkdtemp(prefix=f"{name}-clone-"))
     try:
-        result = subprocess.run(  # noqa: S603 — url is a fixed constant from the source table
-            ["git", "clone", "--depth", "1", url, str(tmp)],  # noqa: S607
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(tmp)],
             capture_output=True,
             text=True,
             timeout=600,

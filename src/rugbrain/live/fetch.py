@@ -58,7 +58,7 @@ async def get_json(
                 resp = await client.get(url, params=params, headers=headers, timeout=timeout or TIMEOUT_S)
             resp.raise_for_status()
             return resp.json(), iso(utcnow())
-        except Exception as exc:  # noqa: BLE001 - classified, then re-raised typed
+        except Exception as exc:
             last = classify(provider, exc)
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(delay)

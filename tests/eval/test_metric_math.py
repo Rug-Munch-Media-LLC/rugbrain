@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import math
-from typing import Iterable, List, Sequence
-
-import pytest
 
 from rugbrain.eval.ndcg import (
     dcg_at_k,
@@ -104,8 +101,8 @@ def test_compute_metrics_for_report():
 
 def test_format_report_matches_expected_baseline_structure():
     """Verify the report structure matches what eval_ingest_sources.py expects."""
-    from rugbrain.eval.harness import BacktestReport
     from rugbrain.eval.golden_set import DEFAULT_K_VALUES
+    from rugbrain.eval.harness import BacktestReport
 
     # Minimal valid report
     report = BacktestReport(total=5, k_values=DEFAULT_K_VALUES)

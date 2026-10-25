@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from rugbrain import polymarket_ref, polymarket_source
+from rugbrain import polymarket_ref
 from rugbrain.polymarket_source import StaleMarketError, citation_line, market_odds
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=UTC)

@@ -13,13 +13,14 @@ Fail-open (per ``base.py``): any fetch/parse error logs and returns ``[]``.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
 from rugbrain.ingest_sources.base import IngestDoc, Source
-from rugbrain.prediction_markets_docs import COLLECTION, DOC_TYPE, SOURCE as SOURCE_NAME, market_to_doc
+from rugbrain.prediction_markets_docs import COLLECTION, DOC_TYPE, market_to_doc
+from rugbrain.prediction_markets_docs import SOURCE as SOURCE_NAME
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ class PredictionMarkets(Source):
             response = await client.get(GAMMA_URL, params=params)
             response.raise_for_status()
             payload = response.json()
-        except Exception as exc:  # noqa: BLE001 - fail-open by contract
+        except Exception as exc:
             log.warning("polymarket fetch failed: %s", exc)
             return []
 
@@ -59,7 +60,7 @@ class PredictionMarkets(Source):
             log.warning("polymarket payload not a list: %r", type(markets))
             return []
 
-        fetched_at = datetime.now(timezone.utc)
+        fetched_at = datetime.now(UTC)
         docs = [d for d in (market_to_doc(m, fetched_at) for m in markets if isinstance(m, dict)) if d]
         log.info("polymarket: %d markets -> %d docs (bound=%d)", len(markets), len(docs), bound)
         return docs
@@ -67,4 +68,4 @@ class PredictionMarkets(Source):
 
 SOURCE = PredictionMarkets()
 
-__all__ = ["PredictionMarkets", "SOURCE", "GAMMA_URL", "DEFAULT_LIMIT", "HARD_CAP"]
+__all__ = ["DEFAULT_LIMIT", "GAMMA_URL", "HARD_CAP", "SOURCE", "PredictionMarkets"]

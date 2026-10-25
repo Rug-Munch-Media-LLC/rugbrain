@@ -31,7 +31,6 @@ Exit codes: 0 ok, 1 one or more collections failed, 2 BM25 embedder missing.
 """
 
 from __future__ import annotations
-from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import asyncio
@@ -42,6 +41,7 @@ from typing import Any
 import httpx
 
 from rugbrain import qdrant_store
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 logger = logging.getLogger("migrate_to_sparse")
 

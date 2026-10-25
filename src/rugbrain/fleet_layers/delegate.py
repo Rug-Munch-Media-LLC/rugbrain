@@ -12,7 +12,8 @@ tests never need a live app and production never monkeypatches anything.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from rugbrain.fleet_layers.envelope import layer_response
 from rugbrain.fleet_layers.native import native_search

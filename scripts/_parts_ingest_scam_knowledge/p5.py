@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
 from _parts_ingest_scam_knowledge.p1 import _detect_attack_vector, _detect_chain
+
 
 def _parse_yaml_entries(text: str, source_file: str, source_url: str) -> list[dict[str, Any]]:
     """Lightweight YAML parse — the blacklist files are simple list-of-dicts.
@@ -130,6 +131,6 @@ def _cryptoscamdb_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any
 
 
 __all__ = [
-    "_parse_yaml_entries",
     "_cryptoscamdb_docs",
+    "_parse_yaml_entries",
 ]

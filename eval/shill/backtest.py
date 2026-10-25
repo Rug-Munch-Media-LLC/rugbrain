@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, "src")
-from rugbrain.ingest_sources.alt_ingest_shill import analyze  # noqa: E402
+from rugbrain.ingest_sources.alt_ingest_shill import analyze
 
 WINDOW = 24 * 3600
 ROWS = [json.loads(l) for l in open("eval/shill/labelled_v1.jsonl", encoding="utf-8")]

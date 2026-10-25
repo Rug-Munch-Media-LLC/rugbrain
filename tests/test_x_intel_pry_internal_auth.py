@@ -35,13 +35,11 @@ from typing import Any
 import httpx
 import pytest
 
-from rugbrain.ingest_sources.x_intel import pry_lane
 from rugbrain.ingest_sources.x_intel.pry_internal_auth import (
     INTERNAL_SIG_HEADER,
     INTERNAL_TIMESTAMP_HEADER,
     INTERNAL_TOKEN_HEADER,
     PRY_SCRAPE_PATH,
-    internal_fingerprint,
     pry_internal_headers,
 )
 from rugbrain.ingest_sources.x_intel.pry_lane import scrape_tweet

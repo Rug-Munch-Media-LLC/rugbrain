@@ -24,8 +24,9 @@ cannot recur.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Mapping
+from typing import Final
 
 #: Any collection above this many points is corpus, not a fixture — it must be
 #: reachable. Below it a collection may be a test slice (316 ``dedup_slice_test``)

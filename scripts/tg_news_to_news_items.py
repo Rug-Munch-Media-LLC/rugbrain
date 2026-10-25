@@ -34,8 +34,8 @@ import asyncpg
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rugbrain.rss_classify import classify, trust_for  # noqa: E402
-from rugbrain.rss_store import content_hash, news_id_for  # noqa: E402
+from rugbrain.rss_classify import classify
+from rugbrain.rss_store import content_hash, news_id_for
 
 TG_ROOT = Path("/srv/work/repos/rmi-backend/data/telegram_news")
 INSERT = """

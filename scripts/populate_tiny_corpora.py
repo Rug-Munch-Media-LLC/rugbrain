@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Populate tiny rugbrain corpora from material already owned (no scraping)."""
-import glob, hashlib, json, os, re, urllib.error, urllib.request, uuid
-from datetime import datetime, timezone
+import glob
+import hashlib
+import json
+import os
+import re
+import urllib.error
+import urllib.request
+import uuid
+from datetime import UTC, datetime
 
 QD = "http://127.0.0.1:6334"
 EMB = "http://127.0.0.1:8024/v1/embeddings"
@@ -114,7 +121,7 @@ def build(coll, spec, key):
     if not picks:
         print(f"{coll}: nothing derivable (have={have})")
         return have, 0, 0
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     ok = bad = 0
     for i in range(0, len(picks), 16):
         chunk = picks[i:i + 16]

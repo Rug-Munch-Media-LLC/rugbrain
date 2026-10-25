@@ -457,7 +457,7 @@ async def market_context_token_endpoint(
 @router.get("/intel/address-risk")
 async def address_risk(
     address: str = Query(..., description="Bare address or chain_address"),
-    request: Request = None,  # type: ignore[assignment]  # noqa: B008 — FastAPI injects it
+    request: Request = None,  # type: ignore[assignment]
 ) -> dict[str, Any]:
     """Risk record for a scanned address, from the ClickHouse label bridge.
 
@@ -478,7 +478,7 @@ async def address_risk(
         raise HTTPException(status_code=400, detail="not a token address")
     try:
         row = labels.resolve_address(bare)
-    except Exception as exc:  # noqa: BLE001 — a lookup miss must not 500 the API
+    except Exception as exc:
         logger.warning("intel_address_risk_failed: %s", str(exc)[:120])
         raise HTTPException(status_code=503, detail="label bridge unavailable") from exc
 

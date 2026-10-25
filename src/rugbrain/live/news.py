@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from .envelope import (
     NEWS_STALE_AFTER_S,
@@ -45,7 +46,7 @@ async def _corpus_search(topic: str, n: int) -> list[dict[str, Any]]:
             limit=n,
             min_similarity=0.3,
         )
-    except Exception as exc:  # noqa: BLE001 - typed refusal downstream
+    except Exception as exc:
         raise ProviderError("rugbrain-corpus", "corpus_unavailable", type(exc).__name__) from exc
     items = []
     for row in rows or []:

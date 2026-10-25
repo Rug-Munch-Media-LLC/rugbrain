@@ -10,7 +10,7 @@ import pytest
 # Import the module to test
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 
-from ingest_kaggle_news import _stable_news_id, _chunk_text, _extract_entities
+from ingest_kaggle_news import _chunk_text, _extract_entities, _stable_news_id
 
 
 def test_stable_news_id():

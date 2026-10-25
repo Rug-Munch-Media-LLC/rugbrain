@@ -12,9 +12,10 @@ openrouter`` to make SiliconFlow the first rung.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse
 
 from rugbrain.app_chunking import split_doc_into_chunks
@@ -66,7 +67,7 @@ async def _http_fetch(url: str) -> UrlPayload:
         try:
             robots = await client.get(f"{parsed.scheme}://{parsed.netloc}/robots.txt")
             robots_text = robots.text if robots.status_code == 200 else None
-        except Exception:  # noqa: BLE001 — robots lookup is best-effort by design
+        except Exception:
             robots_text = None
         response = await client.get(url)
         return UrlPayload(response.status_code, response.headers.get("content-type", ""), response.content, robots_text)
@@ -98,14 +99,14 @@ async def ingest_url(
     fetched_at: str | None = None,
 ) -> dict[str, Any]:
     """Run the full pipeline for one URL and return a :class:`UrlIngestReport` dict."""
-    stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    stamp = fetched_at or datetime.now(UTC).isoformat(timespec="seconds")
     fetch = fetch or _http_fetch
     convert = convert or (lambda body, ctype, _url: to_markdown(body, ctype))
     embed = embed or _hosted_embed
     store = store or _jsonl_store
     try:
         payload = await fetch(url)
-    except Exception as exc:  # noqa: BLE001 — transport failure is a refusal value
+    except Exception as exc:
         return UrlIngestReport(False, url, "fetch_failed", detail=str(exc)[:200]).as_dict()
     verdict = check_url_allowed(
         url, payload.body, robots_text=payload.robots_text,
@@ -123,7 +124,7 @@ async def ingest_url(
         return UrlIngestReport(False, url, "no_chunks", 200, verdict.size_bytes, len(markdown)).as_dict()
     try:
         vectors = await embed(texts)
-    except Exception as exc:  # noqa: BLE001 — an unavailable lane is a refusal value
+    except Exception as exc:
         return UrlIngestReport(False, url, "embed_unavailable", detail=str(exc)[:200]).as_dict()
     if len(vectors) != len(texts) or any(len(vector) != EMBED_DIM for vector in vectors):
         return UrlIngestReport(False, url, "wrong_dim", detail=f"expected {EMBED_DIM}").as_dict()
@@ -142,7 +143,7 @@ async def ingest_url(
     ]
     try:
         stored = await store(records)
-    except Exception as exc:  # noqa: BLE001 — store failure must be visible, not fatal
+    except Exception as exc:
         return UrlIngestReport(False, url, "store_failed", detail=str(exc)[:200]).as_dict()
     return UrlIngestReport(
         True, url, None, payload.status, verdict.size_bytes, len(markdown), len(texts), stored, provenance,

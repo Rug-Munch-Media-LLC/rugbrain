@@ -18,8 +18,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 
-from rugbrain.route_shared import endpoints_proxy as _ep
 from rugbrain.knowledge_boundary import sanitize_public_result
+from rugbrain.route_shared import endpoints_proxy as _ep
 from rugbrain.routes import search_retrieval as retrieval
 from rugbrain.routes.search_chain_data import merge_chain_data
 from rugbrain.routes.search_pkg._shared import enforce_rate_limit

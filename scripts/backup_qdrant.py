@@ -27,18 +27,19 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import requests
 from qdrant_client import QdrantClient
+
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 # Allow importing the shared B2 helper module (scripts/b2_common.py)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import contextlib
+from urllib.parse import urlparse
 
 from b2_common import ensure_bucket, get_b2_api, list_object_keys, load_env_file, upload_file
-from urllib.parse import urlparse
 
 # ---------------------------------------------------------------------------
 # Defaults — override via env or --env-file

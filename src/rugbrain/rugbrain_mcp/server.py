@@ -28,10 +28,12 @@ from rugbrain.rugbrain_mcp import (
     tools_market as tools_market,
 )
 from rugbrain.rugbrain_mcp import (
+    tools_route as tools_route,
+)
+from rugbrain.rugbrain_mcp import (
     tools_search as tools_search,
 )
 from rugbrain.rugbrain_mcp import (
-    tools_route as tools_route,
     tools_ta as tools_ta,
 )
 from rugbrain.rugbrain_mcp.app import (
@@ -161,8 +163,8 @@ __all__ = [
     "rugbrain_wallet_profile",
     "rugbrain_zeroday",
     "symbol_info",
-    "tools_intel",
     "tools_delegate",
+    "tools_intel",
     "tools_layers",
     "tools_market",
     "tools_search",
