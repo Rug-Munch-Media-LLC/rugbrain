@@ -1,0 +1,1 @@
+{"system": "pypi", "name": "httpx", "version": "1.0.0.dev6", "version_resolved": true, "purl": "pkg:pypi/httpx@1.0.0.dev6", "published_at": "2026-08-31T17:59:54Z", "is_deprecated": false, "licenses": [], "advisory_ids": [], "dependencies": {"available": true, "dependency_count": 2, "direct_dependencies": ["truststore", "typing-extensions"]}, "upstream": "deps.dev"}
