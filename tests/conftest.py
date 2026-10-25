@@ -17,3 +17,6 @@ os.environ.setdefault("RERANK_HOSTED", "0")
 # silently route test embeds to the cloud (2026-09-14; the file fallback
 # otherwise flips the default provider to deepinfra on dev hosts).
 os.environ.setdefault("EMBED_PROVIDER", "local")
+
+import pytest
+
