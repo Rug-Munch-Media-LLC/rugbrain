@@ -282,8 +282,8 @@ async def _dispatch_alerts(alerts: list[dict[str, Any]]) -> None:
                 alert_type=f"defi_lending_{alert['type']}",
                 severity=alert["severity"],
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("suppressed %s: %s", type(exc).__name__, exc)
 
 
 # ── Main Polling Cycle ──────────────────────────────────────────────────────

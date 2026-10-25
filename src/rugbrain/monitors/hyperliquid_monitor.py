@@ -394,8 +394,8 @@ async def hyperliquid_full_cycle() -> JsonObject:
                     alert_type="hyperliquid_whale",
                     severity="critical",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("suppressed %s: %s", type(exc).__name__, exc)
         elif "WHALE" in tier and "MEGA" not in tier:
             alerts.append(f"WHALE TRADE: {t['coin']} {t['side_label']} ${t['usd_value']:,.0f}")
             try:
@@ -408,8 +408,8 @@ async def hyperliquid_full_cycle() -> JsonObject:
                     alert_type="hyperliquid_whale",
                     severity="high",
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("suppressed %s: %s", type(exc).__name__, exc)
 
     for l in notable_liqs:  # noqa: E741 — pre-existing, audited 2026-08-22
         ltier = l.get("tier", "")

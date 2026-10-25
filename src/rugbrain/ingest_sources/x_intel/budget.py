@@ -138,6 +138,7 @@ class BudgetTracker:
                 hourly = int(await r.get(self._hourly_key()) or 0)
                 pacing_until = float(await r.get("xintel:pacing_until") or 0.0)
             except Exception as exc:
+                logger.debug("suppressed %s: %s", type(exc).__name__, exc)
                 ingest_health.note("ingest.x_intel.redis_read_failed", err=type(exc).__name__)
         budget_remaining = max(0.0, GETXAPI_TOTAL_BUDGET - spend)
         calls_remaining = max(0, GETXAPI_DAILY_CALL_LIMIT - calls)
