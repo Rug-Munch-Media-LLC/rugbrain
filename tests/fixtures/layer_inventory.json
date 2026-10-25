@@ -1,0 +1,5000 @@
+{
+ "captured_at": "2026-10-25T10:52:16+00:00",
+ "schemas": {
+  "context-crypto": {
+   "activate_project": [
+    "project",
+    "session_id"
+   ],
+   "agent_card": [
+    "agent_id"
+   ],
+   "agent_payload": [
+    "agent_id",
+    "task"
+   ],
+   "analyze_file": [
+    "path"
+   ],
+   "answer_question": [
+    "budget_chars",
+    "json",
+    "limit",
+    "question"
+   ],
+   "api_contracts": [],
+   "architecture_check": [
+    "check_type"
+   ],
+   "branch_compare": [
+    "base",
+    "compare"
+   ],
+   "call_graph": [
+    "direction",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "change_impact": [
+    "action",
+    "files",
+    "ref",
+    "use_git_diff"
+   ],
+   "changes": [
+    "limit",
+    "max_tokens",
+    "ref"
+   ],
+   "cicd_analyze": [],
+   "code_copies": [
+    "content_hash",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "code_docs": [
+    "action",
+    "file",
+    "symbol"
+   ],
+   "code_metrics": [
+    "language",
+    "path",
+    "sort_by"
+   ],
+   "codebase_map": [],
+   "create_text_file": [
+    "content",
+    "relative_path"
+   ],
+   "danger_propagation": [
+    "limit",
+    "min_sites",
+    "symbol"
+   ],
+   "db_schema": [
+    "directory"
+   ],
+   "decode_signature": [
+    "filter",
+    "hashes",
+    "verifiedOnly"
+   ],
+   "delete_memory": [
+    "memory_name"
+   ],
+   "delete_pattern": [
+    "pattern_id"
+   ],
+   "dep_vuln_scan": [],
+   "dependency_graph": [
+    "directory",
+    "file",
+    "language",
+    "max_files"
+   ],
+   "dispatch_brief": [
+    "allow_tools",
+    "compact",
+    "count",
+    "deny_tools",
+    "facets",
+    "fleet",
+    "model",
+    "provider",
+    "reference",
+    "skills",
+    "task",
+    "tools"
+   ],
+   "dispatch_stats": [
+    "days"
+   ],
+   "edit_memory": [
+    "allow_multiple_occurrences",
+    "memory_name",
+    "mode",
+    "needle",
+    "repl"
+   ],
+   "estimate_costs": [
+    "days",
+    "path"
+   ],
+   "execute_shell_command": [
+    "capture_stderr",
+    "command",
+    "cwd",
+    "max_answer_chars"
+   ],
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "file_context": [
+    "budget_tokens",
+    "file_path",
+    "library",
+    "limit",
+    "max_chars"
+   ],
+   "file_tree": [
+    "directory",
+    "glob",
+    "max_depth",
+    "show_details",
+    "type"
+   ],
+   "find_dead_code": [
+    "directory",
+    "file_glob"
+   ],
+   "find_debug_logs": [
+    "directory",
+    "file_glob"
+   ],
+   "find_declaration": [
+    "containing_symbol_name_path",
+    "include_body",
+    "include_info",
+    "regex",
+    "relative_path"
+   ],
+   "find_duplicates": [
+    "directory",
+    "file_glob",
+    "min_length",
+    "pattern"
+   ],
+   "find_empty_catches": [
+    "directory",
+    "file_glob"
+   ],
+   "find_file": [
+    "file_mask",
+    "relative_path"
+   ],
+   "find_implementations": [
+    "exclude_kinds",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_large_files": [
+    "directory",
+    "file_glob",
+    "threshold"
+   ],
+   "find_long_functions": [
+    "directory",
+    "file_glob",
+    "threshold"
+   ],
+   "find_references": [
+    "limit",
+    "repo",
+    "symbol"
+   ],
+   "find_referencing_symbols": [
+    "exclude_kinds",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_secrets": [
+    "directory",
+    "file_glob"
+   ],
+   "find_symbol": [
+    "depth",
+    "exclude_kinds",
+    "include_body",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "max_matches",
+    "name_path_pattern",
+    "relative_path",
+    "substring_matching"
+   ],
+   "find_todos": [
+    "directory",
+    "file_glob"
+   ],
+   "forget": [
+    "noteId"
+   ],
+   "get_code_snippet": [
+    "include_neighbors",
+    "project",
+    "qualified_name"
+   ],
+   "get_context": [
+    "file",
+    "include",
+    "line",
+    "max_tokens",
+    "symbol"
+   ],
+   "get_current_config": [],
+   "get_diagnostics_for_file": [
+    "end_line",
+    "max_answer_chars",
+    "min_severity",
+    "relative_path",
+    "start_line"
+   ],
+   "get_health": [],
+   "get_pair": [
+    "chainId",
+    "pairId"
+   ],
+   "get_review_status": [
+    "reviewId"
+   ],
+   "get_symbols_overview": [
+    "depth",
+    "max_answer_chars",
+    "relative_path"
+   ],
+   "get_token_pools": [
+    "chainId",
+    "tokenAddress"
+   ],
+   "get_tokens": [
+    "chainId",
+    "tokenAddresses"
+   ],
+   "git_blame": [
+    "end_line",
+    "file",
+    "start_line"
+   ],
+   "git_branches": [],
+   "git_contributors": [
+    "file"
+   ],
+   "git_diff": [
+    "file",
+    "ref",
+    "ref2",
+    "staged",
+    "stat"
+   ],
+   "git_hooks": [
+    "action",
+    "checks"
+   ],
+   "git_log": [
+    "author",
+    "count",
+    "file",
+    "since",
+    "with_files"
+   ],
+   "git_show": [
+    "ref",
+    "stat"
+   ],
+   "git_status": [],
+   "guide_lookup": [
+    "task"
+   ],
+   "health_check": [],
+   "iac_analyze": [
+    "directory"
+   ],
+   "impact": [
+    "depth",
+    "file",
+    "include_weak",
+    "line",
+    "max_tokens",
+    "symbol"
+   ],
+   "initial_instructions": [],
+   "inject_security_pattern": [],
+   "insert_after_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "insert_before_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "latest_token_profiles": [],
+   "library_map": [
+    "library"
+   ],
+   "list_dir": [
+    "max_answer_chars",
+    "recursive",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "list_memories": [
+    "topic"
+   ],
+   "list_patterns": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "limit",
+    "offset"
+   ],
+   "list_repos": [
+    "filter"
+   ],
+   "load_skill": [
+    "max_chars",
+    "name"
+   ],
+   "log_dispatch": [
+    "agent",
+    "context_refs",
+    "cost",
+    "duration_s",
+    "gates_passed",
+    "model",
+    "patterns",
+    "provider",
+    "rework",
+    "served_model",
+    "status",
+    "steps",
+    "task"
+   ],
+   "lookup_symbol": [
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "mcp_map": [],
+   "model_catalog": [
+    "capability",
+    "limit",
+    "max_price_in",
+    "min_ctx",
+    "provider",
+    "query",
+    "tier",
+    "vision"
+   ],
+   "model_lane": [
+    "force_provider",
+    "task"
+   ],
+   "monorepo_analyze": [],
+   "notebook_analyze": [
+    "action",
+    "file"
+   ],
+   "observe": [
+    "kind",
+    "source",
+    "tags",
+    "text"
+   ],
+   "onboarding": [],
+   "open_dashboard": [],
+   "overview": [
+    "path"
+   ],
+   "perf_profile": [],
+   "pick_model": [
+    "capability",
+    "limit",
+    "min_ctx",
+    "prefer_proven",
+    "vision"
+   ],
+   "provider_catalog": [],
+   "query-docs": [
+    "language",
+    "libraryId",
+    "query"
+   ],
+   "query_bounties": [
+    "limit",
+    "min_usd",
+    "source",
+    "text"
+   ],
+   "query_codebase": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_snippet_type",
+    "filter_verdict",
+    "json",
+    "library_id",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_coding_lessons": [
+    "include_good",
+    "language",
+    "limit",
+    "query",
+    "rule"
+   ],
+   "query_cross_chain": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_crypto_skills": [
+    "keyword",
+    "limit",
+    "source_repo"
+   ],
+   "query_exploits": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_grants": [
+    "kind",
+    "limit",
+    "min_usd",
+    "text"
+   ],
+   "query_graph": [
+    "max_rows",
+    "project",
+    "query"
+   ],
+   "query_live_feed": [
+    "kind",
+    "limit",
+    "source",
+    "text"
+   ],
+   "query_protocol_design": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_rugbrain": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "query_security_context": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "format",
+    "json",
+    "max_chars",
+    "offset",
+    "query",
+    "top_k"
+   ],
+   "query_threat_feed": [],
+   "read_file": [
+    "end_line",
+    "max_answer_chars",
+    "relative_path",
+    "start_line"
+   ],
+   "read_files": [
+    "end_line",
+    "max_lines_per_file",
+    "path",
+    "paths",
+    "start_line"
+   ],
+   "read_memory": [
+    "memory_name"
+   ],
+   "recall": [
+    "file",
+    "limit",
+    "max_tokens",
+    "query",
+    "symbol"
+   ],
+   "remember": [
+    "anchors",
+    "note"
+   ],
+   "rename_memory": [
+    "new_name",
+    "old_name"
+   ],
+   "rename_symbol": [
+    "name_path",
+    "new_name",
+    "relative_path"
+   ],
+   "replace_content": [
+    "allow_multiple_occurrences",
+    "mode",
+    "needle",
+    "relative_path",
+    "repl"
+   ],
+   "replace_in_files": [
+    "dry_run",
+    "expected_count",
+    "max_answer_chars",
+    "mode",
+    "needle",
+    "occurrence_ids",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "repl"
+   ],
+   "replace_symbol_body": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "repo_map": [
+    "library"
+   ],
+   "repo_map_libraries": [],
+   "resolve-library-id": [
+    "libraryName",
+    "query"
+   ],
+   "resolve_library": [
+    "json",
+    "query"
+   ],
+   "review_code_combined": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_codex": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_gemini": [
+    "options",
+    "prompt"
+   ],
+   "review_diff": [
+    "corpus_links",
+    "diff",
+    "max_findings"
+   ],
+   "rmi_architecture": [
+    "aspect",
+    "project"
+   ],
+   "rmi_find_similar": [
+    "function_name",
+    "limit",
+    "project"
+   ],
+   "rmi_gotchas": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_impact": [
+    "depth",
+    "function_name",
+    "project"
+   ],
+   "rmi_known_good": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_playbook": [
+    "subsystem"
+   ],
+   "rmi_refresh": [
+    "project"
+   ],
+   "rmi_search": [
+    "chain",
+    "code_type",
+    "ecosystem",
+    "limit",
+    "project",
+    "query"
+   ],
+   "rmi_status": [
+    "json"
+   ],
+   "rmi_tags": [
+    "action",
+    "file_path",
+    "function_name",
+    "tag_name",
+    "tag_value"
+   ],
+   "rmi_trace": [
+    "depth",
+    "direction",
+    "function_name",
+    "project"
+   ],
+   "route_agent": [
+    "query",
+    "top_k"
+   ],
+   "route_skills": [
+    "domain",
+    "loadable_only",
+    "query",
+    "top_k"
+   ],
+   "routing_status": [],
+   "safe_delete_symbol": [
+    "name_path_pattern",
+    "relative_path"
+   ],
+   "scaffold": [
+    "action",
+    "name",
+    "target_file",
+    "template"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_code": [
+    "case_sensitive",
+    "context_lines",
+    "directory",
+    "file_glob",
+    "is_regex",
+    "max_results",
+    "pattern",
+    "whole_word"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_for_pattern": [
+    "context_lines_after",
+    "context_lines_before",
+    "max_answer_chars",
+    "multiline",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "restrict_search_to_code_files",
+    "skip_ignored_files",
+    "substring_pattern"
+   ],
+   "search_observations": [
+    "kind",
+    "limit",
+    "min_importance",
+    "query",
+    "source",
+    "tag"
+   ],
+   "search_pairs": [
+    "query"
+   ],
+   "search_reference": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_source_type",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "prefer_source",
+    "query"
+   ],
+   "search_signature": [
+    "filter",
+    "query",
+    "verifiedOnly"
+   ],
+   "search_structure": [
+    "language",
+    "limit",
+    "pattern",
+    "query"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_text": [
+    "library",
+    "limit",
+    "query",
+    "regex"
+   ],
+   "security_scan": [
+    "address",
+    "foundry_build_info_directory",
+    "foundry_ignore_compile",
+    "library",
+    "path",
+    "timeout",
+    "tool",
+    "top"
+   ],
+   "security_tools": [],
+   "semantic_search": [
+    "file_glob",
+    "max_results",
+    "query"
+   ],
+   "skills_for": [
+    "category",
+    "limit",
+    "max_chars",
+    "model_ctx",
+    "task"
+   ],
+   "skills_search": [
+    "domain",
+    "limit",
+    "loadable_only",
+    "query"
+   ],
+   "tech_debt": [
+    "limit",
+    "repo"
+   ],
+   "test_coverage": [
+    "action",
+    "file"
+   ],
+   "threat_intel": [
+    "address",
+    "chain"
+   ],
+   "timeline": [
+    "kind",
+    "limit",
+    "min_importance",
+    "source",
+    "tag"
+   ],
+   "top_boosted_tokens": [],
+   "wallet_profile": [
+    "address",
+    "max_hops"
+   ],
+   "write_memory": [
+    "content",
+    "max_chars",
+    "memory_name"
+   ]
+  },
+  "context7": {
+   "query-docs": [
+    "language",
+    "libraryId",
+    "query"
+   ],
+   "resolve-library-id": [
+    "libraryName",
+    "query"
+   ]
+  },
+  "deepwiki": {
+   "ask_wiki_question": [
+    "question",
+    "repoName"
+   ],
+   "read_wiki_contents": [
+    "repoName"
+   ],
+   "read_wiki_structure": [
+    "repoName"
+   ]
+  },
+  "docs-mcp": {
+   "fetch_url": [
+    "followRedirects",
+    "url"
+   ],
+   "find_version": [
+    "library",
+    "targetVersion"
+   ],
+   "list_libraries": [],
+   "list_pages": [
+    "contains",
+    "library",
+    "limit",
+    "offset",
+    "version"
+   ],
+   "read_page": [
+    "library",
+    "maxChars",
+    "pathOrUrl",
+    "startChunk",
+    "version"
+   ],
+   "search_docs": [
+    "library",
+    "limit",
+    "query",
+    "version"
+   ]
+  },
+  "metamcp-audit": {
+   "activate_project": [
+    "project",
+    "session_id"
+   ],
+   "agent_card": [
+    "agent_id"
+   ],
+   "agent_payload": [
+    "agent_id",
+    "task"
+   ],
+   "answer_question": [
+    "budget_chars",
+    "json",
+    "limit",
+    "question"
+   ],
+   "call_graph": [
+    "direction",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "code_copies": [
+    "content_hash",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "create_text_file": [
+    "content",
+    "relative_path"
+   ],
+   "danger_propagation": [
+    "limit",
+    "min_sites",
+    "symbol"
+   ],
+   "dataset_stats": [],
+   "decode_signature": [
+    "filter",
+    "hashes",
+    "verifiedOnly"
+   ],
+   "delete_memory": [
+    "memory_name"
+   ],
+   "delete_pattern": [
+    "pattern_id"
+   ],
+   "dispatch_brief": [
+    "allow_tools",
+    "compact",
+    "count",
+    "deny_tools",
+    "facets",
+    "fleet",
+    "model",
+    "provider",
+    "reference",
+    "skills",
+    "task",
+    "tools"
+   ],
+   "dispatch_stats": [
+    "days"
+   ],
+   "edit_memory": [
+    "allow_multiple_occurrences",
+    "memory_name",
+    "mode",
+    "needle",
+    "repl"
+   ],
+   "estimate_costs": [
+    "days",
+    "path"
+   ],
+   "execute_shell_command": [
+    "capture_stderr",
+    "command",
+    "cwd",
+    "max_answer_chars"
+   ],
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "file_context": [
+    "budget_tokens",
+    "file_path",
+    "library",
+    "limit",
+    "max_chars"
+   ],
+   "find_declaration": [
+    "containing_symbol_name_path",
+    "include_body",
+    "include_info",
+    "regex",
+    "relative_path"
+   ],
+   "find_file": [
+    "file_mask",
+    "relative_path"
+   ],
+   "find_implementations": [
+    "exclude_kinds",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_references": [
+    "limit",
+    "repo",
+    "symbol"
+   ],
+   "find_referencing_symbols": [
+    "exclude_kinds",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_symbol": [
+    "depth",
+    "exclude_kinds",
+    "include_body",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "max_matches",
+    "name_path_pattern",
+    "relative_path",
+    "substring_matching"
+   ],
+   "get_code_snippet": [
+    "include_neighbors",
+    "project",
+    "qualified_name"
+   ],
+   "get_current_config": [],
+   "get_diagnostics_for_file": [
+    "end_line",
+    "max_answer_chars",
+    "min_severity",
+    "relative_path",
+    "start_line"
+   ],
+   "get_health": [],
+   "get_review_status": [
+    "reviewId"
+   ],
+   "get_symbols_overview": [
+    "depth",
+    "max_answer_chars",
+    "relative_path"
+   ],
+   "guide_lookup": [
+    "task"
+   ],
+   "health_check": [],
+   "initial_instructions": [],
+   "inject_security_pattern": [],
+   "insert_after_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "insert_before_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "library_map": [
+    "library"
+   ],
+   "list_dir": [
+    "max_answer_chars",
+    "recursive",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "list_memories": [
+    "topic"
+   ],
+   "list_patterns": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "limit",
+    "offset"
+   ],
+   "list_repos": [
+    "filter"
+   ],
+   "load_skill": [
+    "max_chars",
+    "name"
+   ],
+   "log_dispatch": [
+    "agent",
+    "context_refs",
+    "cost",
+    "duration_s",
+    "gates_passed",
+    "model",
+    "patterns",
+    "provider",
+    "rework",
+    "served_model",
+    "status",
+    "steps",
+    "task"
+   ],
+   "lookup_address": [
+    "address"
+   ],
+   "lookup_symbol": [
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "mcp_map": [],
+   "model_catalog": [
+    "capability",
+    "limit",
+    "max_price_in",
+    "min_ctx",
+    "provider",
+    "query",
+    "tier",
+    "vision"
+   ],
+   "model_lane": [
+    "force_provider",
+    "task"
+   ],
+   "observe": [
+    "kind",
+    "source",
+    "tags",
+    "text"
+   ],
+   "onboarding": [],
+   "open_dashboard": [],
+   "pick_model": [
+    "capability",
+    "limit",
+    "min_ctx",
+    "prefer_proven",
+    "vision"
+   ],
+   "provider_catalog": [],
+   "query_bounties": [
+    "limit",
+    "min_usd",
+    "source",
+    "text"
+   ],
+   "query_codebase": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_snippet_type",
+    "filter_verdict",
+    "json",
+    "library_id",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_coding_lessons": [
+    "include_good",
+    "language",
+    "limit",
+    "query",
+    "rule"
+   ],
+   "query_cross_chain": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_crypto_skills": [
+    "keyword",
+    "limit",
+    "source_repo"
+   ],
+   "query_exploits": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_grants": [
+    "kind",
+    "limit",
+    "min_usd",
+    "text"
+   ],
+   "query_graph": [
+    "max_rows",
+    "project",
+    "query"
+   ],
+   "query_live_feed": [
+    "kind",
+    "limit",
+    "source",
+    "text"
+   ],
+   "query_protocol_design": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_rugbrain": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "query_security_context": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "format",
+    "json",
+    "max_chars",
+    "offset",
+    "query",
+    "top_k"
+   ],
+   "query_threat_feed": [],
+   "quick_check": [
+    "address",
+    "chain"
+   ],
+   "read_file": [
+    "end_line",
+    "max_answer_chars",
+    "relative_path",
+    "start_line"
+   ],
+   "read_memory": [
+    "memory_name"
+   ],
+   "rename_memory": [
+    "new_name",
+    "old_name"
+   ],
+   "rename_symbol": [
+    "name_path",
+    "new_name",
+    "relative_path"
+   ],
+   "replace_content": [
+    "allow_multiple_occurrences",
+    "mode",
+    "needle",
+    "relative_path",
+    "repl"
+   ],
+   "replace_in_files": [
+    "dry_run",
+    "expected_count",
+    "max_answer_chars",
+    "mode",
+    "needle",
+    "occurrence_ids",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "repl"
+   ],
+   "replace_symbol_body": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "repo_map": [
+    "library"
+   ],
+   "repo_map_libraries": [],
+   "resolve_library": [
+    "json",
+    "query"
+   ],
+   "review_code_combined": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_codex": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_gemini": [
+    "options",
+    "prompt"
+   ],
+   "review_diff": [
+    "corpus_links",
+    "diff",
+    "max_findings"
+   ],
+   "rmi_architecture": [
+    "aspect",
+    "project"
+   ],
+   "rmi_find_similar": [
+    "function_name",
+    "limit",
+    "project"
+   ],
+   "rmi_gotchas": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_impact": [
+    "depth",
+    "function_name",
+    "project"
+   ],
+   "rmi_known_good": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_playbook": [
+    "subsystem"
+   ],
+   "rmi_refresh": [
+    "project"
+   ],
+   "rmi_search": [
+    "chain",
+    "code_type",
+    "ecosystem",
+    "limit",
+    "project",
+    "query"
+   ],
+   "rmi_status": [
+    "json"
+   ],
+   "rmi_tags": [
+    "action",
+    "file_path",
+    "function_name",
+    "tag_name",
+    "tag_value"
+   ],
+   "rmi_trace": [
+    "depth",
+    "direction",
+    "function_name",
+    "project"
+   ],
+   "route_agent": [
+    "query",
+    "top_k"
+   ],
+   "route_skills": [
+    "domain",
+    "loadable_only",
+    "query",
+    "top_k"
+   ],
+   "routing_status": [],
+   "safe_delete_symbol": [
+    "name_path_pattern",
+    "relative_path"
+   ],
+   "scan_token": [
+    "address",
+    "chain"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_code": [
+    "context",
+    "file_pattern",
+    "limit",
+    "mode",
+    "path_filter",
+    "pattern",
+    "project",
+    "regex"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_for_pattern": [
+    "context_lines_after",
+    "context_lines_before",
+    "max_answer_chars",
+    "multiline",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "restrict_search_to_code_files",
+    "skip_ignored_files",
+    "substring_pattern"
+   ],
+   "search_labels": [
+    "limit",
+    "query"
+   ],
+   "search_observations": [
+    "kind",
+    "limit",
+    "min_importance",
+    "query",
+    "source",
+    "tag"
+   ],
+   "search_reference": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_source_type",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "prefer_source",
+    "query"
+   ],
+   "search_signature": [
+    "filter",
+    "query",
+    "verifiedOnly"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_text": [
+    "library",
+    "limit",
+    "query",
+    "regex"
+   ],
+   "security_scan": [
+    "address",
+    "foundry_build_info_directory",
+    "foundry_ignore_compile",
+    "library",
+    "path",
+    "timeout",
+    "tool",
+    "top"
+   ],
+   "security_tools": [],
+   "skills_for": [
+    "category",
+    "limit",
+    "max_chars",
+    "model_ctx",
+    "task"
+   ],
+   "skills_search": [
+    "domain",
+    "limit",
+    "loadable_only",
+    "query"
+   ],
+   "tech_debt": [
+    "limit",
+    "repo"
+   ],
+   "threat_intel": [
+    "address",
+    "chain"
+   ],
+   "timeline": [
+    "kind",
+    "limit",
+    "min_importance",
+    "source",
+    "tag"
+   ],
+   "wallet_profile": [
+    "address",
+    "max_hops"
+   ],
+   "write_memory": [
+    "content",
+    "max_chars",
+    "memory_name"
+   ]
+  },
+  "metamcp-code": {
+   "activate_project": [
+    "project",
+    "session_id"
+   ],
+   "agent_card": [
+    "agent_id"
+   ],
+   "agent_payload": [
+    "agent_id",
+    "task"
+   ],
+   "analyze_file": [
+    "path"
+   ],
+   "answer_question": [
+    "budget_chars",
+    "json",
+    "limit",
+    "question"
+   ],
+   "api_contracts": [],
+   "architecture_check": [
+    "check_type"
+   ],
+   "branch_compare": [
+    "base",
+    "compare"
+   ],
+   "call_graph": [
+    "direction",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "change_impact": [
+    "action",
+    "files",
+    "ref",
+    "use_git_diff"
+   ],
+   "changes": [
+    "limit",
+    "max_tokens",
+    "ref"
+   ],
+   "cicd_analyze": [],
+   "code_copies": [
+    "content_hash",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "code_docs": [
+    "action",
+    "file",
+    "symbol"
+   ],
+   "code_metrics": [
+    "language",
+    "path",
+    "sort_by"
+   ],
+   "codebase_map": [],
+   "create_text_file": [
+    "content",
+    "relative_path"
+   ],
+   "danger_propagation": [
+    "limit",
+    "min_sites",
+    "symbol"
+   ],
+   "db_schema": [
+    "directory"
+   ],
+   "decode_signature": [
+    "filter",
+    "hashes",
+    "verifiedOnly"
+   ],
+   "delete_memory": [
+    "memory_name"
+   ],
+   "delete_pattern": [
+    "pattern_id"
+   ],
+   "dep_vuln_scan": [],
+   "dependency_graph": [
+    "directory",
+    "file",
+    "language",
+    "max_files"
+   ],
+   "dispatch_brief": [
+    "allow_tools",
+    "compact",
+    "count",
+    "deny_tools",
+    "facets",
+    "fleet",
+    "model",
+    "provider",
+    "reference",
+    "skills",
+    "task",
+    "tools"
+   ],
+   "dispatch_stats": [
+    "days"
+   ],
+   "edit_memory": [
+    "allow_multiple_occurrences",
+    "memory_name",
+    "mode",
+    "needle",
+    "repl"
+   ],
+   "estimate_costs": [
+    "days",
+    "path"
+   ],
+   "execute_shell_command": [
+    "capture_stderr",
+    "command",
+    "cwd",
+    "max_answer_chars"
+   ],
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "file_context": [
+    "budget_tokens",
+    "file_path",
+    "library",
+    "limit",
+    "max_chars"
+   ],
+   "file_tree": [
+    "directory",
+    "glob",
+    "max_depth",
+    "show_details",
+    "type"
+   ],
+   "find_dead_code": [
+    "directory",
+    "file_glob"
+   ],
+   "find_debug_logs": [
+    "directory",
+    "file_glob"
+   ],
+   "find_declaration": [
+    "containing_symbol_name_path",
+    "include_body",
+    "include_info",
+    "regex",
+    "relative_path"
+   ],
+   "find_duplicates": [
+    "directory",
+    "file_glob",
+    "min_length",
+    "pattern"
+   ],
+   "find_empty_catches": [
+    "directory",
+    "file_glob"
+   ],
+   "find_file": [
+    "file_mask",
+    "relative_path"
+   ],
+   "find_implementations": [
+    "exclude_kinds",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_large_files": [
+    "directory",
+    "file_glob",
+    "threshold"
+   ],
+   "find_long_functions": [
+    "directory",
+    "file_glob",
+    "threshold"
+   ],
+   "find_references": [
+    "limit",
+    "repo",
+    "symbol"
+   ],
+   "find_referencing_symbols": [
+    "exclude_kinds",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_secrets": [
+    "directory",
+    "file_glob"
+   ],
+   "find_symbol": [
+    "depth",
+    "exclude_kinds",
+    "include_body",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "max_matches",
+    "name_path_pattern",
+    "relative_path",
+    "substring_matching"
+   ],
+   "find_todos": [
+    "directory",
+    "file_glob"
+   ],
+   "forget": [
+    "noteId"
+   ],
+   "get_code_snippet": [
+    "include_neighbors",
+    "project",
+    "qualified_name"
+   ],
+   "get_context": [
+    "file",
+    "include",
+    "line",
+    "max_tokens",
+    "symbol"
+   ],
+   "get_current_config": [],
+   "get_diagnostics_for_file": [
+    "end_line",
+    "max_answer_chars",
+    "min_severity",
+    "relative_path",
+    "start_line"
+   ],
+   "get_health": [],
+   "get_pair": [
+    "chainId",
+    "pairId"
+   ],
+   "get_review_status": [
+    "reviewId"
+   ],
+   "get_symbols_overview": [
+    "depth",
+    "max_answer_chars",
+    "relative_path"
+   ],
+   "get_token_pools": [
+    "chainId",
+    "tokenAddress"
+   ],
+   "get_tokens": [
+    "chainId",
+    "tokenAddresses"
+   ],
+   "git_blame": [
+    "end_line",
+    "file",
+    "start_line"
+   ],
+   "git_branches": [],
+   "git_contributors": [
+    "file"
+   ],
+   "git_diff": [
+    "file",
+    "ref",
+    "ref2",
+    "staged",
+    "stat"
+   ],
+   "git_hooks": [
+    "action",
+    "checks"
+   ],
+   "git_log": [
+    "author",
+    "count",
+    "file",
+    "since",
+    "with_files"
+   ],
+   "git_show": [
+    "ref",
+    "stat"
+   ],
+   "git_status": [],
+   "guide_lookup": [
+    "task"
+   ],
+   "health_check": [],
+   "iac_analyze": [
+    "directory"
+   ],
+   "impact": [
+    "depth",
+    "file",
+    "include_weak",
+    "line",
+    "max_tokens",
+    "symbol"
+   ],
+   "initial_instructions": [],
+   "inject_security_pattern": [],
+   "insert_after_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "insert_before_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "latest_token_profiles": [],
+   "library_map": [
+    "library"
+   ],
+   "list_dir": [
+    "max_answer_chars",
+    "recursive",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "list_memories": [
+    "topic"
+   ],
+   "list_patterns": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "limit",
+    "offset"
+   ],
+   "list_repos": [
+    "filter"
+   ],
+   "load_skill": [
+    "max_chars",
+    "name"
+   ],
+   "log_dispatch": [
+    "agent",
+    "context_refs",
+    "cost",
+    "duration_s",
+    "gates_passed",
+    "model",
+    "patterns",
+    "provider",
+    "rework",
+    "served_model",
+    "status",
+    "steps",
+    "task"
+   ],
+   "lookup_symbol": [
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "mcp_map": [],
+   "model_catalog": [
+    "capability",
+    "limit",
+    "max_price_in",
+    "min_ctx",
+    "provider",
+    "query",
+    "tier",
+    "vision"
+   ],
+   "model_lane": [
+    "force_provider",
+    "task"
+   ],
+   "monorepo_analyze": [],
+   "notebook_analyze": [
+    "action",
+    "file"
+   ],
+   "observe": [
+    "kind",
+    "source",
+    "tags",
+    "text"
+   ],
+   "onboarding": [],
+   "open_dashboard": [],
+   "overview": [
+    "path"
+   ],
+   "perf_profile": [],
+   "pick_model": [
+    "capability",
+    "limit",
+    "min_ctx",
+    "prefer_proven",
+    "vision"
+   ],
+   "provider_catalog": [],
+   "query-docs": [
+    "language",
+    "libraryId",
+    "query"
+   ],
+   "query_bounties": [
+    "limit",
+    "min_usd",
+    "source",
+    "text"
+   ],
+   "query_codebase": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_snippet_type",
+    "filter_verdict",
+    "json",
+    "library_id",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_coding_lessons": [
+    "include_good",
+    "language",
+    "limit",
+    "query",
+    "rule"
+   ],
+   "query_cross_chain": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_crypto_skills": [
+    "keyword",
+    "limit",
+    "source_repo"
+   ],
+   "query_exploits": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_grants": [
+    "kind",
+    "limit",
+    "min_usd",
+    "text"
+   ],
+   "query_graph": [
+    "max_rows",
+    "project",
+    "query"
+   ],
+   "query_live_feed": [
+    "kind",
+    "limit",
+    "source",
+    "text"
+   ],
+   "query_protocol_design": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_rugbrain": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "query_security_context": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "format",
+    "json",
+    "max_chars",
+    "offset",
+    "query",
+    "top_k"
+   ],
+   "query_threat_feed": [],
+   "read_file": [
+    "end_line",
+    "max_answer_chars",
+    "relative_path",
+    "start_line"
+   ],
+   "read_files": [
+    "end_line",
+    "max_lines_per_file",
+    "path",
+    "paths",
+    "start_line"
+   ],
+   "read_memory": [
+    "memory_name"
+   ],
+   "recall": [
+    "file",
+    "limit",
+    "max_tokens",
+    "query",
+    "symbol"
+   ],
+   "remember": [
+    "anchors",
+    "note"
+   ],
+   "rename_memory": [
+    "new_name",
+    "old_name"
+   ],
+   "rename_symbol": [
+    "name_path",
+    "new_name",
+    "relative_path"
+   ],
+   "replace_content": [
+    "allow_multiple_occurrences",
+    "mode",
+    "needle",
+    "relative_path",
+    "repl"
+   ],
+   "replace_in_files": [
+    "dry_run",
+    "expected_count",
+    "max_answer_chars",
+    "mode",
+    "needle",
+    "occurrence_ids",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "repl"
+   ],
+   "replace_symbol_body": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "repo_map": [
+    "library"
+   ],
+   "repo_map_libraries": [],
+   "resolve-library-id": [
+    "libraryName",
+    "query"
+   ],
+   "resolve_library": [
+    "json",
+    "query"
+   ],
+   "review_code_combined": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_codex": [
+    "options",
+    "prompt"
+   ],
+   "review_code_with_gemini": [
+    "options",
+    "prompt"
+   ],
+   "review_diff": [
+    "corpus_links",
+    "diff",
+    "max_findings"
+   ],
+   "rmi_architecture": [
+    "aspect",
+    "project"
+   ],
+   "rmi_find_similar": [
+    "function_name",
+    "limit",
+    "project"
+   ],
+   "rmi_gotchas": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_impact": [
+    "depth",
+    "function_name",
+    "project"
+   ],
+   "rmi_known_good": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_playbook": [
+    "subsystem"
+   ],
+   "rmi_refresh": [
+    "project"
+   ],
+   "rmi_search": [
+    "chain",
+    "code_type",
+    "ecosystem",
+    "limit",
+    "project",
+    "query"
+   ],
+   "rmi_status": [
+    "json"
+   ],
+   "rmi_tags": [
+    "action",
+    "file_path",
+    "function_name",
+    "tag_name",
+    "tag_value"
+   ],
+   "rmi_trace": [
+    "depth",
+    "direction",
+    "function_name",
+    "project"
+   ],
+   "route_agent": [
+    "query",
+    "top_k"
+   ],
+   "route_skills": [
+    "domain",
+    "loadable_only",
+    "query",
+    "top_k"
+   ],
+   "routing_status": [],
+   "safe_delete_symbol": [
+    "name_path_pattern",
+    "relative_path"
+   ],
+   "scaffold": [
+    "action",
+    "name",
+    "target_file",
+    "template"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_code": [
+    "case_sensitive",
+    "context_lines",
+    "directory",
+    "file_glob",
+    "is_regex",
+    "max_results",
+    "pattern",
+    "whole_word"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_for_pattern": [
+    "context_lines_after",
+    "context_lines_before",
+    "max_answer_chars",
+    "multiline",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "restrict_search_to_code_files",
+    "skip_ignored_files",
+    "substring_pattern"
+   ],
+   "search_observations": [
+    "kind",
+    "limit",
+    "min_importance",
+    "query",
+    "source",
+    "tag"
+   ],
+   "search_pairs": [
+    "query"
+   ],
+   "search_reference": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_source_type",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "prefer_source",
+    "query"
+   ],
+   "search_signature": [
+    "filter",
+    "query",
+    "verifiedOnly"
+   ],
+   "search_structure": [
+    "language",
+    "limit",
+    "pattern",
+    "query"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_text": [
+    "library",
+    "limit",
+    "query",
+    "regex"
+   ],
+   "security_scan": [
+    "address",
+    "foundry_build_info_directory",
+    "foundry_ignore_compile",
+    "library",
+    "path",
+    "timeout",
+    "tool",
+    "top"
+   ],
+   "security_tools": [],
+   "semantic_search": [
+    "file_glob",
+    "max_results",
+    "query"
+   ],
+   "skills_for": [
+    "category",
+    "limit",
+    "max_chars",
+    "model_ctx",
+    "task"
+   ],
+   "skills_search": [
+    "domain",
+    "limit",
+    "loadable_only",
+    "query"
+   ],
+   "tech_debt": [
+    "limit",
+    "repo"
+   ],
+   "test_coverage": [
+    "action",
+    "file"
+   ],
+   "threat_intel": [
+    "address",
+    "chain"
+   ],
+   "timeline": [
+    "kind",
+    "limit",
+    "min_importance",
+    "source",
+    "tag"
+   ],
+   "top_boosted_tokens": [],
+   "wallet_profile": [
+    "address",
+    "max_hops"
+   ],
+   "write_memory": [
+    "content",
+    "max_chars",
+    "memory_name"
+   ]
+  },
+  "metamcp-ops": {
+   "activate_project": [
+    "project",
+    "session_id"
+   ],
+   "agent_card": [
+    "agent_id"
+   ],
+   "agent_payload": [
+    "agent_id",
+    "task"
+   ],
+   "answer_question": [
+    "budget_chars",
+    "json",
+    "limit",
+    "question"
+   ],
+   "call_graph": [
+    "direction",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "code_copies": [
+    "content_hash",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "connect": [],
+   "create_text_file": [
+    "content",
+    "relative_path"
+   ],
+   "danger_propagation": [
+    "limit",
+    "min_sites",
+    "symbol"
+   ],
+   "delete_memory": [
+    "memory_name"
+   ],
+   "delete_pattern": [
+    "pattern_id"
+   ],
+   "disconnect": [],
+   "dispatch_brief": [
+    "allow_tools",
+    "compact",
+    "count",
+    "deny_tools",
+    "facets",
+    "fleet",
+    "model",
+    "provider",
+    "reference",
+    "skills",
+    "task",
+    "tools"
+   ],
+   "dispatch_stats": [
+    "days"
+   ],
+   "edit_memory": [
+    "allow_multiple_occurrences",
+    "memory_name",
+    "mode",
+    "needle",
+    "repl"
+   ],
+   "estimate_costs": [
+    "days",
+    "path"
+   ],
+   "execute_shell_command": [
+    "capture_stderr",
+    "command",
+    "cwd",
+    "max_answer_chars"
+   ],
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "file_context": [
+    "budget_tokens",
+    "file_path",
+    "library",
+    "limit",
+    "max_chars"
+   ],
+   "find_declaration": [
+    "containing_symbol_name_path",
+    "include_body",
+    "include_info",
+    "regex",
+    "relative_path"
+   ],
+   "find_file": [
+    "file_mask",
+    "relative_path"
+   ],
+   "find_implementations": [
+    "exclude_kinds",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_references": [
+    "limit",
+    "repo",
+    "symbol"
+   ],
+   "find_referencing_symbols": [
+    "exclude_kinds",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_symbol": [
+    "depth",
+    "exclude_kinds",
+    "include_body",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "max_matches",
+    "name_path_pattern",
+    "relative_path",
+    "substring_matching"
+   ],
+   "get_balance": [
+    "account",
+    "chains"
+   ],
+   "get_code_snippet": [
+    "include_neighbors",
+    "project",
+    "qualified_name"
+   ],
+   "get_current_config": [],
+   "get_diagnostics_for_file": [
+    "end_line",
+    "max_answer_chars",
+    "min_severity",
+    "relative_path",
+    "start_line"
+   ],
+   "get_health": [],
+   "get_performance_score": [
+    "device",
+    "url"
+   ],
+   "get_symbols_overview": [
+    "depth",
+    "max_answer_chars",
+    "relative_path"
+   ],
+   "guide_lookup": [
+    "task"
+   ],
+   "health_check": [],
+   "initial_instructions": [],
+   "inject_security_pattern": [],
+   "insert_after_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "insert_before_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "library_map": [
+    "library"
+   ],
+   "list_dir": [
+    "max_answer_chars",
+    "recursive",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "list_memories": [
+    "topic"
+   ],
+   "list_patterns": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "limit",
+    "offset"
+   ],
+   "list_repos": [
+    "filter"
+   ],
+   "load_skill": [
+    "max_chars",
+    "name"
+   ],
+   "log_dispatch": [
+    "agent",
+    "context_refs",
+    "cost",
+    "duration_s",
+    "gates_passed",
+    "model",
+    "patterns",
+    "provider",
+    "rework",
+    "served_model",
+    "status",
+    "steps",
+    "task"
+   ],
+   "lookup_symbol": [
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "mcp_map": [],
+   "model_catalog": [
+    "capability",
+    "limit",
+    "max_price_in",
+    "min_ctx",
+    "provider",
+    "query",
+    "tier",
+    "vision"
+   ],
+   "model_lane": [
+    "force_provider",
+    "task"
+   ],
+   "observe": [
+    "kind",
+    "source",
+    "tags",
+    "text"
+   ],
+   "onboarding": [],
+   "open_dashboard": [],
+   "personal_sign": [
+    "address",
+    "message"
+   ],
+   "pick_model": [
+    "capability",
+    "limit",
+    "min_ctx",
+    "prefer_proven",
+    "vision"
+   ],
+   "provider_catalog": [],
+   "query_bounties": [
+    "limit",
+    "min_usd",
+    "source",
+    "text"
+   ],
+   "query_codebase": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_snippet_type",
+    "filter_verdict",
+    "json",
+    "library_id",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_coding_lessons": [
+    "include_good",
+    "language",
+    "limit",
+    "query",
+    "rule"
+   ],
+   "query_cross_chain": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_crypto_skills": [
+    "keyword",
+    "limit",
+    "source_repo"
+   ],
+   "query_exploits": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_grants": [
+    "kind",
+    "limit",
+    "min_usd",
+    "text"
+   ],
+   "query_graph": [
+    "max_rows",
+    "project",
+    "query"
+   ],
+   "query_live_feed": [
+    "kind",
+    "limit",
+    "source",
+    "text"
+   ],
+   "query_protocol_design": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_rugbrain": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "query_security_context": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "format",
+    "json",
+    "max_chars",
+    "offset",
+    "query",
+    "top_k"
+   ],
+   "query_threat_feed": [],
+   "read_file": [
+    "end_line",
+    "max_answer_chars",
+    "relative_path",
+    "start_line"
+   ],
+   "read_memory": [
+    "memory_name"
+   ],
+   "rename_memory": [
+    "new_name",
+    "old_name"
+   ],
+   "rename_symbol": [
+    "name_path",
+    "new_name",
+    "relative_path"
+   ],
+   "replace_content": [
+    "allow_multiple_occurrences",
+    "mode",
+    "needle",
+    "relative_path",
+    "repl"
+   ],
+   "replace_in_files": [
+    "dry_run",
+    "expected_count",
+    "max_answer_chars",
+    "mode",
+    "needle",
+    "occurrence_ids",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "repl"
+   ],
+   "replace_symbol_body": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "repo_map": [
+    "library"
+   ],
+   "repo_map_libraries": [],
+   "resolve_library": [
+    "json",
+    "query"
+   ],
+   "review_diff": [
+    "corpus_links",
+    "diff",
+    "max_findings"
+   ],
+   "rmi_architecture": [
+    "aspect",
+    "project"
+   ],
+   "rmi_find_similar": [
+    "function_name",
+    "limit",
+    "project"
+   ],
+   "rmi_gotchas": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_impact": [
+    "depth",
+    "function_name",
+    "project"
+   ],
+   "rmi_known_good": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_playbook": [
+    "subsystem"
+   ],
+   "rmi_refresh": [
+    "project"
+   ],
+   "rmi_search": [
+    "chain",
+    "code_type",
+    "ecosystem",
+    "limit",
+    "project",
+    "query"
+   ],
+   "rmi_status": [
+    "json"
+   ],
+   "rmi_tags": [
+    "action",
+    "file_path",
+    "function_name",
+    "tag_name",
+    "tag_value"
+   ],
+   "rmi_trace": [
+    "depth",
+    "direction",
+    "function_name",
+    "project"
+   ],
+   "route_agent": [
+    "query",
+    "top_k"
+   ],
+   "route_skills": [
+    "domain",
+    "loadable_only",
+    "query",
+    "top_k"
+   ],
+   "routing_status": [],
+   "run_audit": [
+    "categories",
+    "device",
+    "throttling",
+    "url"
+   ],
+   "safe_delete_symbol": [
+    "name_path_pattern",
+    "relative_path"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_code": [
+    "context",
+    "file_pattern",
+    "limit",
+    "mode",
+    "path_filter",
+    "pattern",
+    "project",
+    "regex"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_for_pattern": [
+    "context_lines_after",
+    "context_lines_before",
+    "max_answer_chars",
+    "multiline",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "restrict_search_to_code_files",
+    "skip_ignored_files",
+    "substring_pattern"
+   ],
+   "search_observations": [
+    "kind",
+    "limit",
+    "min_importance",
+    "query",
+    "source",
+    "tag"
+   ],
+   "search_reference": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_source_type",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "prefer_source",
+    "query"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_text": [
+    "library",
+    "limit",
+    "query",
+    "regex"
+   ],
+   "security_scan": [
+    "address",
+    "foundry_build_info_directory",
+    "foundry_ignore_compile",
+    "library",
+    "path",
+    "timeout",
+    "tool",
+    "top"
+   ],
+   "security_tools": [],
+   "send_transaction": [
+    "chain",
+    "data",
+    "from",
+    "timeout_ms",
+    "to",
+    "value",
+    "wait"
+   ],
+   "sign_transaction": [
+    "chain",
+    "data",
+    "from",
+    "to",
+    "value"
+   ],
+   "sign_typed_data": [
+    "address",
+    "typed_data",
+    "version"
+   ],
+   "skills_for": [
+    "category",
+    "limit",
+    "max_chars",
+    "model_ctx",
+    "task"
+   ],
+   "skills_search": [
+    "domain",
+    "limit",
+    "loadable_only",
+    "query"
+   ],
+   "status": [
+    "wait_ms"
+   ],
+   "tavily_crawl": [
+    "allow_external",
+    "extract_depth",
+    "format",
+    "include_favicon",
+    "instructions",
+    "limit",
+    "max_breadth",
+    "max_depth",
+    "select_domains",
+    "select_paths",
+    "url"
+   ],
+   "tavily_extract": [
+    "extract_depth",
+    "format",
+    "include_favicon",
+    "include_images",
+    "query",
+    "urls"
+   ],
+   "tavily_map": [
+    "allow_external",
+    "instructions",
+    "limit",
+    "max_breadth",
+    "max_depth",
+    "select_domains",
+    "select_paths",
+    "url"
+   ],
+   "tavily_research": [
+    "input",
+    "model"
+   ],
+   "tavily_search": [
+    "country",
+    "end_date",
+    "exact_match",
+    "exclude_domains",
+    "include_domains",
+    "include_favicon",
+    "include_image_descriptions",
+    "include_images",
+    "include_raw_content",
+    "max_results",
+    "query",
+    "search_depth",
+    "start_date",
+    "time_range",
+    "topic"
+   ],
+   "tech_debt": [
+    "limit",
+    "repo"
+   ],
+   "threat_intel": [
+    "address",
+    "chain"
+   ],
+   "timeline": [
+    "kind",
+    "limit",
+    "min_importance",
+    "source",
+    "tag"
+   ],
+   "wallet_profile": [
+    "address",
+    "max_hops"
+   ],
+   "write_memory": [
+    "content",
+    "max_chars",
+    "memory_name"
+   ]
+  },
+  "metamcp-research": {
+   "add-portfolio-transaction": [
+    "amount",
+    "coinId",
+    "date",
+    "fee",
+    "notes",
+    "price",
+    "shareToken",
+    "type"
+   ],
+   "agent_card": [
+    "agent_id"
+   ],
+   "agent_payload": [
+    "agent_id",
+    "task"
+   ],
+   "answer_question": [
+    "budget_chars",
+    "json",
+    "limit",
+    "question"
+   ],
+   "bitcoin_price": [],
+   "call_graph": [
+    "direction",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "code_copies": [
+    "content_hash",
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "danger_propagation": [
+    "limit",
+    "min_sites",
+    "symbol"
+   ],
+   "dataset_stats": [],
+   "delete_pattern": [
+    "pattern_id"
+   ],
+   "dispatch_brief": [
+    "allow_tools",
+    "compact",
+    "count",
+    "deny_tools",
+    "facets",
+    "fleet",
+    "model",
+    "provider",
+    "reference",
+    "skills",
+    "task",
+    "tools"
+   ],
+   "dispatch_stats": [
+    "days"
+   ],
+   "estimate_costs": [
+    "days",
+    "path"
+   ],
+   "execute": [
+    "code",
+    "intent"
+   ],
+   "expandResult": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "continuation",
+    "detail",
+    "item",
+    "page",
+    "range",
+    "resultId",
+    "section"
+   ],
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "file_context": [
+    "budget_tokens",
+    "file_path",
+    "library",
+    "limit",
+    "max_chars"
+   ],
+   "find_references": [
+    "limit",
+    "repo",
+    "symbol"
+   ],
+   "get-blockchains": [],
+   "get-coin-avg-price": [
+    "coinId",
+    "timestamp"
+   ],
+   "get-coin-by-id": [
+    "coinId",
+    "currency"
+   ],
+   "get-coin-chart-by-id": [
+    "coinId",
+    "period"
+   ],
+   "get-coin-exchange-price": [
+    "exchange",
+    "from",
+    "timestamp",
+    "to"
+   ],
+   "get-coins": [
+    "availableSupply-equals",
+    "availableSupply-greaterThan",
+    "availableSupply-lessThan",
+    "blockchains",
+    "categories",
+    "currency",
+    "fullyDilutedValuation-equals",
+    "fullyDilutedValuation-greaterThan",
+    "fullyDilutedValuation-lessThan",
+    "includeRiskScore",
+    "limit",
+    "marketCap-equals",
+    "marketCap-greaterThan",
+    "marketCap-lessThan",
+    "name",
+    "page",
+    "price-equals",
+    "price-greaterThan",
+    "price-lessThan",
+    "priceChange1d-equals",
+    "priceChange1d-greaterThan",
+    "priceChange1d-lessThan",
+    "priceChange1h-equals",
+    "priceChange1h-greaterThan",
+    "priceChange1h-lessThan",
+    "priceChange7d-equals",
+    "priceChange7d-greaterThan",
+    "priceChange7d-lessThan",
+    "rank-equals",
+    "rank-greaterThan",
+    "rank-lessThan",
+    "riskScore-equals",
+    "riskScore-greaterThan",
+    "riskScore-lessThan",
+    "sortBy",
+    "sortDir",
+    "symbol",
+    "totalSupply-equals",
+    "totalSupply-greaterThan",
+    "totalSupply-lessThan",
+    "volume-equals",
+    "volume-greaterThan",
+    "volume-lessThan"
+   ],
+   "get-currencies": [],
+   "get-exchange-balance": [
+    "connectionFields",
+    "connectionId"
+   ],
+   "get-exchange-sync-status": [
+    "portfolioId"
+   ],
+   "get-exchange-transactions": [
+    "currency",
+    "from",
+    "limit",
+    "page",
+    "portfolioId",
+    "to",
+    "types"
+   ],
+   "get-exchanges": [],
+   "get-fiat-currencies": [],
+   "get-market-cap": [],
+   "get-news": [
+    "from",
+    "limit",
+    "page",
+    "to"
+   ],
+   "get-news-by-id": [
+    "id"
+   ],
+   "get-news-by-type": [
+    "limit",
+    "page",
+    "type"
+   ],
+   "get-news-sources": [],
+   "get-portfolio-chart": [
+    "shareToken",
+    "type"
+   ],
+   "get-portfolio-coins": [
+    "includeRiskScore",
+    "limit",
+    "page",
+    "shareToken"
+   ],
+   "get-portfolio-transactions": [
+    "coinId",
+    "currency",
+    "limit",
+    "page",
+    "shareToken"
+   ],
+   "get-share-token": [],
+   "get-ticker-exchanges": [],
+   "get-ticker-markets": [
+    "coinId",
+    "exchange",
+    "fromCoin",
+    "limit",
+    "onlyVerified",
+    "page",
+    "toCoin"
+   ],
+   "get-wallet-balance": [
+    "address",
+    "connectionId"
+   ],
+   "get-wallet-balances": [
+    "address",
+    "networks"
+   ],
+   "get-wallet-sync-status": [
+    "address",
+    "connectionId"
+   ],
+   "get-wallet-transactions": [
+    "address",
+    "connectionId",
+    "currency",
+    "from",
+    "limit",
+    "page",
+    "to",
+    "txId",
+    "types"
+   ],
+   "get_chain_id": [
+    "chain_name"
+   ],
+   "get_chains_tvl": [
+    "limit"
+   ],
+   "get_code_snippet": [
+    "include_neighbors",
+    "project",
+    "qualified_name"
+   ],
+   "get_crypto_price": [
+    "name"
+   ],
+   "get_filtered_rpc_list": [
+    "chain_id",
+    "isOpenSource",
+    "tracking"
+   ],
+   "get_health": [],
+   "get_protocol": [
+    "name"
+   ],
+   "get_stablecoins": [
+    "limit"
+   ],
+   "get_token_balance": [
+    "address",
+    "chain_id",
+    "token_address"
+   ],
+   "get_token_holders": [
+    "chain_id",
+    "token_address"
+   ],
+   "get_token_holders_count": [
+    "chain_id",
+    "token_address"
+   ],
+   "get_token_prices": [
+    "tokens"
+   ],
+   "get_total_supply": [
+    "chain_id",
+    "token_address"
+   ],
+   "get_yield_pools": [
+    "chain",
+    "limit",
+    "minTvlUsd",
+    "project"
+   ],
+   "guide_lookup": [
+    "task"
+   ],
+   "health_check": [],
+   "heliusAccount": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "apiKey",
+    "args",
+    "couponCode",
+    "detail",
+    "discoveryPath",
+    "email",
+    "firstName",
+    "frictionPoints",
+    "lastName",
+    "network",
+    "paymentIntentId",
+    "period",
+    "plan"
+   ],
+   "heliusAsset": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "address",
+    "args",
+    "authorityAddress",
+    "burnt",
+    "compressed",
+    "creatorAddress",
+    "detail",
+    "frozen",
+    "groupKey",
+    "groupValue",
+    "id",
+    "ids",
+    "limit",
+    "mint",
+    "name",
+    "onlyVerified",
+    "ownerAddress",
+    "page"
+   ],
+   "heliusChain": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "accountKeys",
+    "action",
+    "address",
+    "addresses",
+    "args",
+    "commitment",
+    "dataSize",
+    "detail",
+    "encoding",
+    "includeAllLevels",
+    "limit",
+    "mint",
+    "owner",
+    "page",
+    "priorityLevel",
+    "programId",
+    "replaceRecentBlockhash",
+    "sigVerify",
+    "slot",
+    "stakeAccount",
+    "transaction"
+   ],
+   "heliusCompression": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "address",
+    "addresses",
+    "args",
+    "cursor",
+    "delegate",
+    "detail",
+    "hash",
+    "hashes",
+    "limit",
+    "mint",
+    "owner"
+   ],
+   "heliusKnowledge": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "args",
+    "branch",
+    "budget",
+    "category",
+    "complexity",
+    "description",
+    "detail",
+    "errorCode",
+    "number",
+    "path",
+    "query",
+    "remember",
+    "repo",
+    "scale",
+    "section",
+    "slug",
+    "topic"
+   ],
+   "heliusStreaming": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "account",
+    "accountAddresses",
+    "accountExclude",
+    "accountInclude",
+    "accountOwners",
+    "accountRequired",
+    "action",
+    "args",
+    "commitment",
+    "detail",
+    "encoding",
+    "region",
+    "signature",
+    "subscribeAccounts",
+    "transactionAccountExclude",
+    "transactionAccountInclude",
+    "transactionAccountRequired",
+    "transactionTypes",
+    "webhookID",
+    "webhookType",
+    "webhookURL"
+   ],
+   "heliusTransaction": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "address",
+    "args",
+    "before",
+    "detail",
+    "limit",
+    "mode",
+    "paginationToken",
+    "signature",
+    "signatures",
+    "sortOrder",
+    "status",
+    "tokenAccounts",
+    "transactionDetails",
+    "until"
+   ],
+   "heliusWallet": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "address",
+    "addresses",
+    "after",
+    "args",
+    "before",
+    "cursor",
+    "datetime",
+    "detail",
+    "limit",
+    "mint",
+    "page",
+    "showNative",
+    "showNfts",
+    "showZeroBalance",
+    "slot",
+    "time"
+   ],
+   "heliusWrite": [
+    "_feedback",
+    "_feedbackTool",
+    "_model",
+    "action",
+    "amount",
+    "args",
+    "destination",
+    "detail",
+    "mintAddress",
+    "owsWallet",
+    "recipientAddress",
+    "sendMax",
+    "stakeAccount"
+   ],
+   "inject_security_pattern": [],
+   "library_map": [
+    "library"
+   ],
+   "list_assets": [],
+   "list_patterns": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "limit",
+    "offset"
+   ],
+   "list_repos": [
+    "filter"
+   ],
+   "load_skill": [
+    "max_chars",
+    "name"
+   ],
+   "log_dispatch": [
+    "agent",
+    "context_refs",
+    "cost",
+    "duration_s",
+    "gates_passed",
+    "model",
+    "patterns",
+    "provider",
+    "rework",
+    "served_model",
+    "status",
+    "steps",
+    "task"
+   ],
+   "lookup_address": [
+    "address"
+   ],
+   "lookup_symbol": [
+    "library",
+    "limit",
+    "symbol"
+   ],
+   "mcp_map": [],
+   "model_catalog": [
+    "capability",
+    "limit",
+    "max_price_in",
+    "min_ctx",
+    "provider",
+    "query",
+    "tier",
+    "vision"
+   ],
+   "model_lane": [
+    "force_provider",
+    "task"
+   ],
+   "observe": [
+    "kind",
+    "source",
+    "tags",
+    "text"
+   ],
+   "pick_model": [
+    "capability",
+    "limit",
+    "min_ctx",
+    "prefer_proven",
+    "vision"
+   ],
+   "provider_catalog": [],
+   "query-docs": [
+    "language",
+    "libraryId",
+    "query"
+   ],
+   "query_bounties": [
+    "limit",
+    "min_usd",
+    "source",
+    "text"
+   ],
+   "query_codebase": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_snippet_type",
+    "filter_verdict",
+    "json",
+    "library_id",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_coding_lessons": [
+    "include_good",
+    "language",
+    "limit",
+    "query",
+    "rule"
+   ],
+   "query_cross_chain": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_crypto_skills": [
+    "keyword",
+    "limit",
+    "source_repo"
+   ],
+   "query_exploits": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_grants": [
+    "kind",
+    "limit",
+    "min_usd",
+    "text"
+   ],
+   "query_graph": [
+    "max_rows",
+    "project",
+    "query"
+   ],
+   "query_live_feed": [
+    "kind",
+    "limit",
+    "source",
+    "text"
+   ],
+   "query_protocol_design": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "query"
+   ],
+   "query_rugbrain": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "query_security_context": [
+    "filter_category",
+    "filter_ecosystem",
+    "filter_severity",
+    "filter_verdict",
+    "format",
+    "json",
+    "max_chars",
+    "offset",
+    "query",
+    "top_k"
+   ],
+   "query_threat_feed": [],
+   "quick_check": [
+    "address",
+    "chain"
+   ],
+   "repo_map": [
+    "library"
+   ],
+   "repo_map_libraries": [],
+   "resolve-library-id": [
+    "libraryName",
+    "query"
+   ],
+   "resolve_library": [
+    "json",
+    "query"
+   ],
+   "review_diff": [
+    "corpus_links",
+    "diff",
+    "max_findings"
+   ],
+   "rmi_architecture": [
+    "aspect",
+    "project"
+   ],
+   "rmi_find_similar": [
+    "function_name",
+    "limit",
+    "project"
+   ],
+   "rmi_gotchas": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_impact": [
+    "depth",
+    "function_name",
+    "project"
+   ],
+   "rmi_known_good": [
+    "query",
+    "subsystem"
+   ],
+   "rmi_playbook": [
+    "subsystem"
+   ],
+   "rmi_refresh": [
+    "project"
+   ],
+   "rmi_search": [
+    "chain",
+    "code_type",
+    "ecosystem",
+    "limit",
+    "project",
+    "query"
+   ],
+   "rmi_status": [
+    "json"
+   ],
+   "rmi_tags": [
+    "action",
+    "file_path",
+    "function_name",
+    "tag_name",
+    "tag_value"
+   ],
+   "rmi_trace": [
+    "depth",
+    "direction",
+    "function_name",
+    "project"
+   ],
+   "route_agent": [
+    "query",
+    "top_k"
+   ],
+   "route_skills": [
+    "domain",
+    "loadable_only",
+    "query",
+    "top_k"
+   ],
+   "routing_status": [],
+   "save-share-token": [
+    "shareToken"
+   ],
+   "scan_token": [
+    "address",
+    "chain"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_code": [
+    "context",
+    "file_pattern",
+    "limit",
+    "mode",
+    "path_filter",
+    "pattern",
+    "project",
+    "regex"
+   ],
+   "search_docs": [
+    "detail",
+    "language",
+    "query"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_labels": [
+    "limit",
+    "query"
+   ],
+   "search_observations": [
+    "kind",
+    "limit",
+    "min_importance",
+    "query",
+    "source",
+    "tag"
+   ],
+   "search_protocols": [
+    "limit",
+    "query"
+   ],
+   "search_reference": [
+    "budget_tokens",
+    "filter_category",
+    "filter_ecosystem",
+    "filter_source_type",
+    "filter_verdict",
+    "json",
+    "limit",
+    "max_chars",
+    "prefer_source",
+    "query"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_text": [
+    "library",
+    "limit",
+    "query",
+    "regex"
+   ],
+   "security_scan": [
+    "address",
+    "foundry_build_info_directory",
+    "foundry_ignore_compile",
+    "library",
+    "path",
+    "timeout",
+    "tool",
+    "top"
+   ],
+   "security_tools": [],
+   "skills_for": [
+    "category",
+    "limit",
+    "max_chars",
+    "model_ctx",
+    "task"
+   ],
+   "skills_search": [
+    "domain",
+    "limit",
+    "loadable_only",
+    "query"
+   ],
+   "tavily_crawl": [
+    "allow_external",
+    "extract_depth",
+    "format",
+    "include_favicon",
+    "instructions",
+    "limit",
+    "max_breadth",
+    "max_depth",
+    "select_domains",
+    "select_paths",
+    "url"
+   ],
+   "tavily_extract": [
+    "extract_depth",
+    "format",
+    "include_favicon",
+    "include_images",
+    "query",
+    "urls"
+   ],
+   "tavily_map": [
+    "allow_external",
+    "instructions",
+    "limit",
+    "max_breadth",
+    "max_depth",
+    "select_domains",
+    "select_paths",
+    "url"
+   ],
+   "tavily_research": [
+    "input",
+    "model"
+   ],
+   "tavily_search": [
+    "country",
+    "end_date",
+    "exact_match",
+    "exclude_domains",
+    "include_domains",
+    "include_favicon",
+    "include_image_descriptions",
+    "include_images",
+    "include_raw_content",
+    "max_results",
+    "query",
+    "search_depth",
+    "start_date",
+    "time_range",
+    "topic"
+   ],
+   "tech_debt": [
+    "limit",
+    "repo"
+   ],
+   "threat_intel": [
+    "address",
+    "chain"
+   ],
+   "timeline": [
+    "kind",
+    "limit",
+    "min_importance",
+    "source",
+    "tag"
+   ],
+   "transactions-sync": [
+    "address",
+    "connectionId"
+   ],
+   "wallet_profile": [
+    "address",
+    "max_hops"
+   ]
+  },
+  "rugbrain-mcp": {
+   "rugbrain_alerts": [
+    "minutes"
+   ],
+   "rugbrain_analyze": [
+    "address",
+    "chain"
+   ],
+   "rugbrain_health": [
+    "full"
+   ],
+   "rugbrain_market_brief": [
+    "limit",
+    "query"
+   ],
+   "rugbrain_news": [
+    "category",
+    "limit",
+    "min_date",
+    "query",
+    "sources"
+   ],
+   "rugbrain_scam_check": [
+    "address",
+    "chain",
+    "limit",
+    "tier"
+   ],
+   "rugbrain_scam_radar": [
+    "limit",
+    "query"
+   ],
+   "rugbrain_search": [
+    "collection",
+    "limit",
+    "query",
+    "rerank"
+   ],
+   "rugbrain_search_multi": [
+    "collections",
+    "limit",
+    "limit_per_collection",
+    "query",
+    "rerank"
+   ],
+   "rugbrain_sentiment": [
+    "address",
+    "chain",
+    "include_news",
+    "include_social"
+   ],
+   "rugbrain_social_sentiment": [
+    "limit",
+    "query"
+   ],
+   "rugbrain_vector_landscape": [],
+   "rugbrain_wallet_profile": [
+    "address",
+    "max_hops"
+   ]
+  },
+  "serena": {
+   "activate_project": [
+    "project",
+    "session"
+   ],
+   "create_text_file": [
+    "content",
+    "relative_path"
+   ],
+   "delete_memory": [
+    "memory_name"
+   ],
+   "edit_memory": [
+    "allow_multiple_occurrences",
+    "memory_name",
+    "mode",
+    "needle",
+    "repl"
+   ],
+   "execute_shell_command": [
+    "capture_stderr",
+    "command",
+    "cwd",
+    "max_answer_chars"
+   ],
+   "find_declaration": [
+    "containing_symbol_name_path",
+    "include_body",
+    "include_info",
+    "regex",
+    "relative_path"
+   ],
+   "find_file": [
+    "file_mask",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "find_implementations": [
+    "exclude_kinds",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_referencing_symbols": [
+    "exclude_kinds",
+    "include_kinds",
+    "max_answer_chars",
+    "name_path",
+    "relative_path"
+   ],
+   "find_symbol": [
+    "depth",
+    "exclude_kinds",
+    "include_body",
+    "include_info",
+    "include_kinds",
+    "max_answer_chars",
+    "max_matches",
+    "name_path_pattern",
+    "relative_path",
+    "substring_matching"
+   ],
+   "get_current_config": [],
+   "get_diagnostics_for_file": [
+    "end_line",
+    "max_answer_chars",
+    "min_severity",
+    "relative_path",
+    "start_line"
+   ],
+   "get_symbols_overview": [
+    "depth",
+    "max_answer_chars",
+    "relative_path"
+   ],
+   "initial_instructions": [],
+   "insert_after_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "insert_before_symbol": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "list_dir": [
+    "max_answer_chars",
+    "recursive",
+    "relative_path",
+    "skip_ignored_files"
+   ],
+   "list_memories": [
+    "topic"
+   ],
+   "onboarding": [],
+   "open_dashboard": [],
+   "read_file": [
+    "end_line",
+    "max_answer_chars",
+    "relative_path",
+    "start_line"
+   ],
+   "read_memory": [
+    "memory_name"
+   ],
+   "rename_memory": [
+    "new_name",
+    "old_name"
+   ],
+   "rename_symbol": [
+    "name_path",
+    "new_name",
+    "relative_path"
+   ],
+   "replace_content": [
+    "allow_multiple_occurrences",
+    "mode",
+    "needle",
+    "relative_path",
+    "repl"
+   ],
+   "replace_in_files": [
+    "dry_run",
+    "expected_count",
+    "max_answer_chars",
+    "mode",
+    "needle",
+    "occurrence_ids",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "repl"
+   ],
+   "replace_symbol_body": [
+    "body",
+    "name_path",
+    "relative_path"
+   ],
+   "safe_delete_symbol": [
+    "name_path_pattern",
+    "relative_path"
+   ],
+   "search_for_pattern": [
+    "context_lines_after",
+    "context_lines_before",
+    "max_answer_chars",
+    "multiline",
+    "paths_exclude_glob",
+    "paths_include_glob",
+    "relative_path",
+    "restrict_search_to_code_files",
+    "skip_ignored_files",
+    "substring_pattern"
+   ],
+   "write_memory": [
+    "content",
+    "max_chars",
+    "memory_name"
+   ]
+  },
+  "zoekt": {
+   "file_content": [
+    "branch",
+    "path",
+    "repository"
+   ],
+   "find_references": [
+    "contextLines",
+    "cursor",
+    "filters",
+    "limit",
+    "symbol"
+   ],
+   "get_health": [],
+   "list_repos": [
+    "filter"
+   ],
+   "search": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_files": [
+    "cursor",
+    "limit",
+    "query"
+   ],
+   "search_symbols": [
+    "contextLines",
+    "cursor",
+    "limit",
+    "query"
+   ]
+  }
+ },
+ "servers": {
+  "context-crypto": [
+   "activate_project",
+   "agent_card",
+   "agent_payload",
+   "analyze_file",
+   "answer_question",
+   "api_contracts",
+   "architecture_check",
+   "branch_compare",
+   "call_graph",
+   "call_graph",
+   "change_impact",
+   "changes",
+   "cicd_analyze",
+   "code_copies",
+   "code_docs",
+   "code_metrics",
+   "codebase_map",
+   "create_text_file",
+   "danger_propagation",
+   "db_schema",
+   "decode_signature",
+   "delete_memory",
+   "delete_pattern",
+   "dep_vuln_scan",
+   "dependency_graph",
+   "dispatch_brief",
+   "dispatch_stats",
+   "edit_memory",
+   "estimate_costs",
+   "execute_shell_command",
+   "file_content",
+   "file_context",
+   "file_tree",
+   "find_dead_code",
+   "find_debug_logs",
+   "find_declaration",
+   "find_duplicates",
+   "find_empty_catches",
+   "find_file",
+   "find_implementations",
+   "find_large_files",
+   "find_long_functions",
+   "find_references",
+   "find_references",
+   "find_references",
+   "find_references",
+   "find_referencing_symbols",
+   "find_secrets",
+   "find_symbol",
+   "find_symbol",
+   "find_todos",
+   "forget",
+   "get_code_snippet",
+   "get_context",
+   "get_current_config",
+   "get_diagnostics_for_file",
+   "get_health",
+   "get_pair",
+   "get_review_status",
+   "get_symbols_overview",
+   "get_token_pools",
+   "get_tokens",
+   "git_blame",
+   "git_branches",
+   "git_contributors",
+   "git_diff",
+   "git_hooks",
+   "git_log",
+   "git_show",
+   "git_status",
+   "guide_lookup",
+   "health_check",
+   "iac_analyze",
+   "impact",
+   "initial_instructions",
+   "inject_security_pattern",
+   "insert_after_symbol",
+   "insert_before_symbol",
+   "latest_token_profiles",
+   "library_map",
+   "list_dir",
+   "list_memories",
+   "list_patterns",
+   "list_repos",
+   "load_skill",
+   "log_dispatch",
+   "lookup_symbol",
+   "mcp_map",
+   "model_catalog",
+   "model_lane",
+   "monorepo_analyze",
+   "notebook_analyze",
+   "observe",
+   "onboarding",
+   "open_dashboard",
+   "overview",
+   "perf_profile",
+   "pick_model",
+   "provider_catalog",
+   "query-docs",
+   "query_bounties",
+   "query_codebase",
+   "query_coding_lessons",
+   "query_cross_chain",
+   "query_crypto_skills",
+   "query_exploits",
+   "query_grants",
+   "query_graph",
+   "query_live_feed",
+   "query_protocol_design",
+   "query_rugbrain",
+   "query_security_context",
+   "query_threat_feed",
+   "read_file",
+   "read_files",
+   "read_memory",
+   "recall",
+   "remember",
+   "rename_memory",
+   "rename_symbol",
+   "replace_content",
+   "replace_in_files",
+   "replace_symbol_body",
+   "repo_map",
+   "repo_map_libraries",
+   "resolve-library-id",
+   "resolve_library",
+   "review_code_combined",
+   "review_code_with_codex",
+   "review_code_with_gemini",
+   "review_diff",
+   "rmi_architecture",
+   "rmi_find_similar",
+   "rmi_gotchas",
+   "rmi_impact",
+   "rmi_known_good",
+   "rmi_playbook",
+   "rmi_refresh",
+   "rmi_search",
+   "rmi_status",
+   "rmi_tags",
+   "rmi_trace",
+   "route_agent",
+   "route_skills",
+   "routing_status",
+   "safe_delete_symbol",
+   "scaffold",
+   "search",
+   "search_code",
+   "search_code",
+   "search_files",
+   "search_for_pattern",
+   "search_observations",
+   "search_pairs",
+   "search_reference",
+   "search_signature",
+   "search_structure",
+   "search_symbols",
+   "search_symbols",
+   "search_symbols",
+   "search_text",
+   "security_scan",
+   "security_scan",
+   "security_tools",
+   "semantic_search",
+   "skills_for",
+   "skills_search",
+   "tech_debt",
+   "test_coverage",
+   "threat_intel",
+   "timeline",
+   "top_boosted_tokens",
+   "wallet_profile",
+   "write_memory"
+  ],
+  "context7": [
+   "query-docs",
+   "resolve-library-id"
+  ],
+  "deepwiki": [
+   "ask_wiki_question",
+   "read_wiki_contents",
+   "read_wiki_structure"
+  ],
+  "docs-mcp": [
+   "fetch_url",
+   "find_version",
+   "list_libraries",
+   "list_pages",
+   "read_page",
+   "search_docs"
+  ],
+  "metamcp-audit": [
+   "activate_project",
+   "agent_card",
+   "agent_payload",
+   "answer_question",
+   "call_graph",
+   "code_copies",
+   "create_text_file",
+   "danger_propagation",
+   "dataset_stats",
+   "decode_signature",
+   "delete_memory",
+   "delete_pattern",
+   "dispatch_brief",
+   "dispatch_stats",
+   "edit_memory",
+   "estimate_costs",
+   "execute_shell_command",
+   "file_content",
+   "file_context",
+   "find_declaration",
+   "find_file",
+   "find_implementations",
+   "find_references",
+   "find_references",
+   "find_referencing_symbols",
+   "find_symbol",
+   "get_code_snippet",
+   "get_current_config",
+   "get_diagnostics_for_file",
+   "get_health",
+   "get_review_status",
+   "get_symbols_overview",
+   "guide_lookup",
+   "health_check",
+   "initial_instructions",
+   "inject_security_pattern",
+   "insert_after_symbol",
+   "insert_before_symbol",
+   "library_map",
+   "list_dir",
+   "list_memories",
+   "list_patterns",
+   "list_repos",
+   "load_skill",
+   "log_dispatch",
+   "lookup_address",
+   "lookup_symbol",
+   "mcp_map",
+   "model_catalog",
+   "model_lane",
+   "observe",
+   "onboarding",
+   "open_dashboard",
+   "pick_model",
+   "provider_catalog",
+   "query_bounties",
+   "query_codebase",
+   "query_coding_lessons",
+   "query_cross_chain",
+   "query_crypto_skills",
+   "query_exploits",
+   "query_grants",
+   "query_graph",
+   "query_live_feed",
+   "query_protocol_design",
+   "query_rugbrain",
+   "query_security_context",
+   "query_threat_feed",
+   "quick_check",
+   "read_file",
+   "read_memory",
+   "rename_memory",
+   "rename_symbol",
+   "replace_content",
+   "replace_in_files",
+   "replace_symbol_body",
+   "repo_map",
+   "repo_map_libraries",
+   "resolve_library",
+   "review_code_combined",
+   "review_code_with_codex",
+   "review_code_with_gemini",
+   "review_diff",
+   "rmi_architecture",
+   "rmi_find_similar",
+   "rmi_gotchas",
+   "rmi_impact",
+   "rmi_known_good",
+   "rmi_playbook",
+   "rmi_refresh",
+   "rmi_search",
+   "rmi_status",
+   "rmi_tags",
+   "rmi_trace",
+   "route_agent",
+   "route_skills",
+   "routing_status",
+   "safe_delete_symbol",
+   "scan_token",
+   "search",
+   "search_code",
+   "search_files",
+   "search_for_pattern",
+   "search_labels",
+   "search_observations",
+   "search_reference",
+   "search_signature",
+   "search_symbols",
+   "search_symbols",
+   "search_text",
+   "security_scan",
+   "security_tools",
+   "skills_for",
+   "skills_search",
+   "tech_debt",
+   "threat_intel",
+   "timeline",
+   "wallet_profile",
+   "write_memory"
+  ],
+  "metamcp-code": [
+   "activate_project",
+   "agent_card",
+   "agent_payload",
+   "analyze_file",
+   "answer_question",
+   "api_contracts",
+   "architecture_check",
+   "branch_compare",
+   "call_graph",
+   "call_graph",
+   "change_impact",
+   "changes",
+   "cicd_analyze",
+   "code_copies",
+   "code_docs",
+   "code_metrics",
+   "codebase_map",
+   "create_text_file",
+   "danger_propagation",
+   "db_schema",
+   "decode_signature",
+   "delete_memory",
+   "delete_pattern",
+   "dep_vuln_scan",
+   "dependency_graph",
+   "dispatch_brief",
+   "dispatch_stats",
+   "edit_memory",
+   "estimate_costs",
+   "execute_shell_command",
+   "file_content",
+   "file_context",
+   "file_tree",
+   "find_dead_code",
+   "find_debug_logs",
+   "find_declaration",
+   "find_duplicates",
+   "find_empty_catches",
+   "find_file",
+   "find_implementations",
+   "find_large_files",
+   "find_long_functions",
+   "find_references",
+   "find_references",
+   "find_references",
+   "find_references",
+   "find_referencing_symbols",
+   "find_secrets",
+   "find_symbol",
+   "find_symbol",
+   "find_todos",
+   "forget",
+   "get_code_snippet",
+   "get_context",
+   "get_current_config",
+   "get_diagnostics_for_file",
+   "get_health",
+   "get_pair",
+   "get_review_status",
+   "get_symbols_overview",
+   "get_token_pools",
+   "get_tokens",
+   "git_blame",
+   "git_branches",
+   "git_contributors",
+   "git_diff",
+   "git_hooks",
+   "git_log",
+   "git_show",
+   "git_status",
+   "guide_lookup",
+   "health_check",
+   "iac_analyze",
+   "impact",
+   "initial_instructions",
+   "inject_security_pattern",
+   "insert_after_symbol",
+   "insert_before_symbol",
+   "latest_token_profiles",
+   "library_map",
+   "list_dir",
+   "list_memories",
+   "list_patterns",
+   "list_repos",
+   "load_skill",
+   "log_dispatch",
+   "lookup_symbol",
+   "mcp_map",
+   "model_catalog",
+   "model_lane",
+   "monorepo_analyze",
+   "notebook_analyze",
+   "observe",
+   "onboarding",
+   "open_dashboard",
+   "overview",
+   "perf_profile",
+   "pick_model",
+   "provider_catalog",
+   "query-docs",
+   "query_bounties",
+   "query_codebase",
+   "query_coding_lessons",
+   "query_cross_chain",
+   "query_crypto_skills",
+   "query_exploits",
+   "query_grants",
+   "query_graph",
+   "query_live_feed",
+   "query_protocol_design",
+   "query_rugbrain",
+   "query_security_context",
+   "query_threat_feed",
+   "read_file",
+   "read_files",
+   "read_memory",
+   "recall",
+   "remember",
+   "rename_memory",
+   "rename_symbol",
+   "replace_content",
+   "replace_in_files",
+   "replace_symbol_body",
+   "repo_map",
+   "repo_map_libraries",
+   "resolve-library-id",
+   "resolve_library",
+   "review_code_combined",
+   "review_code_with_codex",
+   "review_code_with_gemini",
+   "review_diff",
+   "rmi_architecture",
+   "rmi_find_similar",
+   "rmi_gotchas",
+   "rmi_impact",
+   "rmi_known_good",
+   "rmi_playbook",
+   "rmi_refresh",
+   "rmi_search",
+   "rmi_status",
+   "rmi_tags",
+   "rmi_trace",
+   "route_agent",
+   "route_skills",
+   "routing_status",
+   "safe_delete_symbol",
+   "scaffold",
+   "search",
+   "search_code",
+   "search_code",
+   "search_files",
+   "search_for_pattern",
+   "search_observations",
+   "search_pairs",
+   "search_reference",
+   "search_signature",
+   "search_structure",
+   "search_symbols",
+   "search_symbols",
+   "search_symbols",
+   "search_text",
+   "security_scan",
+   "security_scan",
+   "security_tools",
+   "semantic_search",
+   "skills_for",
+   "skills_search",
+   "tech_debt",
+   "test_coverage",
+   "threat_intel",
+   "timeline",
+   "top_boosted_tokens",
+   "wallet_profile",
+   "write_memory"
+  ],
+  "metamcp-ops": [
+   "activate_project",
+   "agent_card",
+   "agent_payload",
+   "answer_question",
+   "call_graph",
+   "code_copies",
+   "connect",
+   "create_text_file",
+   "danger_propagation",
+   "delete_memory",
+   "delete_pattern",
+   "disconnect",
+   "dispatch_brief",
+   "dispatch_stats",
+   "edit_memory",
+   "estimate_costs",
+   "execute_shell_command",
+   "file_content",
+   "file_context",
+   "find_declaration",
+   "find_file",
+   "find_implementations",
+   "find_references",
+   "find_references",
+   "find_referencing_symbols",
+   "find_symbol",
+   "get_balance",
+   "get_code_snippet",
+   "get_current_config",
+   "get_diagnostics_for_file",
+   "get_health",
+   "get_performance_score",
+   "get_symbols_overview",
+   "guide_lookup",
+   "health_check",
+   "initial_instructions",
+   "inject_security_pattern",
+   "insert_after_symbol",
+   "insert_before_symbol",
+   "library_map",
+   "list_dir",
+   "list_memories",
+   "list_patterns",
+   "list_repos",
+   "load_skill",
+   "log_dispatch",
+   "lookup_symbol",
+   "mcp_map",
+   "model_catalog",
+   "model_lane",
+   "observe",
+   "onboarding",
+   "open_dashboard",
+   "personal_sign",
+   "pick_model",
+   "provider_catalog",
+   "query_bounties",
+   "query_codebase",
+   "query_coding_lessons",
+   "query_cross_chain",
+   "query_crypto_skills",
+   "query_exploits",
+   "query_grants",
+   "query_graph",
+   "query_live_feed",
+   "query_protocol_design",
+   "query_rugbrain",
+   "query_security_context",
+   "query_threat_feed",
+   "read_file",
+   "read_memory",
+   "rename_memory",
+   "rename_symbol",
+   "replace_content",
+   "replace_in_files",
+   "replace_symbol_body",
+   "repo_map",
+   "repo_map_libraries",
+   "resolve_library",
+   "review_diff",
+   "rmi_architecture",
+   "rmi_find_similar",
+   "rmi_gotchas",
+   "rmi_impact",
+   "rmi_known_good",
+   "rmi_playbook",
+   "rmi_refresh",
+   "rmi_search",
+   "rmi_status",
+   "rmi_tags",
+   "rmi_trace",
+   "route_agent",
+   "route_skills",
+   "routing_status",
+   "run_audit",
+   "safe_delete_symbol",
+   "search",
+   "search_code",
+   "search_files",
+   "search_for_pattern",
+   "search_observations",
+   "search_reference",
+   "search_symbols",
+   "search_symbols",
+   "search_text",
+   "security_scan",
+   "security_tools",
+   "send_transaction",
+   "sign_transaction",
+   "sign_typed_data",
+   "skills_for",
+   "skills_search",
+   "status",
+   "tavily_crawl",
+   "tavily_extract",
+   "tavily_map",
+   "tavily_research",
+   "tavily_search",
+   "tech_debt",
+   "threat_intel",
+   "timeline",
+   "wallet_profile",
+   "write_memory"
+  ],
+  "metamcp-research": [
+   "add-portfolio-transaction",
+   "agent_card",
+   "agent_payload",
+   "answer_question",
+   "bitcoin_price",
+   "call_graph",
+   "code_copies",
+   "danger_propagation",
+   "dataset_stats",
+   "delete_pattern",
+   "dispatch_brief",
+   "dispatch_stats",
+   "estimate_costs",
+   "execute",
+   "expandResult",
+   "file_content",
+   "file_context",
+   "find_references",
+   "find_references",
+   "get-blockchains",
+   "get-coin-avg-price",
+   "get-coin-by-id",
+   "get-coin-chart-by-id",
+   "get-coin-exchange-price",
+   "get-coins",
+   "get-currencies",
+   "get-exchange-balance",
+   "get-exchange-sync-status",
+   "get-exchange-transactions",
+   "get-exchanges",
+   "get-fiat-currencies",
+   "get-market-cap",
+   "get-news",
+   "get-news-by-id",
+   "get-news-by-type",
+   "get-news-sources",
+   "get-portfolio-chart",
+   "get-portfolio-coins",
+   "get-portfolio-transactions",
+   "get-share-token",
+   "get-ticker-exchanges",
+   "get-ticker-markets",
+   "get-wallet-balance",
+   "get-wallet-balances",
+   "get-wallet-sync-status",
+   "get-wallet-transactions",
+   "get_chain_id",
+   "get_chains_tvl",
+   "get_code_snippet",
+   "get_crypto_price",
+   "get_filtered_rpc_list",
+   "get_health",
+   "get_protocol",
+   "get_stablecoins",
+   "get_token_balance",
+   "get_token_holders",
+   "get_token_holders_count",
+   "get_token_prices",
+   "get_total_supply",
+   "get_yield_pools",
+   "guide_lookup",
+   "health_check",
+   "heliusAccount",
+   "heliusAsset",
+   "heliusChain",
+   "heliusCompression",
+   "heliusKnowledge",
+   "heliusStreaming",
+   "heliusTransaction",
+   "heliusWallet",
+   "heliusWrite",
+   "inject_security_pattern",
+   "library_map",
+   "list_assets",
+   "list_patterns",
+   "list_repos",
+   "load_skill",
+   "log_dispatch",
+   "lookup_address",
+   "lookup_symbol",
+   "mcp_map",
+   "model_catalog",
+   "model_lane",
+   "observe",
+   "pick_model",
+   "provider_catalog",
+   "query-docs",
+   "query_bounties",
+   "query_codebase",
+   "query_coding_lessons",
+   "query_cross_chain",
+   "query_crypto_skills",
+   "query_exploits",
+   "query_grants",
+   "query_graph",
+   "query_live_feed",
+   "query_protocol_design",
+   "query_rugbrain",
+   "query_security_context",
+   "query_threat_feed",
+   "quick_check",
+   "repo_map",
+   "repo_map_libraries",
+   "resolve-library-id",
+   "resolve_library",
+   "review_diff",
+   "rmi_architecture",
+   "rmi_find_similar",
+   "rmi_gotchas",
+   "rmi_impact",
+   "rmi_known_good",
+   "rmi_playbook",
+   "rmi_refresh",
+   "rmi_search",
+   "rmi_status",
+   "rmi_tags",
+   "rmi_trace",
+   "route_agent",
+   "route_skills",
+   "routing_status",
+   "save-share-token",
+   "scan_token",
+   "search",
+   "search_code",
+   "search_docs",
+   "search_files",
+   "search_labels",
+   "search_observations",
+   "search_protocols",
+   "search_reference",
+   "search_symbols",
+   "search_symbols",
+   "search_text",
+   "security_scan",
+   "security_tools",
+   "skills_for",
+   "skills_search",
+   "tavily_crawl",
+   "tavily_extract",
+   "tavily_map",
+   "tavily_research",
+   "tavily_search",
+   "tech_debt",
+   "threat_intel",
+   "timeline",
+   "transactions-sync",
+   "wallet_profile"
+  ],
+  "rugbrain-mcp": [
+   "rugbrain_alerts",
+   "rugbrain_analyze",
+   "rugbrain_health",
+   "rugbrain_market_brief",
+   "rugbrain_news",
+   "rugbrain_scam_check",
+   "rugbrain_scam_radar",
+   "rugbrain_search",
+   "rugbrain_search_multi",
+   "rugbrain_sentiment",
+   "rugbrain_social_sentiment",
+   "rugbrain_vector_landscape",
+   "rugbrain_wallet_profile"
+  ],
+  "serena": [
+   "activate_project",
+   "create_text_file",
+   "delete_memory",
+   "edit_memory",
+   "execute_shell_command",
+   "find_declaration",
+   "find_file",
+   "find_implementations",
+   "find_referencing_symbols",
+   "find_symbol",
+   "get_current_config",
+   "get_diagnostics_for_file",
+   "get_symbols_overview",
+   "initial_instructions",
+   "insert_after_symbol",
+   "insert_before_symbol",
+   "list_dir",
+   "list_memories",
+   "onboarding",
+   "open_dashboard",
+   "read_file",
+   "read_memory",
+   "rename_memory",
+   "rename_symbol",
+   "replace_content",
+   "replace_in_files",
+   "replace_symbol_body",
+   "safe_delete_symbol",
+   "search_for_pattern",
+   "write_memory"
+  ],
+  "zoekt": [
+   "file_content",
+   "find_references",
+   "get_health",
+   "list_repos",
+   "search",
+   "search_files",
+   "search_symbols"
+  ]
+ },
+ "source": "scripts/capture-layer-inventory.py \u2014 MCP tools/list (http) + metamcp tools table (db)"
+}
