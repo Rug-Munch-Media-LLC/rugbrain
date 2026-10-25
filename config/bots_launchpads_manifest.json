@@ -1,45 +1,330 @@
 {
-  "version": 1,
-  "generated": "2026-10-25",
-  "collection": "research_v2",
-  "note": "Public docs / help pages only. No private groups, no auth bypass. licence is the REDISTRIBUTION class, not the use class: these are publicly readable pages with no licence assertion, cleared for internal use.",
-  "entries": [
-    {"id": "phanes-docs", "publisher": "Phanes (@Phanes_bot)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.phanes.bot/sitemap.xml", "max_pages": 10},
-    {"id": "missrose-site", "publisher": "Miss Rose (@MissRose_bot)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://missrose.org/", "max_pages": 1},
-    {"id": "missrose-docs", "publisher": "Miss Rose (@MissRose_bot)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://missrose.org/docs/", "max_pages": 1},
-    {"id": "trojan-site", "publisher": "Trojan (trojanonsolana.com)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://trojanonsolana.com/", "max_pages": 1},
-    {"id": "bonkbot-site", "publisher": "BONKbot (bonkbot.io)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://www.bonkbot.io/", "max_pages": 1},
-    {"id": "bananagun-docs", "publisher": "Banana Gun", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.bananagun.io/sitemap.xml", "max_pages": 8},
-    {"id": "maestro-docs", "publisher": "Maestro (maestrobots.com)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.maestrobots.com/sitemap.xml", "max_pages": 10},
-    {"id": "cielo-docs", "publisher": "Cielo (cielo.finance)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.cielo.finance/sitemap.xml", "max_pages": 6},
-    {"id": "unibot-site", "publisher": "Unibot (unibot.app)", "category": "bot", "doc_type": "bot_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://unibot.app/", "max_pages": 1},
+	"version": 1,
+	"generated": "2026-10-25",
+	"collection": "research_v2_8b",
+	"note": "Public docs / help pages only. No private groups, no auth bypass. licence is the REDISTRIBUTION class, not the use class: these are publicly readable pages with no licence assertion, cleared for internal use.",
+	"entries": [
+		{
+			"id": "phanes-docs",
+			"publisher": "Phanes (@Phanes_bot)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.phanes.bot/sitemap.xml",
+			"max_pages": 10
+		},
+		{
+			"id": "missrose-site",
+			"publisher": "Miss Rose (@MissRose_bot)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://missrose.org/",
+			"max_pages": 1
+		},
+		{
+			"id": "missrose-docs",
+			"publisher": "Miss Rose (@MissRose_bot)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://missrose.org/docs/",
+			"max_pages": 1
+		},
+		{
+			"id": "trojan-site",
+			"publisher": "Trojan (trojanonsolana.com)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://trojanonsolana.com/",
+			"max_pages": 1
+		},
+		{
+			"id": "bonkbot-site",
+			"publisher": "BONKbot (bonkbot.io)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://www.bonkbot.io/",
+			"max_pages": 1
+		},
+		{
+			"id": "bananagun-docs",
+			"publisher": "Banana Gun",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.bananagun.io/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "maestro-docs",
+			"publisher": "Maestro (maestrobots.com)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.maestrobots.com/sitemap.xml",
+			"max_pages": 10
+		},
+		{
+			"id": "cielo-docs",
+			"publisher": "Cielo (cielo.finance)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.cielo.finance/sitemap.xml",
+			"max_pages": 6
+		},
+		{
+			"id": "unibot-site",
+			"publisher": "Unibot (unibot.app)",
+			"category": "bot",
+			"doc_type": "bot_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://unibot.app/",
+			"max_pages": 1
+		},
 
-    {"id": "pumpfun-docs-full", "publisher": "pump.fun", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://docs.pump.fun/llms-full.txt", "max_pages": 1},
-    {"id": "pumpfun-docs", "publisher": "pump.fun", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.pump.fun/sitemap-0.xml", "max_pages": 8},
-    {"id": "pancakeswap-docs", "publisher": "PancakeSwap", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.pancakeswap.finance/sitemap.xml", "max_pages": 10},
-    {"id": "pancakeswap-v3-contracts", "publisher": "PancakeSwap", "category": "launchpad", "doc_type": "launchpad_docs", "license": "repository-license", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://raw.githubusercontent.com/pancakeswap/pancake-v3-contracts/main/README.md", "max_pages": 1},
-    {"id": "raydium-docs", "publisher": "Raydium", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.raydium.io/sitemap.xml", "max_pages": 8},
-    {"id": "jupiter-docs", "publisher": "Jupiter", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.jup.ag/sitemap.xml", "max_pages": 8},
-    {"id": "meteora-docs", "publisher": "Meteora", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.meteora.ag/sitemap.xml", "max_pages": 8},
-    {"id": "base-docs", "publisher": "Base (Coinbase)", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.base.org/sitemap.xml", "max_pages": 8},
-    {"id": "base-docs-llms", "publisher": "Base (Coinbase)", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://docs.base.org/llms.txt", "max_pages": 1},
-    {"id": "optimism-docs", "publisher": "Optimism", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "sitemap", "url": "https://docs.optimism.io/sitemap.xml", "max_pages": 8},
-    {"id": "solana-docs", "publisher": "Solana Foundation", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://solana.com/docs", "max_pages": 1},
-    {"id": "x402-org", "publisher": "x402 (Coinbase)", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://x402.org/", "max_pages": 1},
-    {"id": "coinbase-x402-docs", "publisher": "Coinbase Developer Platform", "category": "launchpad", "doc_type": "launchpad_docs", "license": "proprietary-public-docs", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://docs.cdp.coinbase.com/x402/welcome", "max_pages": 1},
+		{
+			"id": "pumpfun-docs-full",
+			"publisher": "pump.fun",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://docs.pump.fun/llms-full.txt",
+			"max_pages": 1
+		},
+		{
+			"id": "pumpfun-docs",
+			"publisher": "pump.fun",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.pump.fun/sitemap-0.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "pancakeswap-docs",
+			"publisher": "PancakeSwap",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.pancakeswap.finance/sitemap.xml",
+			"max_pages": 10
+		},
+		{
+			"id": "pancakeswap-v3-contracts",
+			"publisher": "PancakeSwap",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "repository-license",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://raw.githubusercontent.com/pancakeswap/pancake-v3-contracts/main/README.md",
+			"max_pages": 1
+		},
+		{
+			"id": "raydium-docs",
+			"publisher": "Raydium",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.raydium.io/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "jupiter-docs",
+			"publisher": "Jupiter",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.jup.ag/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "meteora-docs",
+			"publisher": "Meteora",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.meteora.ag/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "base-docs",
+			"publisher": "Base (Coinbase)",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.base.org/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "base-docs-llms",
+			"publisher": "Base (Coinbase)",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://docs.base.org/llms.txt",
+			"max_pages": 1
+		},
+		{
+			"id": "optimism-docs",
+			"publisher": "Optimism",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "sitemap",
+			"url": "https://docs.optimism.io/sitemap.xml",
+			"max_pages": 8
+		},
+		{
+			"id": "solana-docs",
+			"publisher": "Solana Foundation",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://solana.com/docs",
+			"max_pages": 1
+		},
+		{
+			"id": "x402-org",
+			"publisher": "x402 (Coinbase)",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://x402.org/",
+			"max_pages": 1
+		},
+		{
+			"id": "coinbase-x402-docs",
+			"publisher": "Coinbase Developer Platform",
+			"category": "launchpad",
+			"doc_type": "launchpad_docs",
+			"license": "proprietary-public-docs",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://docs.cdp.coinbase.com/x402/welcome",
+			"max_pages": 1
+		},
 
-    {"id": "uniswap-v4-whitepaper", "publisher": "Uniswap Labs", "category": "whitepaper", "doc_type": "whitepaper", "license": "no-assertion-public-pdf", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://uniswap.org/whitepaper-v4.pdf", "max_pages": 1},
-    {"id": "solana-whitepaper", "publisher": "Solana Labs", "category": "whitepaper", "doc_type": "whitepaper", "license": "no-assertion-public-pdf", "retrieved_on": "2026-10-25", "mode": "document", "url": "https://solana.com/solana-whitepaper.pdf", "max_pages": 1}
-  ],
-  "blocked": [
-    {"id": "four-meme", "publisher": "four.meme", "url": "https://four.meme/", "reason": "HTTP 403 (Cloudflare) on /, /en, /docs; docs.four.meme does not resolve; FlareSolverr unavailable on :8191"},
-    {"id": "bullx", "publisher": "BullX", "url": "https://docs.bullx.io/", "reason": "DNS/connect failure (exit 000)"},
-    {"id": "photon", "publisher": "Photon", "url": "https://photon-sol.tinyastro.io/", "reason": "HTTP 403 (bot wall), no public docs host"},
-    {"id": "pepeboost", "publisher": "Pepeboost", "url": "https://pepeboost.io/", "reason": "DNS/connect failure (exit 000)"},
-    {"id": "rickbot", "publisher": "RickBot", "url": "https://rickbot.app/", "reason": "DNS/connect failure (exit 000)"},
-    {"id": "etherdrops", "publisher": "EtherDrops", "url": "https://etherdrops.io/", "reason": "DNS/connect failure (exit 000)"},
-    {"id": "heimdall", "publisher": "Heimdall (@HeimdallRobot)", "url": "", "reason": "no public documentation site found; Telegram-only usage docs"},
-    {"id": "pumpfun-whitepaper", "publisher": "pump.fun", "url": "", "reason": "no publicly hosted whitepaper found; mechanics live in the on-chain program"},
-    {"id": "pancakeswap-whitepaper", "publisher": "PancakeSwap", "url": "https://docs.pancakeswap.finance/white-paper", "reason": "HTTP 404; whitepaper URL not published on the docs site"}
-  ]
+		{
+			"id": "uniswap-v4-whitepaper",
+			"publisher": "Uniswap Labs",
+			"category": "whitepaper",
+			"doc_type": "whitepaper",
+			"license": "no-assertion-public-pdf",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://uniswap.org/whitepaper-v4.pdf",
+			"max_pages": 1
+		},
+		{
+			"id": "solana-whitepaper",
+			"publisher": "Solana Labs",
+			"category": "whitepaper",
+			"doc_type": "whitepaper",
+			"license": "no-assertion-public-pdf",
+			"retrieved_on": "2026-10-25",
+			"mode": "document",
+			"url": "https://solana.com/solana-whitepaper.pdf",
+			"max_pages": 1
+		}
+	],
+	"blocked": [
+		{
+			"id": "four-meme",
+			"publisher": "four.meme",
+			"url": "https://four.meme/",
+			"reason": "HTTP 403 (Cloudflare) on /, /en, /docs; docs.four.meme does not resolve; FlareSolverr unavailable on :8191"
+		},
+		{
+			"id": "bullx",
+			"publisher": "BullX",
+			"url": "https://docs.bullx.io/",
+			"reason": "DNS/connect failure (exit 000)"
+		},
+		{
+			"id": "photon",
+			"publisher": "Photon",
+			"url": "https://photon-sol.tinyastro.io/",
+			"reason": "HTTP 403 (bot wall), no public docs host"
+		},
+		{
+			"id": "pepeboost",
+			"publisher": "Pepeboost",
+			"url": "https://pepeboost.io/",
+			"reason": "DNS/connect failure (exit 000)"
+		},
+		{
+			"id": "rickbot",
+			"publisher": "RickBot",
+			"url": "https://rickbot.app/",
+			"reason": "DNS/connect failure (exit 000)"
+		},
+		{
+			"id": "etherdrops",
+			"publisher": "EtherDrops",
+			"url": "https://etherdrops.io/",
+			"reason": "DNS/connect failure (exit 000)"
+		},
+		{
+			"id": "heimdall",
+			"publisher": "Heimdall (@HeimdallRobot)",
+			"url": "",
+			"reason": "no public documentation site found; Telegram-only usage docs"
+		},
+		{
+			"id": "pumpfun-whitepaper",
+			"publisher": "pump.fun",
+			"url": "",
+			"reason": "no publicly hosted whitepaper found; mechanics live in the on-chain program"
+		},
+		{
+			"id": "pancakeswap-whitepaper",
+			"publisher": "PancakeSwap",
+			"url": "https://docs.pancakeswap.finance/white-paper",
+			"reason": "HTTP 404; whitepaper URL not published on the docs site"
+		}
+	]
 }

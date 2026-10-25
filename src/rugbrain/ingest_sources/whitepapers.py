@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 REPO = "KiwisLabs/crypto-whitepapers"
 REF = "master"
-DEFAULT_COLLECTION = "research_v2"
+DEFAULT_COLLECTION = "research_v2_8b"
 DOC_TYPE = "whitepaper"
 
 # Skip archived non-whitepaper content if present.
