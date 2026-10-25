@@ -23,6 +23,16 @@ STATE = Path(os.getenv("SHILL_ALERT_STATE", "/var/lib/rugbrain/shill_alert_state
 OUT = Path(os.getenv("SHILL_ALERT_STREAM", "/var/lib/rugbrain/shill_alerts.jsonl"))
 
 
+def annotate(item: dict[str, Any]) -> dict[str, Any]:
+    """Stamp shill_score + campaign_id so news/search can surface the campaign."""
+    from rugbrain.ingest_sources.shill_campaign import campaign_id
+
+    meta = item["metadata"]
+    meta["campaign_id"] = campaign_id(item.get("text") or "", meta.get("date") or item.get("ingested_at") or "")
+    meta["shill_score"] = min(1.0, round(float(meta.get("risk", 0) or 0) / 10.0, 3))
+    return item
+
+
 def load_state() -> dict[str, Any]:
     try:
         return json.loads(STATE.read_text(encoding="utf-8"))
@@ -45,6 +55,8 @@ def emit(items: list[dict[str, Any]], state: dict[str, Any], *, dry_run: bool) -
         if it["id"] not in seen and ((not cursor) or (it.get("ingested_at") or "") > cursor)
     ]
     fresh.sort(key=lambda it: it.get("ingested_at") or "")
+    for it in fresh:
+        annotate(it)
     if fresh and not dry_run:
         OUT.parent.mkdir(parents=True, exist_ok=True)
         with OUT.open("a", encoding="utf-8") as fh:
