@@ -24,7 +24,8 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field
 
 # Crypto-atom helpers: address/hash/URL preservation inside chunk windows.
-from rugbrain.app_chunking import _protect_atoms, _restore_atoms, _snap_pos
+from rugbrain.chunk_config import chunk_settings
+from rugbrain.chunking_boundaries import chunk_spans
 
 log = logging.getLogger(__name__)
 
@@ -88,39 +89,47 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def chunk_text(text: str, size: int = 1500, overlap: int = 100) -> list[str]:
-    """Split *text* into overlapping windows of at most *size* chars.
+def chunk_text(
+    text: str,
+    size: int | None = None,
+    overlap: float | int | None = None,
+    collection: str | None = None,
+    max_chars: int | None = None,
+) -> list[str]:
+    """Split *text* into overlapping chunks at natural boundaries.
 
-    Crypto-aware: EVM/Solana addresses, hashes and URLs are never split in
-    half — a window boundary that would cut one is pushed just past it.
-    Mirrors the chunking used by ``scripts/ingest_rekt_news.py`` so all
-    RugBrain pipelines produce consistently-sized embedded chunks.
+    Sizes come from ``chunking_config.yaml`` through the document's
+    ``collection`` (the config is the single source of truth); an explicit
+    ``size``/``overlap`` still wins for callers with a fixed budget. Boundaries
+    land on paragraph breaks, line breaks, sentence enders or spaces — never
+    mid-word — and an oversized paragraph falls back to the configured
+    ``max_chars`` hard cap, still splitting at a space.
     """
     text = (text or "").strip()
+    if not text:
+        return []
+    if size is None or overlap is None:
+        settings = chunk_settings(collection)
+        size = settings.chunk_size if size is None else size
+        overlap = settings.overlap if overlap is None else overlap
+        max_chars = settings.max_chars if max_chars is None else max_chars
+    elif max_chars is None:
+        max_chars = size  # explicit budget: the hard cap never exceeds it
     if len(text) <= size:
-        return [text] if text else []
-    protected, atoms = _protect_atoms(text)
-    chunks: list[str] = []
-    start = 0
-    while start < len(protected):
-        end = min(start + size, len(protected))
-        end = _snap_pos(protected, end)
-        chunk = protected[start:end]
-        if chunk.strip():
-            chunks.append(chunk)
-        if end == len(protected):
-            break
-        start = max(end - overlap, start + 1)
-        start = _snap_pos(protected, start)
-    return [_restore_atoms(c, atoms) for c in chunks]
+        return [text]
+    return [
+        text[s:e].strip()
+        for s, e in chunk_spans(text, size, overlap, max_chars)
+        if text[s:e].strip()
+    ]
 
 
 async def store_documents(
     docs: list[CrawlDocument],
     embedder: Embedder,
     store: VectorStore,
-    chunk_size: int = 1500,
-    chunk_overlap: int = 100,
+    chunk_size: int | None = None,
+    chunk_overlap: float | int | None = None,
     progress_every: int = 25,
 ) -> dict[str, int]:
     """Embed and upsert *docs* into Qdrant.
@@ -146,7 +155,7 @@ async def store_documents(
     # embed (never drops fresh content).
     has_point = getattr(store, "has_point", None)
     for i, doc in enumerate(docs, start=1):
-        for chunk in chunk_text(doc.content, chunk_size, chunk_overlap):
+        for chunk in chunk_text(doc.content, chunk_size, chunk_overlap, doc.collection):
             doc_id = doc.stable_id(content_hash(chunk))
             metadata = dict(doc.metadata)
             metadata.setdefault("title", doc.title)

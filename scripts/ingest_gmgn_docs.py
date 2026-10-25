@@ -43,7 +43,7 @@ from docs_chunker import chunk_pages
 COLLECTION = "gmgn_docs"
 SOURCE = "gmgn-docs"
 EMBED_DIM = 4096
-BATCH = 8
+BATCH = 128
 DEFAULT_SNAPSHOT = Path("data/gmgn_docs/pages.jsonl")
 
 

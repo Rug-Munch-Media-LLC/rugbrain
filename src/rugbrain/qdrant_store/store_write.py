@@ -128,6 +128,11 @@ class WriteMixin(_types.StoreSurface):
             )
             return False
 
+        from rugbrain.qdrant_store.write_guard import slot_accepts
+
+        if not await slot_accepts(client, collection, len(embedding)):
+            return False
+
         point_id = self._to_uuid(doc_id)
         vector_field = await self._resolve_vector_field(collection, embedding, content, client)
         if vector_field is None:

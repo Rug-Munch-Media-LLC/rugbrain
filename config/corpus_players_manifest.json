@@ -1,0 +1,76 @@
+{
+  "sources": [
+    {
+      "source": "a16zcrypto",
+      "publisher": "a16z crypto",
+      "doc_type": "research_report",
+      "collection": "research_v2",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "Copyright a16z crypto - site content, no reuse licence declared",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "a16z crypto essays: market structure, regulation, crypto-native design"
+    },
+    {
+      "source": "flashbots_writings",
+      "publisher": "Flashbots",
+      "doc_type": "research_report",
+      "collection": "research_v2",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "Copyright Flashbots - site content, no reuse licence declared",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "Flashbots writings: MEV supply chain, PBS, builder/relay research"
+    },
+    {
+      "source": "chainalysis_insights",
+      "publisher": "Chainalysis",
+      "doc_type": "crime_report",
+      "collection": "research_v2",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "Copyright Chainalysis - site content, no reuse licence declared",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "Chainalysis blog: on-chain crime typologies, sanctions, exchange flows"
+    },
+    {
+      "source": "base_docs",
+      "publisher": "Base (Coinbase)",
+      "doc_type": "protocol_doc",
+      "collection": "protocol_design",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "Copyright Coinbase/Base - docs site, no reuse licence declared",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "Base L2 documentation: chain primitives, SDKs, payments, upgrades"
+    },
+    {
+      "source": "arbitrum_docs",
+      "publisher": "Offchain Labs (Arbitrum)",
+      "doc_type": "protocol_doc",
+      "collection": "protocol_design",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "UNDECLARED - OffchainLabs/arbitrum-docs has no SPDX licence file",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "Arbitrum documentation: bridging, nodes, chains, Stylus"
+    },
+    {
+      "source": "defillama_docs",
+      "publisher": "DefiLlama",
+      "doc_type": "protocol_doc",
+      "collection": "protocol_design",
+      "canonical_id": "<source>:<slug>:<contenthash>",
+      "license": "Copyright DefiLlama - docs site, no reuse licence declared",
+      "permitted_use": "research_only",
+      "chunkable": true,
+      "redistribute": false,
+      "description": "DefiLlama docs: TVL methodology, listing projects, adapter SDK"
+    }
+  ]
+}

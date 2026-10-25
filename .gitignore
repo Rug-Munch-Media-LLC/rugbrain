@@ -84,3 +84,8 @@ mutants/
 
 # RSS ingest runtime cache (ETag/Last-Modified state)
 data/rss_feed_validators.json
+
+# opencode goal-tool session state (locks/claims/per-session) — generated, no repo reader
+/.opencode/goals/
+# pre-push test-selector scratch
+/.test-selector-cache.json

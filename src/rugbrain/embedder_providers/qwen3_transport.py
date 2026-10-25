@@ -108,3 +108,32 @@ async def post_llamacpp(lane: Any, texts: list[str]) -> list[list[float]]:
             except Exception as exc:
                 raise RuntimeError(f"qwen_embedder failed: {exc}") from exc
     return results
+
+
+async def post_siliconflow(lane: Any, texts: list[str]) -> list[list[float]]:
+    """SiliconFlow (.com) lane — OpenAI-compatible /embeddings, 4096-d."""
+    import httpx
+
+    base = os.getenv("SILICONFLOW_EMBED_URL", "https://api.siliconflow.com/v1").rstrip("/")
+    if not base.endswith("/embeddings"):
+        base = f"{base}/embeddings"
+    model = os.getenv("SILICONFLOW_EMBED_MODEL", "Qwen/Qwen3-Embedding-8B")
+    headers = {"Authorization": f"Bearer {lane.api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "input": [t[:_MAX_INPUT_CHARS] for t in texts]}
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
+            resp = await client.post(base, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise RuntimeError(f"qwen_embedder siliconflow HTTP {resp.status_code}: {resp.text[:200]}")
+            data = resp.json().get("data", [])
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"qwen_embedder siliconflow failed: {exc}") from exc
+    results = [
+        _fit(item.get("embedding", []), lane.dims, "siliconflow")
+        for item in sorted(data, key=lambda x: x.get("index", 0))
+    ]
+    if len(results) != len(texts):
+        raise RuntimeError(f"siliconflow embed returned {len(results)} vectors for {len(texts)} inputs")
+    return results

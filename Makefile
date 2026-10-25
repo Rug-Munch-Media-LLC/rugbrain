@@ -15,7 +15,7 @@
 SHELL := /bin/bash
 
 .PHONY: help install dev run api-dev ingest backup restore lint format check \
-        typecheck security precommit commit ci clean
+        typecheck security precommit commit ci clean test test-fast gates
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -56,9 +56,20 @@ check: ## Full check: lint + format + typecheck
 typecheck: ## MyPy type check
 	mypy src/ scripts/ --ignore-missing-imports
 
-test: ## Run tests (placeholder - no tests yet)
-	@echo "no tests yet - API endpoints covered via smoke test: make api-dev"
-	exit 0
+PYTEST := python3 -m pytest
+TESTS ?= tests
+TEST_ARGS ?= -q
+
+test: ## Run the test suite (TESTS=tests/x.py or TEST_ARGS="-k foo" to narrow)
+	$(PYTEST) $(TESTS) $(TEST_ARGS)
+
+test-fast: ## Run the fast suite (skip integration-marked tests)
+	$(PYTEST) $(TESTS) $(TEST_ARGS) -m "not integration"
+
+gates: ## Run the shrink-only structural gates (structure, monkeypatch, antipatterns)
+	python3 scripts/check-structure.py --repo .
+	python3 scripts/check-monkeypatch.py
+	python3 scripts/check-antipatterns.py
 
 security: ## Security audit (bandit + ruff S-rules)
 	bandit -r src/ scripts/ -q
@@ -70,9 +81,16 @@ precommit: ## Install pre-commit hooks
 commit: ## Interactive commit with commitizen
 	cz commit || git commit
 
-ci: lint typecheck security ## Full CI: lint + typecheck + security
+ci: lint typecheck security test ## Full CI: lint + typecheck + security + tests
 
 clean: ## Remove build artifacts
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
+
+# Script layer guard (rugbrain scripts/): every file must be declared.
+check-scripts:
+	python3 scripts/check_scripts_manifest.py
+
+manifest-scripts:
+	python3 scripts/classify_scripts.py

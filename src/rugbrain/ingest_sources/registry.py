@@ -54,9 +54,11 @@ carrying a semantic ``doc_type``:
 
 from __future__ import annotations
 
+from rugbrain.ingest_sources.analytics_docs import AnalyticsDocsSource
 from rugbrain.ingest_sources.base import Source
 from rugbrain.ingest_sources.blacklists import BlacklistsSource
 from rugbrain.ingest_sources.blocksecteam_phishing import BlockSecPhishingContractsSource
+from rugbrain.ingest_sources.bot_launchpad_docs import BotLaunchpadDocsSource
 from rugbrain.ingest_sources.bridges import AxelarSource, CCIPSource, LayerZeroSource
 from rugbrain.ingest_sources.chainabuse import ChainabuseSource
 from rugbrain.ingest_sources.cisa_kev import CISAKevSource
@@ -94,6 +96,16 @@ from rugbrain.ingest_sources.opensanctions import OpenSanctionsSource
 from rugbrain.ingest_sources.openzeppelin import OpenZeppelinSource
 from rugbrain.ingest_sources.ossf_malicious import OSSFMaliciousPackagesSource
 from rugbrain.ingest_sources.phishdestroy import PhishDestroySource
+from rugbrain.ingest_sources.players_docs import (
+    ArbitrumDocsSource,
+    BaseDocsSource,
+    DefiLlamaDocsSource,
+)
+from rugbrain.ingest_sources.players_research import (
+    A16ZCryptoSource,
+    ChainalysisInsightsSource,
+    FlashbotsWritingsSource,
+)
 from rugbrain.ingest_sources.privacy import TornadoSource
 from rugbrain.ingest_sources.rekt import RektSource
 from rugbrain.ingest_sources.safe import SafeSource
@@ -110,6 +122,7 @@ from rugbrain.ingest_sources.zk import CircomSource, SnarkJSSource
 
 #: All registered source instances.
 SOURCES: tuple[Source, ...] = (
+    AnalyticsDocsSource(),
     DeFiHackLabsSource(),
     SWCSource(),
     EIPsSource(),
@@ -117,6 +130,7 @@ SOURCES: tuple[Source, ...] = (
     OpenZeppelinSource(),
     RektSource(),
     WhitepapersSource(),
+    BotLaunchpadDocsSource(),
     DeFiLlamaSource(),
     MarketHealthSource(),
     LayerZeroSource(),
@@ -163,6 +177,12 @@ SOURCES: tuple[Source, ...] = (
     DevDocsSource(),
     EngineeringBlogsSource(),
     VulnerabilitySeveritySource(),
+    A16ZCryptoSource(),
+    FlashbotsWritingsSource(),
+    ChainalysisInsightsSource(),
+    BaseDocsSource(),
+    ArbitrumDocsSource(),
+    DefiLlamaDocsSource(),
 )
 
 #: Semantic doc_type → source names (for quick lookup / filtering).
