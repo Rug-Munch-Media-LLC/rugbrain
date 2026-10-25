@@ -118,7 +118,14 @@ services:
       # (llama.cpp :8004 above) or deepinfra (hosted Qwen/Qwen3-Embedding-8B,
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
-      - EMBED_PROVIDER=${EMBED_PROVIDER:-local}
+      - EMBED_PROVIDER=${EMBED_PROVIDER:-siliconflow}
+      # 2026-10-25 (measured): RAG_EMBED_BACKEND=int in .env.rag pinned the
+      # whole chain to ONE rung, so a 1024d answer from :8004 was refused by the
+      # width guard and the request 503'd with chain=('int',). The chain and the
+      # 8B/4096d local endpoint are now compose-owned (env_file cannot pin them);
+      # local :8004 is the 0.6B/1024 lane and must never be a corpus lane.
+      - RAG_EMBED_BACKEND=${RAG_EMBED_BACKEND:-auto}
+      - QWEN_EMBED_URL=${QWEN_EMBED_URL:-http://172.18.0.1:8024/v1}
       # 2026-10-22: this line used to default DEEPINFRA_EMBED_URL to the dead
       # local :8025 listener, so the hosted lane silently POSTed into a socket
       # that accepts and never answers (45 s hang, then fall-through). It now
