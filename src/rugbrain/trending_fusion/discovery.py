@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from rugbrain.trending_fusion.chains import require_chain
 from rugbrain.trending_fusion.geckoterminal import geckoterminal_rows
 from rugbrain.trending_fusion.indexed_pairs import indexed_pair_rows
 
@@ -32,7 +33,9 @@ def dedupe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         for name, value in (row.get("signals") or {}).items():
             try:
-                slot["signals"][name] = max(float(slot["signals"].get(name, float("-inf"))), float(value))
+                slot["signals"][name] = max(
+                    float(slot["signals"].get(name, float("-inf"))), float(value)
+                )
             except (TypeError, ValueError):
                 continue
         slot["paid"] = bool(slot.get("paid")) or bool(row.get("paid"))
@@ -55,5 +58,15 @@ async def gather_rows(chain: str, sources: tuple[Source, ...] | None = None) -> 
             continue
         rows.extend(found)
         ok.append(name)
-    return {"rows": dedupe_rows(rows), "missing": missing, "sources_ok": ok,
-            "scope": f"adapters={','.join(ok) or 'none'}"}
+    return {
+        "rows": dedupe_rows(rows),
+        "missing": missing,
+        "sources_ok": ok,
+        "scope": f"adapters={','.join(ok) or 'none'}",
+    }
+
+
+def sources_for(chain: str) -> tuple[Source, ...]:
+    """Only the adapters the config allows for this chain (typed refusal if unknown)."""
+    allowed = require_chain(chain).adapter_names
+    return tuple((name, fetch) for name, fetch in SOURCES if name in allowed)
