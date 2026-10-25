@@ -164,6 +164,14 @@ _RMI_RAG_OWNED_COLLECTIONS: Final[frozenset[str]] = frozenset(
         # Explicitly reviewed, redacted ContextCrypto projection only.
         # Never add the internal ContextCrypto collections to this gate.
         "public_crypto_patterns",
+        # Finding-level security corpora (2026-10-25). Targets of
+        # scripts/ingest_security_knowledge.py via the public_audit_findings
+        # source: per-finding records (security_findings) and full audit
+        # reports (audit_reports), written at the 4096 lane as *_8b twins.
+        # Listed by BASE name because the gate strips the lane suffix
+        # (gate_collection_name) before the owned-set lookup.
+        "security_findings",
+        "audit_reports",
     }
 )
 
