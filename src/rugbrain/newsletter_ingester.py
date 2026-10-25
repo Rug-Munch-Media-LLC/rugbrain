@@ -18,6 +18,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import ingest_health
+
 logger = logging.getLogger(__name__)
 
 # ── 50+ Crypto Newsletters ───────────────────────────────────────────────
@@ -273,8 +275,8 @@ async def ingest_newsletter(name: str, url: str, frequency: str, category: str) 
         from rugbrain.pii_scrubber import scrub_text
 
         content = await scrub_text(content)
-    except Exception:
-        pass
+    except Exception as exc:
+        ingest_health.note("ingest.pii_scrub_failed", err=type(exc).__name__)
 
     # Build metadata
     metadata = {

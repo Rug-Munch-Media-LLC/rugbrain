@@ -20,6 +20,7 @@ import logging
 import time
 from typing import Any
 
+from rugbrain import ingest_health
 from rugbrain.ingest_sources.x_intel.config import (
     GETXAPI_COST_PER_CALL,
     GETXAPI_DAILY_CALL_LIMIT,
@@ -136,8 +137,8 @@ class BudgetTracker:
             try:
                 hourly = int(await r.get(self._hourly_key()) or 0)
                 pacing_until = float(await r.get("xintel:pacing_until") or 0.0)
-            except Exception:
-                pass
+            except Exception as exc:
+                ingest_health.note("ingest.x_intel.redis_read_failed", err=type(exc).__name__)
         budget_remaining = max(0.0, GETXAPI_TOTAL_BUDGET - spend)
         calls_remaining = max(0, GETXAPI_DAILY_CALL_LIMIT - calls)
         budget_calls = (

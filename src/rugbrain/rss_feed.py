@@ -20,6 +20,7 @@ from typing import Any
 
 import httpx
 
+from rugbrain import ingest_health
 from rugbrain.rss_parser import parse_rss
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) RugMunch-RAG/2.0 (admin@rugmunch.io)"
@@ -66,8 +67,8 @@ def parse_ts(value: str) -> float | None:
         return None
     try:
         return parsedate_to_datetime(value).timestamp()
-    except (ValueError, TypeError):
-        pass
+    except (ValueError, TypeError) as exc:
+        ingest_health.note("ingest.rss.timestamp_unparsed", err=type(exc).__name__)
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
     except ValueError:

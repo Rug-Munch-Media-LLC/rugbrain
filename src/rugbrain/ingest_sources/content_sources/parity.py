@@ -16,6 +16,7 @@ from datetime import datetime
 from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any
 
+from rugbrain import ingest_health
 from rugbrain.ingest_sources.content_sources.sentiment import analyze_item
 from rugbrain.ingest_sources.content_sources.spec import SourceSpec
 
@@ -33,8 +34,8 @@ def _rfc822(value: str) -> str:
         return ""
     try:
         return format_datetime(parsedate_to_datetime(raw), usegmt=True)
-    except (TypeError, ValueError):
-        pass
+    except (TypeError, ValueError) as exc:
+        ingest_health.note("ingest.parity.rfc822_unparsed", err=type(exc).__name__)
     try:
         return format_datetime(datetime.fromisoformat(raw.replace("Z", "+00:00")), usegmt=True)
     except ValueError:

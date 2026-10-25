@@ -13,6 +13,8 @@ import time
 from enum import StrEnum
 from typing import Any
 
+from rugbrain import ingest_health
+
 log = logging.getLogger(__name__)
 
 _DELTA_KEY = "rag:delta_queue"
@@ -108,8 +110,10 @@ class DeltaTracker:
         if val is not None:
             try:
                 return float(val)
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                ingest_health.note(
+                    "retrieval.incremental.last_rebuild_unparsed", err=type(exc).__name__
+                )
         return None
 
 
