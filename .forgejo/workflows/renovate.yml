@@ -9,6 +9,10 @@ on:
     - cron: '0 3 * * 1'  # Monday 3AM UTC
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   renovate:
     name: Renovate
