@@ -37,7 +37,7 @@ from rugbrain.ingest_sources.base import IngestDoc, Source
 
 log = logging.getLogger(__name__)
 
-DEFAULT_COLLECTION = "research_v2"
+DEFAULT_COLLECTION = "research_v2_8b"
 DEFAULT_CAP = 30  # bounded crawl; article text is long
 HOME_URL = "https://samczsun.com/"
 SOURCE_URL = "https://samczsun.com/"
