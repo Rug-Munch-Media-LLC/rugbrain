@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from rugbrain.endpoints import _is_token_address
+from rugbrain.route_shared import _is_token_address
 
 logger = logging.getLogger(__name__)
 
