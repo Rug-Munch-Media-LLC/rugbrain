@@ -20,6 +20,8 @@ from pathlib import Path
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[3] / "config" / "chains.json"
 GT_MARKER = "/networks/"
+# Market-data provider (sources.py fetches this feed); config states only discovery.
+MARKET_DATA_SOURCE = "dexscreener"
 
 
 def config_path() -> Path:
@@ -52,11 +54,15 @@ class ChainSpec:
     aliases: tuple[str, ...]
     caip2: str
     native_token: str
+    candidate_source: str
     source_kind: str
     source_ref: str
     verified_at: str | None
     gap: str | None
     supported: bool = True
+    # Config-only: absent means UNKNOWN, never a guessed default.
+    quote_asset: str | None = None
+    data_source: str = MARKET_DATA_SOURCE
 
     @property
     def verified(self) -> bool:
@@ -85,17 +91,23 @@ def _load(path_str: str) -> tuple[ChainSpec, ...]:
     specs = []
     for row in data.get("chains") or []:
         source = row.get("discovery_source") or {}
+        kind = str(source.get("kind") or "")
+        ref = str(source.get("url_or_table") or "")
+        quote = str(row.get("quote_asset") or "").strip() or None
         specs.append(
             ChainSpec(
                 name=str(row["name"]).strip().lower(),
                 aliases=tuple(str(a).strip().lower() for a in row.get("aliases") or ()),
                 caip2=str(row.get("caip2") or ""),
                 native_token=str(row.get("native") or ""),
-                source_kind=str(source.get("kind") or ""),
-                source_ref=str(source.get("url_or_table") or ""),
+                candidate_source=f"{kind}({ref})" if kind and ref else (kind or ref),
+                source_kind=kind,
+                source_ref=ref,
                 verified_at=source.get("verified_at"),
                 gap=row.get("gap"),
                 supported=bool(row.get("supported", True)),
+                quote_asset=quote,
+                data_source=str(row.get("data_source") or MARKET_DATA_SOURCE),
             )
         )
     return tuple(specs)
@@ -133,5 +145,5 @@ def gt_networks() -> dict[str, str]:
     return {s.name: s.gt_slug for s in load_chains() if s.gt_slug}
 
 
-# Compatibility export (2026-10-25): api.py needs an iterable of chain names.
-CHAINS: tuple[str, ...] = tuple(spec.name for spec in load_chains())
+# Compatibility export (2026-10-25): api.py iterates names, tests read spec fields.
+CHAINS: dict[str, ChainSpec] = {spec.name: spec for spec in load_chains()}
