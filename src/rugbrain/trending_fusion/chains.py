@@ -131,3 +131,7 @@ def require_chain(name: str) -> ChainSpec:
 def gt_networks() -> dict[str, str]:
     """Chain name -> GeckoTerminal slug, derived from the config."""
     return {s.name: s.gt_slug for s in load_chains() if s.gt_slug}
+
+
+# Compatibility export (2026-10-25): api.py needs an iterable of chain names.
+CHAINS: tuple[str, ...] = tuple(spec.name for spec in load_chains())
