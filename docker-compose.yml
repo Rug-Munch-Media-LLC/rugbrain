@@ -119,6 +119,10 @@ services:
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-siliconflow}
+      # Corpus embed chain: auto = siliconflow(.com,4096) -> local :8024(8B,4096) -> deepinfra -> openrouter.
+      # Never :8004 (0.6B/1024) — that lane belongs to supermemory; the width guard refuses 1024.
+      - RAG_EMBED_BACKEND=${RAG_EMBED_BACKEND:-auto}
+      - QWEN_EMBED_URL=${QWEN_EMBED_URL:-http://172.18.0.1:8024/v1}
       # 2026-10-22: this line used to default DEEPINFRA_EMBED_URL to the dead
       # local :8025 listener, so the hosted lane silently POSTed into a socket
       # that accepts and never answers (45 s hang, then fall-through). It now
