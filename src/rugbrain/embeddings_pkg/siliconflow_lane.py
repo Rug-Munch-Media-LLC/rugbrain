@@ -41,8 +41,24 @@ SILICONFLOW_KEY_FILE = os.getenv("SILICONFLOW_KEY_FILE", "/srv/secrets/siliconfl
 _TIMEOUT = float(os.getenv("SILICONFLOW_TIMEOUT", "20.0"))
 
 
+def _is_cn() -> bool:
+    """True only for the .cn host, which needs a DIFFERENT account key.
+
+    Measured 2026-10-25: the .com key returns 200/dim=4096 on
+    api.siliconflow.com and 401 ``code=30014 Token is invalid`` on
+    api.siliconflow.cn. A .cn URL is therefore never attempted unless a
+    .cn-specific key is configured explicitly.
+    """
+    return ".siliconflow.cn" in SILICONFLOW_URL
+
+
 def _api_key() -> str:
     """Key from the environment, else the gopass-spooled file. Never logged."""
+    if _is_cn():
+        cn = os.getenv("SILICONFLOW_CN_API_KEY", "").strip()
+        if not cn:
+            logger.warning("siliconflow_cn_without_cn_key url=%s refusing", SILICONFLOW_URL)
+        return cn
     key = os.getenv("SILICONFLOW_API_KEY", "").strip()
     if key:
         return key
