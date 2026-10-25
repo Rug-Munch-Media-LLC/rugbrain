@@ -22,6 +22,8 @@ from typing import Any
 
 import httpx
 
+from rugbrain import polymarket_ref
+
 logger = logging.getLogger("rag.firehose.direct")
 
 # Curated, long-lived official RSS endpoints (free, no auth, no key).
@@ -150,7 +152,16 @@ async def fetch_prediction_markets_direct(limit: int = 10) -> list[dict[str, Any
                 {
                     "collection": "market_intel",
                     "content": f"Prediction market: {question} - YES: {yes_price} NO: {no_price}",
-                    "metadata": {"source": "polymarket", "type": "prediction"},
+                    "metadata": {
+                        "source": "polymarket",
+                        "type": "prediction",
+                        "slug": str(m.get("slug") or ""),
+                        "url": (
+                            polymarket_ref.ref_url(str(m.get("slug")))
+                            if m.get("slug")
+                            else ""
+                        ),
+                    },
                 }
             )
     except Exception as exc:

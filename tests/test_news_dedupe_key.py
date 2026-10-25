@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 
+import pytest
+
 from rugbrain.ingest_sources.ingest_dedupe import jaccard, normalize_for_dedupe, shingles
 from rugbrain.rss_store import content_hash
 

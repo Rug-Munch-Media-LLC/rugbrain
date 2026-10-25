@@ -55,12 +55,12 @@ WHALE_WATCHLIST: dict[str, str] = {
 
 # In-memory stores
 _all_mids: dict[str, float] = {}
-_all_meta: dict[str, Any] = {"universe": []}
+_all_meta: JsonObject = {"universe": []}
 _open_interests: dict[str, float] = {}
-_funding_rates: dict[str, list[dict[str, Any]]] = defaultdict(list)
-_trade_history: list[dict[str, Any]] = []
-_liquidation_history: list[dict[str, Any]] = []
-_biggest_trades: list[dict[str, Any]] = []
+_funding_rates: dict[str, list[JsonObject]] = defaultdict(list)
+_trade_history: list[JsonObject] = []
+_liquidation_history: list[JsonObject] = []
+_biggest_trades: list[JsonObject] = []
 _top_pnl_wallets: dict[str, float] = {}
 _seen_trades: set[str] = set()
 
@@ -68,7 +68,7 @@ _seen_trades: set[str] = set()
 _COIN_NAMES: dict[str, str] = {}
 
 
-async def _api_call(payload: dict[str, Any]) -> Any:
+async def _api_call(payload: JsonObject) -> JsonValue:
     """Make a POST to the Hyperliquid info endpoint."""
     try:
         async with httpx.AsyncClient(timeout=10) as c:
@@ -101,7 +101,7 @@ async def fetch_all_mids() -> dict[str, float]:
     return {}
 
 
-async def fetch_recent_trades(coin: str = "BTC", limit: int = 50) -> list[dict[str, Any]]:
+async def fetch_recent_trades(coin: str = "BTC", limit: int = 50) -> list[JsonObject]:
     """Get recent trades for a coin."""
     data = await _api_call({"type": "trades", "param": {"coin": coin}})
     if isinstance(data, list):
@@ -109,7 +109,7 @@ async def fetch_recent_trades(coin: str = "BTC", limit: int = 50) -> list[dict[s
     return []
 
 
-async def fetch_liquidations(limit: int = 20) -> list[dict[str, Any]]:
+async def fetch_liquidations(limit: int = 20) -> list[JsonObject]:
     """Get recent liquidation orders."""
     data = await _api_call({"type": "liquidationOrders", "param": {"limit": limit}})
     if isinstance(data, list):
@@ -117,7 +117,7 @@ async def fetch_liquidations(limit: int = 20) -> list[dict[str, Any]]:
     return []
 
 
-async def fetch_funding_history(coin: str = "BTC", limit: int = 10) -> list[dict[str, Any]]:
+async def fetch_funding_history(coin: str = "BTC", limit: int = 10) -> list[JsonObject]:
     """Get funding rate history for a coin. Requires startTime (epoch ms)."""
     import time
 
@@ -152,7 +152,7 @@ async def fetch_open_interests() -> dict[str, float]:
 
 async def fetch_candle_snapshot(
     coin: str, interval: str = "1h", limit: int = 24
-) -> list[dict[str, Any]]:
+) -> list[JsonObject]:
     """Get candle snapshots."""
     now_ms = int(time.time() * 1000)
     start_ms = now_ms - (limit * 3600 * 1000)
@@ -167,13 +167,13 @@ async def fetch_candle_snapshot(
     return []
 
 
-async def fetch_user_portfolio(user: str) -> dict[str, Any] | None:
+async def fetch_user_portfolio(user: str) -> JsonObject | None:
     """Get user portfolio by address."""
     data = await _api_call({"type": "portfolio", "user": user})
-    return cast(dict[str, Any] | None, data)
+    return cast(JsonObject | None, data)
 
 
-async def fetch_all_perp_info() -> dict[str, Any]:
+async def fetch_all_perp_info() -> JsonObject:
     """Fetch all perpetual info in one shot using metaAndAssetCtxs."""
     data = await _api_call({"type": "metaAndAssetCtxs"})
     if isinstance(data, list) and len(data) >= 2:
@@ -204,7 +204,7 @@ async def fetch_all_perp_info() -> dict[str, Any]:
 # ── Trade Classification ─────────────────────────────────────────
 
 
-def classify_trade(trade: dict[str, Any], mid_price: float | None = None) -> dict[str, Any]:
+def classify_trade(trade: JsonObject, mid_price: float | None = None) -> JsonObject:
     """Classify a trade by size, compute USD value."""
     px = float(trade.get("px", 0))
     sz = float(trade.get("sz", 0))
@@ -240,7 +240,7 @@ def classify_trade(trade: dict[str, Any], mid_price: float | None = None) -> dic
     }
 
 
-def classify_liquidation(liq: dict[str, Any]) -> dict[str, Any]:
+def classify_liquidation(liq: JsonObject) -> JsonObject:
     """Classify a liquidation event."""
     coin = liq.get("coin", "?")
     side = liq.get("side", "?")
@@ -275,7 +275,7 @@ def classify_liquidation(liq: dict[str, Any]) -> dict[str, Any]:
 # ── Scan Cycles ──────────────────────────────────────────────────
 
 
-async def scan_trades() -> list[dict[str, Any]]:
+async def scan_trades() -> list[JsonObject]:
     """Scan recent trades across major coins for notable activity."""
     major_coins = ["BTC", "ETH", "SOL", "ARB", "OP", "APT", "SUI", "AVAX", "LINK", "BNB", "DOGE"]
     all_notable = []
@@ -305,7 +305,7 @@ async def scan_trades() -> list[dict[str, Any]]:
     return all_notable
 
 
-async def scan_liquidations() -> list[dict[str, Any]]:
+async def scan_liquidations() -> list[JsonObject]:
     """Scan recent liquidations."""
     liqs = await fetch_liquidations(limit=50)
     notable = []
@@ -316,7 +316,7 @@ async def scan_liquidations() -> list[dict[str, Any]]:
     return notable
 
 
-async def scan_funding() -> dict[str, Any]:
+async def scan_funding() -> JsonObject:
     """Scan funding rates across major coins for spikes."""
     import time
 
@@ -347,7 +347,7 @@ async def scan_funding() -> dict[str, Any]:
     return {"spikes": spikes, "total_coins": len(major_coins)}
 
 
-async def hyperliquid_full_cycle() -> dict[str, Any]:
+async def hyperliquid_full_cycle() -> JsonObject:
     """Run one comprehensive Hyperliquid monitoring cycle."""
     # Fetch all data
     _mids, liqs_data = await asyncio.gather(
@@ -442,7 +442,7 @@ async def hyperliquid_full_cycle() -> dict[str, Any]:
     }
 
 
-def scan_liquidations_from_data(liqs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def scan_liquidations_from_data(liqs: list[JsonObject]) -> list[JsonObject]:
     """Scan liquidation data for notable events."""
     notable = []
     for l in liqs:  # noqa: E741 — pre-existing, audited 2026-08-22

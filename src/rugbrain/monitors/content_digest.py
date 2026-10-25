@@ -9,7 +9,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any
+from rugbrain.json_types import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ CAT: dict[str, str] = {
     "mev": "⚡ MEV",
     "twitter": "🐦 Twitter/X",
 }
-_D: dict[str, Any] = {"daily": [], "hourly": [], "at": None, "srcs": []}
+_D: JsonObject = {"daily": [], "hourly": [], "at": None, "srcs": []}
 
 
 def _mk(
@@ -50,8 +50,8 @@ def _mk(
     hrs: float = 24,
     usd: float = 0,
     sd: float = 0,
-    **kw: Any,
-) -> dict[str, Any]:
+    **kw: JsonValue,
+) -> JsonObject:
     m = max(0, math.log10(max(usd, 1))) if usd > 0 else abs(sd) / 10 if sd else 0
     return {
         "s": s,
@@ -68,14 +68,14 @@ def _mk(
     }
 
 
-async def g_hl() -> list[dict[str, Any]]:
+async def g_hl() -> list[JsonObject]:
     try:
         from rugbrain.monitors.hyperliquid_monitor import hyperliquid_full_cycle as f
 
         d = await f()
     except Exception:
         return []
-    r: list[dict[str, Any]] = []
+    r: list[JsonObject] = []
     n = time.time()
     for t in d.get("biggest_trades", []):
         c = t["coin"]
@@ -116,7 +116,7 @@ async def g_hl() -> list[dict[str, Any]]:
     return r
 
 
-async def g_sc() -> list[dict[str, Any]]:
+async def g_sc() -> list[JsonObject]:
     try:
         from rugbrain.monitors.social_sentiment import get_social_sentiment_state as f
 
@@ -147,14 +147,14 @@ async def g_sc() -> list[dict[str, Any]]:
     return r
 
 
-async def g_lq() -> list[dict[str, Any]]:
+async def g_lq() -> list[JsonObject]:
     try:
         from rugbrain.liquidation_heatmap import liquidation_scan_cycle as f
 
         d = await f()
     except Exception:
         return []
-    r: list[dict[str, Any]] = []
+    r: list[JsonObject] = []
     if (v := d.get("volume_24h_usd", 0)) > 0:
         r.append(_mk("liquidation", "liquidation", f"💀 24h ${v:,.0f}", usd=v, hrs=1))
     r += [
@@ -171,14 +171,14 @@ async def g_lq() -> list[dict[str, Any]]:
     return r
 
 
-async def g_ld() -> list[dict[str, Any]]:
+async def g_ld() -> list[JsonObject]:
     try:
         from rugbrain.monitors.defi_lending import get_defi_lending_state as f
 
         s = f()
     except Exception:
         return []
-    r: list[dict[str, Any]] = []
+    r: list[JsonObject] = []
     for pk, sn in s.get("protocols", {}).items():
         rk = sn.get("risk", {})
         u = rk.get("ltv_proximity_pct")
@@ -189,7 +189,7 @@ async def g_ld() -> list[dict[str, Any]]:
     return r
 
 
-async def g_tw() -> list[dict[str, Any]]:
+async def g_tw() -> list[JsonObject]:
     try:
         from rugbrain.monitors.twitter_tracker import get_twitter_tracker_state as f
 
@@ -208,7 +208,7 @@ async def g_tw() -> list[dict[str, Any]]:
     ]
 
 
-async def g_dt() -> list[dict[str, Any]]:
+async def g_dt() -> list[JsonObject]:
     try:
         from rugbrain.monitors.token_distribution import get_whale_alerts as w
     except Exception:
@@ -243,8 +243,8 @@ async def g_dt() -> list[dict[str, Any]]:
         return []
 
 
-async def g_mk() -> list[dict[str, Any]]:  # fear&greed + peg deviations + exchange flows
-    r: list[dict[str, Any]] = []
+async def g_mk() -> list[JsonObject]:  # fear&greed + peg deviations + exchange flows
+    r: list[JsonObject] = []
     try:
         from rugbrain.fear_index import get_fear_index as f_fg
 
@@ -297,7 +297,7 @@ async def g_mk() -> list[dict[str, Any]]:  # fear&greed + peg deviations + excha
     return r
 
 
-async def g_mv() -> list[dict[str, Any]]:
+async def g_mv() -> list[JsonObject]:
     try:
         from rugbrain.mev_detector import mev_scan_cycle as f
 
@@ -311,8 +311,8 @@ async def g_mv() -> list[dict[str, Any]]:
     )
 
 
-async def g_me() -> list[dict[str, Any]]:  # youtube + podcast + newsletter
-    r: list[dict[str, Any]] = []
+async def g_me() -> list[JsonObject]:  # youtube + podcast + newsletter
+    r: list[JsonObject] = []
     yt: list[tuple[str, str, str]] | None
     try:
         from rugbrain.youtube_ingester import (
@@ -371,9 +371,9 @@ GG: list[tuple[Any, str]] = [
 ]
 
 
-async def _agg() -> tuple[list[dict[str, Any]], list[str]]:
+async def _agg() -> tuple[list[JsonObject], list[str]]:
     rs = await asyncio.gather(*[fn() for fn, _ in GG], return_exceptions=True)
-    sigs: list[dict[str, Any]] = []
+    sigs: list[JsonObject] = []
     src: list[str] = []
     for rv, (_, lb) in zip(rs, GG, strict=False):
         if isinstance(rv, BaseException):
@@ -411,17 +411,17 @@ async def _agg() -> tuple[list[dict[str, Any]], list[str]]:
     return sigs, src
 
 
-async def generate_daily() -> list[dict[str, Any]]:
+async def generate_daily() -> list[JsonObject]:
     sigs, src = await _agg()
     t20 = sigs[:20]
-    bc: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    bc: dict[str, list[JsonObject]] = defaultdict(list)
     cc20: dict[str, int] = defaultdict(int)
     for s in t20:
         bc[s["c"]].append(s)
     for s in t20:
         if c := s.get("coin", ""):
             cc20[c] += 1
-    r: dict[str, Any] = {
+    r: JsonObject = {
         "type": "daily",
         "ts": datetime.now(UTC).isoformat(),
         "n": len(sigs),
@@ -436,13 +436,13 @@ async def generate_daily() -> list[dict[str, Any]]:
     return cast_list(r["top"])
 
 
-async def generate_hourly() -> list[dict[str, Any]]:
+async def generate_hourly() -> list[JsonObject]:
     sigs, src = await _agg()
     urgent = [
         s for s in sigs if s.get("u", 0) > 500000 or s["c"] in ("whale", "liquidation", "mev")
     ] or sigs
     seen: set[str] = set()
-    d: list[dict[str, Any]] = []
+    d: list[JsonObject] = []
     for s in urgent:
         k = f"{s['c']}:{s['t'][:40]}"
         if k not in seen:
@@ -450,7 +450,7 @@ async def generate_hourly() -> list[dict[str, Any]]:
             d.append(s)
     d.sort(key=lambda s: s["sc"], reverse=True)
     t5 = d[:5]
-    r: dict[str, Any] = {
+    r: JsonObject = {
         "type": "hourly",
         "ts": datetime.now(UTC).isoformat(),
         "n": len(sigs),
@@ -461,12 +461,12 @@ async def generate_hourly() -> list[dict[str, Any]]:
     return cast_list(r["urgent"])
 
 
-def cast_list(v: Any) -> list[dict[str, Any]]:
+def cast_list(v: JsonValue) -> list[JsonObject]:
     """Narrow the cached digest payload back to its runtime type."""
     return list(v) if isinstance(v, list) else []
 
 
-def by_coin(coin: str) -> list[dict[str, Any]]:
+def by_coin(coin: str) -> list[JsonObject]:
     coin = coin.upper()
     daily = _D.get("daily")
     if isinstance(daily, dict) and daily.get("top"):
@@ -478,7 +478,7 @@ def by_coin(coin: str) -> list[dict[str, Any]]:
     return []
 
 
-def get_digest() -> dict[str, Any]:
+def get_digest() -> JsonObject:
     return dict(_D)
 
 
