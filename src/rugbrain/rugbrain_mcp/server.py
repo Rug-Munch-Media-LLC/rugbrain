@@ -29,6 +29,9 @@ from rugbrain.rugbrain_mcp import (
 from rugbrain.rugbrain_mcp import (
     tools_search as tools_search,
 )
+from rugbrain.rugbrain_mcp import (
+    tools_route as tools_route,
+)
 from rugbrain.rugbrain_mcp.app import (
     API_KEY as API_KEY,
 )
@@ -170,3 +173,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     mcp.run()
+
+from rugbrain.rugbrain_mcp import tools_corpus  # noqa: E402,F401 - registers corpus_map/corpus_ask

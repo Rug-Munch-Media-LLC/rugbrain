@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh the prediction-market corpus slice every 6h (matches STALE_AFTER_HOURS)
+
+[Timer]
+OnCalendar=*-*-* 00/6:20:00
+RandomizedDelaySec=300
+Persistent=true
+Unit=rugbrain-prediction-markets.service
+
+[Install]
+WantedBy=timers.target

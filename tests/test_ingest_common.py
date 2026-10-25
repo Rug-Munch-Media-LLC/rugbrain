@@ -31,14 +31,14 @@ def test_chunk_text_long_text_overlaps() -> None:
 
 
 def test_crawl_document_stable_id_deterministic() -> None:
-    a = mod.doc_from_article(title="T", content="C", url="https://x/a", source="s", collection="c")
-    b = mod.doc_from_article(title="T", content="C", url="https://x/a", source="s", collection="c")
+    a = mod.doc_from_article(title="T", content="C", url="https://x/a", source="s", collection="default")
+    b = mod.doc_from_article(title="T", content="C", url="https://x/a", source="s", collection="default")
     assert a.stable_id(mod.content_hash("chunk1")) == b.stable_id(mod.content_hash("chunk1"))
     assert a.stable_id("c1") != a.stable_id("c2")
 
 
 def test_crawl_document_metadata_defaults() -> None:
-    doc = mod.doc_from_article(title="T", content="C", url="u", source="s", collection="c")
+    doc = mod.doc_from_article(title="T", content="C", url="u", source="s", collection="default")
     assert doc.severity == "medium"
     assert doc.chain == "unknown"
     assert doc.title == "T"
@@ -76,8 +76,8 @@ class _FakeStore:
 
 async def test_store_documents_embeds_and_inserts() -> None:
     docs = [
-        mod.doc_from_article(title="A", content="alpha", url="u1", source="s", collection="c"),
-        mod.doc_from_article(title="B", content="beta", url="u2", source="s", collection="c"),
+        mod.doc_from_article(title="A", content="alpha", url="u1", source="s", collection="default"),
+        mod.doc_from_article(title="B", content="beta", url="u2", source="s", collection="default"),
     ]
     embedder = _FakeEmbedder()
     store = _FakeStore()
@@ -94,7 +94,7 @@ async def test_store_documents_failed_embed_continues() -> None:
         async def embed_one(self, text: str) -> list[float]:
             raise RuntimeError("embedding backend down")
 
-    docs = [mod.doc_from_article(title="A", content="alpha", url="u1", source="s", collection="c")]
+    docs = [mod.doc_from_article(title="A", content="alpha", url="u1", source="s", collection="default")]
     result = await mod.store_documents(docs, _BrokenEmbedder(), _FakeStore())
     assert result["inserted"] == 0
     assert result["failed"] == 1
