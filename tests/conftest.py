@@ -18,4 +18,3 @@ os.environ.setdefault("RERANK_HOSTED", "0")
 # otherwise flips the default provider to deepinfra on dev hosts).
 os.environ.setdefault("EMBED_PROVIDER", "deepinfra")
 
-import pytest

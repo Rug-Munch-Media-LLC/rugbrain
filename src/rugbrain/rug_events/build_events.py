@@ -30,7 +30,8 @@ from rugbrain.rug_events.qdrant_io import DEFAULT_URL, get_text, scroll_all
 from rugbrain.rug_events.schema import validate
 from rugbrain.rug_events.scythe import (
     DEAD_TOKENS_URL,
-    SOURCE as SCYTHE,
+)
+from rugbrain.rug_events.scythe import (
     build_events as scythe_events,
 )
 from rugbrain.rug_events.solrpds import SOURCE, build_event

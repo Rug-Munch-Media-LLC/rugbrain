@@ -11,7 +11,7 @@ fields. Provenance (slug, Polymarket URL) and ``fetched_at`` travel in
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from rugbrain.ingest_sources.base import IngestDoc
@@ -123,4 +123,4 @@ def market_to_doc(
     )
 
 
-__all__ = ["SOURCE", "DOC_TYPE", "COLLECTION", "market_to_doc"]
+__all__ = ["COLLECTION", "DOC_TYPE", "SOURCE", "market_to_doc"]

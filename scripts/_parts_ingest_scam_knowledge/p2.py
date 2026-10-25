@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+
 
 def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
@@ -137,10 +138,10 @@ async def _upsert_batch(
 
 
 __all__ = [
-    "_content_hash",
-    "_point_id",
     "Checkpoint",
+    "_content_hash",
     "_embed_batch",
     "_ensure_collection",
+    "_point_id",
     "_upsert_batch",
 ]

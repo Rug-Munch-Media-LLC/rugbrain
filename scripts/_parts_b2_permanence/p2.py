@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+
 
 def export_collection_parquet(
     client: qdrant_client.QdrantClient,
@@ -126,8 +127,8 @@ def _is_oversized(client: qdrant_client.QdrantClient, name: str, shard_points: i
 
 
 __all__ = [
-    "export_collection_parquet",
-    "export_collection_ndjson",
-    "collection_points",
     "_is_oversized",
+    "collection_points",
+    "export_collection_ndjson",
+    "export_collection_parquet",
 ]

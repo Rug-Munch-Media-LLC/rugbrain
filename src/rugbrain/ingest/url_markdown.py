@@ -69,6 +69,6 @@ def to_markdown(body: bytes, content_type: str = "", url: str = "") -> str:
         markdown = (getattr(result, "text_content", "") or "").strip()
         if markdown:
             return markdown
-    except Exception:  # noqa: BLE001 — optional dependency, refusal is a value
+    except Exception:
         pass
     return fallback_markdown(body)

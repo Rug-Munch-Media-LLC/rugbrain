@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
 from _parts_ingest_scam_knowledge.p2 import Checkpoint
 from _parts_ingest_scam_knowledge.p9 import _ingest_source
+
 
 async def main_async(
     sources: list[str],
@@ -21,7 +22,7 @@ async def main_async(
     checkpoint = Checkpoint(CHECKPOINT_PATH)
     checkpoint.load()
     # One-time filesystem setup before the hot loop; blocking is fine here.
-    KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
+    KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
     results: dict[str, dict[str, Any]] = {}
     async with httpx.AsyncClient(base_url=QDRANT_URL, timeout=120.0) as client:
@@ -146,6 +147,6 @@ def main() -> None:
 
 
 __all__ = [
-    "main_async",
     "main",
+    "main_async",
 ]

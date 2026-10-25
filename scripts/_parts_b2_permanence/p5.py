@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
 from _parts_b2_permanence.p4 import _merge_shard_progress
+
 
 def upload_manifest(
     b2_api: B2Api,

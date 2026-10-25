@@ -75,7 +75,7 @@ async def ask_corpus(
     for name in cols[:5]:
         try:
             found = await searcher.search(name, question, per_collection)
-        except Exception as exc:  # noqa: BLE001 - search lane down is a typed refusal
+        except Exception as exc:
             return {
                 "status": "refused",
                 "question": question,

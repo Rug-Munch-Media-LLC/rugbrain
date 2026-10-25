@@ -62,16 +62,16 @@ from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:  # works run directly or as scripts.*
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _parts_b2_permanence.p1 import *  # noqa: F401,F403
-from _parts_b2_permanence.p2 import *  # noqa: F401,F403
-from _parts_b2_permanence.p3 import *  # noqa: F401,F403
-from _parts_b2_permanence.p4 import *  # noqa: F401,F403
-from _parts_b2_permanence.p5 import *  # noqa: F401,F403
-from _parts_b2_permanence.p6 import *  # noqa: F401,F403
-from _parts_b2_permanence.p7 import *  # noqa: F401,F403
-from _parts_b2_permanence.p8 import *  # noqa: F401,F403
-from _parts_b2_permanence.p9 import *  # noqa: F401,F403
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+from _parts_b2_permanence.p1 import *  # noqa: F403
+from _parts_b2_permanence.p2 import *  # noqa: F403
+from _parts_b2_permanence.p3 import *  # noqa: F403
+from _parts_b2_permanence.p4 import *  # noqa: F403
+from _parts_b2_permanence.p5 import *  # noqa: F403
+from _parts_b2_permanence.p6 import *  # noqa: F403
+from _parts_b2_permanence.p7 import *  # noqa: F403
+from _parts_b2_permanence.p8 import *  # noqa: F403
+from _parts_b2_permanence.p9 import *  # noqa: F403
 
 if __name__ == "__main__":
     sys.exit(main())

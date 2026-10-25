@@ -4,11 +4,9 @@ Extracted from ``rugbrain.endpoints`` so route modules no longer import the
 router-assembly module (``endpoints -> routes -> endpoints`` cycle).
 """
 
-from typing import Any
-
-from datetime import UTC, datetime
 import os
-
+from datetime import UTC, datetime
+from typing import Any
 
 RATE_LIMITS = {
     "free": 5,

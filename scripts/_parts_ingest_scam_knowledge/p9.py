@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p2 import Checkpoint, _embed_batch, _ensure_collection, _upsert_batch
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p2 import (
+    Checkpoint,
+    _embed_batch,
+    _ensure_collection,
+    _upsert_batch,
+)
 from _parts_ingest_scam_knowledge.p3 import _build_point
 from _parts_ingest_scam_knowledge.p8 import _collect_docs
+
 
 async def _ingest_source(
     source: str,

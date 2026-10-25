@@ -183,11 +183,11 @@ __all__ = [
     "LICENCE_PERMISSIVE",
     "LICENCE_PUBLIC_DOMAIN",
     "LICENCE_UNLICENSED",
+    "MEASURED_ON",
     "REDISTRIBUTABLE_LICENCES",
     "UNCLASSIFIED",
+    "CorpusDeclaration",
     "CorpusDomain",
     "CorpusLanguage",
     "LicenceStatus",
-    "MEASURED_ON",
-    "CorpusDeclaration",
 ]

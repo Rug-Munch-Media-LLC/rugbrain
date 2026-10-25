@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+
 
 def _detect_attack_vector(text: str) -> str:
     for pattern, vector in _CONTENT_VECTORS:
@@ -145,12 +146,12 @@ def _chunk_markdown_sections(text: str, max_len: int = CHUNK_SIZE) -> list[str]:
 
 
 __all__ = [
+    "_chunk_markdown_sections",
+    "_chunk_text",
+    "_date_to_ts",
     "_detect_attack_vector",
     "_detect_chain",
-    "_normalize_severity",
-    "_date_to_ts",
     "_normalize_date",
+    "_normalize_severity",
     "_parse_amount_lost",
-    "_chunk_text",
-    "_chunk_markdown_sections",
 ]

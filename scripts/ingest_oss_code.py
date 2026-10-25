@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Bounded OSS source ingest into Qdrant collection `oss_code` (4096-d)."""
-import json, os, re, subprocess, sys, uuid, pathlib
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import uuid
+
 import httpx
 
 QDRANT = "http://127.0.0.1:6334"

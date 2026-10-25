@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
-from _parts_b2_permanence.p2 import _is_oversized, export_collection_ndjson, export_collection_parquet
+from _parts_b2_permanence._h1 import *  # noqa: F403
+from _parts_b2_permanence.p2 import (
+    _is_oversized,
+    export_collection_ndjson,
+    export_collection_parquet,
+)
+
 
 def snapshot_collection(
     client: qdrant_client.QdrantClient,

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import pytest
-import respx
-import httpx
-
 # Import the module under test
 import sys
 
-sys.path.insert(0, "scripts")
-from ingest_forta import _parse_csv, _build_docs, run  # type: ignore
+import httpx
+import pytest
+import respx
 
+sys.path.insert(0, "scripts")
+from ingest_forta import _build_docs, _parse_csv, run  # type: ignore
 
 # ── Sample CSV data (matching the Forta schema) ──────────────────────────
 SAMPLE_CSV = """contract_address,contract_tag,contract_creator,contract_creation_tx,contract_creator_tag,source,notes,contract_creator_etherscan_label

@@ -16,18 +16,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
-from tests.corpus_manifest_fixtures import client_for
 from rugbrain.corpus import (
     DECLARED,
-    DimMismatch,
     declared_corpus,
-    verify_live_widths,
 )
 from rugbrain.qdrant_store import lane_resolver as lr
 from rugbrain.qdrant_store.lane_table import CANONICAL_LANE_DIM, PRESERVED_LANE_DIM
-
 
 # --------------------------------------------------------------------------
 # 3. LIVE-WIDTH MISMATCH IS FLAGGED

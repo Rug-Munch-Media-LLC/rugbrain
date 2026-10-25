@@ -31,8 +31,8 @@ import asyncpg
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from rugbrain.rss_classify import classify  # noqa: E402
-from rugbrain.rss_store import content_hash  # noqa: E402
+from rugbrain.rss_classify import classify
+from rugbrain.rss_store import content_hash
 
 SELECT = """
 SELECT news_id, title, summary, source, url, category, source_trust, content_hash

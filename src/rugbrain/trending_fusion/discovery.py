@@ -8,7 +8,8 @@ A failing or empty source is named in ``missing`` -- never scored as zero.
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from rugbrain.trending_fusion.geckoterminal import geckoterminal_rows
 from rugbrain.trending_fusion.indexed_pairs import indexed_pair_rows
@@ -46,7 +47,7 @@ async def gather_rows(chain: str, sources: tuple[Source, ...] | None = None) -> 
     for name, fetch in sources if sources is not None else SOURCES:
         try:
             found = await fetch(chain)
-        except Exception as exc:  # noqa: BLE001 - adapter faults are reported, not raised
+        except Exception as exc:
             missing[name] = f"{type(exc).__name__}: {str(exc)[:120]}"
             continue
         if not found:

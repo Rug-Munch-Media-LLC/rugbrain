@@ -13,7 +13,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MANIFEST = Path("/srv/work/repos/fleet-infra/mcp/canonical-mcp.json")
@@ -102,7 +102,7 @@ def main() -> int:
         except (subprocess.CalledProcessError, OSError) as exc:
             print(f"{name:18} DB-FAIL {exc}", file=sys.stderr)
     payload = {
-        "captured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "captured_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": "scripts/capture-layer-inventory.py — MCP tools/list (http) + metamcp tools table (db)",
         "servers": inventory,
         "schemas": schemas,

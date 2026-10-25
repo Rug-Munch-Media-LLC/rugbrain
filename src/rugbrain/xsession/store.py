@@ -15,8 +15,6 @@ from typing import Any
 
 import asyncpg
 
-from rugbrain.xsession import config
-
 INSERT = """
 INSERT INTO news_items (news_id, url, title, summary, body_markdown, source,
                         published_at, source_type, tweet_id, source_trust,

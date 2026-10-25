@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
 from _parts_ingest_scam_knowledge.p1 import _detect_attack_vector, _detect_chain
 from _parts_ingest_scam_knowledge.p3 import _clone_repo
 from _parts_ingest_scam_knowledge.p4 import _defihacklabs_docs, _fetch_rekt_leaderboard, _rekt_docs
 from _parts_ingest_scam_knowledge.p5 import _cryptoscamdb_docs
 from _parts_ingest_scam_knowledge.p6 import _defillama_hacks_docs, _slowmist_docs, _swc_docs
 from _parts_ingest_scam_knowledge.p7 import _immunefi_docs, _web3hacks_docs
+
 
 async def _solodit_docs(limit: int | None) -> list[dict[str, Any]]:
     """Scrape audit report listings from Solodit (best-effort).
@@ -177,8 +178,8 @@ async def _collect_docs(
 
 
 __all__ = [
-    "_solodit_docs",
-    "_postmortems_docs",
-    "_html_to_text",
     "_collect_docs",
+    "_html_to_text",
+    "_postmortems_docs",
+    "_solodit_docs",
 ]

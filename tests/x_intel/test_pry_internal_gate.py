@@ -32,7 +32,6 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pytest
 
 from rugbrain.ingest_sources.x_intel import pry_lane
@@ -44,7 +43,6 @@ from rugbrain.ingest_sources.x_intel.pry_internal_auth import (
     internal_fingerprint,
     pry_internal_headers,
 )
-from rugbrain.ingest_sources.x_intel.pry_lane import scrape_tweet
 
 _TOKEN = "f" * 64
 _CALLER = "127.0.0.1"

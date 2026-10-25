@@ -41,7 +41,7 @@ async def corpus_ask(question: str, budget_tokens: int = 800) -> dict[str, Any]:
 
     try:
         available = await HttpQdrantProbe().collections()
-    except Exception:  # noqa: BLE001 - routing degrades to declared tables only
+    except Exception:
         available = None
     return await ask_corpus(
         question, HttpSearch(), budget_tokens=budget_tokens, available=available

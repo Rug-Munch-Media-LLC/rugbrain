@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+
 
 def _merge_shard_progress(
     prior: dict[str, Any] | None, incoming: dict[str, Any]

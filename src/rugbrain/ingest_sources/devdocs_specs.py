@@ -48,8 +48,8 @@ from rugbrain.ingest_sources.devdocs_specs_devtools import DEVTOOL_SITES
 from rugbrain.ingest_sources.devdocs_specs_languages import BLOG_SITES, LANGUAGE_SITES
 from rugbrain.ingest_sources.devdocs_specs_languages_extra import LANGUAGE_EXTRA_SITES
 from rugbrain.ingest_sources.devdocs_specs_oss_stack import OSS_STACK_SITES
-from rugbrain.ingest_sources.devdocs_specs_social import SOCIAL_SITES
 from rugbrain.ingest_sources.devdocs_specs_protocols import PROTOCOL_SITES
+from rugbrain.ingest_sources.devdocs_specs_social import SOCIAL_SITES
 
 #: Every declared family, in fetch order. The one tuple every consumer reads.
 DOC_SITES: Final[tuple[DocSite, ...]] = (
@@ -82,7 +82,6 @@ __all__ = [
     "DEVTOOL_SITES",
     "DOCS_COLLECTION",
     "DOC_SITES",
-    "SOCIAL_SITES",
     "FEED_SITES",
     "LANGUAGE_EXTRA_SITES",
     "LANGUAGE_SITES",
@@ -96,6 +95,7 @@ __all__ = [
     "OSS_STACK_SITES",
     "PLATFORM_SITES",
     "PROTOCOL_SITES",
+    "SOCIAL_SITES",
     "STATIC_SITES",
     "DocSite",
 ]

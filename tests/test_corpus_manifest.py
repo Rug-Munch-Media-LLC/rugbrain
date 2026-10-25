@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import pytest
 
-from tests.corpus_manifest_fixtures import CorpusDomain, CorpusLanguage, decl
 from rugbrain.corpus import (
     DECLARED,
     UndeclaredCorpus,
@@ -25,6 +24,7 @@ from rugbrain.corpus import (
 )
 from rugbrain.corpus.schema import CODE_LANGUAGES
 from rugbrain.qdrant_store.lane_table import CANONICAL_LANE_DIM, PRESERVED_LANE_DIM
+from tests.corpus_manifest_fixtures import CorpusDomain, CorpusLanguage, decl
 
 
 # --------------------------------------------------------------------------

@@ -3,35 +3,21 @@
 from __future__ import annotations
 
 import argparse
-
 import asyncio
-
 import hashlib
-
 import json
-
 import logging
-
 import os
-
 import re
-
 import shutil
-
 import subprocess
-
 import tempfile
-
 import uuid
-
 from datetime import UTC, datetime
-
 from pathlib import Path
-
 from typing import Any
 
 import httpx
-
 import numpy as np
 
 from rugbrain.ingest_smart import (
@@ -135,48 +121,48 @@ CHAIN_ALIASES: dict[str, tuple[str, ...]] = {
 
 
 __all__ = [
-    "annotations",
-    "argparse",
-    "asyncio",
-    "hashlib",
-    "json",
-    "logging",
-    "os",
-    "re",
-    "shutil",
-    "subprocess",
-    "tempfile",
-    "uuid",
-    "UTC",
-    "datetime",
-    "Path",
-    "Any",
-    "httpx",
-    "np",
-    "dedup_vectors",
-    "filter_by_severity",
-    "git_refresh",
-    "repo_last_updated",
-    "smart_split",
-    "sort_by_priority",
-    "logger",
-    "QDRANT_URL",
-    "QWEN_EMBED_URL",
-    "QWEN_EMBED_MODEL_NAME",
-    "EMBEDDING_DIM",
-    "KNOWLEDGE_DIR",
-    "CHECKPOINT_PATH",
+    "ATTACK_VECTORS",
     "BATCH_SIZE",
-    "CHUNK_SIZE",
+    "CHAIN_ALIASES",
+    "CHECKPOINT_PATH",
     "CHUNK_OVERLAP",
-    "_resolve",
+    "CHUNK_SIZE",
+    "COLLECTION_CONTRACT_AUDITS",
     "COLLECTION_DEFI_EXPLOITS",
     "COLLECTION_SCAM_PATTERNS",
     "COLLECTION_VULNERABILITIES",
-    "COLLECTION_CONTRACT_AUDITS",
-    "SOURCE_COLLECTIONS",
     "DEDUP_THRESHOLD_DEFAULT",
-    "ATTACK_VECTORS",
+    "EMBEDDING_DIM",
+    "KNOWLEDGE_DIR",
+    "QDRANT_URL",
+    "QWEN_EMBED_MODEL_NAME",
+    "QWEN_EMBED_URL",
     "SEVERITY_RANK",
-    "CHAIN_ALIASES",
+    "SOURCE_COLLECTIONS",
+    "UTC",
+    "Any",
+    "Path",
+    "_resolve",
+    "annotations",
+    "argparse",
+    "asyncio",
+    "datetime",
+    "dedup_vectors",
+    "filter_by_severity",
+    "git_refresh",
+    "hashlib",
+    "httpx",
+    "json",
+    "logger",
+    "logging",
+    "np",
+    "os",
+    "re",
+    "repo_last_updated",
+    "shutil",
+    "smart_split",
+    "sort_by_priority",
+    "subprocess",
+    "tempfile",
+    "uuid",
 ]

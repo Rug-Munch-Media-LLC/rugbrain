@@ -56,7 +56,7 @@ def _api_key() -> str:
 async def embed(
     text: str,
     *,
-    query: bool = False,  # noqa: ARG001 - provider applies its own template
+    query: bool = False,
     timeout: float | None = None,  # noqa: ASYNC109 - policy value, not an asyncio timeout
 ) -> list[float] | None:
     """Embed *text* on SiliconFlow, or None when the rung is unusable.
@@ -99,7 +99,7 @@ async def embed(
             logger.warning("siliconflow_dim=%s want=4096", len(vector) if vector else None)
             return None
         return [float(v) for v in vector]
-    except Exception as exc:  # noqa: BLE001 - a rung must never kill the chain
+    except Exception as exc:
         logger.debug("siliconflow_failed: %s", str(exc)[:120])
         return None
 
@@ -151,6 +151,6 @@ async def embed_batch(
             logger.warning("siliconflow_batch_count=%d want=%d", len(out), len(items))
             return None
         return out
-    except Exception as exc:  # noqa: BLE001 — a rung must never kill the chain
+    except Exception as exc:
         logger.debug("siliconflow_batch_failed: %s", str(exc)[:120])
         return None

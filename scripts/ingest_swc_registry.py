@@ -46,7 +46,6 @@ import argparse
 import asyncio
 import hashlib
 import logging
-import os
 import re
 from typing import Any
 

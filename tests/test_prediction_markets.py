@@ -6,7 +6,7 @@ a fake httpx client so CI never touches Polymarket.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -20,7 +20,7 @@ from rugbrain.prediction_markets_freshness import (
     freshness,
 )
 
-FETCHED = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
+FETCHED = datetime(2026, 10, 25, 12, 0, tzinfo=UTC)
 
 MARKET = {
     "id": "m-1",
@@ -134,12 +134,12 @@ async def test_fetch_fails_open_on_upstream_error():
 
 def test_stale_market_is_labelled_not_current():
     """A 7h-old snapshot must be labelled stale, never presented as current odds."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from rugbrain.prediction_markets_docs import market_to_doc
     from rugbrain.prediction_markets_freshness import annotate
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     fetched = now - timedelta(hours=7)
     market = {"question": "Will X protocol ship by date Y?",
               "slug": "x-protocol-ship-by-date-y",

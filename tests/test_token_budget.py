@@ -305,7 +305,6 @@ async def test_rerank_hosted_cap_is_env_tunable() -> None:
 
 async def test_reranker_module_caps_documents() -> None:
     """The top-level reranker had no cap at all before this change."""
-    from rugbrain import reranker as rr
 
     from rugbrain.token_budget import budget_documents, rerank_budget
 

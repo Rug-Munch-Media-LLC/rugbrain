@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+
 
 def resolve_qdrant_client(host: str | None, port: int | None) -> qdrant_client.QdrantClient:
     """Build a QdrantClient, trying the fallback chain until one answers.
@@ -116,10 +117,10 @@ def collection_info(client: qdrant_client.QdrantClient, name: str) -> dict[str, 
 
 
 __all__ = [
-    "resolve_qdrant_client",
-    "list_collections",
-    "filter_collections",
-    "resolve_payload_only_collections",
     "collection_has_vectors",
     "collection_info",
+    "filter_collections",
+    "list_collections",
+    "resolve_payload_only_collections",
+    "resolve_qdrant_client",
 ]

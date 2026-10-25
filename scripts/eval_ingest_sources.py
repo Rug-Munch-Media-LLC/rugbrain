@@ -23,9 +23,8 @@ import aiohttp
 # Add src to path for rugbrain imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from rugbrain.eval.backtest_report import BacktestReport, QueryScore
+from rugbrain.eval.backtest_report import QueryScore
 from rugbrain.eval.golden_set import GoldenQuery, load_golden
-from rugbrain.eval.ndcg import mrr, ndcg_at_k, recall_at_k
 from rugbrain.eval.query_scoring import score_query
 
 

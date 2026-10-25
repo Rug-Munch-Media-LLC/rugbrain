@@ -24,8 +24,8 @@ One primary function: `plan_chunks`.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 # Measured minutes per collection (2026-10-20 manifest). Collections absent
 # from this table cost <= 0.1 min in every observed run; DEFAULT_MIN is

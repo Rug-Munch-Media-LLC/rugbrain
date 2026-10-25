@@ -177,13 +177,13 @@ def worklist(queries: list[str], evidence: dict[str, Evidence], limit: int = 20)
 
 
 __all__ = [
-    "Decision",
     "EVIDENCE_FILENAME",
     "EVIDENCE_SCHEMA",
-    "Evidence",
     "LEGAL_STATES",
     "SYNTHETIC",
     "VERIFIED",
+    "Decision",
+    "Evidence",
     "counts",
     "decide",
     "load_evidence",

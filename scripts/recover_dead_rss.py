@@ -35,7 +35,7 @@ import httpx
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import scrape_dead_sources as sds  # noqa: E402
+import scrape_dead_sources as sds
 
 CONFIG = Path(__file__).resolve().parents[1] / "config" / "dead_feeds.json"
 ERRORS = "SELECT source, url, http_status, last_error FROM rss_feed_status WHERE status='error'"

@@ -5,8 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from rugbrain.corpus_awareness.probe import QdrantUnreachable
-from rugbrain.corpus_awareness.probe import TS_KEYS
+from rugbrain.corpus_awareness.probe import TS_KEYS, QdrantUnreachable
 from rugbrain.corpus_awareness.questions import question_for
 from rugbrain.corpus_awareness.routes import exposed_by
 

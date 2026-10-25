@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from _parts_b2_permanence._h1 import *  # noqa: F401,F403
+from _parts_b2_permanence._h1 import *  # noqa: F403
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -175,7 +176,7 @@ def canonical_denominator(names: list[str], suffix: str = "_8b") -> int:
 
 
 __all__ = [
-    "build_parser",
     "_fmt_size",
+    "build_parser",
     "canonical_denominator",
 ]

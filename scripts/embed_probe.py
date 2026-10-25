@@ -7,7 +7,10 @@ Order (file-first, stale env never wins):
   3. local 0.6B 1024-d   (:8004) -- NOT corpus-valid, reported for completeness only
 """
 from __future__ import annotations
-import json, os, time, urllib.request
+
+import json
+import time
+import urllib.request
 
 SILICONFLOW_KEY = "/srv/secrets/siliconflow_api_key"
 LOCAL_ENV = "/srv/models/embed-lane.env"
@@ -36,7 +39,7 @@ def probe(url: str, key: str, model: str, timeout: int = 180) -> dict:
             data = json.loads(r.read())
         dim = len(data["data"][0]["embedding"])
         return {"ok": True, "dim": dim, "ms": int((time.time() - t0) * 1000)}
-    except Exception as e:  # noqa: BLE001 - probe reports, never raises
+    except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {str(e)[:80]}",
                 "ms": int((time.time() - t0) * 1000)}
 

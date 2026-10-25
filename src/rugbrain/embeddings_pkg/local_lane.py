@@ -16,13 +16,13 @@ import time
 
 import httpx
 
+from rugbrain.embeddings_pkg import admission
 from rugbrain.embeddings_pkg.config import (
     EMBEDDING_DIM,
     QUERY_INSTRUCT,
     QWEN_EMBED_MODEL,
     QWEN_EMBED_URL,
 )
-from rugbrain.embeddings_pkg import admission
 from rugbrain.embeddings_pkg.normalize import resize
 
 log = logging.getLogger(__name__)

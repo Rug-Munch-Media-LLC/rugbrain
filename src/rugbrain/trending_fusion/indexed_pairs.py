@@ -22,9 +22,9 @@ No paid marker: first-seen pairs are organic.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 URL = "http://127.0.0.1:8000/api/v1/market/new-pairs"
 ENV = "RUGBRAIN_INDEXED_PAIRS_URL"
@@ -77,8 +77,8 @@ def _age(raw: Any) -> float:
     except ValueError:
         return 0.5
     if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    hours = max((datetime.now(timezone.utc) - created).total_seconds() / 3600.0, 0.0)
+        created = created.replace(tzinfo=UTC)
+    hours = max((datetime.now(UTC) - created).total_seconds() / 3600.0, 0.0)
     return 1.0 / (1.0 + hours / 24.0)
 
 

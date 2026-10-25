@@ -5,8 +5,8 @@ One job: markdown -> records. No network, no Qdrant. Code fences are never split
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 FM = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 HEADING = re.compile(r"^#{2,3} ")

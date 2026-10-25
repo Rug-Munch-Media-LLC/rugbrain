@@ -9,6 +9,7 @@ import os
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
+
 from rugbrain.json_types import JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)

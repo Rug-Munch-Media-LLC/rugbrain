@@ -1,6 +1,6 @@
 """Header chunk 2/2 of scripts/ingest_scam_knowledge.py (imports + constants)."""
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
 
 _CONTENT_VECTORS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"reentranc", re.I), "reentrancy"),
@@ -138,24 +138,24 @@ SOURCE_TABLE: dict[str, tuple[str, str, tuple[str, ...] | None]] = {
 
 
 __all__ = [
-    "_CONTENT_VECTORS",
-    "_CONTRACT_RE",
-    "_COMMENT_LINES_RE",
-    "_SKIP_SOL",
-    "REKT_LEADERBOARD_URL",
-    "_YAML_KEY_RE",
-    "_YAML_URL_RE",
-    "_YAML_CAT_RE",
-    "_YAML_SUB_RE",
-    "_YAML_DESC_RE",
-    "_YAML_ADDR_RE",
-    "_SLOWMIST_MD_FILES",
-    "_SWC_MD",
-    "_SWC_IDS",
-    "_SWC_VECTORS",
     "DEFILLAMA_HACKS_API",
     "IMMUNEFI_EXPLORE_URL",
-    "_IMMUNEFI_STOPWORDS",
+    "REKT_LEADERBOARD_URL",
     "SOLODIT_URL",
     "SOURCE_TABLE",
+    "_COMMENT_LINES_RE",
+    "_CONTENT_VECTORS",
+    "_CONTRACT_RE",
+    "_IMMUNEFI_STOPWORDS",
+    "_SKIP_SOL",
+    "_SLOWMIST_MD_FILES",
+    "_SWC_IDS",
+    "_SWC_MD",
+    "_SWC_VECTORS",
+    "_YAML_ADDR_RE",
+    "_YAML_CAT_RE",
+    "_YAML_DESC_RE",
+    "_YAML_KEY_RE",
+    "_YAML_SUB_RE",
+    "_YAML_URL_RE",
 ]

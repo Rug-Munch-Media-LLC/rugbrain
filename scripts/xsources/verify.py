@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -23,7 +23,7 @@ def account_created_at(user_id: str | None) -> str | None:
         return None
     if ms <= SNOWFLAKE_EPOCH_MS:
         return None
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(ms / 1000, tz=UTC).isoformat()
 
 
 def _variants(handle: str) -> list[str]:
@@ -110,7 +110,7 @@ async def verify_all(items: list[dict[str, Any]], concurrency: int = 4) -> list[
             result = await lookup(client, item["handle"])
             await asyncio.sleep(0.2)
             result["site"] = site
-            return {**item, "x": result, "verified_at": datetime.now(tz=timezone.utc).isoformat()}
+            return {**item, "x": result, "verified_at": datetime.now(tz=UTC).isoformat()}
 
     async with httpx.AsyncClient(headers=HEADERS) as client:
         return await asyncio.gather(*(one(client, item) for item in items))

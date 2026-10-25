@@ -69,7 +69,7 @@ class HttpQdrantProbe:
                 resp = await client.get("/collections")
                 resp.raise_for_status()
                 raw = (resp.json().get("result") or {}).get("collections") or []
-        except Exception as exc:  # noqa: BLE001 - any transport failure is one refusal
+        except Exception as exc:
             raise QdrantUnreachable(f"{self.url}: {type(exc).__name__}: {exc}") from exc
         return sorted(item["name"] for item in raw if not item["name"].startswith("_"))
 
@@ -93,7 +93,7 @@ class HttpQdrantProbe:
                 hits = (scroll.json().get("result") or {}).get("points") or []
         except QdrantUnreachable:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise QdrantUnreachable(f"{self.url}/{name}: {type(exc).__name__}: {exc}") from exc
         return {
             "dim": _dim(info),

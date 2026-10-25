@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from _parts_ingest_scam_knowledge._h1 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge._h2 import *  # noqa: F401,F403
-from _parts_ingest_scam_knowledge.p1 import _chunk_markdown_sections, _date_to_ts, _detect_attack_vector, _detect_chain
+from _parts_ingest_scam_knowledge._h1 import *  # noqa: F403
+from _parts_ingest_scam_knowledge._h2 import *  # noqa: F403
+from _parts_ingest_scam_knowledge.p1 import (
+    _chunk_markdown_sections,
+    _date_to_ts,
+    _detect_attack_vector,
+    _detect_chain,
+)
+
 
 def _slowmist_docs(repo_root: Path, limit: int | None) -> list[dict[str, Any]]:
     """Parse SlowMist markdown knowledge (study notes, audit reports, translations)."""
@@ -166,7 +172,7 @@ async def _defillama_hacks_docs(limit: int | None) -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "_defillama_hacks_docs",
     "_slowmist_docs",
     "_swc_docs",
-    "_defillama_hacks_docs",
 ]

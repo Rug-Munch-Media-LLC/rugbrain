@@ -9,9 +9,8 @@ import re
 import xml.etree.ElementTree as ET
 
 import httpx
-
-from regs_ingest.normalise import canonical_url
 from regs_ingest.config import CFTC_CANDIDATES, CFTC_ROBOTS, LISTING_PAGES, UA
+from regs_ingest.normalise import canonical_url
 
 ANCHOR = re.compile(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
 TAGS = re.compile(r"<[^>]+>")

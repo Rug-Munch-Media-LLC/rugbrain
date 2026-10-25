@@ -8,7 +8,7 @@ prices move intraday and a corpus slice is refreshed on a timer, not on read.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 STALE_AFTER_HOURS: float = 6.0
 LABEL_CURRENT = "current"
@@ -19,8 +19,8 @@ def _as_utc(value: datetime | str) -> datetime:
     if isinstance(value, str):
         value = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def freshness(
@@ -30,7 +30,7 @@ def freshness(
 ) -> dict[str, object]:
     """Primary entry point: is this snapshot current or stale, and by how much."""
     fetched = _as_utc(fetched_at)
-    reference = _as_utc(now) if now is not None else datetime.now(timezone.utc)
+    reference = _as_utc(now) if now is not None else datetime.now(UTC)
     age = (reference - fetched).total_seconds() / 3600.0
     stale = age > stale_after_hours
     return {
@@ -61,4 +61,4 @@ def annotate(
     return f"{text.rstrip()}\n{footer}"
 
 
-__all__ = ["STALE_AFTER_HOURS", "LABEL_CURRENT", "LABEL_STALE", "freshness", "annotate"]
+__all__ = ["LABEL_CURRENT", "LABEL_STALE", "STALE_AFTER_HOURS", "annotate", "freshness"]
