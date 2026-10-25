@@ -43,6 +43,8 @@ def route_question(question: str, probe: bool = True) -> dict[str, Any]:
         "not_for": layer.get("not_for", ""),
         "probe": health,
         "degraded": health["reachable"] is False,
+        "estate": table.get("estate", []),
+        "estate_apps": [e["app"] for e in table.get("estate", [])],
         "table_version": table.get("version"),
     }
     if result["degraded"]:
