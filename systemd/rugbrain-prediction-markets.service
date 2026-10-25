@@ -1,0 +1,12 @@
+[Unit]
+Description=RugBrain — refresh Polymarket prediction-market corpus slice
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/work/repos/rugbrain
+EnvironmentFile=-/srv/work/repos/rugbrain/.env.rag
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python scripts/ingest_prediction_markets.py --limit 50 --refresh
+TimeoutStartSec=900
+Nice=10
