@@ -16,6 +16,8 @@ import logging
 import os
 from typing import Any
 
+from rugbrain import ingest_health
+
 log = logging.getLogger("rugbrain.clickhouse_store")
 
 # Fleet defaults, mirroring alerts/config.py verbatim.
@@ -111,8 +113,8 @@ def load_env_rag(path: str = ".env.rag") -> None:
                 if line.startswith("CLICKHOUSE_") and "=" in line:
                     key, _, val = line.strip().partition("=")
                     os.environ.setdefault(key, val)
-    except OSError:
-        pass
+    except OSError as exc:
+        ingest_health.note("retrieval.clickhouse.env_load_failed", err=type(exc).__name__)
 
 
 def get_client(database: str | None = None) -> Any:

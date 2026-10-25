@@ -33,3 +33,10 @@ The canonical RAG service is now **[rugbrain](https://git.rugmunch.io/RugMunchMe
 
 See `README.md` (deprecation banner at top) and the rugbrain repo's
 `README.md` (canonical notice at top).
+
+## Retired: `rmi_articles` (ClickHouse)
+
+Marked retired 2026-10-25 by backend-implementer. The table exists with 0 rows and has
+**no writer and no reader** in this repo (`grep -rn rmi_articles src/ scripts/ deploy/ tests/`
+= 0 hits). Articles are stored in Qdrant by the ingest pipeline; do not add a writer.
+Drop the table out-of-band when convenient.
