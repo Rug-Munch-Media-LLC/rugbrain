@@ -74,9 +74,38 @@ def endpoint(base: str) -> str:
     return base if base.endswith("/embeddings") else f"{base}/embeddings"
 
 
+_LOCAL_KEY_ENV = ("LLAMA_EMBED_KEY", "QWEN_EMBED_API_KEY", "LOCAL_EMBED_KEY")
+_LOCAL_KEY_FILES = ("/srv/models/embed-lane.env", "/srv/secrets/embed-lane.env")
+
+
+def local_embed_key() -> str:
+    """Local llama.cpp key: server env files FIRST, then the process env.
+
+    The 8B lane starts with ``--api-key ${LLAMA_EMBED_KEY}`` from
+    ``/srv/models/embed-lane.env``. Callers that only looked at
+    ``os.getenv("LLAMA_EMBED_KEY")`` inherited nothing, sent no Authorization
+    header and got ``401 Invalid API Key`` on :8024 (measured 2026-10-25) --
+    a key mismatch blamed on the lane. Never logs the value.
+    """
+    for path in _LOCAL_KEY_FILES:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    name, _, value = line.partition("=")
+                    if name.strip() in ("LLAMA_EMBED_KEY", "SHIM_KEY") and value.strip():
+                        return value.strip().strip('"').strip("'")
+        except OSError:
+            continue
+    for name in _LOCAL_KEY_ENV:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _local_lane() -> Lane:
     headers = {"Content-Type": "application/json"}
-    key = os.getenv("LLAMA_EMBED_KEY", "").strip()
+    key = local_embed_key()
     if key:
         headers["Authorization"] = f"Bearer {key}"
     return Lane(

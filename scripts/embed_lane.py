@@ -196,6 +196,14 @@ async def embed_batch(
             tried.append(lane.name)
             vectors = await _embed_lane(lane, texts, http)
             if vectors is not None:
+                first = next((v for v in vectors if v), None)
+                if first is not None and len(first) != CORPUS_DIM:
+                    record_failure(lane.name, "dim", f"dim={len(first)} want={CORPUS_DIM}")
+                    raise EmbedLaneExhausted(
+                        f"lane={lane.name} url={lane.url} returned dim={len(first)} but the "
+                        f"corpus requires {CORPUS_DIM}: refusing to write a mixed-dimension "
+                        f"collection (no silent 1024-d fallback)"
+                    )
                 if lane.name != lanes[0].name:
                     logger.warning("embed_lane_fallback used=%s preferred=%s", lane.name, lanes[0].name)
                 return vectors
