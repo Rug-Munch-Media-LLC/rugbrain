@@ -105,7 +105,7 @@ _LANE_GLOBALS: dict[str, str] = {
 #: so a funded account needs no code change), then the local :8024 8B lane —
 #: slow but ours, and 4096-dim. The 0.6B/1024 lane on :8004 is supermemory's
 #: and is deliberately absent; the width guard would refuse it anyway.
-AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "deepinfra", "openrouter", "int")
+AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "int", "deepinfra", "openrouter")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.
