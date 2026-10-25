@@ -1,0 +1,1362 @@
+{
+ "dead_ceiling": 0,
+ "schema": 1,
+ "scripts": {
+  "scripts/__init__.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "tests/test_importlinter_allowlist.py",
+    "tests/test_x_intel_pry_internal_auth.py",
+    "scripts/build_rug_events.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/alert_shill_campaigns.py": {
+   "evidence": [
+    "tests/test_shill_alert_emitter.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/alt_vm_knowledge_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/analytics_docs_refresh.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/apply_payload_indexes.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/rug_events/qdrant_io.py",
+    "src/rugbrain/rug_events/schema.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/b2_common.py": {
+   "evidence": [
+    "tests/test_ingest_ohlcv_cdd.py",
+    "scripts/b2_permanence.py.bak-dedupe-20261024T061010Z",
+    "scripts/ingest_polymarket.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/b2_permanence.py": {
+   "evidence": [
+    "systemd/rugbrain-permanence-elephant.service",
+    "systemd/README.md",
+    "systemd/archived/rmi-rag-permanence.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/b2_restore.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "scripts/b2_permanence.py.bak-dedupe-20261024T061010Z",
+    "scripts/b2_common.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backfill_news_classify.py": {
+   "evidence": [
+    "scripts/recover_dead_rss.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backfill_news_source_type.py": {
+   "evidence": [
+    "tests/test_backfill_news_source_type.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backfill_payload_date.py": {
+   "evidence": [
+    "scripts/qdrant_date_lib.py",
+    "scripts/qdrant_date_plan.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backfill_shadow_i.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/STANDALONE-MIGRATION-PLAN.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backfill_watcher_source.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/backup_qdrant.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/build_golden_set.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/build_rug_events.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md",
+    "src/rugbrain/rug_events/embedding.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/build_x_sources.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/check-antipatterns.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/check-collection-staleness.py": {
+   "evidence": [
+    "systemd/rugbrain-staleness.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/check-monkeypatch.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/check-structure.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/check_bots_launchpads.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/check_corpus_integrity.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/check_dim_drift.py": {
+   "evidence": [
+    "systemd/rugbrain-dim-drift.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/check_oss_stack_coverage.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/COVERAGE-OSS-STACK.md",
+    "src/rugbrain/ingest_sources/devdocs_specs_oss_stack.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/check_scripts_manifest.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/classify_scripts.py": {
+   "evidence": [
+    "Makefile"
+   ],
+   "kind": "cli"
+  },
+  "scripts/codebase_protocols_data.py": {
+   "evidence": [
+    "scripts/ingest_codebase_knowledge.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/coding_ingest_common.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/consolidate_to_rag_documents.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/consolidate-active.sh"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/contract_knowledge_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/corpus_manifest.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/devdocs_manifest.py",
+    "scripts/corpus_manifest_verify.py",
+    "src/rugbrain/corpus/entries.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/corpus_manifest_verify.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/create_qdrant_v2_schema.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/crypto_alert_digest.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/crypto_schema.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/crypto_expert_knowledge_data.py": {
+   "evidence": [
+    "scripts/ingest_crypto_expert_knowledge.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/cryptography_knowledge_data.py": {
+   "evidence": [
+    "scripts/ingest_cryptography.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/devdocs_chunk.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/devdocs_manifest.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/SOURCES-DEVDOCS.md",
+    "src/rugbrain/ingest_sources/devdocs_specs.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/drop_retired_bases.py": {
+   "evidence": [
+    "tests/test_drop_retired_bases.py",
+    "scripts/scripts_manifest.json",
+    "docs/DROP-RETIRED-BASES.md",
+    "docs/DECISION-EMPTY-MARKET-COLLECTIONS.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/__init__.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "tests/test_importlinter_allowlist.py",
+    "tests/test_x_intel_pry_internal_auth.py",
+    "scripts/build_rug_events.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/backfill_speed_vectors.py": {
+   "evidence": [
+    "README.STALE-CLONE.md",
+    "scripts/scripts_manifest.json",
+    "docs/DUAL_TIER_RAG.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/engine_endpoints.py": {
+   "evidence": [
+    "tests/test_dual_tier.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/gateway.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/model_gateway.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/schema_setup.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DUAL_TIER_RAG.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/dual_tier/shadow_test_chat.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DIM-DRIFT-GATE.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/__init__.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "tests/test_importlinter_allowlist.py",
+    "tests/test_x_intel_pry_internal_auth.py",
+    "scripts/build_rug_events.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/__main__.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "scripts/scripts_manifest.json",
+    "docs/MODERNIZATION.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/embed.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/eliminate_4b/targets.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/fill.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/plan.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/eliminate_4b/targets.py",
+    "scripts/eliminate_4b/qdrant_io.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/qdrant_io.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/report.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eliminate_4b/targets.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/embed_chain.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/embed_contract.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/embed_lane.py": {
+   "evidence": [
+    "scripts/rmi-threat-intel-ingest.sh",
+    "scripts/ingest_common.py",
+    "scripts/news_to_rag.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/enrich_metadata.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/crypto_schema.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eval_ingest_sources.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "tests/eval/test_metric_math.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/eval_rerank_ab.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/eval/harness.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/export_address_labels.py": {
+   "evidence": [
+    "tests/test_clickhouse_labels.py",
+    "scripts/scripts_manifest.json",
+    "docs/SCAN-INTEL-LANE-MERGE-PLAN-2026-10-18.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/factcheck.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-JOURNALISM-TA.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/fetch_gmgn_docs.py": {
+   "evidence": [
+    "scripts/ingest_gmgn_docs.py",
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/corpus/entries_knowledge.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/fetch_seed_data.py": {
+   "evidence": [
+    "scripts/seed_qdrant_collections.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/filter_news_noise.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/news_filter.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/generate_golden_ingest_sources.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/golden_coverage.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/reanchor_golden_set.py",
+    "src/rugbrain/eval/ranked_out.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/good_bad_contracts_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "AUDIT_FINDINGS.md",
+    ".agent-guardrails/config.json",
+    ".agent-guardrails/task-contract.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_all_sources.py": {
+   "evidence": [
+    "systemd/rugbrain-market-health.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/ingest_alt_vm_knowledge.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/alt_vm_knowledge_data.py",
+    "scripts/coding_ingest_common.py",
+    "src/rugbrain/search/engine/constants.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_binance_klines.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/MARKET-DATASETS-2026-10-23.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_blacklists.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_bots_launchpads.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/refresh_bots_launchpads.sh",
+    "src/rugbrain/ingest_sources/docs_manifest.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_chainabuse.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/ingest_sources/chainabuse.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_codebase_knowledge.py": {
+   "evidence": [
+    "scripts/ingest_common.py",
+    "scripts/codebase_protocols_data.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_coingecko_trending.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_common.py": {
+   "evidence": [
+    "DATA-STRATEGY.md",
+    "scripts/scripts_manifest.json",
+    "scripts/ingest_common2.py",
+    "scripts/structure-baseline.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_common2.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_content_sources.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_continuous.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/continuous_ingest.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_contract_audits.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_crypto_expert_knowledge.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/crypto_expert_knowledge_data.py",
+    "docs/COVERAGE-AUDIT-2026-09-28.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_cryptography.py": {
+   "evidence": [
+    "scripts/cryptography_knowledge_data.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_cryptopanic_news.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/rmi-news-ingest.sh"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_cryptoscamdb.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/ingest_cryptoscamdb_refresh.py",
+    "scripts/ingest_free_scam_sources.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_cryptoscamdb_blacklist.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_cryptoscamdb_refresh.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_csf_incidents.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_defi_incidents.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/ingest_sources/incidents.py",
+    "src/rugbrain/ingest_sources/crypto_rekts.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_defihacklabs.py": {
+   "evidence": [
+    "DATA-STRATEGY.md",
+    "TODO.md",
+    "scripts/crypto_alert_digest.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_defillama_hacks.py": {
+   "evidence": [
+    "scripts/rmi-threat-intel-ingest.sh",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_defillama_hacks_8b.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_defisafety.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_education.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_financial_tweets.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DATASET-BACKLOG.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_financial_tweets_crypto.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_forta.py": {
+   "evidence": [
+    "tests/test_ingest_forta.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_fraudcoins_holder_concentration.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DATASET-BACKLOG.md",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_free_scam_sources.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_gacs.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_gmgn_docs.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/corpus/entries_knowledge.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_good_bad_contracts.py": {
+   "evidence": [
+    "scripts/ingest_common.py",
+    "scripts/scripts_manifest.json",
+    "scripts/good_bad_contracts_data.py",
+    "src/rugbrain/qdrant_store/lane_table.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_hacks_ch.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/MARKET-DATASETS-2026-10-23.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_honeypot.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_incidents.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_kaggle_news.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_kaggle_scam_fraud.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_multi_chain_scams.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_ofac_sanctions.py": {
+   "evidence": [
+    "tests/test_ingest_ofac_sanctions.py",
+    "scripts/scripts_manifest.json",
+    "docs/MARKET-DATASETS-2026-10-23.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_ohlcv_cdd.py": {
+   "evidence": [
+    "tests/test_ingest_ohlcv_cdd.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_osv.py": {
+   "evidence": [
+    "tests/test_ingest_osv.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_peckshield.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_polymarket.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DATASET-BACKLOG.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_public_contextcrypto.py": {
+   "evidence": [
+    ".agent-guardrails/config.json",
+    ".agent-guardrails/task-contract.json",
+    "scripts/scripts_manifest.json",
+    "docs/RAG-MCP-BOUNDARY.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_pumpfun_kaggle.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/MARKET-DATASETS-2026-10-23.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_regulation_enforcement.py": {
+   "evidence": [
+    "scripts/rmi-threat-intel-ingest.sh",
+    "scripts/ingest_regulation_us.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_regulation_us.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_rekt_news.py": {
+   "evidence": [
+    "DATA-STRATEGY.md",
+    "TODO.md",
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/ingest_common.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_revokecash.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_rugdoc.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_rust_solana_knowledge.py": {
+   "evidence": [
+    "scripts/rust_solana_knowledge_data.py",
+    "scripts/scripts_manifest.json",
+    "scripts/coding_ingest_common.py",
+    "src/rugbrain/qdrant_store/lane_table.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_sanctions_ch.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/MARKET-DATASETS-2026-10-23.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_scam_knowledge.py": {
+   "evidence": [
+    "scripts/ingest_cryptoscamdb.py",
+    "scripts/ingest_defillama_hacks.py",
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/ingest_smart.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_scam_patterns.py": {
+   "evidence": [
+    "tests/test_ingest_scam_patterns.py",
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md",
+    "src/rugbrain/qdrant_store/owned_registry.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_scam_watchlist.py": {
+   "evidence": [
+    "scripts/refresh_alt_channels.py",
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_scamsniffer.py": {
+   "evidence": [
+    "tests/test_ingest_scamsniffer.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_sec_edgar.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_security_feeds.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/SECURITY-FEEDS.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_security_guides.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/coding_ingest_common.py",
+    "scripts/security_guides_data.py",
+    "src/rugbrain/search/engine/constants.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_security_patterns.py": {
+   "evidence": [
+    "scripts/ingest_common.py",
+    "scripts/scripts_manifest.json",
+    "scripts/contract_knowledge_data.py",
+    "src/rugbrain/search/engine/constants.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_security_repos.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_solidity_knowledge.py": {
+   "evidence": [
+    "scripts/solidity_knowledge_data.py",
+    "scripts/scripts_manifest.json",
+    "scripts/coding_ingest_common.py",
+    "src/rugbrain/search/engine/constants.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_stablecoin_market.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_swc_registry.py": {
+   "evidence": [
+    "DATA-STRATEGY.md",
+    "scripts/ingest_security_patterns.py",
+    "scripts/scripts_manifest.json",
+    "scripts/contract_knowledge_data.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_telegram_alt.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_threats.py": {
+   "evidence": [
+    "Makefile",
+    "docker-compose.yml"
+   ],
+   "kind": "cli"
+  },
+  "scripts/ingest_tokensniffer.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_wallet_labels.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/load_kol_wallets_8b.py",
+    "docs/8B-CUTOVER-AUDIT.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/ingest_web3hack_archive.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/load_kol_wallets_8b.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/mcp_tool_runner.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/ARCHITECTURE-2026.md",
+    "src/rugbrain/mcp_bridge/__init__.py",
+    "src/rugbrain/mcp_bridge/dispatch.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/migrate_embeddings_v2.py": {
+   "evidence": [
+    "TODO.md",
+    "scripts/reembed_deepinfra.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/migrate_to_parquet.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "scripts/b2_permanence.py.bak-dedupe-20261024T061010Z",
+    "scripts/b2_common.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/migrate_to_sparse.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/ingest_sources/defihacklabs.py",
+    "src/rugbrain/qdrant_store/owned_registry.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/news_quality_stamp.py": {
+   "evidence": [
+    "scripts/resolve_google_news.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/news_to_rag.py": {
+   "evidence": [
+    "systemd/rmi-news-ingest.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/permanence_budget.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_chunk_plan.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_chunk_run.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_scope.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_shard.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_shard_contract.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_shard_resume.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/permanence_skip.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/prune_dead_feeds.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/publish_daily_rug.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CONTENT-STYLE.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/qdrant_date_lib.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/qdrant_date_plan.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/DECISION-EMPTY-MARKET-COLLECTIONS.md"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/reanchor_golden.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/reanchor_golden_set.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/recover_dead_rss.py": {
+   "evidence": [
+    "scripts/prune_dead_feeds.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/reembed_deepinfra.py": {
+   "evidence": [
+    "README.STALE-CLONE.md",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/refresh_alt_channels.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "data/alt_ingest_extra_channels.txt",
+    "src/rugbrain/ingest_sources/alt_ingest_channels.py",
+    "src/rugbrain/ingest_sources/alt_ingest_vet.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/refresh_corpus_players.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/refresh_devdocs.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/SOURCES-DEVDOCS.md",
+    "src/rugbrain/ingest_sources/devdocs_specs_devtools.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/registry_report.py": {
+   "evidence": [
+    "systemd/rugbrain-registry.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/resolve_google_news.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/retention_sweep.py": {
+   "evidence": [
+    "systemd/rugbrain-retention.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/rss_feed_health.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "config/rss_feeds_candidates.txt"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/rss_ingest_feeds.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "scripts/rmi-news-ingest.sh",
+    "scripts/sql/2026-10-22-news-classify.sql"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/run-mission-eval.py": {
+   "evidence": [
+    "pyproject.toml",
+    "scripts/scripts_manifest.json",
+    "src/rugbrain/eval/harness.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/rust_solana_knowledge_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/scrape_dead_sources.py": {
+   "evidence": [
+    "scripts/recover_dead_rss.py",
+    "scripts/scripts_manifest.json",
+    "scripts/scrape-dead-sources.sh"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/security_guides_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/seed_all.py": {
+   "evidence": [
+    "ARCHITECTURE.md",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/seed_qdrant_collections.py": {
+   "evidence": [
+    "DATA-STRATEGY.md",
+    "scripts/reembed_deepinfra.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/solidity_knowledge_data.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/tg_news_to_news_items.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/verify_4b_elimination.py": {
+   "evidence": [
+    "tests/test_verify_4b_elimination.py",
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/verify_coding_knowledge.py": {
+   "evidence": [
+    "tests/test_search_quality.py",
+    "scripts/scripts_manifest.json",
+    "scripts/sync_code_knowledge.sh"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/verify_contract_knowledge.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xregistry_pilot.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsession_ingest.py": {
+   "evidence": [
+    "deploy/systemd/rugbrain-x-session-ingest.service"
+   ],
+   "kind": "cli"
+  },
+  "scripts/xsources/__init__.py": {
+   "evidence": [
+    "ARCHITECTURE-V2.md",
+    "tests/test_importlinter_allowlist.py",
+    "tests/test_x_intel_pry_internal_auth.py",
+    "scripts/build_rug_events.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/build.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/classify.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/inventory.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/registry.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/CAPABILITY-GAPS-SCAM-MARKET.md",
+    "scripts/xsources/registry.py"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/registry_evidence.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/registry_rows.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json"
+   ],
+   "kind": "one-shot"
+  },
+  "scripts/xsources/verify.py": {
+   "evidence": [
+    "scripts/scripts_manifest.json",
+    "docs/YOUTUBE-SCAM-WATCH.md",
+    "src/rugbrain/corpus/reports.py"
+   ],
+   "kind": "one-shot"
+  }
+ }
+}

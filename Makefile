@@ -87,3 +87,10 @@ clean: ## Remove build artifacts
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
+
+# Script layer guard (rugbrain scripts/): every file must be declared.
+check-scripts:
+	python3 scripts/check_scripts_manifest.py
+
+manifest-scripts:
+	python3 scripts/classify_scripts.py
