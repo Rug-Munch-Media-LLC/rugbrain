@@ -61,12 +61,21 @@ def _route_collection(source_name: str, default_collection: str, metadata: dict[
 
 async def _store_docs(
     store: QdrantVectorStore,
-    client: httpx.AsyncClient,
+    embed_client: httpx.AsyncClient,
     source_name: str,
     default_collection: str,
     docs: list[Any],
     dry_run: bool,
 ) -> dict[str, int]:
+    from rugbrain.qdrant_store.client_contract import require_qdrant_http_client
+
+    # The boundary: one client kind, checked before a single embed or write.
+    require_qdrant_http_client(embed_client, where="ingest_all_sources._store_docs")
+    if not isinstance(store, QdrantVectorStore):
+        raise TypeError(
+            f"ingest_all_sources._store_docs store={type(store).__name__} "
+            "must be a QdrantVectorStore (REST contract)"
+        )
     stats = {"fetched": len(docs), "embedded": 0, "skipped": 0, "errors": 0}
     by_collection: dict[str, list[tuple[str, str, dict[str, Any], str]]] = defaultdict(list)
     for d in docs:
@@ -108,7 +117,7 @@ async def _store_docs(
             for i, ch in enumerate(chunks_for_doc(content, metadata)):
                 chunks.append((f"{doc_id}:c{i}" if i else doc_id, ch, metadata, source, doc_id))
         try:
-            vectors = await embed_many(client, [c[1] for c in chunks])
+            vectors = await embed_many(embed_client, [c[1] for c in chunks])
         except Exception as e:
             logger.warning("embed_fail source=%s err=%s", source_name, str(e)[:150])
             stats["errors"] += len(chunks)

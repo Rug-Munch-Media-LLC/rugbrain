@@ -36,6 +36,11 @@ from rugbrain.ingest_sources.fetch_state import (
     raw_not_found_reason,
     record_fetch_error,
 )
+from rugbrain.ingest_sources.github_auth import (
+    GithubAuthMissing,
+    github_token,
+    require_github_token,
+)
 from rugbrain.ingest_sources.github_git import list_repo_files_git
 
 log = logging.getLogger(__name__)
@@ -45,9 +50,9 @@ GITHUB_RAW = "https://raw.githubusercontent.com"
 
 
 def github_api_headers() -> dict[str, str]:
-    """Headers for api.github.com (optional token from ``GITHUB_TOKEN``)."""
+    """Headers for api.github.com (token from env or a credentials file)."""
     headers = {"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT}
-    token = os.getenv("GITHUB_TOKEN", "").strip()
+    token = github_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
@@ -65,6 +70,18 @@ async def list_repo_files(
     *recorded* on the fetch channel, so the caller can tell it apart from a
     repo that genuinely has no blobs.
     """
+    try:
+        require_github_token()
+    except GithubAuthMissing as exc:
+        # A REFUSAL, not an empty repo. Unauthenticated 60 req/h is what produced
+        # the 403 -> pages=0 that looked like "this repo has no files".
+        log.error("github_tree_blocked repo=%s ref=%s reason=%s", repo, ref, exc.code)
+        record_fetch_error(exc.code, f"list_repo_files repo={repo} ref={ref} reason=missing_token")
+        entries = await list_repo_files_git(repo, ref)
+        if entries:
+            log.info("list_repo_files_git_fallback_ok repo=%s entries=%d", repo, len(entries))
+            return entries
+        return []
     url = f"{GITHUB_API}/repos/{repo}/git/trees/{ref}?recursive=1"
     try:
         r = await client.get(url, headers=github_api_headers())
