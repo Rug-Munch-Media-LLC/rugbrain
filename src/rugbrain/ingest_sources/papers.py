@@ -31,8 +31,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass, field
-
-import httpx
+from typing import Any
 
 from rugbrain.ingest_sources.papers_norm import (
     COLLECTION,
@@ -46,6 +45,8 @@ from rugbrain.ingest_sources.papers_norm import (
     parse_eip,
     protocol_doc,
 )
+from rugbrain.ingest_sources.shared.http import client as http_client
+from rugbrain.ingest_sources.shared.registry import register
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class Harvest:
         return len(self.docs)
 
 
-async def harvest_eips(client: httpx.AsyncClient, limit: int | None) -> Harvest:
+async def harvest_eips(client: Any, limit: int | None) -> Harvest:
     """Fetch the EIPs tree, then each substantive EIP markdown file."""
     h = Harvest()
     tree_url = f"https://api.github.com/repos/{EIPS_REPO}/git/trees/{EIPS_REF}?recursive=1"
@@ -90,7 +91,7 @@ async def harvest_eips(client: httpx.AsyncClient, limit: int | None) -> Harvest:
     return h
 
 
-async def harvest_defillama(client: httpx.AsyncClient, limit: int | None) -> Harvest:
+async def harvest_defillama(client: Any, limit: int | None) -> Harvest:
     """Fetch the DeFiLlama /protocols bulk array."""
     h = Harvest()
     r = await client.get(DEFILLAMA_URL)
@@ -108,7 +109,7 @@ async def harvest_defillama(client: httpx.AsyncClient, limit: int | None) -> Har
     return h
 
 
-async def harvest(client: httpx.AsyncClient, limit: int | None) -> Harvest:
+async def harvest(client: Any, limit: int | None) -> Harvest:
     """Both sources, one combined ``Harvest``."""
     combined = Harvest()
     for coro in (harvest_eips(client, limit), harvest_defillama(client, limit)):
@@ -147,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     async def run() -> Harvest:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with http_client(timeout=30.0) as client:
             return await harvest(client, args.limit)
 
     h = asyncio.run(run())
@@ -165,6 +166,16 @@ def main(argv: list[str] | None = None) -> int:
     # 4096-lane check and the licence stamp are all applied by one owner.
     print("  REFUSING: writes must go through the reviewed ingest pipeline", file=sys.stderr)
     return 1
+
+
+#: Registry entry — a source is this line plus this module (ADR §registry).
+register(
+    "papers",
+    family="papers",
+    fetch=harvest,
+    doc_type="standard",
+    collection=COLLECTION,
+)
 
 
 if __name__ == "__main__":
