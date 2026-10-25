@@ -1,0 +1,21 @@
+{
+  "empty": [
+    "cross_chain",
+    "exploits",
+    "live_threats",
+    "mem0migrations",
+    "regulation_enforcement"
+  ],
+  "orphans": [
+    "agent_memory_lane_e",
+    "audit_reports_8b",
+    "bounty_intel_8b",
+    "gamblefi_docs",
+    "mem0_fleet",
+    "mem0_fleet_entities",
+    "security_findings_8b"
+  ],
+  "fixture_leak": [
+    "security_patterns_test"
+  ]
+}
