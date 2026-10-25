@@ -1,0 +1,25 @@
+{
+  "policy": {
+    "include_page_kinds": ["reference", "guide", "tutorial", "howto"],
+    "exclude_page_kinds": ["index", "landing", "blog", "changelog", "release-notes"],
+    "exclude_url_patterns": ["llms-full.txt", "/blog/", "/changelog", "/release", "/news/", "/index.html$"],
+    "max_pages_per_library": 300,
+    "prefer_source": "docs source repo (Markdown/reST) > rendered HTML via markitdown",
+    "provenance_required": ["library", "page_url", "source_repo", "licence", "fetched_at", "page_kind"],
+    "publishable_rule": "true only for MIT/Apache-2.0/BSD/ISC; copyleft (GPL/LGPL/AGPL) => false"
+  },
+  "libraries": [
+    {"library":"fastapi","source_repo":"fastapi/fastapi","docs_path":"docs/en/docs","licence":"MIT","publishable":true,
+     "include_globs":["**/tutorial/**/*.md","**/advanced/**/*.md","**/reference/**/*.md"],"url_base":"https://fastapi.tiangolo.com/"},
+    {"library":"pydantic","source_repo":"pydantic/pydantic","docs_path":"docs","licence":"MIT","publishable":true,
+     "include_globs":["**/concepts/**/*.md","**/api/**/*.md","**/usage/**/*.md"],"url_base":"https://docs.pydantic.dev/latest/"},
+    {"library":"sqlalchemy","source_repo":"sqlalchemy/sqlalchemy","docs_path":"doc/build","licence":"MIT","publishable":true,
+     "include_globs":["orm/**/*.rst","core/**/*.rst","tutorial/**/*.rst"],"url_base":"https://docs.sqlalchemy.org/en/20/"},
+    {"library":"nuxt","source_repo":"nuxt/nuxt","docs_path":"docs/4.x","licence":"MIT","publishable":true,
+     "include_globs":["**/guide/**/*.md","**/api/**/*.md"],"url_base":"https://nuxt.com/docs/4.x/"},
+    {"library":"python-telegram-bot","source_repo":"python-telegram-bot/python-telegram-bot","docs_path":"docs/source","licence":"GPL-3.0","publishable":false,
+     "include_globs":["**/*.rst"],"url_base":"https://docs.python-telegram-bot.org/en/stable/","note":"copyleft: store for internal retrieval only; publishable=false"},
+    {"library":"qdrant","source_repo":"qdrant/qdrant","docs_path":"docs","licence":"Apache-2.0","publishable":true,
+     "include_globs":["**/concepts/**/*.md","**/guides/**/*.md"],"url_base":"https://qdrant.tech/documentation/"}
+  ]
+}
