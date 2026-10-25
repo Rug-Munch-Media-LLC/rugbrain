@@ -16,31 +16,28 @@ from rugbrain.embedder_providers.local import embed_local, local_key
 LAST_FAILURE: dict[str, str] = {}
 
 
+def _file_key(path: str) -> str:
+    """Credential from a secrets file, or "" when it is unreadable/empty."""
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return ""
+
+
 def _key(provider: str) -> str:
-    # FILE-FIRST: the secrets file is canonical; an env var may be stale and
-    # must never shadow a working key (2026-10-25: stale env key caused every
-    # lane to report the provider as dead while the file key worked).
-    _cfg = _PROVIDERS.get(provider)
-    if _cfg and len(_cfg) > 3 and _cfg[3]:
-        try:
-            _v = Path(_cfg[3]).read_text().strip()
-            if _v:
-                return _v
-        except OSError:
-            pass
-    """Credential for a provider: env first, then the spooled key file."""
+    """Credential for a provider: the FILE first, then the env.
+
+    FILE-FIRST is a fleet rule: an env var may be stale and must never shadow a
+    working key (2026-10-25: a stale export made every lane report the provider
+    dead while the file key authenticated). The local lane's credential file is
+    ENV-FORMAT (``KEY=value``) and is parsed by :func:`local.local_key`.
+    """
     if provider == "local":
         return local_key()
     if provider in _KEYS:
         return _KEYS[provider]
     _, _, env_name, key_file = _PROVIDERS[provider]
-    value = os.getenv(env_name, "").strip()
-    if not value:
-        try:
-            with open(key_file, encoding="utf-8") as handle:
-                value = handle.read().strip()
-        except OSError:
-            value = ""
+    value = _file_key(key_file) or os.getenv(env_name, "").strip()
     _KEYS[provider] = value
     return value
 
@@ -52,7 +49,9 @@ def _order() -> tuple[str, ...]:
 
 
 async def _call(
-    provider: str, texts: list[str], timeout: float | None  # noqa: ASYNC109 — forwarded to HTTP client
+    provider: str,
+    texts: list[str],
+    timeout: float | None,  # noqa: ASYNC109 — forwarded to HTTP client
 ) -> list[list[float]] | None:
     """Call a single provider for embeddings. Returns list of vectors or None."""
     base, model, _, _ = _PROVIDERS[provider]
@@ -78,7 +77,7 @@ async def _call(
             logger.warning("embed_%s_status=%d", provider, resp.status_code)
             LAST_FAILURE[provider] = f"status={resp.status_code}"
             return None
-        items = (resp.json().get("data") or [])
+        items = resp.json().get("data") or []
         if len(items) != len(texts):
             logger.warning("embed_%s_count got=%d want=%d", provider, len(items), len(texts))
             return None
@@ -102,4 +101,3 @@ async def _call(
             logger.warning("embed_%s_dim_mismatch idx=%d: %s", provider, i, exc)
             return None
     return normalized
-
