@@ -73,7 +73,7 @@ jobs:
                 "resolvedDependencies": [{"uri": "git+$SOURCE_URI@$REV", "digest": {"gitCommit": "$REV"}}]
               },
               "runDetails": {
-                "builder": {"id": "$GITHUB_SERVER_URL/$GITHUB_rugbrainSITORY/actions/runs/$GITHUB_RUN_ID"},
+                "builder": {"id": "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"},
                 "metadata": {"invocationId": "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT", "startedOn": "$TS", "finishedOn": "$TS"}
               }
             }
