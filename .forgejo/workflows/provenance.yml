@@ -1,0 +1,133 @@
+name: Release Provenance (SLSA v1)
+
+# Vendored from fleet-template/.forgejo/workflows/release-provenance.yml (PR #4).
+# Why vendored rather than called: the reusable workflow verifies by downloading
+# the SBOM from a *published release*, so it cannot be proven without cutting a
+# release. This copy hands the SBOM between jobs with upload/download-artifact,
+# which makes the identical cosign verification runnable on any commit through
+# workflow_dispatch, while a tag push remains the real release path.
+# Key pair, not keyless: Fulcio needs an OIDC issuer and Forgejo issues none.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  SBOM_NAME: rugbrain.cdx.json
+  SOURCE_URI: ssh://git@git.rugmunch.io:2222/RugMunchMedia/rugbrain
+
+jobs:
+  attest:
+    name: SBOM + SLSA v1 attestation
+    runs-on: docker-x64
+    timeout-minutes: 20
+    container:
+      image: alpine:3.20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install syft and cosign
+        env:
+          SYFT_VERSION: "1.55.0"
+          COSIGN_VERSION: "3.1.4"
+        run: |
+          set -eu
+          apk add --no-cache curl tar ca-certificates python3 >/dev/null
+          curl -fsSL -o /tmp/syft.tar.gz "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/syft.tar.gz -C /usr/local/bin syft
+          curl -fsSL -o /usr/local/bin/cosign "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          chmod +x /usr/local/bin/cosign
+          syft version | head -2
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -eu
+          mkdir -p dist
+          syft dir:. -o cyclonedx-json --file "dist/$SBOM_NAME"
+          ( cd dist && sha256sum "$SBOM_NAME" > "$SBOM_NAME.sha256" )
+          cat "dist/$SBOM_NAME.sha256"
+
+      - name: Write SLSA v1 provenance statement
+        run: |
+          set -eu
+          D=$(cut -d" " -f1 "dist/$SBOM_NAME.sha256")
+          REV=$(git rev-parse HEAD)
+          TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > /tmp/provenance.json <<JSON
+          {
+            "_type": "https://in-toto.io/Statement/v1",
+            "subject": [{"name": "$SBOM_NAME", "digest": {"sha256": "$D"}}],
+            "predicateType": "https://slsa.dev/provenance/v1",
+            "predicate": {
+              "buildDefinition": {
+                "buildType": "https://rugmunch.io/buildtypes/syft/v1",
+                "externalParameters": {"source": "$SOURCE_URI", "revision": "$REV"},
+                "internalParameters": {"syftVersion": "1.55.0", "cosignVersion": "3.1.4"},
+                "resolvedDependencies": [{"uri": "git+$SOURCE_URI@$REV", "digest": {"gitCommit": "$REV"}}]
+              },
+              "runDetails": {
+                "builder": {"id": "$GITHUB_SERVER_URL/$GITHUB_rugbrainSITORY/actions/runs/$GITHUB_RUN_ID"},
+                "metadata": {"invocationId": "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT", "startedOn": "$TS", "finishedOn": "$TS"}
+              }
+            }
+          }
+          JSON
+          python3 -c "import json;json.load(open('/tmp/provenance.json'));print('provenance: valid JSON')"
+
+      - name: Sign the attestation (cosign attest-blob)
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        run: |
+          set -eu
+          printf "%s" "$COSIGN_KEY" > /tmp/cosign.key
+          cosign attest-blob --yes --key /tmp/cosign.key --type slsaprovenance1 \
+            --predicate /tmp/provenance.json --bundle "dist/$SBOM_NAME.intoto.jsonl" "dist/$SBOM_NAME"
+          rm -f /tmp/cosign.key
+          ls -l "dist/$SBOM_NAME.intoto.jsonl"
+
+      - name: Upload SBOM and bundle
+        uses: actions/upload-artifact@v5.0.0
+        with:
+          name: provenance
+          path: dist/*
+
+  verify:
+    name: Verify attestation
+    needs: attest
+    runs-on: docker-x64
+    timeout-minutes: 10
+    container:
+      image: alpine:3.20
+    steps:
+      - name: Install cosign
+        env:
+          COSIGN_VERSION: "3.1.4"
+        run: |
+          set -eu
+          apk add --no-cache curl ca-certificates >/dev/null
+          curl -fsSL -o /usr/local/bin/cosign "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          chmod +x /usr/local/bin/cosign
+
+      - name: Download SBOM and bundle
+        uses: actions/download-artifact@v5.0.0
+        with:
+          name: provenance
+          path: dist
+
+      - name: Verify attestation against the SBOM
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          set -eu
+          printf "%s" "$COSIGN_PUBLIC_KEY" > /tmp/cosign.pub
+          cosign verify-blob-attestation --key /tmp/cosign.pub --type slsaprovenance1 \
+            --bundle "dist/$SBOM_NAME.intoto.jsonl" "dist/$SBOM_NAME"
+          echo "Verified OK - SBOM digest is bound to the signed SLSA v1 predicate"
