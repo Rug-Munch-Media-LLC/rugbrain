@@ -121,4 +121,14 @@ async def profile_wallet(address: str, max_hops: int = 2) -> dict[str, Any]:
     return profile
 
 
-__all__ = ["looks_like_address", "profile_wallet"]
+async def exact_address_hits(address: str) -> list[tuple[str, dict[str, Any]]]:
+    """Public surface for the exact label lookup other layers consume.
+
+    Thin wrapper over :func:`_exact_hits` so callers outside this module
+    (search facade, routes) depend on a documented name rather than a
+    private one. Behaviour is identical.
+    """
+    return await _exact_hits(address)
+
+
+__all__ = ["exact_address_hits", "looks_like_address", "profile_wallet"]

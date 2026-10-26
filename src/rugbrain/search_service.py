@@ -56,3 +56,18 @@ _pattern_cache_loaded = False
 # ═══════════════════════════════════════════════════════════════
 
 from rugbrain.search import *  # noqa: E402, F403
+
+
+async def exact_address_hits(address: str) -> list[tuple[str, dict[str, Any]]]:
+    """Exact ``metadata.address`` label hits — route-facing facade.
+
+    Exists so ``routes.search_pkg.scam`` does not import ``wallet_profile``
+    directly: that module reaches Qdrant over ``httpx``, which the
+    thin-router contract forbids below ``rugbrain.routes``. The route talks
+    to this service, the service owns the storage reach. The import is
+    function-local because ``wallet_profile`` is not import-safe until the
+    search package has loaded.
+    """
+    from rugbrain.wallet_profile import exact_address_hits as _hits
+
+    return await _hits(address)

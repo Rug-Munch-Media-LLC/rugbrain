@@ -55,14 +55,13 @@ def rugbrain_wallet_profile(address: str, max_hops: int = 2) -> dict[str, Any]:
     )
 
 
-@mcp.tool(name="rugbrain_alerts")
-def rugbrain_alerts(minutes: int = 60) -> dict[str, Any]:
-    """Recent alerts detected in the last N minutes.
-
-    Args:
-        minutes: Lookback window (1-1440, default 60).
-    """
-    return _call("/api/v1/alerts/recent", {"minutes": max(1, min(minutes, 1440))})
+# RETIRED 2026-10-27: rugbrain_alerts. GET /api/v1/alerts/recent reads a
+# PER-PROCESS in-memory store (realtime_alerts._store) that only a detector
+# loop inside the API process can fill; the MCP facade talks to a different
+# process, so the tool returned {"count": 0, "alerts": []} on every call. Its
+# one Qdrant-backed alternative, /api/v1/alerts/live, reads the live_threats
+# collection, which holds 0 points. There was no signal to repair, so the tool
+# was removed rather than left answering "no alerts" with confidence.
 
 
 @mcp.tool(name="rugbrain_news")
