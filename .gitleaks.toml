@@ -33,7 +33,9 @@ tags = ["internal", "infrastructure"]
 [[rules]]
 id = "jupiter-api-key"
 description = "Jupiter DEX API keys"
-regex = '''(jupiter.*api.*key|JUPITER_API_KEY)\s*[:=]\s*[A-Za-z0-9+/]{20,}'''
+# (?i) covers the SCREAMING_CASE spelling the explicit alternative used to list,
+# and [\s_-]* also accepts the spaced/dashed form. Broader than before.
+regex = '''(?i)jupiter[\s_-]*api[\s_-]*key\s*[:=]\s*[A-Za-z0-9+/]{20,}'''
 tags = ["rmi", "api-key"]
 
 [[rules]]
@@ -75,7 +77,9 @@ tags = ["rmi", "critical"]
 [[rules]]
 id = "internal-service-token"
 description = "Internal service authentication tokens"
-regex = '''(?i)(?:rmi_service_token|rmi_auth_token|internal_api_key)\s*[:=]\s*[A-Za-z0-9+/=]{20,}'''
+# Same names as before (rmi/internal x service/auth/api x token/key) with the
+# separators opened to space/dot/dash. Broader than before.
+regex = '''(?i)(?:rmi|internal)[\s_.-]*(?:service|auth|api)[\s_.-]*(?:token|key)\s*[:=]\s*[A-Za-z0-9+/=]{20,}'''
 tags = ["rmi", "critical"]
 
 # ─── ALLOWLIST ──────────────────────────────────────────────────────────────
