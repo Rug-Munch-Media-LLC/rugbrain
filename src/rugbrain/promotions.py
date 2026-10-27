@@ -46,8 +46,17 @@ CREATE TABLE IF NOT EXISTS {db}.{table} (
 ORDER BY (chain, token_address, kind)
 """
 
-COLUMNS = ["chain", "token_address", "url", "kind", "amount_usd", "paid",
-           "first_seen", "last_seen", "source"]
+COLUMNS = [
+    "chain",
+    "token_address",
+    "url",
+    "kind",
+    "amount_usd",
+    "paid",
+    "first_seen",
+    "last_seen",
+    "source",
+]
 
 
 def _amount(item: dict[str, Any]) -> float | None:
@@ -61,8 +70,9 @@ def _amount(item: dict[str, Any]) -> float | None:
         return None
 
 
-def parse_payload(items: list[dict[str, Any]], kind: str, source: str,
-                  seen_at: datetime | None = None) -> list[dict[str, Any]]:
+def parse_payload(
+    items: list[dict[str, Any]], kind: str, source: str, seen_at: datetime | None = None
+) -> list[dict[str, Any]]:
     """Normalise one endpoint payload into dm_promotions rows."""
     stamp = seen_at or datetime.now(UTC)
     out: list[dict[str, Any]] = []
@@ -72,17 +82,19 @@ def parse_payload(items: list[dict[str, Any]], kind: str, source: str,
         if not chain or not token:
             continue
         row_kind = "cto" if kind == "profile" and item.get("cto") is True else kind
-        out.append({
-            "chain": chain,
-            "token_address": token,
-            "url": str(item.get("url") or ""),
-            "kind": row_kind,
-            "amount_usd": _amount(item),
-            "paid": 1,
-            "first_seen": stamp,
-            "last_seen": stamp,
-            "source": source,
-        })
+        out.append(
+            {
+                "chain": chain,
+                "token_address": token,
+                "url": str(item.get("url") or ""),
+                "kind": row_kind,
+                "amount_usd": _amount(item),
+                "paid": 1,
+                "first_seen": stamp,
+                "last_seen": stamp,
+                "source": source,
+            }
+        )
     return out
 
 
@@ -130,9 +142,14 @@ def spend_by_day(rows: list[dict[str, Any]]) -> dict[str, float]:
 def client() -> Any:
     """ClickHouse client, lazily imported; first database that accepts the DDL wins."""
     ch = importlib.import_module("clickhouse_connect")
-    cli = ch.get_client(host=CLICKHOUSE_HOST, port=CLICKHOUSE_PORT,
-                        interface=CLICKHOUSE_INTERFACE, username=CLICKHOUSE_USER,
-                        password=CLICKHOUSE_PASSWORD, database=CLICKHOUSE_DATABASE)
+    cli = ch.get_client(
+        host=CLICKHOUSE_HOST,
+        port=CLICKHOUSE_PORT,
+        interface=CLICKHOUSE_INTERFACE,
+        username=CLICKHOUSE_USER,
+        password=CLICKHOUSE_PASSWORD,
+        database=CLICKHOUSE_DATABASE,
+    )
     for db in (CLICKHOUSE_DATABASE, CLICKHOUSE_FALLBACK_DATABASE):
         try:
             cli.command(DDL.format(db=db, table=TABLE))
@@ -155,7 +172,7 @@ def top_paid_promotions(days: int = 7, limit: int = 10) -> list[dict[str, Any]]:
     FROM {_qualified()} FINAL
     WHERE last_seen >= now() - INTERVAL {{days:UInt32}} DAY
     GROUP BY chain, token_address ORDER BY amount_usd DESC LIMIT {{limit:UInt32}}
-    """
+    """  # nosec B608 — only _qualified() (two module constants) is interpolated; days/limit are ClickHouse parameters
     res = client().query(sql, parameters={"days": days, "limit": limit})
     return [dict(zip(res.column_names, row, strict=True)) for row in res.result_rows]
 
@@ -167,10 +184,14 @@ def promotions_for(chain: str, token_address: str) -> dict[str, Any]:
     FROM {_qualified()} FINAL
     WHERE chain = {{chain:String}} AND token_address = {{token:String}}
     ORDER BY last_seen DESC
-    """
+    """  # nosec B608 — only _qualified() (two module constants) is interpolated; chain/token are ClickHouse parameters
     res = client().query(sql, parameters={"chain": chain, "token": token_address})
     rows = [dict(zip(res.column_names, row, strict=True)) for row in res.result_rows]
     kinds = {row["kind"] for row in rows}
-    return {"chain": chain, "token_address": token_address, "rows": rows,
-            "spend_usd": sum(row["amount_usd"] or 0 for row in rows),
-            "paid_only": bool(rows) and kinds == {"boost"}}
+    return {
+        "chain": chain,
+        "token_address": token_address,
+        "rows": rows,
+        "spend_usd": sum(row["amount_usd"] or 0 for row in rows),
+        "paid_only": bool(rows) and kinds == {"boost"},
+    }

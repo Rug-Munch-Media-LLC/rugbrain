@@ -5,7 +5,8 @@ The four queries are fixed strings in ``analytics_docs_targets.ARXIV_QUERIES``
 built from user input, so a refresh produces the same corpus shape and the
 manifest can record exactly what was asked for.
 
-Parsed with ``xml.etree`` from the Atom feed; one ``IngestDoc`` per paper
+Parsed with ``defusedxml`` from the Atom feed (entity expansion and external
+entities are refused); one ``IngestDoc`` per paper
 carrying title + abstract + canonical arXiv URL + published date. Failure is
 fail-open like every other source: a dead API returns ``[]`` and the docs half
 of the corpus still ingests.
@@ -14,9 +15,10 @@ of the corpus still ingests.
 from __future__ import annotations
 
 import logging
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # types only -- never parses
 
 import httpx
+from defusedxml.ElementTree import ParseError, fromstring
 
 from rugbrain.ingest_sources.analytics_docs_pages import content_hash
 from rugbrain.ingest_sources.analytics_docs_targets import (
@@ -55,9 +57,10 @@ async def _query(client: httpx.AsyncClient, query: str, topic: str) -> list[Inge
         log.warning("arxiv_status topic=%s status=%s", topic, resp.status_code)
         return []
     try:
-        # Fixed arXiv host + Atom feed; no untrusted XML source is accepted.
-        root = ET.fromstring(resp.text)  # noqa: S314
-    except ET.ParseError as e:
+        # Fixed arXiv host + Atom feed. Parsed with defusedxml so a hostile or
+        # corrupted feed cannot expand entities or reach the network.
+        root = fromstring(resp.text)
+    except ParseError as e:
         log.warning("arxiv_parse topic=%s err=%s", topic, str(e)[:120])
         return []
 

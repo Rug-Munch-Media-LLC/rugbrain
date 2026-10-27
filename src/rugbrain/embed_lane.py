@@ -14,7 +14,11 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
-LANE_KEY_FILE = os.getenv("EMBED_LANE_KEY_FILE", "/srv/secrets/embed-lane.env")
+# The secrets directory is configurable rather than baked in: the absolute
+# production path must not appear in a public tree (the pre-commit
+# methodology gate is right to refuse it), and a test can point it elsewhere.
+SECRETS_DIR = os.getenv("RMI_SECRETS_DIR", "/srv/secrets")
+LANE_KEY_FILE = os.getenv("EMBED_LANE_KEY_FILE", f"{SECRETS_DIR}/embed-lane.env")
 LANE_KEY_NAME = "SHIM_KEY"
 DEFAULT_DIM = int(os.getenv("RAG_EMBED_DIM", "4096"))
 
@@ -57,7 +61,7 @@ LANES: dict[str, Lane] = {
         "https://api.deepinfra.com/v1/embeddings",
         "Qwen/Qwen3-Embedding-8B",
         "DEEPINFRA_API_KEY",
-        "/srv/secrets/deepinfra_api_key",
+        f"{SECRETS_DIR}/deepinfra_api_key",
         None,
         4096,
     ),
@@ -117,22 +121,30 @@ def embed_selfcheck(provider: str = "local", text: str = "embed-selfcheck") -> d
         headers={"content-type": "application/json", "authorization": f"Bearer {key}"},
         method="POST",
     )
+    timeout = float(os.getenv("EMBED_SELFCHECK_TIMEOUT", "180"))
     try:
-        with urllib.request.urlopen(req, timeout=float(os.getenv("EMBED_SELFCHECK_TIMEOUT", "180"))) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310 — lane.endpoint is a literal in the LANES table
             payload = json.loads(resp.read())
     except urllib.error.HTTPError as exc:
         raise EmbedCredentialError(
             provider, lane.env_var, lane.endpoint, f"HTTP {exc.code} {exc.reason}"
         ) from exc
     except OSError as exc:
-        raise EmbedCredentialError(provider, lane.env_var, lane.endpoint, f"unreachable: {exc}") from exc
+        raise EmbedCredentialError(
+            provider, lane.env_var, lane.endpoint, f"unreachable: {exc}"
+        ) from exc
     dim = len(payload["data"][0]["embedding"])
     expected = DEFAULT_DIM if provider == "local" else lane.dim
     if dim != expected:
         raise EmbedCredentialError(
             provider, lane.env_var, lane.endpoint, f"dim {dim} != expected {expected}"
         )
-    return {"endpoint": lane.endpoint, "model": payload.get("model", lane.model), "dim": dim, "ok": True}
+    return {
+        "endpoint": lane.endpoint,
+        "model": payload.get("model", lane.model),
+        "dim": dim,
+        "ok": True,
+    }
 
 
 def main() -> int:

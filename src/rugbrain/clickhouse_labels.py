@@ -145,7 +145,7 @@ def resolve_address(
     if chain:
         where += " AND chain_id = %(chain)s"
         params["chain"] = chain
-    sql = f"SELECT {_RESOLVE_COLS} FROM {table} FINAL WHERE {where} ORDER BY scanned_at DESC, doc_id DESC LIMIT 1"  # noqa: S608
+    sql = f"SELECT {_RESOLVE_COLS} FROM {table} FINAL WHERE {where} ORDER BY scanned_at DESC, doc_id DESC LIMIT 1"  # noqa: S608  # nosec B608 — table allowlisted by clickhouse_store.qualified(), address/chain bound as %(name)s params
     try:
         rows = cli.query(sql, parameters=params).result_rows
     except Exception as exc:
@@ -182,8 +182,8 @@ def label_counts(db: str | None = None, table: str = SCAN_TABLE) -> dict[str, in
         cli = get_client(resolved.split(".")[0])
         if cli is None:
             return {}
-        total = cli.query(f"SELECT count() FROM {resolved}").result_rows[0][0]  # noqa: S608
-        addrs = cli.query(f"SELECT uniqExact(address) FROM {resolved}").result_rows[0][0]  # noqa: S608
+        total = cli.query(f"SELECT count() FROM {resolved}").result_rows[0][0]  # noqa: S608  # nosec B608 — resolved is allowlist-validated above, no value interpolated
+        addrs = cli.query(f"SELECT uniqExact(address) FROM {resolved}").result_rows[0][0]  # noqa: S608  # nosec B608 — same allowlisted identifier, no value interpolated
         return {"rows": int(total), "distinct_addresses": int(addrs)}
     except Exception as exc:
         log.warning("label_counts_failed: %s", exc)

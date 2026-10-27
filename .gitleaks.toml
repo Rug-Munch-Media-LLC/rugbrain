@@ -33,7 +33,9 @@ tags = ["internal", "infrastructure"]
 [[rules]]
 id = "jupiter-api-key"
 description = "Jupiter DEX API keys"
-regex = '''(jupiter.*api.*key|JUPITER_API_KEY)\s*[:=]\s*[A-Za-z0-9+/]{20,}'''
+# (?i) covers the SCREAMING_CASE spelling the explicit alternative used to list,
+# and [\s_-]* also accepts the spaced/dashed form. Broader than before.
+regex = '''(?i)jupiter[\s_-]*api[\s_-]*key\s*[:=]\s*[A-Za-z0-9+/]{20,}'''
 tags = ["rmi", "api-key"]
 
 [[rules]]
@@ -75,7 +77,12 @@ tags = ["rmi", "critical"]
 [[rules]]
 id = "internal-service-token"
 description = "Internal service authentication tokens"
-regex = '''(?i)(?:rmi_service_token|rmi_auth_token|internal_api_key)\s*[:=]\s*[A-Za-z0-9+/=]{20,}'''
+# Same names as before (rmi/internal x service/auth/api x token/key) with the
+# separators opened to space/dot/dash, and an optional opening quote after
+# the assignment -- without it the rule was blind to KEY="value" and to
+# JSON, where the character after ': ' is always a quote. Broader than
+# before; measured 2026-10-27 to add 0 findings on the existing corpus.
+regex = '''(?i)(?:rmi|internal)[\s_.-]*(?:service|auth|api)[\s_.-]*(?:token|key)\s*[:=]\s*["']?[A-Za-z0-9+/=]{20,}'''
 tags = ["rmi", "critical"]
 
 # ─── ALLOWLIST ──────────────────────────────────────────────────────────────
@@ -99,7 +106,6 @@ paths = [
   '''\.ruff_cache/''',
   '''\.mypy_cache/''',
   '''vendor/''',
-  '''scripts/''',
   # Public CryptoScamDB dataset — URLs contain hex strings that resemble keys
   '''data/cryptoscamdb_urls\.yaml''',
   '''AGENTS\.md''',
@@ -123,4 +129,49 @@ stopwords = [
   "placeholder-secret",
   "your-api-key-here",
   "TODO: add real key",
+]
+
+# ─── VALUE-SCOPED ALLOWLIST — scraped corpus & labelled eval artefacts ────────
+# Measured 2026-10-27: `gitleaks detect --no-git` on main reported 7 findings and
+# not one of them was a secret. `ethereum-private-key` is a PROXIMITY rule
+# (`(?:private.*key|eth.*key|secret).*` plus sixty-four hex chars) and every
+# ingest record ends in its own content checksum of exactly that length, so any
+# scraped page that merely *talks* about a private key satisfies it.
+# The `private-repo-reference` rule likewise fires on ordinary news prose.
+#
+# WHY NOT PATHS: a path allowlist exempts the WHOLE file — measured 2026-10-27, a
+# planted real secret inside a path-allowlisted file was NOT reported, i.e. a path
+# entry converts the rule off for every byte of that path. The entries below match
+# the finding's own VALUE (the record's content checksum / its immutable UUID), so
+# the rules stay live for every other line, and for any new file.
+[[allowlists]]
+description = "Scraped doc records whose own content checksum satisfies the ethereum-private-key proximity rule"
+targetRules = ["ethereum-private-key"]
+regexTarget = "secret"
+regexes = [
+  # data/gamblefi_docs/pages.jsonl:4  — Beam Network docs page (scraped 2026-10-24)
+  '''36c68692cf5056fe5eba63f2bdba85ff24718e3f52b82f1ba32aa66bf3dd04da''',
+  # data/gamblefi_docs/pages.jsonl:10 — Immutable zkEVM contracts README (scraped 2026-10-24)
+  '''ddcefacfa789463342aa77640d0fd008bce87cd3ad9c42ff9cb1cfcb8b10b0a0''',
+  # data/gamblefi_docs/pages.jsonl:11 — Roobet provably-fair page (scraped 2026-10-24)
+  '''bbe7a3a3e300606c54d9b2b798ed583b435f141e64f28dfd7d72eb890f633afb''',
+  # data/gamblefi_docs/pages.jsonl:13 — Stake docs page (scraped 2026-10-24)
+  '''4e2f72c0094a7061065b0115cc031a35b5713e35939604f1c9be8a6002bf525e''',
+  # data/gamblefi_docs/pages.jsonl:14 — Sky Mavis / Axie whitepaper (scraped 2026-10-24)
+  '''5a716cfe97c70942c9c10f1cb097e5e31335ecc9e67a88adb3182da090763c23''',
+  # data/gmgn_docs/pages.jsonl:51 — GMGN TG-wallet import/export docs (scraped 2026-10-24)
+  '''26d9d7734f78b62772ccaafe672c7f1ba4be0f44356518d6408d914e7003e21c''',
+]
+
+[[allowlists]]
+description = "One labelled eval record matched only by ordinary news prose inside a 4 KB line"
+targetRules = ["private-repo-reference"]
+regexTarget = "line"
+regexes = [
+  # eval/shill/labelled_v1.jsonl:211 — label=organic, provenance cross_channel_dup.
+  # Scoped by the record's own immutable UUID rather than by the captured word that
+  # drew the hit (that word alone would blind this rule for every file, which is the
+  # path-glob failure in a different costume). A finding on any other line —
+  # including a fresh line appended to this very file — is still reported.
+  '''"id": "034375ce-97e1-5faf-9605-a168abc74565"''',
 ]

@@ -8,7 +8,12 @@ construct one, and they do not import ``httpx`` to get one.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from httpx import AsyncClient as HttpClient
+else:  # the runtime object is never constructed here
+    HttpClient = Any
 
 USER_AGENT = "RMI-RagBrain/0.1 (+https://rugmunch.io; source ingestion)"
 DEFAULT_TIMEOUT = 30.0
@@ -39,4 +44,4 @@ def client(
     )
 
 
-__all__ = ["DEFAULT_TIMEOUT", "USER_AGENT", "client", "proxy_url"]
+__all__ = ["DEFAULT_TIMEOUT", "USER_AGENT", "HttpClient", "client", "proxy_url"]

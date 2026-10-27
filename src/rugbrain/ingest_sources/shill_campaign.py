@@ -62,7 +62,10 @@ def campaign_id(text: str, when: str | int | float | None) -> str:
     ts = to_epoch(when)
     bucket = ts // 86400 if ts else 0
     raw = f"{fingerprint(text)}:{bucket}"
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    # Deterministic identifier, not a security primitive: campaign ids must stay
+    # stable across runs. usedforsecurity=False says so in code and keeps a
+    # FIPS-mode interpreter from refusing the call.
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def score_campaign(
@@ -88,7 +91,7 @@ def score_campaign(
     seen: set[str] = set()
     for h_channel, h_text, h_when in history:
         h_ts = to_epoch(h_when)
-        if h_ts >= ts:            # LOOK-AHEAD GUARD: future (or same-instant) data is invisible
+        if h_ts >= ts:  # LOOK-AHEAD GUARD: future (or same-instant) data is invisible
             continue
         if ts - h_ts > window:
             continue
