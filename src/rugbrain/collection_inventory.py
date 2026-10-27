@@ -37,7 +37,7 @@ def _get(path: str, body: dict | None = None) -> dict:
         data=json.dumps(body).encode() if body else None,
         headers={"content-type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=20) as r:  # nosec B310 — host from QDRANT_URL env (operator config), path is a module literal
         return json.load(r)["result"]
 
 
@@ -50,17 +50,25 @@ def _dim(info: dict) -> int:
 
 def _corpus(root: str) -> dict[str, str]:
     out = subprocess.run(
-        ["grep", "-rIl", "--exclude-dir=.git", "--exclude-dir=node_modules",
-         "--exclude=*.bak*", "-e", ".", root],
-        capture_output=True, text=True,
+        [
+            "grep",
+            "-rIl",
+            "--exclude-dir=.git",
+            "--exclude-dir=node_modules",
+            "--exclude=*.bak*",
+            "-e",
+            ".",
+            root,
+        ],
+        capture_output=True,
+        text=True,
     ).stdout.split()
     # A report that DESCRIBES a dead collection is not a consumer of it, and
     # neither is the ratchet baseline: counting either would let the inventory
     # certify its own findings as alive.
     keep = tuple(f"{root}/{d}" for d in ("src", "scripts", "config", "tests"))
     skip = ("collection_orphans_allow.json", "collection_guard_allow.json")
-    return {p: pathlib_text(p) for p in out
-            if p.startswith(keep) and not p.endswith(skip)}
+    return {p: pathlib_text(p) for p in out if p.startswith(keep) and not p.endswith(skip)}
 
 
 def pathlib_text(p: str) -> str:
@@ -118,9 +126,16 @@ def inventory(root: str | None = None) -> list[dict]:
             verdict = "keep"
         else:
             verdict = "orphan"
-        rows.append({
-            "name": n, "points": counts[n], "dim": dims[n], "twin": twin,
-            "twin_points": twin_points, "verdict": verdict,
-            "consumers": prod[:3], "test_refs": len(home) - len(prod),
-        })
+        rows.append(
+            {
+                "name": n,
+                "points": counts[n],
+                "dim": dims[n],
+                "twin": twin,
+                "twin_points": twin_points,
+                "verdict": verdict,
+                "consumers": prod[:3],
+                "test_refs": len(home) - len(prod),
+            }
+        )
     return rows

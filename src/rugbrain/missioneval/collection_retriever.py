@@ -85,10 +85,7 @@ async def _embed_for(target: str, text: str) -> list[float]:
 
         apply_lane_env()
         return (await embed_batch([text]))[0]
-    raise RetrievalError(
-        f"cannot embed for {target}: live width {live} matches no known lane"
-    )
-
+    raise RetrievalError(f"cannot embed for {target}: live width {live} matches no known lane")
 
 
 def _scroll(text: str, collection: str, vector: list[float], top_k: int, url: str) -> list[dict]:
@@ -112,7 +109,7 @@ def _scroll(text: str, collection: str, vector: list[float], top_k: int, url: st
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310  # nosec B310 — operator-supplied Qdrant host, never request input
             hits = json.load(resp).get("result") or []
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:200].decode(errors="replace")

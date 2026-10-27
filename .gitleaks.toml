@@ -78,8 +78,11 @@ tags = ["rmi", "critical"]
 id = "internal-service-token"
 description = "Internal service authentication tokens"
 # Same names as before (rmi/internal x service/auth/api x token/key) with the
-# separators opened to space/dot/dash. Broader than before.
-regex = '''(?i)(?:rmi|internal)[\s_.-]*(?:service|auth|api)[\s_.-]*(?:token|key)\s*[:=]\s*[A-Za-z0-9+/=]{20,}'''
+# separators opened to space/dot/dash, and an optional opening quote after
+# the assignment -- without it the rule was blind to KEY="value" and to
+# JSON, where the character after ': ' is always a quote. Broader than
+# before; measured 2026-10-27 to add 0 findings on the existing corpus.
+regex = '''(?i)(?:rmi|internal)[\s_.-]*(?:service|auth|api)[\s_.-]*(?:token|key)\s*[:=]\s*["']?[A-Za-z0-9+/=]{20,}'''
 tags = ["rmi", "critical"]
 
 # ─── ALLOWLIST ──────────────────────────────────────────────────────────────
@@ -103,7 +106,6 @@ paths = [
   '''\.ruff_cache/''',
   '''\.mypy_cache/''',
   '''vendor/''',
-  '''scripts/''',
   # Public CryptoScamDB dataset — URLs contain hex strings that resemble keys
   '''data/cryptoscamdb_urls\.yaml''',
   '''AGENTS\.md''',

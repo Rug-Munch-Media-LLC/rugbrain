@@ -36,8 +36,10 @@ from typing import Final
 # exist so a string can *look* like one thing to a human and be parsed as
 # another by a tokenizer. Stripped from everything we return to a model.
 _INVISIBLE: Final = frozenset(
-    "‌‍‎‏"
-    "‪‫‬‭‮⁦⁧⁨⁩﻿"
+    # Written as escapes on purpose: a bidi/ZWN char written literally makes the
+    # SOURCE itself carry the hazard this table exists to remove (bandit B613),
+    # and turns the file into a spoofing surface for whoever reads it next.
+    "\u200c\u200d\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\ufeff"
 )
 _INVISIBLE_RE: Final = re.compile(f"[{re.escape(''.join(sorted(_INVISIBLE)))}]")
 

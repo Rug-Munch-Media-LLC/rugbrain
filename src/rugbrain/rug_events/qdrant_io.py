@@ -57,7 +57,7 @@ def request(
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310  # nosec B310 — caller-supplied Qdrant base (internal config), path is literal
             loaded = json.load(resp)
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:300].decode(errors="replace")
@@ -117,7 +117,7 @@ def get_text(url: str, timeout: int = 60) -> str:
     upstream must degrade the corpus, never abort the build.
     """
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310
+        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310  # nosec B310 — dataset URLs are module constants (see DEAD_TOKENS_URL callers)
             body = resp.read()
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
         log.warning("fetch_failed url=%s err=%s", url, str(exc)[:160])

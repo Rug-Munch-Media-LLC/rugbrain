@@ -42,7 +42,7 @@ def _http_json(
         hdrs["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=hdrs, method="POST" if data else "GET")  # noqa: S310 — internal loopback URL
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — internal loopback URL
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — internal loopback URL  # nosec B310 — zoekt base is module config (loopback), path is literal
             return resp.status, dict(resp.headers), resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers or {}), exc.read() or b""
@@ -51,8 +51,15 @@ def _http_json(
 def _failure(exc: BaseException) -> dict[str, Any]:
     """Map a transport exception onto a typed refusal."""
     reason = getattr(exc, "reason", None)
-    code = "timeout" if isinstance(exc, (socket.timeout, TimeoutError)) or isinstance(reason, (socket.timeout, TimeoutError)) else "unavailable"
-    return layer_response(source=SOURCE, error_code=code, detail=f"{type(exc).__name__}: {exc}", fallback=FALLBACK)
+    code = (
+        "timeout"
+        if isinstance(exc, (socket.timeout, TimeoutError))
+        or isinstance(reason, (socket.timeout, TimeoutError))
+        else "unavailable"
+    )
+    return layer_response(
+        source=SOURCE, error_code=code, detail=f"{type(exc).__name__}: {exc}", fallback=FALLBACK
+    )
 
 
 def _files_from(body: dict[str, Any], *, files_only: bool) -> list[dict[str, Any]]:
@@ -80,24 +87,38 @@ def zoekt_search(query: str, files_only: bool = False) -> dict[str, Any]:
     """
     q = (query or "").strip()
     if not q:
-        return layer_response(source=SOURCE, error_code="refused", detail="query is empty", fallback=FALLBACK)
+        return layer_response(
+            source=SOURCE, error_code="refused", detail="query is empty", fallback=FALLBACK
+        )
     url = f"{BASE}/search?{urlencode({'q': q, 'format': 'json'})}"
     try:
         status, _headers, body = _http_json(url)
     except Exception as exc:  # transport failure is a typed refusal, not a crash
         return _failure(exc)
     if status in (401, 403):
-        return layer_response(source=SOURCE, error_code="unauthorized", detail=f"HTTP {status}", fallback=FALLBACK)
+        return layer_response(
+            source=SOURCE, error_code="unauthorized", detail=f"HTTP {status}", fallback=FALLBACK
+        )
     if status != 200:
         looks_html = b"<html" in body[:200].lower()
         detail = f"HTTP {status}" + (" (SPA HTML, wrong surface)" if looks_html else "")
-        return layer_response(source=SOURCE, error_code="bad_response", detail=detail, fallback=FALLBACK)
+        return layer_response(
+            source=SOURCE, error_code="bad_response", detail=detail, fallback=FALLBACK
+        )
     try:
         parsed = json.loads(body)
     except json.JSONDecodeError:
-        return layer_response(source=SOURCE, error_code="bad_response", detail="non-JSON body", fallback=FALLBACK)
+        return layer_response(
+            source=SOURCE, error_code="bad_response", detail="non-JSON body", fallback=FALLBACK
+        )
     rows = _files_from(parsed, files_only=files_only)
     return layer_response(
         source=SOURCE,
-        data={"query": q, "files_only": files_only, "count": len(rows), "empty": not rows, "files": rows},
+        data={
+            "query": q,
+            "files_only": files_only,
+            "count": len(rows),
+            "empty": not rows,
+            "files": rows,
+        },
     )

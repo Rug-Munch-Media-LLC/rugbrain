@@ -52,7 +52,7 @@ def _fetch(path: str, url: str, body: dict | None, timeout: float) -> dict:
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — scheme guarded
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — scheme guarded  # nosec B310 — false positive: the http(s) assertion happens four lines above
             return json.load(resp)
     except urllib.error.URLError as exc:
         raise QdrantError(f"unreachable at {path}: {exc.reason}") from exc

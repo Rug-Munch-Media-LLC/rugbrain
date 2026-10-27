@@ -19,7 +19,7 @@ def _named_vectors(base: str, collection: str) -> bool:
     if collection in _NAMED_CACHE:
         return _NAMED_CACHE[collection]
     try:
-        with urllib.request.urlopen(f"{base}/collections/{collection}", timeout=30) as resp:  # noqa: S310
+        with urllib.request.urlopen(f"{base}/collections/{collection}", timeout=30) as resp:  # noqa: S310  # nosec B310 — base is the configured Qdrant URL; read-only eval GET
             vectors = json.load(resp)["result"]["config"]["params"].get("vectors") or {}
         named = isinstance(vectors, dict) and "size" not in vectors
     except Exception:
@@ -39,7 +39,7 @@ def _live_width(base: str, collection: str) -> int | None:
     if collection in _WIDTH_CACHE:
         return _WIDTH_CACHE[collection]
     try:
-        with urllib.request.urlopen(f"{base}/collections/{collection}", timeout=30) as resp:  # noqa: S310
+        with urllib.request.urlopen(f"{base}/collections/{collection}", timeout=30) as resp:  # noqa: S310  # nosec B310 — base is the configured Qdrant URL; read-only eval GET
             vectors = json.load(resp)["result"]["config"]["params"].get("vectors") or {}
         if "size" in vectors:
             width: int | None = int(vectors["size"])
