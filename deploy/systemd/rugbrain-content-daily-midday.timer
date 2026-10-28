@@ -1,0 +1,13 @@
+# 12:30 UTC — Rug Munch Intelligence — Midday Market Report
+[Unit]
+Description=RugBrain content edition timer — midday (12:30 UTC)
+
+[Timer]
+OnCalendar=*-*-* 12:30:00 UTC
+Persistent=true
+RandomizedDelaySec=15s
+AccuracySec=1s
+Unit=rugbrain-content-daily@midday.service
+
+[Install]
+WantedBy=timers.target

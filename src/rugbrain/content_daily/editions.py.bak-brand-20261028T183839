@@ -1,0 +1,125 @@
+"""SPDX-License-Identifier: MIT
+
+Copyright (c) 2026 Rug Munch Media LLC
+
+The three editions: identity, slot, angle, and the keys derived from them.
+
+An edition is not a channel rename. Each one answers a different question for
+the reader because it is written at a different point in the trading day:
+
+    06:30 UTC  morning   what happened overnight and in the Asia session
+    12:30 UTC  midday    what the Europe open and the US pre-market changed
+    21:30 UTC  evening   what the US close settled, and what to watch next
+
+The topic string is the slug input, so it must be stable and mutually distinct
+within a day: three editions on one date must never collide on one URL.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime, time
+
+#: Published under @cryptorugmuncher; Lane E maps the key to a chat id.
+DEFAULT_CHANNEL = "main"
+DAY_FORMAT = "%Y-%m-%d"
+
+
+@dataclass(frozen=True)
+class Edition:
+    """One scheduled edition."""
+
+    key: str
+    label: str
+    at_utc: str
+    topic: str
+    angle: str
+    max_items: int
+    min_paragraphs: int
+    max_paragraphs: int
+    channel: str = DEFAULT_CHANNEL
+
+    def title_for(self, day: str) -> str:
+        """The edition title carried on the run record and the published envelope."""
+        return f"The Daily Rug — {self.label} · {day}"
+
+
+EDITIONS: dict[str, Edition] = {
+    "morning": Edition(
+        key="morning",
+        label="Morning Brief",
+        at_utc="06:30",
+        topic="crypto risk overnight and asia session",
+        angle="overnight developments and the Asia session",
+        max_items=3,
+        min_paragraphs=2,
+        max_paragraphs=4,
+    ),
+    "midday": Edition(
+        key="midday",
+        label="Midday Update",
+        at_utc="12:30",
+        topic="crypto risk europe open and us premarket",
+        angle="the Europe open and the US pre-market",
+        max_items=4,
+        min_paragraphs=2,
+        max_paragraphs=4,
+    ),
+    "evening": Edition(
+        key="evening",
+        label="Evening Close",
+        at_utc="21:30",
+        topic="crypto risk us close and overnight outlook",
+        angle="the US session close and the overnight outlook",
+        max_items=4,
+        min_paragraphs=2,
+        max_paragraphs=4,
+    ),
+}
+
+
+def get(key: str) -> Edition:
+    """The edition for ``key``; an unknown key names the valid ones."""
+    try:
+        return EDITIONS[key]
+    except KeyError:
+        raise KeyError(f"unknown edition {key!r}; valid: {', '.join(sorted(EDITIONS))}") from None
+
+
+def run_key(edition: Edition, day: str) -> str:
+    """The idempotency key for one edition on one day."""
+    return f"daily:{edition.key}:{day}"
+
+
+def scheduled(edition: Edition, day: str) -> datetime:
+    """The edition's UTC slot on ``day``."""
+    hour, minute = (int(part) for part in edition.at_utc.split(":"))
+    return datetime.combine(
+        datetime.strptime(day, DAY_FORMAT).date(), time(hour, minute), tzinfo=UTC
+    )
+
+
+def due_state(edition: Edition, now: datetime, day: str) -> str:
+    """``due`` once the slot has passed, ``upcoming`` before it.
+
+    ``upcoming`` is what stops a manual 04:00 run from publishing a brief
+    labelled "Morning" that describes a session that has not opened yet.
+    """
+    return "due" if now >= scheduled(edition, day) else "upcoming"
+
+
+def today(now: datetime | None = None) -> str:
+    """The UTC day the run belongs to."""
+    return (now or datetime.now(UTC)).strftime(DAY_FORMAT)
+
+
+__all__ = [
+    "DEFAULT_CHANNEL",
+    "EDITIONS",
+    "Edition",
+    "due_state",
+    "get",
+    "run_key",
+    "scheduled",
+    "today",
+]
