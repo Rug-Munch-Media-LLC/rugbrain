@@ -78,25 +78,51 @@ def _model_writer() -> Any:
 
 
 def _normalise_written(edition_key: str, day: str, doc: dict[str, Any]) -> dict[str, Any]:
-    """Add the identity fields the publication/validation seam requires.
+    """Project Lane B's written document onto the publication shape — once.
 
-    Lane B writes the reader-facing document; the pipeline owns the identity
-    (slug, canonical URL) because it is the idempotency key the site and the
-    Telegram ledger share. Never overwrite a value Lane B already set.
+    Lane B owns the copy; the pipeline owns identity (slug, canonical URL,
+    edition stamp) because it is the idempotency key the site store and the
+    Telegram ledger share. It also owns the layout the validator, the store and
+    the card all read: a written section indexes a paragraph, a published one
+    carries the text.
+
+    A refusal has no body, so it is passed through untouched and reported by
+    its own reason (:func:`edit_document`) — never dressed up as a schema gap.
     """
     if str(doc.get("status")) != "ok":
         return doc
+    from rugbrain.content_style import load_style
+
+    edition = editions.get(edition_key)
     slug = str(doc.get("slug") or f"daily-rug-{day}-{edition_key}")
-    doc.setdefault("slug", slug)
-    doc.setdefault("url", f"https://rugmunch.io/story/{slug}")
-    doc.setdefault("dek", str(doc.get("headline") or doc.get("dek") or ""))
-    doc.setdefault("sections", list(doc.get("paragraphs") or ()))
-    doc.setdefault("tokens", {})
-    doc.setdefault("date", day)
+    base = str(load_style()["slug"]["base_url"]).rstrip("/")
+    paragraphs = [str(item) for item in doc.get("paragraphs") or ()]
+    rows = [row for row in doc.get("sections") or () if isinstance(row, dict)]
+    doc["slug"] = slug
+    doc["url"] = str(doc.get("url") or f"{base}/{slug}")
+    doc["title"] = str(doc.get("title") or edition.title_for(day))
+    doc["dek"] = str(doc.get("dek") or doc.get("headline") or "")
+    doc["date"] = str(doc.get("date") or day)
+    if not rows or any("body" not in row for row in rows):
+        doc["sections"] = [
+            {"heading": str(row.get("heading") or ""), "body": paragraphs[int(row["paragraph"])]}
+            for row in rows
+            if isinstance(row.get("paragraph"), int)
+            and 0 <= int(row["paragraph"]) < len(paragraphs)
+        ]
+    doc.setdefault("edition_title", edition.title_for(day))
+    doc.setdefault("topic", edition.topic)
+    doc.setdefault("body_markdown", "\n\n".join(paragraphs))
+    doc.setdefault("tokens", [])
+    doc.setdefault("charts", [])
+    doc.setdefault("open_graph", {})
+    doc.setdefault("image_url", str((doc.get("image") or {}).get("url") or ""))
     return doc
 
 
-async def write_edition(edition_key: str, stories: list[dict[str, Any]], day: str) -> dict[str, Any]:
+async def write_edition(
+    edition_key: str, stories: list[dict[str, Any]], day: str
+) -> dict[str, Any]:
     """Write the edition through Lane B, else the deterministic fallback.
 
     ``rugbrain.content.writer.write_edition`` is the owner of the writer prompt,
@@ -124,7 +150,18 @@ async def write_edition(edition_key: str, stories: list[dict[str, Any]], day: st
 
 
 def edit_document(doc: dict[str, Any]) -> list[str]:
-    """Blocking problems: schema, citations, style, numbers, length."""
+    """Blocking problems: schema, citations, style, numbers, length.
+
+    A document the writer itself refused is not a schema failure — its own
+    status and reason are the finding, and they are propagated verbatim so the
+    operator reads "thin evidence", not "missing slug".
+    """
+    status = str(doc.get("status") or "")
+    if status and status != "ok":
+        reason = str(doc.get("reason") or "").strip()
+        if not reason:
+            reason = "; ".join(str(item) for item in doc.get("style_violations") or ())
+        return [f"writer: {status}" + (f": {reason}" if reason else "")]
     try:
         from rugbrain.content import draft as content_draft
     except ImportError:

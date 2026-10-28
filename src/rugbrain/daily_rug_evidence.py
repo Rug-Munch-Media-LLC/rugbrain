@@ -120,6 +120,21 @@ async def collect_evidence(
     return evidence
 
 
+def _publisher_key(url: str) -> str:
+    """The independence key for one source URL.
+
+    ``t.me/<channel>`` is a publisher per CHANNEL, not one publisher for all of
+    Telegram: two different news channels are two independent sources. Every
+    other host keeps the netloc rule.
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if host in {"t.me", "telegram.me"}:
+        channel = parsed.path.strip("/").split("/")[0]
+        return f"t.me/{channel}" if channel else host
+    return host
+
+
 def sufficiency(
     evidence: Sequence[dict[str, Any]], min_sources: int = 2
 ) -> tuple[bool, str]:
@@ -132,9 +147,7 @@ def sufficiency(
         return False, (
             f"only {len(evidence)} citable source(s) with a URL; need {min_sources}"
         )
-    domains = {
-        urlparse(row["url"]).netloc.lower() for row in evidence if row.get("url")
-    }
+    domains = {_publisher_key(row.get("url") or "") for row in evidence if row.get("url")}
     if len(domains) < min_sources:
         listed = ", ".join(sorted(domains)) or "none"
         return False, (

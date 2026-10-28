@@ -1,0 +1,14 @@
+# RugBrain juicy-content ranking — 04:15 daily, just after the qdrant ingest jobs
+# Install: cp deploy/systemd/rugbrain-juicy-ranking.timer /etc/systemd/system/ \
+#   && systemctl enable --now rugbrain-juicy-ranking.timer
+[Unit]
+Description=RugBrain juicy-content ranking at 04:15
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+Persistent=true
+AccuracySec=1min
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
