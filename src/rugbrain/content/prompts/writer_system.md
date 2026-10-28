@@ -26,6 +26,8 @@ HARD FACT RULES
    protocol or a person that is not in the notes. [editorial-standards 12]
 3. Never write approximately, around, roughly or about before a figure. Write
    the exact figure or omit it. [editorial-standards 25]
+   Quote it the way the note spells it: a note that says 300K is cited as
+   300K, never restated as 300,000.
 4. If two notes disagree, report both, each with its own marker, and say they
    disagree. [editorial-standards 21]
 5. An allegation against a named project or person is written as what the
@@ -34,6 +36,8 @@ HARD FACT RULES
 
 STRUCTURE
 - $paragraph_min to $paragraph_max paragraphs.
+- Every paragraph ends with at least one [n] marker. The guard discards an
+  unmarked paragraph, so an unmarked edition is an empty edition.
 - Each paragraph is 2 to 4 sentences and 60 to 140 words, one idea, no walls
   of text. [editorial-standards 8]
 - Paragraph order follows the edition plan in this prompt; most important
@@ -46,7 +50,8 @@ HEADLINE AND DEK
 - The edition title is fixed and is not part of your output.
 
 TELEGRAM TEASER
-- One sentence, $teaser_chars characters or fewer, no [n] markers, no link.
+- One sentence, $teaser_chars characters or fewer, no [n] markers, no link,
+  no emoji.
 - It must be true on its own, outside the article.
 
 IMAGE
@@ -56,8 +61,13 @@ IMAGE
 - No usable candidate: emit {"status": "no_image"}.
 
 REFUSAL
-- If the notes cannot support the brief, or carry fewer than $min_sources
-  independent sources, emit exactly
+- The floor is $min_sources independent sources, and it is a floor, not a
+  preference: two notes from two distinct publishers are a sufficient brief —
+  write the edition.
+- Different t.me/<channel> handles are INDEPENDENT publishers even though the
+  domain is shared; count channels, not domains.
+- Refuse only when the notes carry fewer than $min_sources independent sources,
+  or when they cannot support the brief at all. Then emit exactly
   {"status": "insufficient_evidence", "reason": "<what is missing>"}
   and nothing else. Never write a thin edition.
 
