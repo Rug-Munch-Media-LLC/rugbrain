@@ -1,0 +1,17 @@
+# Smoke run: proves the unit, the venv, the CLI and the journal with no network
+# and no publication. Offline fixture dependencies, dry run, forced past the slot.
+[Unit]
+Description=RugBrain content-daily smoke run (offline fixture, publishes nothing)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain/src/branch/main/deploy/systemd/README.md
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.content_daily daily --edition morning --offline --dry-run --force --json
+MemoryMax=512M
+TimeoutStartSec=300
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rugbrain-content-daily-smoke

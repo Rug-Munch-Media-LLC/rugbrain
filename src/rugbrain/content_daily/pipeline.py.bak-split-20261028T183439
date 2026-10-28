@@ -1,0 +1,214 @@
+"""SPDX-License-Identifier: MIT
+
+Copyright (c) 2026 Rug Munch Media LLC
+
+The one entrypoint: one edition, one run, eight stages, one result envelope.
+
+Everything lane-specific arrives through :class:`Deps`; this module decides
+*order* and *what a failure costs*, nothing else. The consequences are the
+contract:
+
+*   ``no_candidates`` / ``needs_review`` / ``site_failed`` publish nothing and
+    exit non-zero — an empty edition is a signal, not a silence.
+*   ``partial`` means the site is published and Telegram is not. The site is
+    never rolled back (it is the citable artefact) and the next run does not
+    re-post it: ``already_published`` unless ``--repair-delivery`` is asked for.
+*   ``skipped`` is the normal state after a persistent timer fires a missed
+    slot: the ledger already holds this run key.
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from rugbrain.content_daily import adapters, delivery, editions, selection, spec
+from rugbrain.content_daily.envelope import envelope, finish, note
+from rugbrain.content_daily.journal import Journal
+from rugbrain.content_daily.ledger import DailyLedger
+from rugbrain.content_daily.ports import (
+    CollectFn,
+    DedupeFn,
+    DeliverFn,
+    EditFn,
+    PublishFn,
+    RouteFn,
+    ScoreFn,
+    WriteFn,
+)
+from rugbrain.content_daily.stage_runner import run_stage
+
+
+@dataclass(frozen=True)
+class Deps:
+    """Every lane's entry point, swappable per run (and in the acceptance harness)."""
+
+    collect: CollectFn = adapters.collect_stories
+    score: ScoreFn = adapters.score_story
+    dedupe: DedupeFn = adapters.dedupe_stories
+    route: RouteFn = adapters.route_story
+    write: WriteFn = adapters.write_edition
+    edit: EditFn = adapters.edit_document
+    publish: PublishFn = delivery.publish_document
+    deliver: DeliverFn = delivery.deliver_telegram
+
+
+async def run_edition(
+    edition_key: str,
+    *,
+    day: str | None = None,
+    dry_run: bool = False,
+    force: bool = False,
+    repair_delivery: bool = False,
+    deps: Deps | None = None,
+    ledger: DailyLedger | None = None,
+    journal: Journal | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Run one edition end to end and return the result envelope."""
+    deps = deps or Deps()
+    ledger = ledger or DailyLedger()
+    journal = journal or Journal()
+    edition = editions.get(edition_key)
+    moment = now or datetime.now(UTC)
+    day = day or editions.today(moment)
+    run_key = editions.run_key(edition, day)
+    started = time.perf_counter()
+    result = envelope(edition, day, run_key, dry_run)
+
+    published = ledger.published(run_key)
+    if published and not dry_run and not repair_delivery:
+        return finish(
+            result, journal, started, "skipped",
+            reason="already_published", url=published.get("url"),
+        )
+    if not force and editions.due_state(edition, moment, day) == "upcoming":
+        return finish(result, journal, started, "not_due", reason="slot_in_the_future")
+    repair = bool(repair_delivery and published and not ledger.delivered(run_key))
+
+    # 1. collect -----------------------------------------------------------
+    stage = spec.spec(spec.COLLECT)
+    outcome = await run_stage(
+        stage,
+        lambda: deps.collect(edition.key),
+        journal=journal,
+        run_key=run_key,
+        edition=edition.key,
+        day=day,
+    )
+    note(result, outcome, stage.name)
+    if not outcome.ok or not outcome.value:
+        return finish(result, journal, started, "no_candidates", reason="empty_pool")
+    stories: list[dict[str, Any]] = outcome.value
+
+    # 2. score + dedupe ----------------------------------------------------
+    stage = spec.spec(spec.SCORE_DEDUPE)
+    suppressed = ledger.recent_refs(today=day)
+    result["suppressed_refs"] = len(suppressed)
+
+    async def scored() -> list[dict[str, Any]]:
+        pool, drops = selection.score_and_dedupe(stories, dedupe=deps.dedupe, score=deps.score)
+        result["dedupe_drops"] = drops
+        return pool
+
+    outcome = await run_stage(
+        stage, scored, journal=journal, run_key=run_key, edition=edition.key, day=day,
+        items_in=len(stories),
+    )
+    note(result, outcome, stage.name)
+    if not outcome.ok:
+        return finish(result, journal, started, "no_candidates", reason="scoring_failed")
+    pool: list[dict[str, Any]] = outcome.value
+
+    # 3. select ------------------------------------------------------------
+    stage = spec.spec(spec.SELECT)
+    counts: dict[str, int] = {}
+
+    async def routed() -> list[dict[str, Any]]:
+        chosen, dropped = selection.select(
+            pool, edition=edition, route=deps.route, suppressed=suppressed, day=day
+        )
+        counts["dropped"] = dropped
+        return chosen
+
+    outcome = await run_stage(
+        stage, routed, journal=journal, run_key=run_key, edition=edition.key, day=day,
+        items_in=len(pool),
+    )
+    note(result, outcome, stage.name)
+    result["routed_drops"] = counts.get("dropped", 0)
+    selected: list[dict[str, Any]] = list(outcome.value or [])
+    result["items"] = len(selected)
+    if not selected:
+        return finish(result, journal, started, "no_candidates", reason="nothing_broadcastable")
+
+    # 4. write -------------------------------------------------------------
+    stage = spec.spec(spec.WRITE)
+    outcome = await run_stage(
+        stage, lambda: deps.write(edition.key, selected, day), journal=journal,
+        run_key=run_key, edition=edition.key, day=day, items_in=len(selected),
+    )
+    note(result, outcome, stage.name)
+    if not outcome.ok or not isinstance(outcome.value, dict):
+        return finish(result, journal, started, "writer_unavailable", reason="no_document")
+    doc: dict[str, Any] = outcome.value
+
+    # 5. edit / fact-check -------------------------------------------------
+    stage = spec.spec(spec.EDIT)
+    outcome = await run_stage(
+        stage, selection.immediate(deps.edit(doc)), journal=journal, run_key=run_key,
+        edition=edition.key, day=day,
+    )
+    note(result, outcome, stage.name)
+    problems = list(outcome.value or [])
+    if problems:
+        return finish(result, journal, started, "needs_review", reason="; ".join(problems[:5]))
+
+    # 6. publish the site --------------------------------------------------
+    stage = spec.spec(spec.PUBLISH)
+    outcome = await run_stage(
+        stage, lambda: deps.publish(doc, dry_run), journal=journal, run_key=run_key,
+        edition=edition.key, day=day,
+    )
+    note(result, outcome, stage.name)
+    published_row = outcome.value if outcome.ok and isinstance(outcome.value, dict) else {}
+    if not published_row.get("ok"):
+        return finish(result, journal, started, "site_failed", reason="publish_failed")
+    published_row = dict(published_row, run_key=run_key)
+    result["url"] = published_row.get("url")
+    result["title"] = published_row.get("title") or result["title"]
+    if not dry_run:
+        ledger.mark_published(
+            run_key,
+            edition=edition.key,
+            day=day,
+            slug=str(published_row.get("slug") or ""),
+            url=str(published_row.get("url") or ""),
+            title=str(result["title"]),
+            story_refs=[str(item.get("source") or "") for item in selected if item.get("source")],
+        )
+
+    # 7. deliver -----------------------------------------------------------
+    stage = spec.spec(spec.DELIVER)
+    outcome = await run_stage(
+        stage, lambda: deps.deliver(edition.key, doc, published_row, dry_run),
+        journal=journal, run_key=run_key, edition=edition.key, day=day,
+    )
+    note(result, outcome, stage.name)
+    delivery_row = outcome.value if outcome.ok and isinstance(outcome.value, dict) else {}
+    delivered = bool(delivery_row.get("ok"))
+    if delivered:
+        ids = list(delivery_row.get("message_ids") or [])
+        result["message_ids"] = ids
+        result["telegram"] = delivery_row.get("payload", {})
+        if not dry_run and ids:
+            ledger.mark_delivered(run_key, channel=edition.channel, message_ids=ids)
+
+    if not delivered:
+        return finish(result, journal, started, "partial", reason="telegram_failed")
+    return finish(result, journal, started, "repaired" if repair else "ok", repair=repair)
+
+
+__all__ = ["Deps", "run_edition"]

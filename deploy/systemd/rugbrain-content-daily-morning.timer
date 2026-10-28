@@ -1,0 +1,13 @@
+# 06:30 UTC — Rug Munch Intelligence — The Morning Rug
+[Unit]
+Description=RugBrain content edition timer — morning (06:30 UTC)
+
+[Timer]
+OnCalendar=*-*-* 06:30:00 UTC
+Persistent=true
+RandomizedDelaySec=15s
+AccuracySec=1s
+Unit=rugbrain-content-daily@morning.service
+
+[Install]
+WantedBy=timers.target

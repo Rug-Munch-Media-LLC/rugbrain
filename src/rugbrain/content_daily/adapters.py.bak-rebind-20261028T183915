@@ -1,0 +1,107 @@
+"""SPDX-License-Identifier: MIT
+
+Copyright (c) 2026 Rug Munch Media LLC
+
+Default implementations of the injection seams — and the exact lane symbols
+they call. Nothing here owns a prompt, a score or a route; each function is a
+thin, tolerant binding to a module another lane owns.
+
+The bindings, so the contract is readable in one place:
+
+===============  ===========================================================
+stage            symbol
+===============  ===========================================================
+collect          ``rugbrain.content_candidates.recent_stories``
+score_dedupe     ``rugbrain.content_value.score_item`` (fallback: importance)
+                 ``rugbrain.content_dedupe.collapse``
+select           ``rugbrain.content_gate.decide``
+write            ``rugbrain.daily_rug.generate_daily_rug`` +
+                 ``rugbrain.content_engine.write_post`` when it exists
+edit_factcheck   ``rugbrain.daily_rug_validate.validate_daily_rug``
+===============  ===========================================================
+
+A missing optional symbol degrades along a declared path and says so in the
+journal — it is never silently substituted for something that looks similar.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from rugbrain import content_candidates, content_dedupe, content_gate, daily_rug_validate
+from rugbrain.content_daily import editions
+from rugbrain.daily_rug import generate_daily_rug
+
+
+async def collect_stories(edition_key: str, *, limit: int = 60) -> Any:
+    """Candidate pool for one edition (Lane B/C's ranked, collapsed stories)."""
+    del edition_key  # the pool is shared; the edition only decides how much it takes
+    return await content_candidates.recent_stories(limit)
+
+
+def score_story(story: dict[str, Any]) -> float:
+    """Importance in 0..1; Lane C's value model when present, else the reranker's."""
+    try:
+        from rugbrain import content_value  # noqa: PLC0415 - optional lane module
+    except ImportError:
+        return float(story.get("importance") or 0.0)
+    scorer = getattr(content_value, "score_item", None)
+    if not callable(scorer):
+        return float(story.get("importance") or 0.0)
+    try:
+        return float(scorer(story))
+    except (TypeError, ValueError):
+        return float(story.get("importance") or 0.0)
+
+
+def dedupe_stories(stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse near-duplicates; keeps one representative with ``also_seen_in``."""
+    return content_dedupe.collapse(stories)
+
+
+def route_story(score: float, category: str, kind: str, duplicate: bool) -> dict[str, str]:
+    """The publication ladder: skip / feed / channel / both."""
+    return content_gate.decide(score, category, kind, duplicate)
+
+
+def _model_writer() -> Any:
+    """Lane B's chat call, adapted to ``daily_rug``'s ``(system, user) -> str``.
+
+    ``content_engine.write_post`` is the documented symbol. When it is absent
+    the brief is still produced, from the deterministic renderer — the writer
+    degrades, the pipeline does not.
+    """
+    from rugbrain import content_engine  # noqa: PLC0415 - optional lane module
+
+    writer = getattr(content_engine, "write_post", None)
+    return writer if callable(writer) else None
+
+
+async def write_edition(edition_key: str, stories: list[dict[str, Any]], day: str) -> dict[str, Any]:
+    """Write the edition's document. The edition label is stamped on the result."""
+    edition = editions.get(edition_key)
+    doc = await generate_daily_rug(edition.topic, date=day, writer=_model_writer())
+    doc["edition"] = {
+        "key": edition.key,
+        "label": edition.label,
+        "at_utc": edition.at_utc,
+        "angle": edition.angle,
+    }
+    doc["edition_title"] = edition.title_for(day)
+    doc["selected_items"] = len(stories)
+    return doc
+
+
+def edit_document(doc: dict[str, Any]) -> list[str]:
+    """Blocking problems: schema, citations, style, numbers, length."""
+    return daily_rug_validate.validate_daily_rug(doc)
+
+
+__all__ = [
+    "collect_stories",
+    "dedupe_stories",
+    "edit_document",
+    "route_story",
+    "score_story",
+    "write_edition",
+]
