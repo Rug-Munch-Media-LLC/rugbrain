@@ -74,6 +74,9 @@ from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_health as rugbrain_health,
 )
 from rugbrain.rugbrain_mcp.tools_intel import (
+    rugbrain_juicy as rugbrain_juicy,
+)
+from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_news as rugbrain_news,
 )
 from rugbrain.rugbrain_mcp.tools_intel import (
@@ -121,6 +124,7 @@ __all__ = [
     "mcp",
     "rugbrain_analyze",
     "rugbrain_health",
+    "rugbrain_juicy",
     "rugbrain_market_brief",
     "rugbrain_news",
     "rugbrain_scam_check",

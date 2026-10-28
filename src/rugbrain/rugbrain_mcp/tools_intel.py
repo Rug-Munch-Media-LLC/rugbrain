@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from rugbrain.rugbrain_mcp.app import _call, mcp
@@ -133,3 +134,26 @@ def rugbrain_health(full: bool = False) -> dict[str, Any]:
 
 
 # ── Market-specialist surface (moved in 2026-10-12) ──────────────────
+
+
+@mcp.tool(name="rugbrain_juicy")
+def rugbrain_juicy(kind: str = "", limit: int = 20) -> dict[str, Any]:
+    """Ranked exploit/hack/scam/zero-day/advisory/detection feed.
+
+    The ranking is materialised nightly by ``scripts/rank_juicy_content.py``
+    over the SHARED Qdrant (recency + severity + corroboration + relevance)
+    and served from one small JSON file — never recomputed per request.
+
+    Args:
+        kind: exploit|hack|scam|advisory|detection ('' = all public kinds).
+        limit: Max ranked items (1-200, default 20).
+
+    ``kind=detection`` needs the operator's internal key (the server fails
+    closed without ``RUGBRAIN_INTERNAL_CODE_KEY``); the detection playbooks
+    are internal even though the incident collections are public.
+    """
+    return _call(
+        "/api/v1/intel/ranking",
+        {"kind": kind, "limit": max(1, min(limit, 200))},
+        extra_headers={"x-internal-code-key": os.getenv("RUGBRAIN_INTERNAL_CODE_KEY", "")},
+    )

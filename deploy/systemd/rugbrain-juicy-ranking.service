@@ -1,0 +1,26 @@
+# rugbrain-juicy-ranking — build the materialised exploit/hack/scam/detection ranking
+#
+# Reads the SHARED Qdrant (rmi-qdrant-v2) that RugBrain and ContextCrypto both
+# already use. Nothing is copied, nothing is deleted: the job only emits one
+# small JSON file that /api/v1/intel/ranking serves.
+#
+# Deploy:
+#   cp deploy/systemd/rugbrain-juicy-ranking.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now rugbrain-juicy-ranking.timer
+# Rollback:
+#   systemctl disable --now rugbrain-juicy-ranking.timer
+[Unit]
+Description=RugBrain juicy-content ranking (materialised view over shared Qdrant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/rugbrain
+Environment=QDRANT_URL=http://127.0.0.1:6334
+# Private scoring weights (tuned numbers live here, never in the repo).
+Environment=RUGBRAIN_JUICY_WEIGHTS=/etc/rugbrain/juicy_weights.json
+ExecStart=/usr/bin/python3 /opt/rugbrain/scripts/rank_juicy_content.py --out /opt/rugbrain/data/ranking/juicy_ranking.json
+Nice=15
+TimeoutStartSec=900
