@@ -50,7 +50,7 @@ def _document(
     """The record a site renderer consumes — no markup, no channel logic."""
     teaser = str(draft.get("telegram_teaser") or "")
     paragraphs = [str(item) for item in draft.get("paragraphs") or ()]
-    return {
+    document = {
         "status": str(draft.get("status") or "needs_review"),
         "edition": spec["key"],
         "title": spec["title"],
@@ -81,6 +81,12 @@ def _document(
             "paragraphs": len(paragraphs),
         },
     }
+    # A model refusal names what is missing; dropping it here left the operator
+    # with a bare "writer: insufficient_evidence" and nothing to act on.
+    reason = str(draft.get("reason") or "").strip()
+    if reason:
+        document["reason"] = reason
+    return document
 
 
 def _empty(
