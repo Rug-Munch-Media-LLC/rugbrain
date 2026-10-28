@@ -12,12 +12,16 @@ so the alias is always a named constant here, never improvised at a call site.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from typing import Any
 
 import httpx
 
 from rugbrain.content_engine import CHAT_TIMEOUT, CHAT_URL
+
+log = logging.getLogger(__name__)
 
 WRITER_ALIAS = "writer"
 EDITOR_ALIAS = "editor"
@@ -51,15 +55,33 @@ async def chat(
     api_key = os.getenv("RAG_CHAT_API_KEY", "").strip()
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    try:
-        async with httpx.AsyncClient(timeout=max(CHAT_TIMEOUT, 120.0)) as client:
-            response = await client.post(CHAT_URL, headers=headers, json=payload)
-            if response.status_code != 200:
-                return ""
-            body = response.json().get("choices", [{}])[0].get("message", {})
-    except (httpx.HTTPError, ValueError, KeyError, IndexError):
+    # A cold Qwythos preset reload is ~7 G and can take minutes under load, so
+    # the writer timeout is explicit and longer than the chat default. One retry
+    # covers the reload window; a second failure is a real refusal.
+    timeout = float(os.getenv("RAG_EDITION_TIMEOUT", "300"))
+    for attempt in (1, 2):
+        try:
+            async with httpx.AsyncClient(timeout=max(CHAT_TIMEOUT, timeout)) as client:
+                response = await client.post(CHAT_URL, headers=headers, json=payload)
+                if response.status_code != 200:
+                    log.warning(
+                        "edition_chat_http", model=model, status=response.status_code,
+                        attempt=attempt,
+                    )
+                    continue
+                body = response.json().get("choices", [{}])[0].get("message", {})
+        except (httpx.HTTPError, ValueError, KeyError, IndexError) as exc:
+            log.warning("edition_chat_failed", model=model, error=str(exc)[:120],
+                        attempt=attempt)
+            continue
+        text = str(body.get("content") or "").strip()
+        if text:
+            break
+        log.warning("edition_chat_empty", model=model, attempt=attempt)
+        if attempt == 1:
+            await asyncio.sleep(5)
+    else:
         return ""
-    text = str(body.get("content") or "").strip()
     if "</think>" in text:
         text = text.split("</think>", 1)[1].strip()
     return text

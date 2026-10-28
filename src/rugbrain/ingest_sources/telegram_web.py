@@ -195,6 +195,9 @@ async def run_cycle(max_channels: int = MAX_PER_CYCLE) -> dict[str, Any]:
                 "collection": "threat_intel_v2" if sev in ("critical", "high") else "social_intel",
                 "severity": sev,
                 "source": f"t.me/{m['channel']}",
+                # 2026-10-29: the permalink is the citable identity. Storing an
+                # empty URL made every Telegram row unusable as a source.
+                "url": f"https://t.me/{m['channel']}/{m['msg_id']}",
                 "metadata": {
                     "kind": "telegram_message",
                     "category": cat,
@@ -234,7 +237,7 @@ async def run_cycle(max_channels: int = MAX_PER_CYCLE) -> dict[str, Any]:
             CrawlDocument(
                 title=d["content"][:120],
                 content=d["content"],
-                url="",
+                url=d.get("url", ""),
                 source=d["source"],
                 collection=d["collection"],
                 category=d["metadata"].get("category", "telegram"),
