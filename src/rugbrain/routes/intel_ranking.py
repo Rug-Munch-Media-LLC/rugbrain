@@ -55,34 +55,38 @@ def _wants_internal(kind: str, include_internal: bool) -> bool:
     return include_internal or kind in INTERNAL_KINDS
 
 
-@router.get("/ranking")
-def intel_ranking(
-    limit: int = Query(default=20, ge=1, le=200),
-    kind: str = Query(
-        default="", description="exploit|hack|scam|advisory|detection ('' = all public)"
-    ),
-    include_internal: bool = Query(default=False),
-    x_internal_code_key: str | None = Header(default=None),
-) -> dict[str, Any]:
-    """Top-ranked crypto incidents/advisories, optionally including detection docs."""
-    kind = (kind or "").strip().lower()
-    if kind and kind not in PUBLIC_KINDS | INTERNAL_KINDS:
+def _resolve_kind(kind: str) -> str:
+    """Normalise the kind filter and reject an unknown one before any read."""
+    normalised = (kind or "").strip().lower()
+    if normalised and normalised not in PUBLIC_KINDS | INTERNAL_KINDS:
         raise HTTPException(status_code=400, detail={"error": "unknown_kind"})
+    return normalised
 
-    wants_internal = _wants_internal(kind, include_internal)
-    if wants_internal and not internal_code_access_allowed(
-        {"x-internal-code-key": x_internal_code_key or ""}
-    ):
+
+def _require_internal_access(wants_internal: bool, key: str | None) -> None:
+    """Fail closed before reading when an internal-only view is requested."""
+    if not wants_internal:
+        return
+    if not internal_code_access_allowed({"x-internal-code-key": key or ""}):
         raise HTTPException(status_code=403, detail={"error": "internal_only"})
 
-    document = load_ranking()
-    items = document.get("items") or []
-    if kind:
-        selected = [item for item in items if item.get("kind") == kind]
-    else:
-        allowed = INTERNAL_KINDS | PUBLIC_KINDS if wants_internal else PUBLIC_KINDS
-        selected = [item for item in items if item.get("kind") in allowed]
 
+def _select(items: list[dict[str, Any]], kind: str, wants_internal: bool) -> list[dict[str, Any]]:
+    """Filter the materialised items by kind (or by the audience's allowed kinds)."""
+    if kind:
+        return [item for item in items if item.get("kind") == kind]
+    allowed = INTERNAL_KINDS | PUBLIC_KINDS if wants_internal else PUBLIC_KINDS
+    return [item for item in items if item.get("kind") in allowed]
+
+
+def _envelope(
+    document: dict[str, Any],
+    selected: list[dict[str, Any]],
+    kind: str,
+    wants_internal: bool,
+    limit: int,
+) -> dict[str, Any]:
+    """Served document header (weights, half-life, counts) plus the page of items."""
     return {
         "generated_at": document.get("generated_at"),
         "generated_at_epoch": document.get("generated_at_epoch"),
@@ -95,3 +99,21 @@ def intel_ranking(
         "counts": document.get("counts"),
         "items": selected[:limit],
     }
+
+
+@router.get("/ranking")
+def intel_ranking(
+    limit: int = Query(default=20, ge=1, le=200),
+    kind: str = Query(
+        default="", description="exploit|hack|scam|advisory|detection ('' = all public)"
+    ),
+    include_internal: bool = Query(default=False),
+    x_internal_code_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Top-ranked crypto incidents/advisories, optionally including detection docs."""
+    resolved = _resolve_kind(kind)
+    wants_internal = _wants_internal(resolved, include_internal)
+    _require_internal_access(wants_internal, x_internal_code_key)
+    document = load_ranking()
+    selected = _select(document.get("items") or [], resolved, wants_internal)
+    return _envelope(document, selected, resolved, wants_internal, limit)

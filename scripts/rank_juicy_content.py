@@ -98,35 +98,35 @@ def scroll(collection: str, flt: dict[str, Any] | None = None, cap: int = MAX_PO
     return points[:cap]
 
 
-def _first(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
-    return next((payload[key] for key in keys if payload.get(key)), None)
+def _pick(*values: Any, missing: Any = None) -> Any:
+    """First value that is neither ``None`` nor empty (an explicit ``or``-chain)."""
+    return next((v for v in values if v not in (None, "")), missing)
 
 
 def normalise(point: dict[str, Any], collection: str, kind: str, rank: Any) -> dict[str, Any]:
     """Map a Qdrant payload into the one shape the ranking serves."""
-    payload = point.get("payload") or {}
-    provenance = payload.get("provenance") if isinstance(payload.get("provenance"), dict) else {}
-    timestamp = rank.parse_timestamp(_first(payload, DATE_KEYS))
-    summary = str(_first(payload, SUMMARY_KEYS) or "")
-    headline = summary.split("\n", 1)[0][:90].strip()
-    title = str(_first(payload, TITLE_KEYS) or payload.get("entity") or headline or "untitled")
+    payload = point.get("payload")
+    payload = payload if isinstance(payload, dict) else {}
+    provenance = payload.get("provenance")
+    provenance = provenance if isinstance(provenance, dict) else {}
+    timestamp = rank.parse_timestamp(_pick(*(payload.get(k) for k in DATE_KEYS)))
+    summary = str(_pick(*(payload.get(k) for k in SUMMARY_KEYS), missing=""))
+    title = _pick(*(payload.get(k) for k in TITLE_KEYS), payload.get("entity"), missing="untitled")
     return {
         "id": str(point.get("id")),
         "collection": collection,
         "kind": kind,
-        "title": rank.redact(title)[:220],
+        "title": rank.redact(str(title).split("\n", 1)[0])[:220],
         "summary": rank.redact(summary)[:400],
         "timestamp": timestamp,
-        "date": (
-            datetime.fromtimestamp(timestamp, UTC).isoformat() if timestamp is not None else None
-        ),
-        "severity": str(payload.get("severity") or "unknown").lower(),
+        "date": (None if timestamp is None else datetime.fromtimestamp(timestamp, UTC).isoformat()),
+        "severity": str(_pick(payload.get("severity"), missing="unknown")).lower(),
         "library_id": payload.get("library_id"),
         "library_name": payload.get("library_name"),
-        "source": str(_first(payload, SOURCE_KEYS) or provenance.get("source") or ""),
-        "source_url": str(payload.get("source_url") or provenance.get("source_url") or ""),
-        "impact_usd": payload.get("loss_usd") or payload.get("amount"),
-        "tags": [str(tag) for tag in (payload.get("tags") or [])][:12],
+        "source": str(_pick(*(payload.get(k) for k in SOURCE_KEYS), provenance.get("source"))),
+        "source_url": str(_pick(payload.get("source_url"), provenance.get("source_url"))),
+        "impact_usd": _pick(payload.get("loss_usd"), payload.get("amount")),
+        "tags": [str(tag) for tag in _pick(payload.get("tags"), missing=[])][:12],
     }
 
 
