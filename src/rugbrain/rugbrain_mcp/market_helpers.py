@@ -49,10 +49,13 @@ def _extract_results(resp: dict[str, Any], collection: str) -> list[dict[str, An
             score = item.get("rrf_score")
         if score is None:
             score = item.get("similarity", 0.0)
+        # A fused response carries several collections; labelling every row
+        # with the collection the caller asked for mis-attributes the rest.
+        source = _source_of(item)
         out.append(
             {
                 "content": item.get("content", ""),
-                "collection": collection,
+                "collection": source if source != "?" else collection,
                 "score": float(score or 0.0),
             }
         )

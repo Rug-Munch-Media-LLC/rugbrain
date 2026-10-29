@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from rugbrain.rugbrain_mcp.app import _call, mcp
@@ -55,14 +56,13 @@ def rugbrain_wallet_profile(address: str, max_hops: int = 2) -> dict[str, Any]:
     )
 
 
-@mcp.tool(name="rugbrain_alerts")
-def rugbrain_alerts(minutes: int = 60) -> dict[str, Any]:
-    """Recent alerts detected in the last N minutes.
-
-    Args:
-        minutes: Lookback window (1-1440, default 60).
-    """
-    return _call("/api/v1/alerts/recent", {"minutes": max(1, min(minutes, 1440))})
+# RETIRED 2026-10-27: rugbrain_alerts. GET /api/v1/alerts/recent reads a
+# PER-PROCESS in-memory store (realtime_alerts._store) that only a detector
+# loop inside the API process can fill; the MCP facade talks to a different
+# process, so the tool returned {"count": 0, "alerts": []} on every call. Its
+# one Qdrant-backed alternative, /api/v1/alerts/live, reads the live_threats
+# collection, which holds 0 points. There was no signal to repair, so the tool
+# was removed rather than left answering "no alerts" with confidence.
 
 
 @mcp.tool(name="rugbrain_news")
@@ -134,3 +134,26 @@ def rugbrain_health(full: bool = False) -> dict[str, Any]:
 
 
 # ── Market-specialist surface (moved in 2026-10-12) ──────────────────
+
+
+@mcp.tool(name="rugbrain_juicy")
+def rugbrain_juicy(kind: str = "", limit: int = 20) -> dict[str, Any]:
+    """Ranked exploit/hack/scam/zero-day/advisory/detection feed.
+
+    The ranking is materialised nightly by ``scripts/rank_juicy_content.py``
+    over the SHARED Qdrant (recency + severity + corroboration + relevance)
+    and served from one small JSON file — never recomputed per request.
+
+    Args:
+        kind: exploit|hack|scam|advisory|detection ('' = all public kinds).
+        limit: Max ranked items (1-200, default 20).
+
+    ``kind=detection`` needs the operator's internal key (the server fails
+    closed without ``RUGBRAIN_INTERNAL_CODE_KEY``); the detection playbooks
+    are internal even though the incident collections are public.
+    """
+    return _call(
+        "/api/v1/intel/ranking",
+        {"kind": kind, "limit": max(1, min(limit, 200))},
+        extra_headers={"x-internal-code-key": os.getenv("RUGBRAIN_INTERNAL_CODE_KEY", "")},
+    )

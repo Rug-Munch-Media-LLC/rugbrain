@@ -60,6 +60,17 @@ _PUBLIC = frozenset(
         "contract_security_8b",
         "github_audits_8b",
         "news_v2_8b",
+        # 2026-10-27: news_articles_8b is the fed/served twin of the
+        # news_articles collection. It was absent from this table, so
+        # /api/v1/search/multi answered 403 collection_not_available for the
+        # collection the news feed actually writes to.
+        "news_articles_8b",
+        # Same defect class, same day: social_intel and education are public
+        # under their bare names, but their _8b twins (the fed ones) were
+        # missing, so rugbrain_social_sentiment and rugbrain_market_brief got
+        # 403 collection_not_available on every call.
+        "education_8b",
+        "social_intel_8b",
         "protocol_design_8b",
         "regulation_enforcement_8b",
         "scam_intel_v2_8b",

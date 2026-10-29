@@ -1,12 +1,9 @@
-"""Unified News Feed — aggregates YouTube, podcast, and newsletter content.
+"""Unified News Feed — podcast, newsletter and news content in one endpoint.
 
-Provides a single API endpoint that queries across all content sources:
-- youtube_videos collection
-- podcast_episodes collection
-- newsletters collection
-- threat_intel (news stories)
-
-Returns deduplicated, sorted-by-date results with source attribution.
+Queries the sources that actually exist (``podcast_episodes``,
+``newsletters``, ``news_articles_8b``) through :mod:`rugbrain.news_feed_query`,
+which owns the fetch, the quality gate and the dedupe. This module is the
+HTTP surface only.
 """
 
 from __future__ import annotations
@@ -16,6 +13,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query
+
+from rugbrain.news_feed_query import DEFAULT_QUERY, fetch_feed_rows, select_feed_rows
 
 logger = logging.getLogger(__name__)
 
@@ -27,95 +26,29 @@ async def get_unified_news_feed(
     q: str = Query(default="", description="Search query across all sources"),
     limit: int = Query(default=20, ge=1, le=100),
     sources: str = Query(
-        default="youtube,podcast,newsletter,news",
+        default="podcast,newsletter,news",
         description="Comma-separated sources to include",
     ),
     category: str | None = Query(default=None, description="Filter by category"),
     min_date: str | None = Query(default=None, description="ISO date filter (YYYY-MM-DD)"),
 ) -> dict[str, Any]:
-    """Get unified news feed across YouTube, podcasts, newsletters, and news."""
-    source_list = [s.strip() for s in sources.split(",")]
-
-    # Collection map
-    collection_map = {
-        "youtube": ("youtube_videos", "youtube"),
-        "podcast": ("podcast_episodes", "podcast"),
-        "newsletter": ("newsletters", "newsletter"),
-        "news": ("threat_intel", "news"),
-    }
-
-    # Build embedding for search
+    """Get unified news feed across podcasts, newsletters, and news."""
+    source_list = [s.strip() for s in sources.split(",") if s.strip()]
+    per_source = max(1, limit // max(1, len(source_list)) + 1)
     try:
-        from rugbrain.embeddings import get_embedding
-        from rugbrain.qdrant_store import QdrantVectorStore
-
-        query = q or "crypto market intelligence"
-        embedding = await get_embedding(query)
-
-        store = QdrantVectorStore()
-        all_results = []
-
-        for source_key in source_list:
-            if source_key not in collection_map:
-                continue
-            collection, _ = collection_map[source_key]
-
-            try:
-                results = await store.hybrid_search(
-                    query_text=query,
-                    query_embedding=embedding,
-                    collection=collection,
-                    limit=limit // len(source_list) + 1,
-                    min_similarity=0.3,
-                )
-                for r in results:
-                    meta = r.get("metadata", {})
-                    if isinstance(meta, dict):
-                        # Add source tag
-                        meta["_source"] = source_key
-                        meta["_feed_date"] = (
-                            meta.get("upload_date")
-                            or meta.get("ingested_at")
-                            or meta.get("date")
-                            or datetime.now(UTC).isoformat()
-                        )
-                    all_results.append(r)
-            except Exception:
-                logger.debug("feed_collection_failed collection=%s", collection)
-
-        # Sort by date descending
-        all_results.sort(
-            key=lambda r: (
-                r.get("metadata", {}).get("_feed_date", "")
-                if isinstance(r.get("metadata"), dict)
-                else ""
-            ),
-            reverse=True,
-        )
-
-        # Apply filters
-        filtered = []
-        for r in all_results:
-            meta = r.get("metadata", {}) if isinstance(r.get("metadata"), dict) else {}
-            if category and meta.get("category") != category:
-                continue
-            if min_date and meta.get("_feed_date", "")[:10] < min_date:
-                continue
-            filtered.append(r)
-            if len(filtered) >= limit:
-                break
-
-        return {
-            "results": filtered,
-            "total": len(filtered),
-            "query": q,
-            "sources_queried": source_list,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
-
+        rows = await fetch_feed_rows(q or DEFAULT_QUERY, source_list, per_source)
     except Exception as exc:
         logger.warning("news_feed_failed %s", str(exc)[:200])
         return {"results": [], "total": 0, "error": str(exc)[:200]}
+
+    selected = select_feed_rows(rows, category, min_date, limit)
+    return {
+        "results": selected,
+        "total": len(selected),
+        "query": q,
+        "sources_queried": source_list,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
 
 
 @news_feed_router.get("/sources")

@@ -1,0 +1,100 @@
+{
+	"rules": {
+		"magic-threshold": 23,
+		"weight-map": 5,
+		"signal-list": 12
+	},
+	"total": 40,
+	"reasons": [
+		{
+			"date": "2026-10-28",
+			"rules": {
+				"magic-threshold": [0, 23],
+				"weight-map": [0, 5],
+				"signal-list": [0, 12]
+			},
+			"reason": "Reviewed baseline recorded when separating the juicy-ranking feature from pre-existing methodology debt. All 40 findings (23 magic-threshold, 12 signal-list, 5 weight-map) come from 26 files that this change does NOT touch and must not edit here: src/rugbrain/news_ranking.py, src/rugbrain/fear_index/config.py, src/rugbrain/news_rating/axes.py, src/rugbrain/content_value.py, src/rugbrain/bundle_cluster.py, src/rugbrain/confidence_scorer.py, src/rugbrain/cross_chain.py, src/rugbrain/dashboard.py, src/rugbrain/discord_scraper.py, src/rugbrain/eval/metrics.py, src/rugbrain/evaluation.py, src/rugbrain/ingestion_quality.py, src/rugbrain/ingest_sources/ingest_dedupe.py, src/rugbrain/ingest_sources/ingest_scoring.py, src/rugbrain/ingest_sources/tg_preview.py, src/rugbrain/journalism.py, src/rugbrain/near_dup.py, src/rugbrain/pattern_matching.py, src/rugbrain/sentiment_engine.py, src/rugbrain/social_sentiment.py, src/rugbrain/splade_bm25.py, src/rugbrain/whale_flow.py, src/rugbrain/youtube_ingester.py, scripts/good_bad_contracts_data.py, scripts/ingest_multi_chain_scams.py, scripts/ingest_scam_knowledge.py. They pre-date this branch and are outside its diff; the ranking feature itself publishes no method (weights load at runtime from an operator-only secrets file (path injected at runtime)). The ceiling is shrink-only from here and each file keeps its own per-file allowance so future commits are judged file-scoped, never repo-wide."
+		}
+	],
+	"files": {
+		"src/rugbrain/near_dup.py": {
+			"magic-threshold": 1
+		},
+		"src/rugbrain/content_value.py": {
+			"weight-map": 1
+		},
+		"src/rugbrain/discord_scraper.py": {
+			"magic-threshold": 2
+		},
+		"src/rugbrain/whale_flow.py": {
+			"magic-threshold": 3
+		},
+		"src/rugbrain/splade_bm25.py": {
+			"magic-threshold": 1
+		},
+		"src/rugbrain/dashboard.py": {
+			"magic-threshold": 4
+		},
+		"src/rugbrain/pattern_matching.py": {
+			"magic-threshold": 1
+		},
+		"src/rugbrain/evaluation.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/youtube_ingester.py": {
+			"magic-threshold": 1
+		},
+		"src/rugbrain/confidence_scorer.py": {
+			"magic-threshold": 3
+		},
+		"src/rugbrain/news_ranking.py": {
+			"weight-map": 1
+		},
+		"src/rugbrain/sentiment_engine.py": {
+			"magic-threshold": 1
+		},
+		"src/rugbrain/ingestion_quality.py": {
+			"weight-map": 1
+		},
+		"src/rugbrain/cross_chain.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/journalism.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/bundle_cluster.py": {
+			"signal-list": 5
+		},
+		"src/rugbrain/social_sentiment.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/fear_index/config.py": {
+			"weight-map": 1
+		},
+		"src/rugbrain/news_rating/axes.py": {
+			"weight-map": 1
+		},
+		"src/rugbrain/ingest_sources/ingest_scoring.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/ingest_sources/tg_preview.py": {
+			"signal-list": 1
+		},
+		"src/rugbrain/ingest_sources/ingest_dedupe.py": {
+			"magic-threshold": 2
+		},
+		"src/rugbrain/eval/metrics.py": {
+			"magic-threshold": 1
+		},
+		"scripts/ingest_multi_chain_scams.py": {
+			"signal-list": 1
+		},
+		"scripts/ingest_scam_knowledge.py": {
+			"magic-threshold": 1
+		},
+		"scripts/good_bad_contracts_data.py": {
+			"magic-threshold": 2
+		}
+	},
+	"generated_on": "2026-10-28"
+}

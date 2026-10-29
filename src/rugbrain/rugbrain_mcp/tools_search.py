@@ -10,7 +10,7 @@ from rugbrain.rugbrain_mcp.app import _call, mcp
 @mcp.tool(name="rugbrain_search")
 def rugbrain_search(
     query: str,
-    collection: str = "threat_intel_v2",
+    collection: str = "threat_intel_v2_8b",
     limit: int = 10,
     rerank: bool = True,
 ) -> dict[str, Any]:
@@ -18,10 +18,11 @@ def rugbrain_search(
 
     Args:
         query: Search query — token address, name, scam description, or topic.
-        collection: Qdrant collection to search (default: threat_intel_v2).
-            Options: threat_intel_v2, defi_exploits, scam_intel_v2, known_scams,
-            scam_patterns, news_v2, wallet_v2, contract_audits,
-            crypto_vulnerabilities, regulation_enforcement, education.
+        collection: Qdrant collection to search (default: threat_intel_v2_8b).
+            Options are the served _8b collections: threat_intel_v2_8b,
+            defi_exploits_8b, scam_intel_v2_8b, scam_patterns_8b, news_v2_8b,
+            news_articles_8b, wallet_v2_8b, contract_audits_8b,
+            crypto_vulnerabilities_8b, regulation_enforcement_8b, education_8b.
         limit: Max results (1-100, default 10).
         rerank: Re-rank top-20 with Qwen3-Reranker-8B (default true).
     """
@@ -48,7 +49,7 @@ def rugbrain_search_multi(
 
     Args:
         query: Search query text.
-        collections: Collections to search (default: ["threat_intel_v2"]).
+        collections: Collections to search (default: ["threat_intel_v2_8b"]).
         limit: Final fused results (1-100, default 10).
         limit_per_collection: Per-collection limit before fusion (1-100, default 20).
         rerank: Re-rank top-40 fused candidates with Qwen3-Reranker-8B (default true).
@@ -57,7 +58,7 @@ def rugbrain_search_multi(
         "/api/v1/search/multi",
         body={
             "query": query,
-            "collections": collections or ["threat_intel_v2"],
+            "collections": collections or ["threat_intel_v2_8b"],
             "limit": max(1, min(limit, 100)),
             "limit_per_collection": max(1, min(limit_per_collection, 100)),
             "rerank": rerank,

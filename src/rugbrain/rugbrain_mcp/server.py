@@ -76,13 +76,13 @@ from rugbrain.rugbrain_mcp.market_helpers import (
     _source_of as _source_of,
 )
 from rugbrain.rugbrain_mcp.tools_intel import (
-    rugbrain_alerts as rugbrain_alerts,
-)
-from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_analyze as rugbrain_analyze,
 )
 from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_health as rugbrain_health,
+)
+from rugbrain.rugbrain_mcp.tools_intel import (
+    rugbrain_juicy as rugbrain_juicy,
 )
 from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_news as rugbrain_news,
@@ -147,10 +147,10 @@ __all__ = [
     "log",
     "market_helpers",
     "mcp",
-    "rugbrain_alerts",
     "rugbrain_analyze",
     "rugbrain_bounty_scope",
     "rugbrain_health",
+    "rugbrain_juicy",
     "rugbrain_market_brief",
     "rugbrain_news",
     "rugbrain_scam_check",

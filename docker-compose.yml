@@ -89,6 +89,9 @@ services:
       # root-owned — the non-root container user (rmi, uid 999) cannot traverse
       # into /root to reach the mount point. HF_HOME is set to /opt/hf-cache.
       - /path/to/hf-cache:/opt/hf-cache:ro
+      # Materialised juicy ranking (built nightly on the host). Read-only:
+      # the API serves the file, it never writes it.
+      - ${RUGBRAIN_RANKING_DIR:-/path/to/rugbrain-data/ranking}:/app/data/ranking:ro
       # Rclone config for chain-parquet B2 access (b2-crypt remote). The
       # container runs as non-root rmi (uid 999), so the source file must be
       # world-readable (chmod 644 — /root is 0700 so only root can traverse
@@ -100,6 +103,8 @@ services:
       - ${RCLONE_CONF_SOURCE:-/path/to/rclone.conf}:/home/rmi/.config/rclone/rclone.conf:ro
     environment:
       - QDRANT_URL=http://rmi-qdrant-v2:6333
+      - RUGBRAIN_JUICY_RANKING_FILE=/app/data/ranking/juicy_ranking.json
+      # RUGBRAIN_INTERNAL_CODE_KEY comes from env_file .env.rag (single source).
       - QDRANT_HOST=rmi-qdrant-v2
       - QDRANT_PORT=6333
       - REDIS_HOST=rmi-valkey
@@ -119,6 +124,10 @@ services:
       # massive-scale). DEEPINFRA_API_KEY is supplied via .env.rag —
       # flip EMBED_PROVIDER=deepinfra only once the key is present there.
       - EMBED_PROVIDER=${EMBED_PROVIDER:-siliconflow}
+      # 2026-10-25 (measured): RAG_EMBED_BACKEND=int in .env.rag pinned the chain to ONE
+      # rung, so a 1024d answer from :8004 was refused by width_guard and every search
+      # 503'd with chain=('int',). The chain and the 8B/4096 endpoint are compose-owned
+      # so an env_file cannot re-pin the chain or point it at the 0.6B/1024 lane.
       # Corpus embed chain: auto = siliconflow(.com,4096) -> local :8024(8B,4096) -> deepinfra -> openrouter.
       # Never :8004 (0.6B/1024) — that lane belongs to supermemory; the width guard refuses 1024.
       - RAG_EMBED_BACKEND=${RAG_EMBED_BACKEND:-auto}
