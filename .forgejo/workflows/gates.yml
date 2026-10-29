@@ -1,9 +1,19 @@
+# ---------------------------------------------------------------------------
+# DO NOT EDIT — GENERATED FILE. Re-render, never hand-patch.
+#   generator: standards/scripts/gen-gates-workflow.py
+#   template : standards/templates/gates-workflow/gates.yml.tmpl
+#   config   : standards/gates/repos/rugbrain.json
+#   regenerate: python3 scripts/gen-gates-workflow.py --repo rugbrain --write
+#   drift gate: python3 scripts/gen-gates-workflow.py --all --check --root <repos>
+# Forgejo 15.0.7 cannot expand a cross-repo `uses:` (0 tasks picked, empty
+# job_id, no log line), so fleet gate reuse is COMPILE TIME. See
+# fleet/CI-RUNNER.md. Never call another repo's workflow from this file.
+# gates-enabled : sast, deps
+# gates-disabled: lint, typecheck, test, secret_scan, structure
+# (a disabled gate is NAMED here so a green summary can never hide a silent skip)
+# config-digest : acd8ed3e362e8cb7
+# ---------------------------------------------------------------------------
 name: Gates
-
-# Rollout of the fleet reusable gate set (standards/.forgejo/workflows/reusable-ci.yml).
-# ci.yml already gates ruff, mypy (blocking), pytest, structure, gitleaks, bandit
-# and semgrep. Dependency/OSV scanning only ran in nightly.yml, i.e. never on a
-# PR — that is the one gate enabled here. Nothing existing is relaxed.
 
 on:
   pull_request:
@@ -12,18 +22,58 @@ on:
     branches: [main]
 
 concurrency:
-  group: gates-${{ github.ref }}
+  group: gates-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  reusable:
-    uses: RugMunchMedia/gates/.forgejo/workflows/reusable-ci.yml@main
-    with:
-      language: python
-      enable_lint: "false"
-      enable_typecheck: "false"
-      enable_test: "false"
-      enable_secret_scan: "false"
-      enable_sast: "false"
-      enable_structure: "false"
-      enable_deps: "true"
+  sast:
+    runs-on: docker-x64
+    container: {image: "nikolaik/python-nodejs:python3.11-nodejs22"}
+    defaults: {run: {working-directory: "."}}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Semgrep
+        run: |
+          set -eu
+          python3 -m pip install --quiet --disable-pip-version-check semgrep
+          semgrep scan --config=auto --severity=ERROR --error --metrics=off \
+            --exclude=node_modules --exclude=.venv --exclude=docs --sarif --output=semgrep.sarif
+  deps:
+    runs-on: docker-x64
+    container: {image: "nikolaik/python-nodejs:python3.11-nodejs22"}
+    defaults: {run: {working-directory: "."}}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: OSV-Scanner
+        run: |
+          set -eu
+          command -v curl >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates; }
+          curl -fsSL -o /usr/local/bin/osv-scanner \
+            https://github.com/google/osv-scanner/releases/download/v1.9.2/osv-scanner_linux_amd64
+          chmod +x /usr/local/bin/osv-scanner
+          osv-scanner --recursive --skip-git .
+  summary:
+    if: always()
+    needs: [sast, deps]
+    runs-on: docker-x64
+    container: {image: "nikolaik/python-nodejs:python3.11-nodejs22"}
+    steps:
+      - name: Aggregate
+        env:
+          R_SAST: ${{ needs.sast.result }}
+          R_DEPS: ${{ needs.deps.result }}
+        run: |
+          set -eu
+          fail=0
+          check() {
+            name="$1"; result="$2"
+            echo "gate $name: result=$result"
+            case "$result" in
+              success) ;;
+              *) echo "::error::gate $name failed ($result)"; fail=1 ;;
+            esac
+          }
+          check sast "$R_SAST"
+          check deps "$R_DEPS"
+          if [ "$fail" -ne 0 ]; then echo "GATES RED (enabled gates listed above)"; exit 1; fi
+          echo "ALL ENABLED GATES GREEN"
