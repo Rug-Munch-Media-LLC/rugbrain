@@ -3,7 +3,8 @@
 One job: classify which embedding lane is serving RIGHT NOW (``embed_lane``),
 prove the vector the public chain produces is a real 4096-d corpus vector, and
 fail loudly when the lane answers with an empty vector, a 1024-d vector
-(supermemory's 0.6B lane on :8004) or any other retired width.
+(supermemory's 0.6B lane on :8024; :8004 is the 8B/4096 corpus lane) or any
+other retired width.
 
 Read-only: one backend probe plus one real embedding call through the public
 chain. Never writes to Qdrant — ``rugbrain.eval.dim_probe`` owns the store side.

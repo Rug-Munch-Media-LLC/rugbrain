@@ -1,7 +1,8 @@
 """The one place a lane's vector WIDTH is accepted or refused.
 
 The corpus is a single 4096-dim space (Qwen3-Embedding-8B). A 1024-dim vector
-is supermemory's 0.6B lane on ``:8004``; 2048 and 2560 are retired generations.
+is supermemory's 0.6B lane on ``:8024`` (``:8004`` is the 8B/4096 corpus
+lane); 2048 and 2560 are retired generations.
 None of them may be written to a 4096 collection, and a provider that silently
 changes width must not degrade retrieval — it must be skipped, loudly.
 """
