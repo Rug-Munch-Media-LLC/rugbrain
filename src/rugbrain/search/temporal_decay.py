@@ -16,10 +16,13 @@ Where:
 
 from __future__ import annotations
 
+import logging
 import math
 import time
 from datetime import datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Default decay parameters
 DECAY_HALFLIFE_HOURS = 24.0  # 1 day halflife
@@ -54,13 +57,13 @@ def _parse_timestamp(value: Any) -> float | None:
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
             return dt.timestamp()
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug("suppressed %s: %s", type(exc).__name__, exc)
         # Try Unix timestamp string
         try:
             return float(value)
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            logger.debug("suppressed %s: %s", type(exc).__name__, exc)
     return None
 
 

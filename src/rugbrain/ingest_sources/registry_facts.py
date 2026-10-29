@@ -30,7 +30,7 @@ def live_collections(qdrant_url: str = "http://localhost:6334") -> set[str]:
     if not qdrant_url.startswith("http://") and not qdrant_url.startswith("https://"):
         return set()
     try:
-        with urllib.request.urlopen(  # noqa: S310 — scheme validated above
+        with urllib.request.urlopen(  # noqa: S310 — scheme validated above  # nosec B310 — false positive: scheme checked immediately above
             f"{qdrant_url}/collections", timeout=10
         ) as resp:
             payload = json.loads(resp.read())

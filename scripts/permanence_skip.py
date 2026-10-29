@@ -88,7 +88,7 @@ def carry_if_unchanged(client: Any, name: str) -> dict[str, Any] | None:
         return None
     try:
         same = _fingerprint(client, name) == prior.get("fingerprint")
-    except Exception as exc:  # noqa: BLE001 - never block a backup on the gate
+    except Exception as exc:
         logger.warning("skip_fingerprint_failed collection=%s err=%s", name, exc)
         return None
     if not same:

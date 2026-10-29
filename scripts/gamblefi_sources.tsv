@@ -1,0 +1,39 @@
+# GambleFi / crypto-gaming corpus sources — TSV, one row per URL.
+# tier	url	publisher	doc_type	licence	title
+# tier=official → the operator's own docs/whitepaper/repo; community → third-party.
+# gh:<owner>/<repo>/<path> resolves to raw.githubusercontent.com (default branch main).
+official	https://stake-engine.com/docs	Stake	docs	publisher-terms	Stake Engine — RGS documentation
+official	https://shuffle.com/provably-fair	Shuffle	provably-fair	publisher-terms	Shuffle — provably fair
+official	https://duelbits.com/provably-fair	Duelbits	provably-fair	publisher-terms	Duelbits — provably fair
+official	https://roobet.com/fair	Roobet	provably-fair	publisher-terms	Roobet — provably fair
+official	https://docs.azuro.org/	Azuro	docs	publisher-terms	Azuro — on-chain betting protocol docs
+official	https://funfair.io/	FunFair	whitepaper	publisher-terms	FunFair — blockchain casino platform
+official	https://whitepaper.axieinfinity.com/	Sky Mavis	whitepaper	publisher-terms	Axie Infinity — whitepaper
+official	https://docs.illuvium.io/	Illuvium	docs	publisher-terms	Illuvium — documentation
+official	https://docs.pixels.xyz/	Pixels	docs	publisher-terms	Pixels — documentation
+official	https://docs.treasure.lol/	Treasure	docs	publisher-terms	Treasure — documentation
+official	https://docs.roninchain.com/	Sky Mavis	docs	publisher-terms	Ronin — chain documentation
+official	https://docs.immutable.com/	Immutable	docs	publisher-terms	Immutable — platform documentation
+official	https://docs.onbeam.com/	Beam	docs	publisher-terms	Beam — gaming chain documentation
+official	gh:immutable/contracts/README.md	Immutable	code	publisher-terms	Immutable — contracts
+
+# DEAD provably-fair Stake        https://stake.com/provably-fair  (403 Cloudflare even via pry_scrape (js_render))
+# DEAD code          BetSwirl     gh:Betswirl/betswirl/README.md  (404 (repo name is a guess; not verified))
+# DEAD code          BetSwirl     gh:Betswirl/betswirl/docs/CASINO.md  (404 (repo name is a guess; not verified))
+# DEAD code          Sky Mavis    gh:AxieInfinity/contracts/README.md  (404 (repo name is a guess; not verified))
+# DEAD code          Sky Mavis    gh:axieinfinity/ronin/main/README.md  (404 (repo name is a guess; not verified))
+# ── dead on 2026-10-25 (probed; do not re-add without a verified replacement) ──
+# 404 = page gone; ConnectError = host does not resolve; empty = SPA shell with no
+# server-rendered text and no first-party markdown twin. A dead row is evidence,
+# not a source: it stays commented so the next crawl does not re-pay for it.
+# DEAD docs          BC.Game      https://docs.bcgame.com/  (BC.Game — developer documentation)
+# DEAD provably-fair BC.Game      https://bcgame.com/en/provably-fair  (BC.Game — provably fair)
+# DEAD docs          Shuffle      https://docs.shuffle.com/  (Shuffle — documentation)
+# DEAD provably-fair BetFury      https://betfury.io/provably-fair  (BetFury — provably fair)
+# DEAD provably-fair Gamdom       https://gamdom.com/provably-fair  (Gamdom — provably fair)
+# DEAD docs          BetSwirl     https://docs.betswirl.com/  (BetSwirl — on-chain casino docs)
+# DEAD docs          Sky Mavis    https://docs.axieinfinity.com/  (Axie Infinity — documentation)
+# DEAD docs          Immutable    https://docs.godsunchained.com/  (Gods Unchained — documentation)
+# DEAD docs          ATMTA        https://docs.staratlas.com/  (Star Atlas — documentation)
+# DEAD docs          YGG          https://docs.yieldguild.io/  (Yield Guild Games — documentation)
+# DEAD whitepaper    Big Time Studios https://bigtime.gg/whitepaper  (Big Time — whitepaper)

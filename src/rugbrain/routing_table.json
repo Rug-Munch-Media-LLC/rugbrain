@@ -1,0 +1,462 @@
+{
+  "version": 1,
+  "question": "Which retrieval layer answers this? One documented door, not five guessed ones.",
+  "default_layer": "rugbrain_vector",
+  "default_shape": "default",
+  "shapes": [
+    {
+      "id": "exact_string",
+      "layer": "zoekt_exact",
+      "keywords": [
+        "exact string",
+        "exact match",
+        "where is the string",
+        "identifier",
+        "literal",
+        "error message",
+        "error string",
+        "config key",
+        "env var",
+        "regex",
+        "grep for",
+        "file named",
+        "stack trace",
+        "log line",
+        "constant",
+        "variable name"
+      ],
+      "rationale": "Exact text, identifiers and regex are a literal search problem; embeddings blur them."
+    },
+    {
+      "id": "symbol_ref",
+      "layer": "serena_symbols",
+      "keywords": [
+        "symbol",
+        "function",
+        "class",
+        "method",
+        "who calls",
+        "callers",
+        "references",
+        "definition",
+        "declared",
+        "rename",
+        "signature",
+        "implementation",
+        "imported",
+        "type of"
+      ],
+      "rationale": "Symbol identity, references and safe rename come from LSP, not from text or vectors."
+    },
+    {
+      "id": "house_knowledge",
+      "layer": "context_crypto_curated",
+      "keywords": [
+        "how do we",
+        "how we build",
+        "our convention",
+        "our pattern",
+        "playbook",
+        "gotcha",
+        "anti-pattern",
+        "verdict",
+        "code review",
+        "lesson",
+        "exemplar",
+        "do we already",
+        "our stack"
+      ],
+      "rationale": "House conventions, verdicts and curated good/bad exemplars live in the curated corpus."
+    },
+    {
+      "id": "upstream_repo",
+      "layer": "deepwiki",
+      "keywords": [
+        "upstream repo",
+        "github repo",
+        "open source project",
+        "how is this project built",
+        "third-party project",
+        "deepwiki",
+        "how does this library work internally"
+      ],
+      "rationale": "Public repository architecture is what DeepWiki indexes; our own code is not there."
+    },
+    {
+      "id": "repo_architecture",
+      "layer": "metamcp_code",
+      "keywords": [
+        "architecture",
+        "repo structure",
+        "module layout",
+        "how does this repo",
+        "entry point",
+        "service map",
+        "what does this repo",
+        "call graph",
+        "coupling",
+        "dependency graph"
+      ],
+      "rationale": "Structural map of one of our repos: call graph and codebase map through the code namespace."
+    },
+    {
+      "id": "library_api",
+      "layer": "context7",
+      "keywords": [
+        "library",
+        "sdk",
+        "package",
+        "api docs",
+        "documentation for",
+        "how to use",
+        "version",
+        "changelog",
+        "framework",
+        "upgrade guide",
+        "upstream api"
+      ],
+      "rationale": "Current third-party API surface; resolve the library id first, never guess it."
+    },
+    {
+      "id": "fleet_docs",
+      "layer": "docs_mcp",
+      "keywords": [
+        "agents.md",
+        "fleet doc",
+        "our docs",
+        "runbook",
+        "standard",
+        "policy doc",
+        "onboarding doc",
+        "checklist"
+      ],
+      "rationale": "Docs we have indexed ourselves (currently fleet-agents-md only) \u2014 check list_libraries before trusting it."
+    },
+    {
+      "id": "domain_intel",
+      "layer": "rugbrain_vector",
+      "keywords": [
+        "scam",
+        "rug",
+        "exploit",
+        "hack",
+        "incident",
+        "news",
+        "token",
+        "wallet",
+        "sentiment",
+        "threat",
+        "audit report",
+        "narrative",
+        "who is behind"
+      ],
+      "rationale": "Crypto domain knowledge (news, scams, incidents, audits) is RugBrain's own vector corpus."
+    }
+  ],
+  "arg_aliases": {
+    "query": [
+      "q",
+      "pattern",
+      "regex",
+      "search",
+      "question",
+      "topic",
+      "queryText",
+      "search_query"
+    ],
+    "limit": [
+      "max_results",
+      "count",
+      "top_k",
+      "num_results"
+    ],
+    "library": [
+      "libraryId",
+      "libraryName",
+      "library_name",
+      "lib"
+    ],
+    "repo": [
+      "repoName",
+      "repo_name",
+      "repository",
+      "path",
+      "project"
+    ],
+    "symbol": [
+      "name_path_pattern",
+      "name_path",
+      "name",
+      "symbol_name",
+      "symbolName"
+    ]
+  },
+  "layers": {
+    "rugbrain_vector": {
+      "server": "rugbrain-mcp",
+      "probe_url": "http://127.0.0.1:8012",
+      "answers": "crypto domain knowledge: news, scams, incidents, audits, wallet narratives",
+      "not_for": "our source code, symbols, library APIs",
+      "fallback_layer": "context_crypto_curated",
+      "call": {
+        "tool": "rugbrain_search",
+        "args_intent": {
+          "query": "<question>",
+          "collection": "threat_intel_v2",
+          "limit": 10
+        },
+        "args": {
+          "query": "<question>",
+          "collection": "threat_intel_v2",
+          "limit": 10
+        },
+        "declared_args": [
+          "collection",
+          "limit",
+          "query",
+          "rerank"
+        ],
+        "unresolved_args": []
+      }
+    },
+    "zoekt_exact": {
+      "server": "zoekt",
+      "probe_url": "http://127.0.0.1:9093",
+      "answers": "where a literal / identifier / error string / regex appears in any indexed repo",
+      "not_for": "semantic questions, symbol relationships, uncommitted work (use rg-search)",
+      "fallback_layer": "metamcp_code",
+      "call": {
+        "tool": "search",
+        "args_intent": {
+          "query": "<question>",
+          "limit": 30
+        },
+        "args": {
+          "query": "<question>",
+          "limit": 30
+        },
+        "declared_args": [
+          "contextLines",
+          "cursor",
+          "limit",
+          "query"
+        ],
+        "unresolved_args": []
+      }
+    },
+    "serena_symbols": {
+      "server": "serena",
+      "probe_url": "http://127.0.0.1:9092",
+      "answers": "what a symbol is, who references it, what breaks if it changes, safe rename",
+      "not_for": "text hunts across third-party code, semantic recall",
+      "fallback_layer": "metamcp_code",
+      "call": {
+        "tool": "find_symbol",
+        "args_intent": {
+          "symbol": "<question>",
+          "include_body": true
+        },
+        "args": {
+          "include_body": true
+        },
+        "declared_args": [
+          "depth",
+          "exclude_kinds",
+          "include_body",
+          "include_info",
+          "include_kinds",
+          "max_answer_chars",
+          "max_matches",
+          "name_path_pattern",
+          "relative_path",
+          "substring_matching"
+        ],
+        "unresolved_args": [
+          "symbol"
+        ]
+      }
+    },
+    "metamcp_code": {
+      "server": "metamcp-code",
+      "probe_url": "http://127.0.0.1:12008",
+      "answers": "structural map of our repos: call graph, codebase map, change impact, code review",
+      "not_for": "third-party library API (context7), public repo architecture (deepwiki)",
+      "fallback_layer": "zoekt_exact",
+      "call": {
+        "tool": "codebase_map",
+        "args_intent": {
+          "repo": "<question>"
+        },
+        "args": {},
+        "declared_args": [],
+        "unresolved_args": [
+          "repo"
+        ]
+      }
+    },
+    "docs_mcp": {
+      "server": "docs-mcp",
+      "probe_url": "http://127.0.0.1:9123",
+      "answers": "fleet doctrine docs we indexed ourselves (currently fleet-agents-md only)",
+      "not_for": "mainstream library API or our code",
+      "fallback_layer": "context_crypto_curated",
+      "call": {
+        "tool": "search_docs",
+        "args_intent": {
+          "library": "fleet-agents-md",
+          "query": "<question>"
+        },
+        "args": {
+          "library": "fleet-agents-md",
+          "query": "<question>"
+        },
+        "declared_args": [
+          "library",
+          "limit",
+          "query",
+          "version"
+        ],
+        "unresolved_args": []
+      }
+    },
+    "context7": {
+      "server": "context7",
+      "probe_url": "https://mcp.context7.com",
+      "answers": "current API of a mainstream third-party library",
+      "not_for": "our internal code, our own conventions",
+      "fallback_layer": "deepwiki",
+      "call": {
+        "tool": "resolve-library-id",
+        "args_intent": {
+          "library": "<library name>",
+          "query": "<question>"
+        },
+        "args": {
+          "query": "<question>"
+        },
+        "declared_args": [
+          "libraryName",
+          "query"
+        ],
+        "unresolved_args": [
+          "library"
+        ]
+      }
+    },
+    "deepwiki": {
+      "server": "deepwiki",
+      "probe_url": "https://mcp.deepwiki.com",
+      "answers": "how a public repository is built (architecture, internals)",
+      "not_for": "exact code or symbols, private repos",
+      "fallback_layer": "context7",
+      "call": {
+        "tool": "ask_wiki_question",
+        "args_intent": {
+          "repo": "<owner/repo>",
+          "query": "<question>"
+        },
+        "args": {},
+        "declared_args": [
+          "question",
+          "repoName"
+        ],
+        "unresolved_args": [
+          "repo",
+          "query"
+        ]
+      }
+    },
+    "context_crypto_curated": {
+      "server": "context-crypto",
+      "probe_url": "http://127.0.0.1:8191",
+      "answers": "how we build X, verdicts, gotchas, curated good/bad exemplars, exploit patterns",
+      "not_for": "exact identifiers (zoekt), symbol refs (serena)",
+      "fallback_layer": "rugbrain_vector",
+      "call": {
+        "tool": "search_reference",
+        "args_intent": {
+          "query": "<question>"
+        },
+        "args": {
+          "query": "<question>"
+        },
+        "declared_args": [
+          "budget_tokens",
+          "filter_category",
+          "filter_ecosystem",
+          "filter_source_type",
+          "filter_verdict",
+          "json",
+          "limit",
+          "max_chars",
+          "prefer_source",
+          "query"
+        ],
+        "unresolved_args": []
+      }
+    }
+  },
+  "generated_at": "2026-10-25T10:52:55+00:00",
+  "estate": [
+    {
+      "app": "zoekt",
+      "owns": "exact string / regex over COMMITTED code",
+      "call": "delegate_lookup(kind='exact') or exact_search",
+      "layer": "zoekt_exact"
+    },
+    {
+      "app": "serena",
+      "owns": "what IS a symbol, who references it, safe rename (LSP)",
+      "call": "delegate_lookup(kind='symbol', project=<abs path>) or symbol_info",
+      "layer": "serena_symbols"
+    },
+    {
+      "app": "context-crypto",
+      "owns": "our verdicts, playbooks, gotchas, exploits, crypto reference",
+      "call": "search_reference / rmi_playbook / query_security_context",
+      "layer": "context_crypto_curated"
+    },
+    {
+      "app": "context7",
+      "owns": "current API of a mainstream library",
+      "call": "resolve-library-id -> query-docs",
+      "layer": "context7"
+    },
+    {
+      "app": "deepwiki",
+      "owns": "how a public repo is built (architecture walkthrough)",
+      "call": "ask_wiki_question",
+      "layer": null
+    },
+    {
+      "app": "code-intel",
+      "owns": "repo facts, OpenSSF score, package versions, dependency truth",
+      "call": "repo_facts / package_facts",
+      "layer": null
+    },
+    {
+      "app": "markitdown",
+      "owns": "document / URL -> markdown before ingestion",
+      "call": "convert_to_markdown",
+      "layer": null
+    },
+    {
+      "app": "repomix",
+      "owns": "whole repo as one bounded, greppable artifact",
+      "call": "pack_codebase (RugBrain: repomix_helper, gated)",
+      "layer": null
+    },
+    {
+      "app": "rg-search",
+      "owns": "working tree / UNCOMMITTED edits and AST shape",
+      "call": "codebase_search_text / codebase_search_structural",
+      "layer": null
+    },
+    {
+      "app": "metamcp-code",
+      "owns": "call graph / architecture over indexed repos",
+      "call": "search -> graph tools",
+      "layer": "metamcp_code"
+    }
+  ]
+}

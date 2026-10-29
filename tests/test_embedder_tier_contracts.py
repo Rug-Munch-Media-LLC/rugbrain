@@ -113,8 +113,8 @@ def test_near_dup_no_longer_pins_the_retired_tier():
 
 def test_rerank_lane_urls():
     """2026-10-11: no local llama.cpp rerank lane exists; hosted 8B chain only."""
-    from rugbrain.search import rerank as rr
     from rugbrain import rerank_lanes as rl
+    from rugbrain.search import rerank as rr
 
     assert not hasattr(rr, "RERANKER_URL_LIVE")
     assert ":8003" not in rr.RERANKER_URL and ":8008" not in rr.RERANKER_URL
@@ -153,7 +153,7 @@ async def test_rerank_live_lane_ladder_fast_then_deep(monkeypatch):
     async def fake_hosted(query, valid, total):
         return [0.9] * total, "qwen3-reranker-8b"
 
-    async def forbidden_local(*a, **k):  # noqa: ASYNC109
+    async def forbidden_local(*a, **k):
         raise AssertionError("the local :8003 rung must not be called")
 
     monkeypatch.setattr(rr, "_hosted_scores", fake_hosted)

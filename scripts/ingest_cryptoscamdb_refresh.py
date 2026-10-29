@@ -41,16 +41,13 @@ import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Reuse the parsing and cloning logic from the original script
-from ingest_cryptoscamdb import (
-    _parse_yaml_entries,
-    _load_file,
-    _clone,
-    REPO_URL,
-    REPO_DIR,
-)  # noqa: F401
-
 from ingest_common import content_hash
 from ingest_common2 import build_doc
+from ingest_cryptoscamdb import (
+    _clone,
+    _parse_yaml_entries,
+)
+
 from rugbrain.embedder import get_embedder
 from rugbrain.qdrant_store import QdrantVectorStore
 
@@ -227,7 +224,7 @@ async def run(
                 logger.warning("invalid_since_format %s", since)
                 since_dt = None
     elif days is not None and days >= 0:
-        since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        since_dt = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days)
 
     repo_root = _clone()
     docs = _docs_since(repo_root, limit, since_dt)

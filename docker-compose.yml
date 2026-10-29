@@ -128,6 +128,8 @@ services:
       # rung, so a 1024d answer from :8004 was refused by width_guard and every search
       # 503'd with chain=('int',). The chain and the 8B/4096 endpoint are compose-owned
       # so an env_file cannot re-pin the chain or point it at the 0.6B/1024 lane.
+      # Corpus embed chain: auto = siliconflow(.com,4096) -> local :8024(8B,4096) -> deepinfra -> openrouter.
+      # Never :8004 (0.6B/1024) — that lane belongs to supermemory; the width guard refuses 1024.
       - RAG_EMBED_BACKEND=${RAG_EMBED_BACKEND:-auto}
       - QWEN_EMBED_URL=${QWEN_EMBED_URL:-http://172.18.0.1:8024/v1}
       # 2026-10-22: this line used to default DEEPINFRA_EMBED_URL to the dead

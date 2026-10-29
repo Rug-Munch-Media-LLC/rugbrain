@@ -15,12 +15,13 @@ Verify:    GET http://localhost:6334/collections/crypto_intelligence
 """
 
 from __future__ import annotations
-from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import os
 import sys
 
 from qdrant_client import QdrantClient, models
+
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL)
 COLLECTION = os.getenv("RAG_COLLECTION", "crypto_intelligence")

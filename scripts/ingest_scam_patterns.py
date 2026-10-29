@@ -51,6 +51,7 @@ from rugbrain.scam_patterns import (
 logger = logging.getLogger("ingest_scam_patterns")
 
 from rugbrain.dim_drift import DEFAULT_QDRANT_URL
+
 QDRANT_URL = os.getenv("QDRANT_URL", DEFAULT_QDRANT_URL).rstrip("/")
 KEY_FILES = (
     os.getenv("DEEPINFRA_KEY_FILE", ""),

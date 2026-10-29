@@ -33,6 +33,11 @@ BASE = os.getenv("RUGBRAIN_URL", "http://127.0.0.1:8012").rstrip("/")
 TIMEOUT = int(os.getenv("RUGBRAIN_TIMEOUT", "90"))
 
 
+# Secrets directory, configurable for the reason embed_lane.py states: no
+# absolute production path baked into a public tree.
+SECRETS_DIR = os.getenv("RMI_SECRETS_DIR", "/srv/secrets")
+
+
 def _api_key() -> str:
     """Resolve the API key: env first, then the spooled secrets file.
 
@@ -44,12 +49,12 @@ def _api_key() -> str:
     if key:
         return key
     try:
-        for line in Path("/etc/rugbrain/rugbrain.env").read_text(encoding="utf-8").splitlines():
+        for line in Path(f"{SECRETS_DIR}/rugbrain.env").read_text(encoding="utf-8").splitlines():
             if line.startswith("RMI_RAG_API_KEY="):
                 return line.split("=", 1)[1].strip()
     except OSError:
         pass
-    raise RuntimeError("RMI_RAG_API_KEY not found in env or /etc/rugbrain/rugbrain.env")
+    raise RuntimeError(f"RMI_RAG_API_KEY not found in env or {SECRETS_DIR}/rugbrain.env")
 
 
 API_KEY = _api_key()
@@ -88,10 +93,7 @@ mcp = FastMCP("rugbrain-mcp")
 
 # ── HTTP helper ───────────────────────────────────────────────────────────
 def _call(
-    path: str,
-    params: dict[str, Any] | None = None,
-    body: dict[str, Any] | None = None,
-    extra_headers: dict[str, str] | None = None,
+    path: str, params: dict[str, Any] | None = None, body: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Call RugBrain API. Raises on failure — no silent empty returns."""
     url = f"{BASE}{path}"
@@ -102,14 +104,12 @@ def _call(
 
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Accept": "application/json", "X-API-Key": API_KEY}
-    if extra_headers:
-        headers.update(extra_headers)
     if data is not None:
         headers["Content-Type"] = "application/json"
 
     req = urllib.request.Request(url, data=data, headers=headers)  # noqa: S310 — internal Qdrant/RugBrain URL
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310 — internal Qdrant/RugBrain URL
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310 — internal Qdrant/RugBrain URL  # nosec B310 — URL built from RUG_BRAIN_URL/QDRANT_URL config
             return json.load(resp)
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:500].decode(errors="replace")

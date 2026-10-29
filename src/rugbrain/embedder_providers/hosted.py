@@ -3,25 +3,41 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import httpx
 
 from rugbrain.dim_policy import normalize_dims
 from rugbrain.embedder_config import _KEYS, _PROVIDERS, DEFAULT_ORDER, TIMEOUT, logger
+from rugbrain.embedder_providers.local import LAST_STATUS as _LOCAL_STATUS
+from rugbrain.embedder_providers.local import embed_local, local_key
+
+#: provider -> human-readable outcome of the most recent attempt
+LAST_FAILURE: dict[str, str] = {}
+
+
+def _file_key(path: str) -> str:
+    """Credential from a secrets file, or "" when it is unreadable/empty."""
+    try:
+        return Path(path).read_text().strip()
+    except OSError:
+        return ""
 
 
 def _key(provider: str) -> str:
-    """Credential for a provider: env first, then the spooled key file."""
+    """Credential for a provider: the FILE first, then the env.
+
+    FILE-FIRST is a fleet rule: an env var may be stale and must never shadow a
+    working key (2026-10-25: a stale export made every lane report the provider
+    dead while the file key authenticated). The local lane's credential file is
+    ENV-FORMAT (``KEY=value``) and is parsed by :func:`local.local_key`.
+    """
+    if provider == "local":
+        return local_key()
     if provider in _KEYS:
         return _KEYS[provider]
     _, _, env_name, key_file = _PROVIDERS[provider]
-    value = os.getenv(env_name, "").strip()
-    if not value:
-        try:
-            with open(key_file, encoding="utf-8") as handle:
-                value = handle.read().strip()
-        except OSError:
-            value = ""
+    value = _file_key(key_file) or os.getenv(env_name, "").strip()
     _KEYS[provider] = value
     return value
 
@@ -33,14 +49,23 @@ def _order() -> tuple[str, ...]:
 
 
 async def _call(
-    provider: str, texts: list[str], timeout: float | None  # noqa: ASYNC109 — forwarded to HTTP client
+    provider: str,
+    texts: list[str],
+    timeout: float | None,  # noqa: ASYNC109 — forwarded to HTTP client
 ) -> list[list[float]] | None:
     """Call a single provider for embeddings. Returns list of vectors or None."""
     base, model, _, _ = _PROVIDERS[provider]
     key = _key(provider)
     if not key:
         logger.debug("embed_%s_skipped no_api_key", provider)
+        LAST_FAILURE[provider] = "no_key"
         return None
+    if provider == "local":
+        vectors = await embed_local(texts)
+        LAST_FAILURE[provider] = _LOCAL_STATUS.get("local", "unknown")
+        if vectors is None:
+            return None
+        return [normalize_dims(v, 4096) for v in vectors]
     try:
         async with httpx.AsyncClient(timeout=timeout or TIMEOUT) as client:
             resp = await client.post(
@@ -50,8 +75,9 @@ async def _call(
             )
         if resp.status_code != 200:
             logger.warning("embed_%s_status=%d", provider, resp.status_code)
+            LAST_FAILURE[provider] = f"status={resp.status_code}"
             return None
-        items = (resp.json().get("data") or [])
+        items = resp.json().get("data") or []
         if len(items) != len(texts):
             logger.warning("embed_%s_count got=%d want=%d", provider, len(items), len(texts))
             return None
@@ -75,4 +101,3 @@ async def _call(
             logger.warning("embed_%s_dim_mismatch idx=%d: %s", provider, i, exc)
             return None
     return normalized
-

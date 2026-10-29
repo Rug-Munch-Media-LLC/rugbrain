@@ -20,7 +20,7 @@ User=root
 WorkingDirectory=/opt/rugbrain
 Environment=QDRANT_URL=http://127.0.0.1:6334
 # Private scoring weights (tuned numbers live here, never in the repo).
-Environment=RUGBRAIN_JUICY_WEIGHTS=/etc/rugbrain/juicy_weights.json
+Environment=RUGBRAIN_JUICY_WEIGHTS=/srv/secrets/juicy_weights.json
 ExecStart=/usr/bin/python3 /opt/rugbrain/scripts/rank_juicy_content.py --out /opt/rugbrain/data/ranking/juicy_ranking.json
 Nice=15
 TimeoutStartSec=900

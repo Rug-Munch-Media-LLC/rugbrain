@@ -23,7 +23,7 @@ from rugbrain.qdrant_store.collection_schema import dense_vector_dimensions
 def _get_json(url: str, timeout: float = _REQUEST_TIMEOUT) -> Any:
     """GET a URL and decode JSON. The only network verb this module uses."""
     request = urllib.request.Request(url, method=_READ_ONLY)  # noqa: S310 — internal Qdrant/RugBrain URL
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 — internal Qdrant/RugBrain URL
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 — internal Qdrant/RugBrain URL  # nosec B310 — base URL is module config, no caller-supplied scheme
         return json.loads(response.read().decode("utf-8"))
 
 

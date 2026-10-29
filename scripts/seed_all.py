@@ -23,7 +23,6 @@ Requires:
 """
 
 from __future__ import annotations
-from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 import argparse
 import asyncio
@@ -34,6 +33,8 @@ from typing import Any
 
 import httpx
 import numpy as np
+
+from rugbrain.dim_drift import DEFAULT_QDRANT_URL
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("seed_all")

@@ -29,7 +29,7 @@ from rugbrain.ingest_sources.docs_manifest import ManifestEntry, canonical_id, l
 log = logging.getLogger(__name__)
 
 SOURCE_NAME = "bots_launchpads"
-DEFAULT_COLLECTION = "research_v2"
+DEFAULT_COLLECTION = "research_v2_8b"
 MIN_WORDS = 120
 
 
@@ -142,7 +142,9 @@ class BotLaunchpadDocsSource(Source):
                 resp = await client.get(entry.url, timeout=30.0)
                 urls = sitemap_urls(resp.text, entry.max_pages) if resp.status_code == 200 else []
                 if not urls:
-                    log.warning("bot_docs_sitemap_empty id=%s status=%d", entry.id, resp.status_code)
+                    log.warning(
+                        "bot_docs_sitemap_empty id=%s status=%d", entry.id, resp.status_code
+                    )
             for url in urls:
                 if limit and len(docs) >= limit:
                     return docs

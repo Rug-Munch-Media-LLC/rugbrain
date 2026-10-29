@@ -136,6 +136,44 @@ _KNOWLEDGE: Final[tuple[CorpusDeclaration, ...]] = (
         retired=(),
     ),
     _d(
+        "gamblefi-docs",
+        "gamblefi_docs",
+        cid="gamblefi_docs",
+        language=L.DOCS,
+        domain=D.KNOWLEDGE,
+        url="https://docs.axieinfinity.com/",
+        licence="publisher-terms (casino + GameFi documentation; internal use, not product-cleared)",
+        cadence=MONTHLY,
+        last_verified=None,
+        notes="GambleFi / crypto-gaming corpus: crypto casino provably-fair pages "
+        "(Stake, BC.Game, Shuffle, Duelbits, Roobet, BetFury, Gamdom), on-chain "
+        "casino protocols (BetSwirl, Azuro, FunFair) and GameFi docs/whitepapers "
+        "(Axie, Illuvium, Gods Unchained, Star Atlas, Pixels, Treasure, Ronin, "
+        "Immutable, Beam, YGG, Big Time). Source list is "
+        "data/gamblefi_docs/sources.tsv, snapshotted by "
+        "scripts/fetch_gamblefi_docs.py and ingested by "
+        "scripts/ingest_gamblefi_docs.py at the canonical lane.",
+        observed=None,
+        retired=(),
+    ),
+    _d(
+        "analytics-docs",
+        "analytics_docs",
+        cid="analytics_docs",
+        language=L.MARKDOWN,
+        domain=D.KNOWLEDGE,
+        url="https://docs.etherscan.io",
+        licence=LICENCE_UNLICENSED,
+        cadence=MONTHLY,
+        notes="On-chain analytics + wallet-visualisation docs (Etherscan, Blockscout, "
+        "Nansen, MetaSleuth, Rotki, SolanaFM, Solscan, Cielo, Zerion, DeBank, Bubblemaps, "
+        "GraphSense) and arXiv clustering/entity-resolution papers. Per-publisher licence "
+        "is in data/analytics_docs_manifest.json; mixed proprietary/OSS/academic, so the "
+        "row is UNLICENSED = internal-only, not product-cleared.",
+        observed=4096,
+        retired=(),
+    ),
+    _d(
         "youtube-videos",
         "youtube_videos",
         cid="youtube_videos",

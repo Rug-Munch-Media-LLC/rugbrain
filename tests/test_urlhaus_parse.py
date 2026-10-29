@@ -1,4 +1,3 @@
-import io
 
 from rugbrain.ingest_sources.urlhaus import parse_csv_rows
 

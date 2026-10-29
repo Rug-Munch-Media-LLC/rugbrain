@@ -40,7 +40,7 @@ def candles_sql(*, chain: str, pair_address: str, start: str, end: str) -> str:
     # through lit(), so the only interpolated pieces are quoted literals and
     # module config constants.
     return (
-        "SELECT timestamp, open, high, low, close, volume, trades "  # noqa: S608
+        "SELECT timestamp, open, high, low, close, volume, trades "  # noqa: S608  # nosec B608 — every caller value passes through lit(), which escapes quotes/backslashes
         f"FROM {DATABASE}.{TABLE} "
         "WHERE chain = {chain} AND pair_address = {pair} "
         "AND timestamp >= {start} AND timestamp <= {end} "
@@ -57,7 +57,7 @@ def stats_sql() -> str:
     """Row count, distinct pair count and freshness for the whole table."""
     # No caller input at all: only the two module config constants.
     return (
-        f"SELECT count() AS rows, uniqExact(pair_address) AS pairs, "  # noqa: S608
+        f"SELECT count() AS rows, uniqExact(pair_address) AS pairs, "  # noqa: S608  # nosec B608 — no caller input at all; two module config constants only
         f"max(timestamp) AS fresh FROM {DATABASE}.{TABLE}"
     )
 
@@ -72,7 +72,7 @@ def top_pairs_sql(*, days: int, limit: int) -> str:
     n_days, n_limit = int(days), int(limit)
     # n_days/n_limit were coerced with int() above, so no string can reach here.
     return (
-        "SELECT chain, pair_address, count() AS c FROM "  # noqa: S608
+        "SELECT chain, pair_address, count() AS c FROM "  # noqa: S608  # nosec B608 — days/limit coerced with int() above; no string can reach the SQL
         f"{DATABASE}.{TABLE} "
         f"WHERE timestamp >= now() - INTERVAL {n_days} DAY "
         f"GROUP BY chain, pair_address ORDER BY c DESC LIMIT {n_limit}"

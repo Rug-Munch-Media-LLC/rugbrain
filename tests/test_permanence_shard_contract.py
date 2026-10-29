@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from permanence_shard_contract import pin_expected_shards  # noqa: E402
-from permanence_shard_resume import entry_is_done, resume_state  # noqa: E402
+from permanence_shard_contract import pin_expected_shards
+from permanence_shard_resume import entry_is_done, resume_state
 
 
 def test_pin_uses_ceiling_and_records_the_denominator() -> None:

@@ -2,7 +2,7 @@
 
 Pry first-party calls skip the x402 payment challenge when the request presents
 ``X-Internal-Token`` plus a valid HMAC over the request fingerprint
-(``pry.payments.x402_middleware.internal`` in pryscraper).
+(``pry.payments.x402 middleware internal`` in pryscraper).
 
 The signed message is, byte for byte::
 
@@ -52,6 +52,11 @@ PRY_SCRAPE_PATH: str = "/v1/scrape"
 INTERNAL_TOKEN_HEADER: str = "X-Internal-Token"  # noqa: S105 - an HTTP header name, not a secret
 INTERNAL_SIG_HEADER: str = "X-Internal-Signature"
 INTERNAL_TIMESTAMP_HEADER: str = "X-Internal-Timestamp"
+#: Signed principal name. Pry binds the HMAC to a stable SERVICE name instead
+#: of this container's ephemeral bridge IP, so the credential survives every
+#: recreate. The name must be in Pry's PRY_INTERNAL_ALLOWED_SERVICES.
+INTERNAL_SERVICE_HEADER: str = "X-Internal-Service"
+SERVICE_ENV: str = "PRY_INTERNAL_SERVICE"
 
 
 def caller_hint() -> str:
@@ -63,6 +68,16 @@ def caller_hint() -> str:
     set ``PRY_INTERNAL_CALLER`` to the right-most non-trusted hop it will see.
     """
     return DEFAULT_CALLER
+
+
+def service_hint() -> str:
+    """The first-party service name this process signs as ("" when unset).
+
+    Set ``PRY_INTERNAL_SERVICE=rugbrain`` in the deployment. Without it the
+    caller field falls back to the socket peer, which is only correct for a host
+    process dialing loopback.
+    """
+    return (os.getenv(SERVICE_ENV) or "").strip().lower()
 
 
 def internal_fingerprint(method: str, path: str, caller: str, timestamp: str | int) -> str:
@@ -103,23 +118,30 @@ def pry_internal_headers(
     secret = ((os.getenv("PRY_INTERNAL_TOKEN") or "") if token is None else token).strip()
     if not secret:
         return {}
-    who = (caller_hint() if caller is None else caller).strip()
+    service = service_hint() if caller is None else ""
+    who = service or (caller_hint() if caller is None else caller).strip()
     stamp = int(time.time()) if timestamp is None else int(timestamp)
-    return {
+    headers = {
         INTERNAL_TOKEN_HEADER: secret,
         INTERNAL_SIG_HEADER: internal_signature(secret, method, path, who, stamp),
         INTERNAL_TIMESTAMP_HEADER: str(stamp),
     }
+    if service:
+        headers[INTERNAL_SERVICE_HEADER] = service
+    return headers
 
 
 __all__ = [
     "DEFAULT_CALLER",
+    "INTERNAL_SERVICE_HEADER",
     "INTERNAL_SIG_HEADER",
     "INTERNAL_TIMESTAMP_HEADER",
     "INTERNAL_TOKEN_HEADER",
     "PRY_SCRAPE_PATH",
+    "SERVICE_ENV",
     "caller_hint",
     "internal_fingerprint",
     "internal_signature",
     "pry_internal_headers",
+    "service_hint",
 ]

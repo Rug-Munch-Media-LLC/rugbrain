@@ -1,0 +1,183 @@
+"""SPDX-License-Identifier: MIT
+
+Copyright (c) 2026 Rug Munch Media LLC
+
+Default implementations of the injection seams — and the exact lane symbols
+they call. Nothing here owns a prompt, a score or a route; each function is a
+thin, tolerant binding to a module another lane owns.
+
+The bindings, so the contract is readable in one place:
+
+===============  ===========================================================
+stage            symbol
+===============  ===========================================================
+collect          ``rugbrain.content_candidates.recent_stories``
+score_dedupe     ``rugbrain.content_value.score_item`` (fallback: importance)
+                 ``rugbrain.content_dedupe.collapse``
+select           ``rugbrain.content_gate.decide``
+write            ``rugbrain.daily_rug.generate_daily_rug`` +
+                 ``rugbrain.content_engine.write_post`` when it exists
+edit_factcheck   ``rugbrain.daily_rug_validate.validate_daily_rug``
+===============  ===========================================================
+
+A missing optional symbol degrades along a declared path and says so in the
+journal — it is never silently substituted for something that looks similar.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from rugbrain import content_candidates, content_dedupe, content_gate, daily_rug_validate
+from rugbrain.content_daily import editions
+from rugbrain.daily_rug import generate_daily_rug
+
+
+async def collect_stories(edition_key: str, *, limit: int = 60) -> Any:
+    """Candidate pool for one edition (Lane B/C's ranked, collapsed stories)."""
+    del edition_key  # the pool is shared; the edition only decides how much it takes
+    return await content_candidates.recent_stories(limit)
+
+
+def score_story(story: dict[str, Any]) -> float:
+    """Importance in 0..1; Lane C's value model when present, else the reranker's."""
+    try:
+        from rugbrain import content_value
+    except ImportError:
+        return float(story.get("importance") or 0.0)
+    scorer = getattr(content_value, "score_item", None)
+    if not callable(scorer):
+        return float(story.get("importance") or 0.0)
+    try:
+        return float(scorer(story))
+    except (TypeError, ValueError):
+        return float(story.get("importance") or 0.0)
+
+
+def dedupe_stories(stories: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse near-duplicates; keeps one representative with ``also_seen_in``."""
+    return content_dedupe.collapse(stories)
+
+
+def route_story(score: float, category: str, kind: str, duplicate: bool) -> dict[str, str]:
+    """The publication ladder: skip / feed / channel / both."""
+    return content_gate.decide(score, category, kind, duplicate)
+
+
+def _model_writer() -> Any:
+    """Lane B's chat call, adapted to ``daily_rug``'s ``(system, user) -> str``.
+
+    ``content_engine.write_post`` is the documented symbol. When it is absent
+    the brief is still produced, from the deterministic renderer — the writer
+    degrades, the pipeline does not.
+    """
+    from rugbrain import content_engine
+
+    writer = getattr(content_engine, "write_post", None)
+    return writer if callable(writer) else None
+
+
+def _normalise_written(edition_key: str, day: str, doc: dict[str, Any]) -> dict[str, Any]:
+    """Project Lane B's written document onto the publication shape — once.
+
+    Lane B owns the copy; the pipeline owns identity (slug, canonical URL,
+    edition stamp) because it is the idempotency key the site store and the
+    Telegram ledger share. It also owns the layout the validator, the store and
+    the card all read: a written section indexes a paragraph, a published one
+    carries the text.
+
+    A refusal has no body, so it is passed through untouched and reported by
+    its own reason (:func:`edit_document`) — never dressed up as a schema gap.
+    """
+    if str(doc.get("status")) != "ok":
+        return doc
+    from rugbrain.content_style import load_style
+
+    edition = editions.get(edition_key)
+    slug = str(doc.get("slug") or f"daily-rug-{day}-{edition_key}")
+    base = str(load_style()["slug"]["base_url"]).rstrip("/")
+    paragraphs = [str(item) for item in doc.get("paragraphs") or ()]
+    rows = [row for row in doc.get("sections") or () if isinstance(row, dict)]
+    doc["slug"] = slug
+    doc["url"] = str(doc.get("url") or f"{base}/{slug}")
+    doc["title"] = str(doc.get("title") or edition.title_for(day))
+    doc["dek"] = str(doc.get("dek") or doc.get("headline") or "")
+    doc["date"] = str(doc.get("date") or day)
+    if not rows or any("body" not in row for row in rows):
+        doc["sections"] = [
+            {"heading": str(row.get("heading") or ""), "body": paragraphs[int(row["paragraph"])]}
+            for row in rows
+            if isinstance(row.get("paragraph"), int)
+            and 0 <= int(row["paragraph"]) < len(paragraphs)
+        ]
+    doc.setdefault("edition_title", edition.title_for(day))
+    doc.setdefault("topic", edition.topic)
+    doc.setdefault("body_markdown", "\n\n".join(paragraphs))
+    doc.setdefault("tokens", [])
+    doc.setdefault("charts", [])
+    doc.setdefault("open_graph", {})
+    doc.setdefault("image_url", str((doc.get("image") or {}).get("url") or ""))
+    return doc
+
+
+async def write_edition(
+    edition_key: str, stories: list[dict[str, Any]], day: str
+) -> dict[str, Any]:
+    """Write the edition through Lane B, else the deterministic fallback.
+
+    ``rugbrain.content.writer.write_edition`` is the owner of the writer prompt,
+    the citation guard and the refusal path. The fallback exists so a missing
+    optional module degrades instead of aborting the run.
+    """
+    try:
+        from rugbrain.content import writer as content_writer
+    except ImportError:
+        content_writer = None
+    if content_writer is not None and callable(getattr(content_writer, "write_edition", None)):
+        doc = await content_writer.write_edition(edition_key, stories, date=day)
+        return _normalise_written(edition_key, day, doc)
+    edition = editions.get(edition_key)
+    doc = await generate_daily_rug(edition.topic, date=day, writer=_model_writer())
+    doc["edition"] = {
+        "key": edition.key,
+        "label": edition.label,
+        "at_utc": edition.at_utc,
+        "angle": edition.angle,
+    }
+    doc["edition_title"] = edition.title_for(day)
+    doc["selected_items"] = len(stories)
+    return doc
+
+
+def edit_document(doc: dict[str, Any]) -> list[str]:
+    """Blocking problems: schema, citations, style, numbers, length.
+
+    A document the writer itself refused is not a schema failure — its own
+    status and reason are the finding, and they are propagated verbatim so the
+    operator reads "thin evidence", not "missing slug".
+    """
+    status = str(doc.get("status") or "")
+    if status and status != "ok":
+        reason = str(doc.get("reason") or "").strip()
+        if not reason:
+            reason = "; ".join(str(item) for item in doc.get("style_violations") or ())
+        return [f"writer: {status}" + (f": {reason}" if reason else "")]
+    try:
+        from rugbrain.content import draft as content_draft
+    except ImportError:
+        content_draft = None
+    if content_draft is not None and hasattr(content_draft, "validate"):
+        problems = content_draft.validate(doc)
+        if isinstance(problems, list):
+            return [str(item) for item in problems]
+    return daily_rug_validate.validate_daily_rug(doc)
+
+
+__all__ = [
+    "collect_stories",
+    "dedupe_stories",
+    "edit_document",
+    "route_story",
+    "score_story",
+    "write_edition",
+]

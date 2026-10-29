@@ -54,5 +54,20 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import httpx; r = httpx.get('http://localhost:8012/ready'); exit(0 if r.status_code == 200 else 1)" \
     || exit 1
 
+# ── OCI provenance labels ────────────────────────────────
+# Placed last so a changing GIT_SHA invalidates only this layer, never the
+# apt/pip/duckdb layers above. Answers "which commit is this image?" via:
+#   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' <img>
+ARG GIT_SHA=unknown
+ARG GIT_SOURCE=https://git.rugmunch.io/RugMunchMedia/rugbrain
+ARG BUILD_VERSION=dev
+ARG BUILD_CREATED=unknown
+LABEL org.opencontainers.image.title="rugbrain" \
+      org.opencontainers.image.description="RugBrain RAG retrieval API + MCP corpus service" \
+      org.opencontainers.image.source="${GIT_SOURCE}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.created="${BUILD_CREATED}"
+
 # ── Default: start FastAPI server ───────────────────────────────────
 CMD ["uvicorn", "rugbrain.main:app", "--host", "0.0.0.0", "--port", "8012", "--log-level", "info"]

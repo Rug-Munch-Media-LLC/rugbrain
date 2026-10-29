@@ -32,103 +32,24 @@ import argparse
 import asyncio
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from docs_chunker import chunk_pages
+
 COLLECTION = "gmgn_docs"
 SOURCE = "gmgn-docs"
 EMBED_DIM = 4096
-MAX_CHARS = 1800
-BATCH = 8
+BATCH = 128
 DEFAULT_SNAPSHOT = Path("data/gmgn_docs/pages.jsonl")
-_HEADING = re.compile(r"^(#{1,4})\s+(.*)$")
-_FENCE = re.compile(r"^\s*(```|~~~)")
-
-
-def _split_units(page: str) -> list[tuple[str, str]]:
-    """Split markdown into ``(heading_path, body)`` units.
-
-    Fences are consumed as opaque blocks: once a fence opens, every line up to
-    the closing fence belongs to the current unit regardless of leading ``#``,
-    which is how a shell comment inside a code sample stops being a heading.
-    """
-    path: list[str] = []
-    units: list[tuple[str, list[str]]] = [("", [])]
-    in_fence = False
-    for line in page.splitlines():
-        if _FENCE.match(line):
-            in_fence = not in_fence
-            units[-1][1].append(line)
-            continue
-        m = None if in_fence else _HEADING.match(line)
-        if m:
-            level = len(m.group(1))
-            path = [*path[: level - 1], m.group(2).strip()]
-            units.append((" > ".join(path), []))
-            continue
-        units[-1][1].append(line)
-    return [(h, "\n".join(b).strip()) for h, b in units if "\n".join(b).strip()]
-
-
-def _pack(body: str) -> list[str]:
-    """Pack one section into <= MAX_CHARS chunks, breaking only outside fences.
-
-    Lines are the unit, so a fenced block that contains blank lines stays one
-    indivisible run: the fence state is tracked per line and a cut is refused
-    while it is open. A table row or a curl example is therefore never torn.
-    """
-    if len(body) <= MAX_CHARS:
-        return [body]
-    chunks: list[str] = []
-    current: list[str] = []
-    size = 0
-    in_fence = False
-    for line in body.splitlines(keepends=True):
-        if _FENCE.match(line):
-            in_fence = not in_fence
-        if size + len(line) > MAX_CHARS and current and not in_fence:
-            chunks.append("".join(current).strip())
-            current, size = [], 0
-        current.append(line)
-        size += len(line)
-    if "".join(current).strip():
-        chunks.append("".join(current).strip())
-    return [c for c in chunks if c]
 
 
 def _chunks(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for page in pages:
-        units = _split_units(str(page.get("content", "")))
-        page_chunks: list[tuple[str, str]] = []
-        for heading, body in units:
-            for piece in _pack(body):
-                page_chunks.append((heading, piece))
-        for idx, (heading, piece) in enumerate(page_chunks):
-            out.append(
-                {
-                    "doc_id": f"{SOURCE}:{page['canonical_id']}:{idx}",
-                    "text": f"# {page['title']}\n\n{heading}\n\n{piece}".strip(),
-                    "metadata": {
-                        "url": page["url"],
-                        "title": page["title"],
-                        "section": page["section"],
-                        "heading_path": heading,
-                        "publisher": page["publisher"],
-                        "licence": page["licence"],
-                        "source_kind": page["source_kind"],
-                        "fetched_at": page["fetched_at"],
-                        "page_sha256": page["sha256"],
-                        "chunk_index": idx,
-                        "total_chunks": len(page_chunks),
-                    },
-                }
-            )
-    return out
+    """Section-aware chunks, shared with the gamblefi ingest (see docs_chunker)."""
+    return chunk_pages(pages, SOURCE)
 
 
 async def ingest(

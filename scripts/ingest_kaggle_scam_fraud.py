@@ -335,7 +335,7 @@ async def _upsert(store: QdrantVectorStore, docs: list[dict[str, Any]]) -> dict[
         texts = [d["text"] for d in batch]
         try:
             vectors = await embedder.embed(texts)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.error("embed_batch_failed offset=%d err=%s", i, str(e)[:200])
             failed += len(batch)
             continue

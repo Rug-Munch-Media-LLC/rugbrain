@@ -11,25 +11,21 @@ import re
 from typing import Any
 
 from rugbrain.app_chunking._atoms import _protect_atoms, _restore_atoms, _snap_pos
+from rugbrain.chunk_config import load_chunking_config
 
 # ── Strategy presets per content type ──
 # chunk_size is a character target (~4 chars/token); max_chars is the hard
 # cap for that strategy (never exceeded except for indivisible atoms).
-STRATEGY_PRESETS = {
-    "news": {"strategy": "recursive", "chunk_size": 2048, "overlap": 0.15, "max_chars": 2560},
-    "scam_report": {"strategy": "semantic", "chunk_size": 1600, "overlap": 0.10, "max_chars": 2000},
-    "contract_code": {"strategy": "code", "chunk_size": 1024, "overlap": 0.20, "max_chars": 1536},
-    "wallet_profile": {"strategy": "fixed", "chunk_size": 512, "overlap": 0.0, "max_chars": 768},
-    "annual_report": {
-        "strategy": "recursive",
-        "chunk_size": 3200,
-        "overlap": 0.15,
-        "max_chars": 4000,
-    },
-    "social_post": {"strategy": "fixed", "chunk_size": 1024, "overlap": 0.05, "max_chars": 1280},
-    "market_data": {"strategy": "semantic", "chunk_size": 1200, "overlap": 0.10, "max_chars": 1600},
-    "default": {"strategy": "recursive", "chunk_size": 2048, "overlap": 0.15, "max_chars": 2560},
+STRATEGY_PRESETS: dict[str, dict[str, Any]] = {
+    name: {
+        "strategy": cfg.strategy,
+        "chunk_size": cfg.chunk_size,
+        "overlap": cfg.overlap,
+        "max_chars": cfg.max_chars,
+    }
+    for name, cfg in load_chunking_config().items()
 }
+# Derived from src/rugbrain/chunking_config.yaml — edit the YAML, not this dict.
 
 # ── Separator hierarchy for recursive splitting ──
 RECURSIVE_SEPARATORS = ["\n\n", "\n", ". ", " ", ""]

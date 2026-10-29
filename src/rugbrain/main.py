@@ -32,6 +32,7 @@ from rugbrain.app.health_routes import router as health_routes_router  # noqa: E
 from rugbrain.app.health_state import STATE  # noqa: E402
 from rugbrain.app.lifespan import lifespan  # noqa: E402
 from rugbrain.app.routes_registry import include_all_routers  # noqa: E402
+from rugbrain.startup_checks import assert_runtime_config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ __all__ = [
 #: The background subsystems, in boot order. Public so tests can assert the
 #: split preserved the pre-refactor startup sequence exactly.
 assert len(BOOT_STEP_NAMES) == 27, f"expected 27 boot steps, got {len(BOOT_STEP_NAMES)}"
+
+assert_runtime_config()
 
 app = FastAPI(
     title="RugBrain API",

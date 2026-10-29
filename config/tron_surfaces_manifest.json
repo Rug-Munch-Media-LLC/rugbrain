@@ -1,0 +1,67 @@
+{
+ "version": 1,
+ "generated": "2026-10-25",
+ "note": "Per-surface provenance incl. licence + pinned commit. publishable=false means internal retrieval only.",
+ "surfaces": [
+  {
+   "project": "TRON core dev docs",
+   "repo": null,
+   "ref": "live-2026-10-25",
+   "path": "https://developers.tron.network/sitemap.xml",
+   "section": "all (381 URLs)",
+   "licence": "proprietary-public-docs",
+   "publishable": false,
+   "pages_discovered": 381,
+   "pages_cap": 140,
+   "kind": "docs"
+  },
+  {
+   "project": "java-tron",
+   "repo": "tronprotocol/java-tron",
+   "ref": "b33eed89a6a4",
+   "path": "repo_docs: framework/src/main/java/org/tron/core/actuator",
+   "section": "actuator/VMActuator, EnergyProcessor; core/db/Program TRC-10 tokenId",
+   "licence": "LGPL-3.0",
+   "publishable": true,
+   "pages_discovered": 0,
+   "pages_cap": 0,
+   "kind": "repo_docs"
+  },
+  {
+   "project": "SUN.io / SunPump",
+   "repo": null,
+   "ref": "live-2026-10-25",
+   "path": "https://docs.sun.io/sitemap.xml",
+   "section": "protocols/sunpump/* (11 URLs of 210)",
+   "licence": "proprietary-public-docs",
+   "publishable": false,
+   "pages_discovered": 210,
+   "pages_cap": 120,
+   "kind": "docs"
+  },
+  {
+   "project": "SunSwap contracts",
+   "repo": "sun-protocol/* (404)",
+   "ref": null,
+   "path": null,
+   "section": null,
+   "licence": "unverified",
+   "publishable": false,
+   "pages_discovered": 0,
+   "pages_cap": 0,
+   "kind": "gap"
+  },
+  {
+   "project": "SunPump factory (deployed)",
+   "repo": null,
+   "ref": "TTfvyrAz86hbZk5iDpKD78pqLGgi8C7AAw",
+   "path": "closed-source",
+   "section": null,
+   "licence": "closed-source",
+   "publishable": false,
+   "pages_discovered": 0,
+   "pages_cap": 0,
+   "kind": "gap"
+  }
+ ]
+}

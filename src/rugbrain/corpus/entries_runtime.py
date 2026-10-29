@@ -15,7 +15,6 @@ from typing import Final
 
 from rugbrain.corpus.entries_base import ON_DEMAND, PROBE, RUNTIME, D, _d
 from rugbrain.corpus.schema import CorpusDeclaration
-from rugbrain.qdrant_store.lane_table import PRESERVED_LANE_DIM
 
 _NON_CORPUS: Final[tuple[CorpusDeclaration, ...]] = (
     _d(

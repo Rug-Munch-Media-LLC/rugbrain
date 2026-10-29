@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 SHILL_RE = re.compile(
@@ -36,7 +36,7 @@ def _tokens(value: str | None) -> set[str]:
 
 def _days_old(created_at: str | None) -> float | None:
     try:
-        return (datetime.now(tz=timezone.utc) - datetime.fromisoformat(created_at or "")).days
+        return (datetime.now(tz=UTC) - datetime.fromisoformat(created_at or "")).days
     except ValueError:
         return None
 

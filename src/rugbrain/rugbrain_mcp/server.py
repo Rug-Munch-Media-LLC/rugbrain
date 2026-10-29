@@ -16,6 +16,8 @@ Does not deprecate context-crypto's query_rugbrain yet — plan:
 
 from __future__ import annotations
 
+import rugbrain.rugbrain_mcp.tools_delegate as tools_delegate
+import rugbrain.rugbrain_mcp.tools_layers as tools_layers
 from rugbrain.rugbrain_mcp import (
     market_helpers as market_helpers,
 )
@@ -26,7 +28,13 @@ from rugbrain.rugbrain_mcp import (
     tools_market as tools_market,
 )
 from rugbrain.rugbrain_mcp import (
+    tools_route as tools_route,
+)
+from rugbrain.rugbrain_mcp import (
     tools_search as tools_search,
+)
+from rugbrain.rugbrain_mcp import (
+    tools_ta as tools_ta,
 )
 from rugbrain.rugbrain_mcp.app import (
     API_KEY as API_KEY,
@@ -91,6 +99,15 @@ from rugbrain.rugbrain_mcp.tools_intel import (
 from rugbrain.rugbrain_mcp.tools_intel import (
     rugbrain_wallet_profile as rugbrain_wallet_profile,
 )
+from rugbrain.rugbrain_mcp.tools_layers import (
+    compress_text as compress_text,
+)
+from rugbrain.rugbrain_mcp.tools_layers import (
+    exact_search as exact_search,
+)
+from rugbrain.rugbrain_mcp.tools_layers import (
+    symbol_info as symbol_info,
+)
 from rugbrain.rugbrain_mcp.tools_market import (
     rugbrain_market_brief as rugbrain_market_brief,
 )
@@ -106,6 +123,12 @@ from rugbrain.rugbrain_mcp.tools_search import (
 from rugbrain.rugbrain_mcp.tools_search import (
     rugbrain_search_multi as rugbrain_search_multi,
 )
+from rugbrain.rugbrain_mcp.tools_zeroday import (
+    rugbrain_bounty_scope as rugbrain_bounty_scope,
+)
+from rugbrain.rugbrain_mcp.tools_zeroday import (
+    rugbrain_zeroday as rugbrain_zeroday,
+)
 
 __all__ = [
     "API_KEY",
@@ -119,10 +142,13 @@ __all__ = [
     "_call_search_multi",
     "_extract_results",
     "_source_of",
+    "compress_text",
+    "exact_search",
     "log",
     "market_helpers",
     "mcp",
     "rugbrain_analyze",
+    "rugbrain_bounty_scope",
     "rugbrain_health",
     "rugbrain_juicy",
     "rugbrain_market_brief",
@@ -135,9 +161,14 @@ __all__ = [
     "rugbrain_social_sentiment",
     "rugbrain_vector_landscape",
     "rugbrain_wallet_profile",
+    "rugbrain_zeroday",
+    "symbol_info",
+    "tools_delegate",
     "tools_intel",
+    "tools_layers",
     "tools_market",
     "tools_search",
+    "tools_ta",
 ]
 
 
@@ -148,3 +179,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     mcp.run()
+
+from rugbrain.rugbrain_mcp import tools_corpus  # noqa: E402,F401 - registers corpus_map/corpus_ask

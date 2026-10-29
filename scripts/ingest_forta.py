@@ -40,9 +40,7 @@ from typing import Any
 import httpx
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ingest_common import content_hash
 from rugbrain.embedder import get_embedder
-
 from rugbrain.qdrant_store import QdrantVectorStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")

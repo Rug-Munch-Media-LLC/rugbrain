@@ -42,7 +42,6 @@ import httpx
 from defusedxml import ElementTree as element_tree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ingest_common import embed_many
 from ingest_common2 import build_doc, write_docs
 
 from rugbrain.qdrant_store import QdrantVectorStore

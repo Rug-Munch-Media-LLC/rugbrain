@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from rugbrain import endpoints as _ep
+from rugbrain.route_shared import endpoints_proxy as _ep
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,23 @@
+# One daily content edition: write → publish the site → deliver the Telegram card.
+# The edition is the instance name: rugbrain-content-daily@morning.service
+[Unit]
+Description=RugBrain daily content edition (%i)
+Documentation=https://git.rugmunch.io/RugMunchMedia/rugbrain/src/branch/main/deploy/systemd/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/work/repos/rugbrain
+# Bridge URL and any tenant overrides. Optional on purpose: a missing secret
+# must fail the delivery stage (status partial, exit 4), never the unit load.
+EnvironmentFile=-/srv/secrets/rugbrain-content-daily.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/work/repos/rugbrain/.venv/bin/python -m rugbrain.content_daily daily --edition %i --json
+MemoryMax=2G
+TimeoutStartSec=900
+Nice=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rugbrain-content-daily-%i

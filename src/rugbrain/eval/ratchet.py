@@ -104,7 +104,7 @@ async def _run(args: argparse.Namespace) -> tuple[int, dict]:
             checks = await dim_preflight.preflight(targets, ratchet_runner.qdrant_url())
             dim_checks = [c.as_dict() for c in checks]
             preflight_split = dim_preflight.split_collections(checks)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # An embedder that cannot be reached makes measurement impossible;
             # treat it as a dimension-split (the measurement is invalid), not a pass.
             return ratchet.EXIT_DIM_SPLIT, {

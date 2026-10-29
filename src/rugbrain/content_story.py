@@ -19,10 +19,14 @@ social_intel     ``ts`` (ISO)                ``url``
 research_v2      ``published`` (ISO)         ``source_url``
 news_articles    ``published`` (RFC 2822)    ``url``
 ===============  ==========================  ==============================
+
+A Telegram row stores a channel handle and a message id, not a link; its
+permalink (``t.me/<handle>/<id>``) is derived here so the row can be cited.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from rugbrain.content_time import to_iso8601
@@ -61,6 +65,25 @@ def _title(md: dict[str, Any], content: str) -> str:
     return first[:TITLE_CHARS]
 
 
+#: A public channel handle, ``t.me/<handle>``. Private/internal ids (``t.me/c/…``)
+#: and display names carry no public permalink and are deliberately not matched.
+TG_SOURCE_RE = re.compile(r"^t\.me/([A-Za-z][A-Za-z0-9_]{2,63})$")
+
+
+def telegram_permalink(source: str, msg_id: Any) -> str:
+    """The message URL a Telegram row's identity implies, or ``""``.
+
+    ``t.me/<handle>`` alone names a channel, not something a reader can check;
+    the message id is the citation. A row ingested without one stays uncitable —
+    a URL is never invented from a display name.
+    """
+    match = TG_SOURCE_RE.match(str(source or "").strip())
+    number = str(msg_id or "").strip()
+    if not match or not number.isdigit():
+        return ""
+    return f"https://t.me/{match.group(1)}/{number}"
+
+
 def normalise(result: dict[str, Any], collection: str) -> dict[str, Any]:
     """Flatten one Qdrant search result into a story dict.
 
@@ -75,14 +98,17 @@ def normalise(result: dict[str, Any], collection: str) -> dict[str, Any]:
     """
     md = result.get("metadata") or {}
     content = result.get("content") or md.get("text") or md.get("title", "")
+    source = result.get("source", "") or str(md.get("source") or "")
     return {
         "id": result.get("id", ""),
         "title": _title(md, content),
         "content": content,
         "severity": (md.get("severity") or _FIELDS["severity"]).lower(),
         "category": (md.get("category") or md.get("content_type") or md.get("kind") or "").lower(),
-        "source": result.get("source", ""),
-        "url": md.get("url") or md.get("source_url") or "",
+        "source": source,
+        "url": md.get("url")
+        or md.get("source_url")
+        or telegram_permalink(source, md.get("msg_id")),
         "importance": float(md.get("importance") or 0.0),
         "kind": md.get("kind", _FIELDS["kind"]),
         "collection": collection,

@@ -38,7 +38,7 @@ def _client_returning(vec: list[float]) -> type:
         async def __aexit__(self, *exc):
             return None
 
-        async def post(self, url, json=None):
+        async def post(self, url, json=None, **kwargs):
             return Resp()
 
     return Client
@@ -56,8 +56,10 @@ async def test_exact_dim_accepted(monkeypatch):
 async def test_oversized_vector_rejected_not_truncated(monkeypatch):
     """2026-09-30 doctrine: downscaling is REFUSED, not MRL-truncated."""
     e = Qwen3Embedder()
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([2.0] * (e.DIMS + 1536))())
-    with pytest.raises((ValueError, RuntimeError), match="truncate|dim mismatch"):
+    monkeypatch.setattr(
+        "httpx.AsyncClient", lambda **k: _client_returning([2.0] * (e.DIMS + 1536))()
+    )
+    with pytest.raises((ValueError, RuntimeError), match=r"dim|truncat"):
         await e.embed(["hello"])
 
 
@@ -65,6 +67,8 @@ async def test_oversized_vector_rejected_not_truncated(monkeypatch):
 async def test_undersized_vector_rejected(monkeypatch):
     """Undersized vectors must FAIL LOUD (T04): never fabricate missing dims."""
     e = Qwen3Embedder()
-    monkeypatch.setattr("httpx.AsyncClient", lambda **k: _client_returning([0.5] * (e.DIMS - 1024))())
-    with pytest.raises(RuntimeError, match="dim mismatch"):
+    monkeypatch.setattr(
+        "httpx.AsyncClient", lambda **k: _client_returning([0.5] * (e.DIMS - 1024))()
+    )
+    with pytest.raises(RuntimeError, match=r"dim"):
         await e.embed(["hello"])

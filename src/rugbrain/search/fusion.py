@@ -62,8 +62,8 @@ def _parse_date(value: Any) -> datetime | None:
             if ts > 1e12:  # epoch millis (string form)
                 ts = ts / 1000.0
             return datetime.fromtimestamp(ts, tz=UTC)
-        except (OverflowError, OSError, ValueError):
-            pass
+        except (OverflowError, OSError, ValueError) as exc:
+            logger.debug("suppressed %s: %s", type(exc).__name__, exc)
         try:
             dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
             if dt.tzinfo is None:

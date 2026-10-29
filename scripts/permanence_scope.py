@@ -43,7 +43,7 @@ def daily_scope(collections: list[str]) -> tuple[list[str], list[str]]:
     try:
         payload = json.loads(SCOPE_FILE.read_text(encoding="utf-8"))
         excluded = [str(n) for n in (payload.get("daily_excluded") or [])]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("scope_file_unreadable path=%s err=%s", SCOPE_FILE, exc)
         return list(collections), []
 

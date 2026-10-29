@@ -1,0 +1,13 @@
+# 21:30 UTC — Rug Munch Intelligence — Evening Market Closing Report
+[Unit]
+Description=RugBrain content edition timer — evening (21:30 UTC)
+
+[Timer]
+OnCalendar=*-*-* 21:30:00 UTC
+Persistent=true
+RandomizedDelaySec=15s
+AccuracySec=1s
+Unit=rugbrain-content-daily@evening.service
+
+[Install]
+WantedBy=timers.target

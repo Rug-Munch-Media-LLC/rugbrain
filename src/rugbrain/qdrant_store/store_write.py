@@ -104,7 +104,11 @@ class WriteMixin(_types.StoreSurface):
         # ``RAG_UNIFIED_READS=1`` filtered ``collection == news_v2``.
         collection = write_lane_for_dim(collection, len(embedding))
 
-        client = await self._get_client()
+        from rugbrain.qdrant_store.client_contract import require_qdrant_http_client
+
+        client = require_qdrant_http_client(
+            await self._get_client(), where="store.write.insert"
+        )
         # CREATION IS AN EXPLICIT, NAMED ACT HERE. The old call omitted
         # ``create_if_missing`` and inherited a ``True`` default, so a typo'd
         # collection name was silently CREATED at the vector's width and the
@@ -126,6 +130,11 @@ class WriteMixin(_types.StoreSurface):
                 collection,
                 len(embedding),
             )
+            return False
+
+        from rugbrain.qdrant_store.write_guard import slot_accepts
+
+        if not await slot_accepts(client, collection, len(embedding)):
             return False
 
         point_id = self._to_uuid(doc_id)
@@ -168,7 +177,7 @@ class WriteMixin(_types.StoreSurface):
         collection: str,
         embedding: list[float],
         content: str,
-        client: Any,
+        client: httpx.AsyncClient,
     ) -> Any:
         """Build a Qdrant vector payload using the collection's actual names."""
         import rugbrain.qdrant_store as _pkg

@@ -41,8 +41,24 @@ SILICONFLOW_KEY_FILE = os.getenv("SILICONFLOW_KEY_FILE", "/srv/secrets/siliconfl
 _TIMEOUT = float(os.getenv("SILICONFLOW_TIMEOUT", "20.0"))
 
 
+def _is_cn() -> bool:
+    """True only for the .cn host, which needs a DIFFERENT account key.
+
+    Measured 2026-10-25: the .com key returns 200/dim=4096 on
+    api.siliconflow.com and 401 ``code=30014 Token is invalid`` on
+    api.siliconflow.cn. A .cn URL is therefore never attempted unless a
+    .cn-specific key is configured explicitly.
+    """
+    return ".siliconflow.cn" in SILICONFLOW_URL
+
+
 def _api_key() -> str:
     """Key from the environment, else the gopass-spooled file. Never logged."""
+    if _is_cn():
+        cn = os.getenv("SILICONFLOW_CN_API_KEY", "").strip()
+        if not cn:
+            logger.warning("siliconflow_cn_without_cn_key url=%s refusing", SILICONFLOW_URL)
+        return cn
     key = os.getenv("SILICONFLOW_API_KEY", "").strip()
     if key:
         return key
@@ -56,7 +72,7 @@ def _api_key() -> str:
 async def embed(
     text: str,
     *,
-    query: bool = False,  # noqa: ARG001 - provider applies its own template
+    query: bool = False,
     timeout: float | None = None,  # noqa: ASYNC109 - policy value, not an asyncio timeout
 ) -> list[float] | None:
     """Embed *text* on SiliconFlow, or None when the rung is unusable.
@@ -99,7 +115,7 @@ async def embed(
             logger.warning("siliconflow_dim=%s want=4096", len(vector) if vector else None)
             return None
         return [float(v) for v in vector]
-    except Exception as exc:  # noqa: BLE001 - a rung must never kill the chain
+    except Exception as exc:
         logger.debug("siliconflow_failed: %s", str(exc)[:120])
         return None
 
@@ -151,6 +167,6 @@ async def embed_batch(
             logger.warning("siliconflow_batch_count=%d want=%d", len(out), len(items))
             return None
         return out
-    except Exception as exc:  # noqa: BLE001 — a rung must never kill the chain
+    except Exception as exc:
         logger.debug("siliconflow_batch_failed: %s", str(exc)[:120])
         return None

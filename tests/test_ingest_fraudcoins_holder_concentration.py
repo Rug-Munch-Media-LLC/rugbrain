@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Test for ingest_fraudcoins_holder_concentration."""
 
-import json
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 # Add the scripts directory to sys.path
 import sys
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from ingest_fraudcoins_holder_concentration import (
@@ -17,6 +17,7 @@ from ingest_fraudcoins_holder_concentration import (
     split_text,
     to_uuid,
 )
+
 
 def test_to_uuid():
     """Test UUID generation."""
@@ -40,7 +41,7 @@ def test_split_text():
     """Test text splitting."""
     short_text = "short"
     assert split_text(short_text) == ["short"]
-    
+
     long_text = "a" * 1500
     chunks = split_text(long_text, max_chars=1000)
     assert len(chunks) == 2
@@ -77,7 +78,7 @@ async def test_main_logic_with_mocks():
     """Test the main logic with mocked dependencies."""
     # We'll test the main function by mocking the external calls
     from ingest_fraudcoins_holder_concentration import main
-    
+
     # Mock the file loading
     mock_concentration = {
         "generatedAt": "2026-10-12T04:13:08.969Z",
@@ -115,7 +116,7 @@ async def test_main_logic_with_mocks():
     mock_coins_index = [
         {"id": "btc", "name": "Bitcoin", "symbol": "BTC"}
     ]
-    
+
     # 2026-10-15: the loader seam is _load_dataset_files (sync, off the loop);
     # builtins.open is no longer what main() touches.
     with patch(
@@ -125,17 +126,17 @@ async def test_main_logic_with_mocks():
         # Mock embedder and store
         with patch("ingest_fraudcoins_holder_concentration.get_embedder") as mock_get_embedder, \
              patch("ingest_fraudcoins_holder_concentration.QdrantVectorStore") as mock_store_class:
-            
+
             mock_embedder = AsyncMock()
             mock_embedder.embed.return_value = [[0.1] * 4096]  # dummy vector
             mock_get_embedder.return_value = mock_embedder
-            
+
             mock_store = AsyncMock()
             mock_store_class.return_value = mock_store
-            
+
             # Run main with limit=1, dry_run=True
             result = await main(limit=1, dry_run=True, batch_size=100)
-            
+
             # Check stats
             assert result["coins_processed"] == 1
             assert result["summaries_embedded"] == 1

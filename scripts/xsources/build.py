@@ -6,7 +6,7 @@ import asyncio
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -104,7 +104,7 @@ async def main() -> int:
     counts = Counter(r["category"] for r in verified)
     payload = {
         "version": 1,
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
         "method": (
             "Handle inventory from company_channels.json + rmi-backend x_intel config/CT_ACCOUNTS "
             "+ curated seed; each handle resolved via https://api.fxtwitter.com/<handle> "
