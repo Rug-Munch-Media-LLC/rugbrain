@@ -51,7 +51,11 @@ tags = ["rmi", "critical"]
 [[rules]]
 id = "ethereum-private-key"
 description = "Ethereum private keys (64 hex chars)"
-regex = '''(?i)(?:private.*key|eth.*key|secret).*[0-9a-f]{64}'''
+# Assignment shape, not "the words appear somewhere on the line": the old
+# `.*` form matched scraped documentation URLs whose slug contains
+# "private-key-..." and whose URL carries a 64-hex asset hash
+# (data/gmgn_docs/pages.jsonl). A real key is written as key/secret = <hex>.
+regex = '''(?i)(?:private[a-z_]*key|eth[a-z_]*key|secret)["']?\s*[:=]\s*["']?(?:0x)?[0-9a-f]{64}'''
 tags = ["rmi", "critical"]
 
 [[rules]]
