@@ -23,3 +23,6 @@ aiofiles>=23.2.0
 
 # TA/OHLCV + fear-index storage client (was only in pyproject; image lacked it)
 clickhouse-connect>=0.8.0
+
+# TA indicators: TA-Lib 0.8.3 ships manylinux wheels (no libta_lib compile)
+ta-lib>=0.8.3
