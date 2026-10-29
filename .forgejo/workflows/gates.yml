@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   reusable:
-    uses: RugMunchMedia/standards/.forgejo/workflows/reusable-ci.yml@main
+    uses: RugMunchMedia/gates/.forgejo/workflows/reusable-ci.yml@main
     with:
       language: python
       enable_lint: "false"
