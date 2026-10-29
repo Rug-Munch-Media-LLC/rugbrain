@@ -1,6 +1,6 @@
 """Indicator computation over a real OHLCV window, with provenance attached.
 
-Takes ``(pair, timeframe, window, indicators)`` and returns indicator values
+Takes one :class:`ComputeRequest` and returns indicator values
 **plus the hash of the exact bars and the as-of timestamp those values came
 from**. A report can then say "RSI(14) = 71.2 at 2026-10-24T20:00Z over
 sha256:1f3c…", which is a claim someone else can re-run.
@@ -40,6 +40,18 @@ SUPPORTED_TIMEFRAMES: tuple[str, ...] = ("1h",)
 
 #: Default lookback in bars. 200 covers SMA(200) with no warm-up shortfall.
 DEFAULT_WINDOW = 200
+
+
+@dataclass(frozen=True, slots=True)
+class ComputeRequest:
+    """Everything one computation needs — one object instead of six arguments."""
+
+    pair: str | PairRef
+    timeframe: str = "1h"
+    window: int = DEFAULT_WINDOW
+    indicators: Sequence[str] | str = ("rsi",)
+    candles: Sequence[Candle] | None = None
+    as_of: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,33 +95,28 @@ class TaComputation:
         return out
 
 
-def compute(
-    pair: str | PairRef,
-    timeframe: str = "1h",
-    window: int = DEFAULT_WINDOW,
-    indicators: Sequence[str] | str = ("rsi",),
-    *,
-    candles: Sequence[Candle] | None = None,
-    as_of: datetime | None = None,
-) -> TaComputation:
-    """Compute *indicators* for *pair*, or say precisely why we cannot."""
-    specs = parse_specs(indicators)
+def compute(request: ComputeRequest) -> TaComputation:
+    """Compute *request.indicators* for *request.pair*, or say why we cannot."""
+    specs = parse_specs(request.indicators)
     need = max(required_bars(spec) for spec in specs)
-    ref = _pair_ref(pair)
+    ref = _pair_ref(request.pair)
     base = TaComputation(
         pair=str(ref),
-        timeframe=timeframe,
+        timeframe=request.timeframe,
         status="ok",
         bars=0,
         required_bars=need,
         indicators=tuple(spec.label for spec in specs),
     )
-    if timeframe not in SUPPORTED_TIMEFRAMES:
+    if request.timeframe not in SUPPORTED_TIMEFRAMES:
         return _replace(
             base, status="unsupported_timeframe", detail=f"supported: {SUPPORTED_TIMEFRAMES}"
         )
 
-    rows = list(candles) if candles is not None else _read(ref, window, as_of)
+    if request.candles is not None:
+        rows = list(request.candles)
+    else:
+        rows = _read(ref, request.window, request.as_of)
     if rows is None:
         return _replace(base, status="read_error", detail="ohlcv read failed; see reader logs")
     if not rows:
@@ -162,4 +169,10 @@ def _replace(base: TaComputation, **changes: Any) -> TaComputation:
     return TaComputation(**merged)
 
 
-__all__ = ["DEFAULT_WINDOW", "SUPPORTED_TIMEFRAMES", "TaComputation", "compute"]
+__all__ = [
+    "DEFAULT_WINDOW",
+    "SUPPORTED_TIMEFRAMES",
+    "ComputeRequest",
+    "TaComputation",
+    "compute",
+]

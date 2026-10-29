@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from rugbrain.ta.candles import Candle
-from rugbrain.ta.compute import compute
+from rugbrain.ta.compute import ComputeRequest, compute
 from rugbrain.ta.series_hash import digest
 from rugbrain.ta.specs import parse_specs, required_bars
 
@@ -40,7 +40,7 @@ def ramp(bars: int, step: float = 0.5) -> list[Candle]:
 
 def test_unknown_pair_is_not_guessed() -> None:
     """No rows -> ``unknown``, with no hash and no values."""
-    result = compute("solana:doesnotexist", candles=[])
+    result = compute(ComputeRequest("solana:doesnotexist", candles=[]))
     assert result.status == "unknown"
     assert result.bars == 0
     assert result.series_hash is None
@@ -49,7 +49,9 @@ def test_unknown_pair_is_not_guessed() -> None:
 
 def test_insufficient_bars_reports_the_counts() -> None:
     """12 bars cannot answer SMA(200); say how many are missing."""
-    result = compute("solana:abc", window=12, indicators=["sma:200"], candles=ramp(12))
+    result = compute(
+        ComputeRequest("solana:abc", window=12, indicators=["sma:200"], candles=ramp(12))
+    )
     assert result.status == "insufficient_data"
     assert result.bars == 12
     assert result.required_bars == 200
@@ -61,7 +63,9 @@ def test_insufficient_bars_reports_the_counts() -> None:
 def test_only_the_short_indicators_are_named() -> None:
     """A mixed request names the short one and not the satisfied ones."""
     result = compute(
-        "solana:abc", window=30, indicators=["sma:20", "rsi:14", "sma:50"], candles=ramp(30)
+        ComputeRequest(
+            "solana:abc", window=30, indicators=["sma:20", "rsi:14", "sma:50"], candles=ramp(30)
+        )
     )
     assert result.status == "insufficient_data"
     assert result.short == (("sma(50)", 50),)
@@ -70,7 +74,9 @@ def test_only_the_short_indicators_are_named() -> None:
 def test_ok_path_carries_values_hash_and_as_of() -> None:
     """A successful answer is reproducible: rows hashed, last bar timestamped."""
     bars = ramp(70)
-    result = compute("solana:abc", window=70, indicators=["rsi:14", "macd"], candles=bars)
+    result = compute(
+        ComputeRequest("solana:abc", window=70, indicators=["rsi:14", "macd"], candles=bars)
+    )
     assert result.status == "ok"
     assert result.bars == 70
     assert result.series_hash == digest(bars)
@@ -88,7 +94,7 @@ def test_ok_path_carries_values_hash_and_as_of() -> None:
 def test_values_align_with_their_bar() -> None:
     """Value ``i`` belongs to bar ``i`` — the alignment contract, spot-checked."""
     bars = ramp(70)
-    result = compute("solana:abc", window=70, indicators=["sma:20"], candles=bars)
+    result = compute(ComputeRequest("solana:abc", window=70, indicators=["sma:20"], candles=bars))
     series = result.values["sma(20)"]
     assert series[-1] == pytest.approx(sum(b.close for b in bars[-20:]) / 20)
     assert series[18] is None
@@ -97,7 +103,9 @@ def test_values_align_with_their_bar() -> None:
 
 def test_unsupported_timeframe_refuses_to_resample() -> None:
     """The substrate is hourly; a 4h request is a no, not a silent resample."""
-    result = compute("solana:abc", timeframe="4h", indicators=["rsi:14"], candles=ramp(50))
+    result = compute(
+        ComputeRequest("solana:abc", timeframe="4h", indicators=["rsi:14"], candles=ramp(50))
+    )
     assert result.status == "unsupported_timeframe"
     assert result.values == {}
 
@@ -120,11 +128,11 @@ def test_hash_is_deterministic_and_revision_sensitive() -> None:
 def test_bad_input_fails_loudly() -> None:
     """A typo is a caller bug: no zeros, no silently dropped indicator."""
     with pytest.raises(ValueError, match="chain:pair_address"):
-        compute("solana", candles=ramp(40))
+        compute(ComputeRequest("solana", candles=ramp(40)))
     with pytest.raises(ValueError, match="unknown indicator"):
-        compute("solana:abc", indicators=["rsii"], candles=ramp(40))
+        compute(ComputeRequest("solana:abc", indicators=["rsii"], candles=ramp(40)))
     with pytest.raises(ValueError, match="duplicate"):
-        compute("solana:abc", indicators=["rsi", "rsi:14"], candles=ramp(40))
+        compute(ComputeRequest("solana:abc", indicators=["rsi", "rsi:14"], candles=ramp(40)))
 
 
 @pytest.mark.parametrize(
@@ -148,5 +156,7 @@ def test_required_bars_matches_the_reference_warmup(text: str, expected: int) ->
 
 def test_latest_is_the_quoted_number() -> None:
     """``latest()`` is what a report cites, and it is the last aligned value."""
-    result = compute("solana:abc", window=60, indicators=["sma:20"], candles=ramp(60))
+    result = compute(
+        ComputeRequest("solana:abc", window=60, indicators=["sma:20"], candles=ramp(60))
+    )
     assert result.latest()["sma(20)"] == result.values["sma(20)"][-1]
