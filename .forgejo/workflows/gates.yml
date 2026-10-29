@@ -1,0 +1,29 @@
+name: Gates
+
+# Rollout of the fleet reusable gate set (standards/.forgejo/workflows/reusable-ci.yml).
+# ci.yml already gates ruff, mypy (blocking), pytest, structure, gitleaks, bandit
+# and semgrep. Dependency/OSV scanning only ran in nightly.yml, i.e. never on a
+# PR — that is the one gate enabled here. Nothing existing is relaxed.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reusable:
+    uses: RugMunchMedia/standards/.forgejo/workflows/reusable-ci.yml@main
+    with:
+      language: python
+      enable_lint: "false"
+      enable_typecheck: "false"
+      enable_test: "false"
+      enable_secret_scan: "false"
+      enable_sast: "false"
+      enable_structure: "false"
+      enable_deps: "true"
