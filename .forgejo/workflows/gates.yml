@@ -5,14 +5,15 @@
 #   config   : standards/gates/repos/rugbrain.json
 #   regenerate: python3 scripts/gen-gates-workflow.py --repo rugbrain --write
 #   drift gate: python3 scripts/gen-gates-workflow.py --all --check --root <repos>
-# Forgejo 15.0.7 cannot expand a cross-repo `uses:` (0 tasks picked, empty
-# job_id, no log line), so fleet gate reuse is COMPILE TIME. See
-# fleet/CI-RUNNER.md. Never call another repo's workflow from this file.
+# Forgejo 15.0.7 DOES expand a cross-repo `uses:`; the expanded job then fails
+# workflow schema validation on the `__metadata` field Forgejo injects into it,
+# before any step runs and with no error line. Fleet gate reuse is COMPILE TIME.
+# See fleet/CI-RUNNER.md. Never call another repo's workflow from this file.
 # gates-enabled : sast
 # gates-disabled: lint, typecheck, test, secret_scan, deps, structure
 # gates-disabled-why: lint — unrecorded; typecheck — unrecorded; test — unrecorded; secret_scan — unrecorded; deps — osv-scanner reports the FLOOR of an unconstrained >= spec as the installed version (Pillow>=10.0 -> 'pillow 10.0'), so every finding is a false positive until the repos pin or lock; re-enable once reqs are pinned/locked or the gate resolves first (see fleet/GATE-POLICY.md); structure — unrecorded
 # (a disabled gate is NAMED here so a green summary can never hide a silent skip)
-# config-digest : 65adf215b412f3cb
+# config-digest : dfab2603b85821aa
 # ---------------------------------------------------------------------------
 name: Gates
 
