@@ -100,12 +100,12 @@ _LANE_GLOBALS: dict[str, str] = {
 #: and liveness. Cross-model lanes (gateway, OpenRouter, NIM) are NEVER here —
 #: they are reachable only through an explicit ``RAG_EMBED_BACKEND`` override.
 #:
-#: 2026-10-23 (measured): SiliconFlow LEADS (only live 200 @ 4096, 0.77 s), then
-#: DeepInfra (402 today, breaker-skipped), then OpenRouter (402 credits, walked
-#: so a funded account needs no code change), then the local :8024 8B lane —
-#: slow but ours, and 4096-dim. The 0.6B/1024 lane on :8004 is supermemory's
-#: and is deliberately absent; the width guard would refuse it anyway.
-AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "int", "deepinfra", "openrouter")
+#: 2026-10-30 (measured): SiliconFlow LEADS (only live 200 @ 4096), then
+#: OpenRouter (402 credits, still walked), then DeepInfra (402/503, kept as a
+#: fallback), then the local 8B lane COLD LAST: :8004, 4096, no bearer. The
+#: 0.6B/1024 lane is :8024 (supermemory's) and is deliberately absent; the
+#: width guard refuses it anyway.
+AUTO_CHAIN: tuple[str, ...] = ("siliconflow", "openrouter", "deepinfra", "int")
 
 #: Explicit ``RAG_EMBED_BACKEND`` overrides and their fall-through order. An
 #: override names a primary lane plus, optionally, a never-go-down secondary.

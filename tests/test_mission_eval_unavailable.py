@@ -129,9 +129,16 @@ def test_probe_really_reports_a_dead_lane(monkeypatch: pytest.MonkeyPatch) -> No
     broken the way a real outage breaks it - an invalid credential against the
     live provider - and must still answer False rather than a healthy verdict.
     """
+    from rugbrain.embeddings_pkg import local_lane
     from rugbrain.missioneval import __main__ as entry
 
     monkeypatch.setenv("DEEPINFRA_API_KEY", "definitely-not-a-valid-key")
+    monkeypatch.setenv("SILICONFLOW_ENABLED", "0")
+    # Break the LOCAL rung as well. Since the :8004 port fix the local 8B lane
+    # really answers, so an invalid hosted key alone is NOT an outage and a
+    # healthy verdict is the correct one. A probe that must report "dead" has
+    # to see every rung dead, which is what a real outage looks like.
+    monkeypatch.setattr(local_lane, "QWEN_EMBED_URL", "http://127.0.0.1:9/v1")
     alive, detail = entry._embedder_alive()
     assert alive is False, f"probe reported healthy against a failing embedder: {detail}"
     assert detail.strip(), "a failure must carry a reason an operator can act on"

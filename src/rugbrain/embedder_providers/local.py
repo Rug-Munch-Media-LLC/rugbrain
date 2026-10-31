@@ -14,7 +14,11 @@ import httpx
 
 from rugbrain.embedder_config import logger
 
-ENDPOINT = os.getenv("EMBED_LOCAL_URL", "http://127.0.0.1:8024/v1/embeddings")
+# :8004 is the 8B/4096 CORPUS lane (no bearer). :8024 is the 0.6B/1024
+# MEMORY lane and must never be the default here: a 1024 vector cannot enter a
+# 4096 collection, and MODEL_ID below names the 8B model, so a port serving a
+# different model is the exact mismatch this default used to encode.
+ENDPOINT = os.getenv("EMBED_LOCAL_URL", "http://127.0.0.1:8004/v1/embeddings")
 MODEL_ID = os.getenv("EMBED_LOCAL_MODEL", "qwen3-embedding-8b")
 KEY_ENV = "LLAMA_EMBED_KEY"
 _SRV = "/srv"
