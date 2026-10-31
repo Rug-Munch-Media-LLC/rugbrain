@@ -18,6 +18,13 @@ This package is that substrate. Layout (one job per module, all under 200 lines)
 * :mod:`backtest` — walk-forward: bars in, trades out, with a one-bar fill lag.
 * :mod:`no_lookahead` — the leak DETECTOR: rewrites the future and checks the verdict moved.
 
+Two numeric paths, deliberately separate. :mod:`talib_engine` (TA-Lib, the
+reference implementation) is what :mod:`compute` publishes, because a number a
+user compares against an exchange chart has to come from the reference and not
+from our own arithmetic; ``eval/ta_conformance.py`` measures where it and
+TradingView's Pine still differ. The hand-written indicators below stay as the
+dependency-free primitives the backtest and signal code use.
+
 Every indicator is a **pure function over a list of floats** — no pandas, no
 numpy dependency in the maths — and every one of them is *causal by
 construction*: the value at index ``i`` is computed from ``series[:i+1]`` only.

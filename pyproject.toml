@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.9.0",
     "pytz>=2024.1",
     "redis>=5.2.0",
+    "ta-lib>=0.8.3",  # TA-Lib reference indicators: cp312 manylinux wheel, numpy-only dep
     "qdrant-client>=1.13.0",
     "uvicorn[standard]>=0.30.0",
 ]
